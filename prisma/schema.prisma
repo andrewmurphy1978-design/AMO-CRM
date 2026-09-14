@@ -1,0 +1,290 @@
+// Prisma schema for Andrew Murphy Online CRM
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth / Users
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(MEMBER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedProjects   Project[]          @relation("ProjectOwner")
+  ownedContacts   Contact[]          @relation("ContactOwner")
+  assignedTasks   Task[]             @relation("TaskAssignee")
+  activityEntries ActivityLogEntry[]
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Contacts / Clients (System.IO contact model)
+// ---------------------------------------------------------------------------
+
+// Lifecycle stage within our own pipeline (separate from systeme.io tags,
+// which are synced verbatim into ContactTag below).
+enum ContactStage {
+  LEAD
+  PROSPECT
+  CLIENT
+  PAST_CLIENT
+  UNSUBSCRIBED
+}
+
+model Contact {
+  id String @id @default(cuid())
+
+  // --- Core systeme.io fields ---
+  // systeme.io's own numeric contact id, used as the sync key. Null for
+  // contacts created directly in the CRM that have not been pushed/matched
+  // to systeme.io yet.
+  systemeIoId           Int?      @unique
+  email                 String    @unique
+  locale                String? // e.g. "en", "fr"
+  systemeIoRegisteredAt DateTime? // registered_at from systeme.io
+
+  // --- Common systeme.io custom fields promoted to real columns for
+  // fast search/sort. Any other custom field systeme.io returns is stored
+  // in ContactFieldValue below so nothing is ever dropped. ---
+  firstName String?
+  lastName  String?
+  phone     String?
+  address   String?
+  city      String?
+  state     String?
+  zip       String?
+  country   String?
+  company   String?
+  website   String?
+
+  // --- Our own CRM-level fields (not from systeme.io) ---
+  stage   ContactStage @default(LEAD)
+  notes   String?      @db.Text
+  ownerId String?
+  owner   User?        @relation("ContactOwner", fields: [ownerId], references: [id])
+
+  source       String? // e.g. "systeme.io", "manual", "clickfunnels"
+  lastSyncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tags        ContactTag[]
+  fieldValues ContactFieldValue[]
+  projects    Project[]
+  activity    ActivityLogEntry[]
+
+  @@index([stage])
+  @@index([lastName, firstName])
+  @@map("contacts")
+}
+
+// Tag definitions, mirroring systeme.io tags (each has a systeme.io id/name).
+model Tag {
+  id          String  @id @default(cuid())
+  systemeIoId Int?    @unique
+  name        String  @unique
+  color       String? // for UI badges
+
+  contacts ContactTag[]
+
+  createdAt DateTime @default(now())
+
+  @@map("tags")
+}
+
+// Explicit join table (rather than an implicit m2m) so we can record when
+// a tag was applied.
+model ContactTag {
+  contactId String
+  tagId     String
+  appliedAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@map("contact_tags")
+}
+
+// Definition of every custom field systeme.io knows about (fetched from
+// GET /api/contact_fields), so we can label raw slugs in the UI.
+model CustomFieldDefinition {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  label     String
+  type      String? // text, number, date, etc. as reported by systeme.io
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  values ContactFieldValue[]
+
+  @@map("custom_field_definitions")
+}
+
+// Catch-all storage for every systeme.io custom field value on a contact,
+// including ones we haven't promoted to a dedicated column. This guarantees
+// "all System.IO fields" are preserved even as systeme.io accounts add new
+// custom fields over time.
+model ContactFieldValue {
+  id        String  @id @default(cuid())
+  contactId String
+  fieldSlug String
+  value     String? @db.Text
+
+  contact    Contact                @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  definition CustomFieldDefinition? @relation(fields: [fieldSlug], references: [slug])
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([contactId, fieldSlug])
+  @@map("contact_field_values")
+}
+
+// ---------------------------------------------------------------------------
+// Projects & Tasks
+// ---------------------------------------------------------------------------
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?       @db.Text
+  status      ProjectStatus @default(PLANNING)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   User?   @relation("ProjectOwner", fields: [ownerId], references: [id])
+
+  startDate DateTime?
+  dueDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks    Task[]
+  activity ActivityLogEntry[]
+
+  @@index([status])
+  @@index([contactId])
+  @@map("projects")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  title       String
+  description String?      @db.Text
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  assigneeId String?
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  dueDate     DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+  @@map("tasks")
+}
+
+// Lightweight activity trail shown on contact/project detail pages.
+model ActivityLogEntry {
+  id      String @id @default(cuid())
+  message String
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([contactId])
+  @@index([projectId])
+  @@map("activity_log_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Integrations
+// ---------------------------------------------------------------------------
+
+model IntegrationSetting {
+  id              String    @id @default(cuid())
+  provider        String    @unique // "systeme_io"
+  apiKeyEncrypted String?
+  lastSyncedAt    DateTime?
+  lastSyncStatus  String?
+  lastSyncError   String?   @db.Text
+  autoSyncEnabled Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("integration_settings")
+}
+
+model SyncLog {
+  id             String    @id @default(cuid())
+  provider       String
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  status         String // "success" | "error" | "running"
+  contactsSynced Int       @default(0)
+  tagsSynced     Int       @default(0)
+  errorMessage   String?   @db.Text
+
+  @@map("sync_logs")
+}
