@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import LoginForm from "./login-form";
 
 export default async function LoginPage({
@@ -5,6 +7,11 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ callbackUrl?: string }>;
 }) {
+  const session = await auth();
+  if (session) {
+    redirect("/");
+  }
+
   const { callbackUrl } = await searchParams;
 
   return (

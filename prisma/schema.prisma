@@ -1,8 +1,18 @@
 // Prisma schema for Andrew Murphy Online CRM
 // Docs: https://pris.ly/d/prisma-schema
 
+// Prisma runs over a driver instance we construct in code (node-postgres
+// locally, the same driver pointed at Cloudflare's Hyperdrive binding in
+// production) instead of connecting from a URL itself — required because
+// Cloudflare Workers can't open its own raw database connections. See
+// src/lib/prisma.ts.
+// engineType "client" is Prisma's engine-less, pure-JS/WASM query compiler
+// — the only engine type compatible with the `adapter` option (see
+// src/lib/prisma.ts), which is what lets this run without a native binary
+// on Cloudflare Workers.
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "client"
 }
 
 datasource db {

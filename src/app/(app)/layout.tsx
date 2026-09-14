@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import NavLink from "./nav-link";
 
@@ -11,6 +12,15 @@ const NAV_ITEMS = [
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
+
+  // Route protection used to live in middleware (src/proxy.ts), but
+  // NextAuth's `auth()`-wrapped middleware hits an unsupported edge case
+  // under Cloudflare's (experimental) Node.js middleware support — see
+  // DEPLOY.md. Gating here in the layout works identically everywhere and
+  // covers every route under this group (i.e. everything except /login).
+  if (!session) {
+    redirect("/login");
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">

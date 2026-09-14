@@ -4,6 +4,12 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Required on platforms that don't run a traditional Node.js server
+  // (Cloudflare Workers, Vercel Edge, behind some reverse proxies) — NextAuth
+  // can't always verify the request's Host header itself there. Safe because
+  // NEXTAUTH_URL/AUTH_URL is set explicitly by us, not derived from a header
+  // an attacker could spoof.
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",

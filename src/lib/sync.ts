@@ -16,7 +16,7 @@ export async function getSystemeIoClient(): Promise<SystemeIoClient | null> {
     where: { provider: "systeme_io" },
   });
   if (!setting?.apiKeyEncrypted) return null;
-  const apiKey = decryptSecret(setting.apiKeyEncrypted);
+  const apiKey = await decryptSecret(setting.apiKeyEncrypted);
   return new SystemeIoClient(apiKey);
 }
 

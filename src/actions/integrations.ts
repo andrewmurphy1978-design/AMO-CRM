@@ -24,7 +24,7 @@ export async function saveSystemeIoApiKey(
     return { error: "API key is required." };
   }
 
-  const encrypted = encryptSecret(apiKey);
+  const encrypted = await encryptSecret(apiKey);
 
   await prisma.integrationSetting.upsert({
     where: { provider: "systeme_io" },

@@ -1,0 +1,26 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "amo-crm",
+	"compatibility_date": "2024-09-23",
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	// Cloudflare doesn't host Postgres, so Hyperdrive pools/proxies connections
+	// from the Worker to an external Postgres database (e.g. Neon, Supabase).
+	// Create this in the Cloudflare dashboard under Workers & Pages > Hyperdrive,
+	// then replace <HYPERDRIVE_ID> below with the id it gives you.
+	// See DEPLOY.md for the full walkthrough.
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "<HYPERDRIVE_ID>",
+			// Used only by `wrangler dev` (local preview) — put a real Postgres
+			// connection string here (your Neon one is fine) so local preview
+			// can reach the database without going through Hyperdrive's pooler.
+			"localConnectionString": "postgresql://amo_crm:amo_crm@localhost:5432/amo_crm"
+		}
+	]
+}

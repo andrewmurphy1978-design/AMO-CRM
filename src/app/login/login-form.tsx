@@ -1,14 +1,43 @@
 "use client";
 
-import { useActionState } from "react";
-import { loginAction } from "./actions";
+import { useState } from "react";
+import { signIn } from "next-auth/react";
 
+// Uses next-auth/react's client-side signIn() (a plain fetch() from the
+// browser) rather than a Server Action calling the server-side signIn().
+// Both work, but this keeps the sign-in request/response entirely inside
+// normal browser fetch + navigation, with no dependency on how a given
+// hosting platform's server-action redirect handling behaves.
 export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
-  const [state, formAction, pending] = useActionState(loginAction, undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   return (
-    <form action={formAction} className="mt-6 space-y-4">
-      <input type="hidden" name="callbackUrl" value={callbackUrl} />
+    <form
+      className="mt-6 space-y-4"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setError(null);
+        setPending(true);
+        const formData = new FormData(e.currentTarget);
+        try {
+          const result = await signIn("credentials", {
+            email: formData.get("email"),
+            password: formData.get("password"),
+            redirect: false,
+          });
+          if (result?.error) {
+            setError("Invalid email or password.");
+            setPending(false);
+            return;
+          }
+          window.location.href = callbackUrl;
+        } catch {
+          setError("Something went wrong. Please try again.");
+          setPending(false);
+        }
+      }}
+    >
       <div>
         <label htmlFor="email" className="block text-sm font-medium text-slate-700">
           Email
@@ -35,7 +64,7 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
         />
       </div>
-      {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
         disabled={pending}

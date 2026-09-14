@@ -6,7 +6,8 @@ by a live systeme.io sync, plus Projects (per client) with Tasks.
 ## Stack
 
 - **Next.js 16** (App Router, TypeScript, Server Actions)
-- **Prisma 6** + **PostgreSQL**
+- **Prisma 6** + **PostgreSQL** (via a driver adapter, so it also runs on
+  Cloudflare Workers — see [DEPLOY.md](./DEPLOY.md))
 - **Auth.js (NextAuth v5)** with email/password login and Admin/Member roles
 - **Tailwind CSS 4**
 
@@ -128,7 +129,14 @@ See `prisma/schema.prisma` for the full schema.
 
 ## Deployment
 
-Any Node.js host works (Vercel is the easiest path for Next.js). Steps:
+**Cloudflare (free plan):** see [DEPLOY.md](./DEPLOY.md) for the full
+step-by-step guide — it runs on Cloudflare Workers via
+[OpenNext](https://opennext.js.org/cloudflare), with Postgres hosted on
+Neon's free tier and bridged in through Cloudflare Hyperdrive.
+
+**Any other Node.js host** (Vercel, Railway, Fly.io, a VPS, etc.) also
+works, using the plain `next build` output instead of the Cloudflare-specific
+`cf:*` scripts:
 
 1. Provision a Postgres database and set `DATABASE_URL`.
 2. Set `AUTH_SECRET`, `NEXTAUTH_URL` (your production URL), `ENCRYPTION_KEY`.
