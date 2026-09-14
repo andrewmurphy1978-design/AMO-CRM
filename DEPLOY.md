@@ -8,16 +8,33 @@ pools/proxies the Worker's connections to it.
 Everything below uses the Cloudflare free plan and Neon's free tier — no
 credit card required for either.
 
-This whole guide runs on **your own computer** (or any machine with normal
-internet access), not inside this session — the sandbox this app was built
-in can't reach Cloudflare's or Neon's servers itself.
-
 ## What you'll end up with
 
 - A Neon Postgres database holding your contacts, projects, and tasks.
 - A Cloudflare Worker (on a free `*.workers.dev` URL, or your own domain)
   running the CRM.
 - A Cloudflare Hyperdrive config bridging the two.
+
+## Already done for you
+
+Using the Neon connector, the following already exist — you don't need to
+redo them:
+
+- **Neon project** `amo-crm` (id `noisy-sea-07492639`, `us-east-1`), with
+  the full schema applied (all 11 tables).
+- **Your admin login** — the email and a temporary password were shared with
+  you in chat when this was set up (not repeated here, since this file is
+  committed to your repo). Change it after your first login — there's no
+  in-app reset yet, so add a new admin user in Settings and remove this one.
+- **The Neon connection string** — also shared with you in chat (same
+  reason it's not pasted here: this file lives in git). Grab it from there,
+  or from the Neon console (console.neon.tech → your `amo-crm` project →
+  Connection Details) if you've lost it. You'll need it in step 2 below.
+
+What's left uses the Cloudflare CLI (`wrangler`), which needs to run from a
+machine with normal internet access and your Cloudflare login — the
+Cloudflare connector used above can inspect Workers and Hyperdrive configs,
+but can't create or deploy them, so steps 1 onward are still yours to run.
 
 ## 1. Get the code onto your computer
 
@@ -27,14 +44,7 @@ cd AMO-CRM
 npm install
 ```
 
-## 2. Create the Neon database
-
-1. Go to [neon.tech](https://neon.tech) and sign up (free).
-2. Create a new project. Note the **connection string** it gives you —
-   it looks like `postgresql://user:password@ep-xxxx.region.aws.neon.tech/dbname?sslmode=require`.
-   Neon shows two variants (pooled/direct); either works for the steps below.
-
-## 3. Set up your local `.env` for one-time setup
+## 2. Set up your local `.env`
 
 ```bash
 cp .env.example .env
@@ -42,22 +52,23 @@ cp .env.example .env
 
 Edit `.env`:
 
-- `DATABASE_URL` → paste the Neon connection string from step 2.
+- `DATABASE_URL` → paste the Neon connection string above.
 - `AUTH_SECRET` → generate with `openssl rand -base64 32`.
 - `ENCRYPTION_KEY` → generate with `openssl rand -base64 32`.
 - `NEXTAUTH_URL` → leave as `http://localhost:3000` for now; you'll set the
-  real one as a Cloudflare secret in step 7.
-- `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADMIN_NAME` → your login.
+  real one as a Cloudflare secret in step 6.
 
-Apply the database schema and create your admin login, against Neon
-directly (this step talks to Neon over a normal Postgres connection, not
-through Cloudflare — that's fine, it's a one-time setup command run from
-your computer):
+(Skip `SEED_ADMIN_*` and `npm run db:seed` — your admin login already
+exists in the database, see above.)
+
+## 3. Confirm the database is reachable (optional sanity check)
 
 ```bash
-npx prisma migrate deploy
-npm run db:seed
+npx prisma db pull
 ```
+
+This should run without errors and reflect the existing schema — it
+confirms `DATABASE_URL` is correct before you move on.
 
 ## 4. Log into Cloudflare from the CLI
 
@@ -71,8 +82,8 @@ installed as part of `npm install`) against your Cloudflare account.
 ## 5. Create the Hyperdrive config
 
 In the Cloudflare dashboard: **Workers & Pages → Hyperdrive → Create
-configuration** (or run the command below). Point it at the *same* Neon
-connection string from step 2.
+configuration** (or run the command below). Point it at the Neon connection
+string shared with you in chat (see "Already done for you" above).
 
 ```bash
 npx wrangler hyperdrive create amo-crm-db --connection-string="<your Neon connection string>"
@@ -104,10 +115,10 @@ These are stored encrypted by Cloudflare, not in your repo:
 
 ```bash
 npx wrangler secret put AUTH_SECRET
-# paste the same value you generated in step 3
+# paste the same value you generated in step 2
 
 npx wrangler secret put ENCRYPTION_KEY
-# paste the same value you generated in step 3
+# paste the same value you generated in step 2
 
 npx wrangler secret put NEXTAUTH_URL
 # you don't know your final URL yet — for a first deploy, use:
@@ -151,8 +162,9 @@ npm run cf:deploy
 
 ## 10. Try it
 
-Visit your URL, sign in with the admin email/password from step 3, and
-connect systeme.io from **Settings** as described in the main README.
+Visit your URL, sign in with the admin email/password from the "Already
+done for you" section above, and connect systeme.io from **Settings** as
+described in the main README.
 
 ## Redeploying later
 
