@@ -109,7 +109,13 @@ export default async function ContactDetailPage({
     include: {
       tags: { include: { tag: true } },
       fieldValues: { include: { definition: true } },
-      projects: { orderBy: { createdAt: "desc" } },
+      projects: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          proposals: { orderBy: { createdAt: "desc" } },
+          invoices: { orderBy: { createdAt: "desc" } },
+        },
+      },
       activity: { orderBy: { createdAt: "desc" }, take: 20, include: { user: true } },
       interactions: {
         orderBy: { occurredAt: "desc" },
@@ -131,6 +137,33 @@ export default async function ContactDetailPage({
   const otherFields = contact.fieldValues.filter((fv) => !DUPLICATE_FIELD_SLUGS.has(normalizeSlug(fv.fieldSlug)));
 
   const hasBillingContactInfo = contact.billingContactName || contact.billingEmail || contact.billingPhone;
+
+  const billingItems = contact.projects
+    .flatMap((project) => [
+      ...project.proposals.map((p) => ({
+        kind: "proposal" as const,
+        id: p.id,
+        label: p.title,
+        status: p.status,
+        amount: p.amount,
+        currency: p.currency,
+        createdAt: p.createdAt,
+        projectId: project.id,
+        projectName: project.name,
+      })),
+      ...project.invoices.map((inv) => ({
+        kind: "invoice" as const,
+        id: inv.id,
+        label: inv.number || t.invoices.title,
+        status: inv.status,
+        amount: inv.amount as number | null,
+        currency: inv.currency,
+        createdAt: inv.createdAt,
+        projectId: project.id,
+        projectName: project.name,
+      })),
+    ])
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
   return (
     <div className="space-y-6">
@@ -302,12 +335,14 @@ export default async function ContactDetailPage({
             )}
           </section>
 
-          {(contact.subscriptions.length > 0 ||
-            contact.courseEnrollments.length > 0 ||
-            contact.communityMemberships.length > 0) && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.purchasesTitle}</h2>
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.purchasesTitle}</h2>
+            {contact.subscriptions.length === 0 &&
+            contact.courseEnrollments.length === 0 &&
+            contact.communityMemberships.length === 0 ? (
+              <p className="mt-2 text-sm text-soft">{t.contactDetail.noPurchasesYet}</p>
+            ) : (
               <div className="mt-4 grid gap-6 sm:grid-cols-3">
                 {contact.subscriptions.length > 0 && (
                   <div>
@@ -368,8 +403,8 @@ export default async function ContactDetailPage({
                   </div>
                 )}
               </div>
-            </section>
-          )}
+            )}
+          </section>
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
@@ -386,6 +421,36 @@ export default async function ContactDetailPage({
                       {project.name}
                     </Link>
                     <span className="ml-2 text-xs text-soft">{t.projectStatuses[project.status]}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.proposalsInvoicesTitle}</h2>
+            {billingItems.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.contactDetail.noProposalsInvoicesYet}</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-card-border">
+                {billingItems.map((item) => (
+                  <li key={`${item.kind}-${item.id}`} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                    <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-soft">
+                      {item.kind === "proposal" ? t.proposals.title : t.invoices.title}
+                    </span>
+                    <span className="flex-1 font-medium text-ink">{item.label}</span>
+                    {item.amount != null && (
+                      <span className="text-soft">
+                        {item.amount} {item.currency}
+                      </span>
+                    )}
+                    <span className="text-xs text-soft">
+                      {item.kind === "proposal" ? t.proposals.statuses[item.status as keyof typeof t.proposals.statuses] : t.invoices.statuses[item.status as keyof typeof t.invoices.statuses]}
+                    </span>
+                    <Link href={`/projects/${item.projectId}`} className="text-xs text-soft hover:underline">
+                      {item.projectName} · {t.contactDetail.viewProject}
+                    </Link>
                   </li>
                 ))}
               </ul>

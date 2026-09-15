@@ -7,6 +7,8 @@ import {
   type SystemeIoSubscription,
   type SystemeIoEnrollment,
   type SystemeIoCommunityMembership,
+  type SystemeIoEmailCampaign,
+  type SystemeIoAutomationWorkflow,
 } from "@/lib/systemeio";
 
 export interface SyncResult {
@@ -15,6 +17,8 @@ export interface SyncResult {
   subscriptionsSynced: number;
   enrollmentsSynced: number;
   membershipsSynced: number;
+  campaignsSynced: number;
+  automationsSynced: number;
 }
 
 export async function getSystemeIoClient(): Promise<SystemeIoClient | null> {
@@ -41,6 +45,8 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
   let subscriptionsSynced = 0;
   let enrollmentsSynced = 0;
   let membershipsSynced = 0;
+  let campaignsSynced = 0;
+  let automationsSynced = 0;
 
   try {
     // 1. Tags
@@ -113,6 +119,30 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       console.warn("systeme.io community memberships sync skipped:", error);
     }
 
+    // 5. Account-level marketing data (not tied to a contact): email
+    // campaigns and automation workflows. Same best-effort handling.
+    try {
+      for await (const campaigns of client.iterateEmailCampaigns()) {
+        for (const campaign of campaigns) {
+          await upsertEmailCampaign(campaign);
+          campaignsSynced += 1;
+        }
+      }
+    } catch (error) {
+      console.warn("systeme.io email campaigns sync skipped:", error);
+    }
+
+    try {
+      for await (const automations of client.iterateAutomationWorkflows()) {
+        for (const automation of automations) {
+          await upsertAutomationWorkflow(automation);
+          automationsSynced += 1;
+        }
+      }
+    } catch (error) {
+      console.warn("systeme.io automation workflows sync skipped:", error);
+    }
+
     await prisma.integrationSetting.update({
       where: { provider: "systeme_io" },
       data: {
@@ -132,7 +162,15 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       },
     });
 
-    return { contactsSynced, tagsSynced, subscriptionsSynced, enrollmentsSynced, membershipsSynced };
+    return {
+      contactsSynced,
+      tagsSynced,
+      subscriptionsSynced,
+      enrollmentsSynced,
+      membershipsSynced,
+      campaignsSynced,
+      automationsSynced,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync error";
 
@@ -237,6 +275,52 @@ async function upsertCommunityMembership(
       status: membership.status,
       joinedAt: membership.joinedAt ? new Date(membership.joinedAt) : null,
       raw: membership.raw as never,
+    },
+  });
+}
+
+async function upsertEmailCampaign(campaign: SystemeIoEmailCampaign) {
+  await prisma.emailCampaign.upsert({
+    where: { systemeIoId: campaign.id },
+    update: {
+      name: campaign.name,
+      subject: campaign.subject,
+      status: campaign.status,
+      sentAt: campaign.sentAt ? new Date(campaign.sentAt) : null,
+      recipientCount: campaign.recipientCount,
+      openCount: campaign.openCount,
+      clickCount: campaign.clickCount,
+      raw: campaign.raw as never,
+    },
+    create: {
+      systemeIoId: campaign.id,
+      name: campaign.name,
+      subject: campaign.subject,
+      status: campaign.status,
+      sentAt: campaign.sentAt ? new Date(campaign.sentAt) : null,
+      recipientCount: campaign.recipientCount,
+      openCount: campaign.openCount,
+      clickCount: campaign.clickCount,
+      raw: campaign.raw as never,
+    },
+  });
+}
+
+async function upsertAutomationWorkflow(automation: SystemeIoAutomationWorkflow) {
+  await prisma.automationWorkflow.upsert({
+    where: { systemeIoId: automation.id },
+    update: {
+      name: automation.name,
+      status: automation.status,
+      triggerType: automation.triggerType,
+      raw: automation.raw as never,
+    },
+    create: {
+      systemeIoId: automation.id,
+      name: automation.name,
+      status: automation.status,
+      triggerType: automation.triggerType,
+      raw: automation.raw as never,
     },
   });
 }

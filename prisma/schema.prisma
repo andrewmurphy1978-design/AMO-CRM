@@ -207,6 +207,44 @@ model CommunityMembership {
   @@map("community_memberships")
 }
 
+// Account-level marketing data from systeme.io — not tied to a single
+// contact, so these live on their own "Marketing" page rather than the
+// Contact detail page (unlike Subscription/CourseEnrollment/
+// CommunityMembership above, which are per-contact).
+model EmailCampaign {
+  id          String   @id @default(cuid())
+  systemeIoId Int      @unique
+
+  name           String?
+  subject        String?
+  status         String?
+  sentAt         DateTime?
+  recipientCount Int?
+  openCount      Int?
+  clickCount     Int?
+  raw            Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_campaigns")
+}
+
+model AutomationWorkflow {
+  id          String   @id @default(cuid())
+  systemeIoId Int      @unique
+
+  name        String?
+  status      String?
+  triggerType String?
+  raw         Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("automation_workflows")
+}
+
 // Tag definitions, mirroring systeme.io tags (each has a systeme.io id/name).
 model Tag {
   id          String  @id @default(cuid())
@@ -302,10 +340,72 @@ model Project {
   tasks        Task[]
   activity     ActivityLogEntry[]
   interactions Interaction[]
+  proposals    Proposal[]
+  invoices     Invoice[]
 
   @@index([status])
   @@index([contactId])
   @@map("projects")
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DECLINED
+}
+
+// Client-facing proposals. Always tied to a Project (which is itself tied to
+// a Contact), so a proposal shows up both under its project and — via the
+// project's contact — on that contact's page. No separate contactId: the
+// project is the single source of truth for who it's for.
+model Proposal {
+  id        String         @id @default(cuid())
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  status    ProposalStatus @default(DRAFT)
+  amount    Float?
+  currency  String         @default("CAD")
+  notes     String?        @db.Text
+
+  sentAt      DateTime?
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("proposals")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+// Client-facing invoices. Same "always via a Project" shape as Proposal.
+model Invoice {
+  id        String        @id @default(cuid())
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  number    String?
+  status    InvoiceStatus @default(DRAFT)
+  amount    Float
+  currency  String        @default("CAD")
+  notes     String?       @db.Text
+
+  dueDate DateTime?
+  paidAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("invoices")
 }
 
 enum TaskStatus {

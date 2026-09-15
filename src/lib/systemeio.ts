@@ -74,6 +74,31 @@ export interface SystemeIoCommunityMembership {
   raw: Record<string, unknown>;
 }
 
+// Account-level marketing resources — not tied to a single contact. Same
+// defensive-extraction caveat as above: the public API docs list "Mailing"
+// (newsletters/campaigns/campaign steps) and "Automation Rules" by name only,
+// with no documented field shapes, so the endpoint paths and field names
+// here are a best-effort guess pending live verification.
+export interface SystemeIoEmailCampaign {
+  id: number;
+  name: string | null;
+  subject: string | null;
+  status: string | null;
+  sentAt: string | null;
+  recipientCount: number | null;
+  openCount: number | null;
+  clickCount: number | null;
+  raw: Record<string, unknown>;
+}
+
+export interface SystemeIoAutomationWorkflow {
+  id: number;
+  name: string | null;
+  status: string | null;
+  triggerType: string | null;
+  raw: Record<string, unknown>;
+}
+
 export class SystemeIoApiError extends Error {
   status: number;
   /** Full, untruncated response body — `message` is truncated for display. */
@@ -265,6 +290,21 @@ export class SystemeIoClient {
   async *iterateCommunityMemberships(pageSize = 100): AsyncGenerator<SystemeIoCommunityMembership[]> {
     yield* this.paginate("/community_memberships", mapCommunityMembership, pageSize);
   }
+
+  // Best-effort endpoint guesses — the public docs list these resource
+  // groups by name only ("Mailing": newsletters/campaigns/campaign steps;
+  // "Automation Rules": automationrules) without documented paths for
+  // fetching sent-campaign history, so "/newsletters" is this account's
+  // most likely home for what the CRM calls "Email Campaigns". Wrapped in
+  // its own try/catch by the caller (see sync.ts) so a wrong guess here
+  // just skips this one resource type instead of failing the whole sync.
+  async *iterateEmailCampaigns(pageSize = 100): AsyncGenerator<SystemeIoEmailCampaign[]> {
+    yield* this.paginate("/newsletters", mapEmailCampaign, pageSize);
+  }
+
+  async *iterateAutomationWorkflows(pageSize = 100): AsyncGenerator<SystemeIoAutomationWorkflow[]> {
+    yield* this.paginate("/automationrules", mapAutomationWorkflow, pageSize);
+  }
 }
 
 // --- Response parsing helpers -----------------------------------------------
@@ -403,6 +443,30 @@ function mapCommunityMembership(raw: Record<string, unknown>): SystemeIoCommunit
     communityName,
     status: pickString(raw, ["status", "state"]),
     joinedAt: pickString(raw, ["joinedAt", "joined_at", "createdAt", "created_at"]),
+    raw,
+  };
+}
+
+function mapEmailCampaign(raw: Record<string, unknown>): SystemeIoEmailCampaign {
+  return {
+    id: Number(raw.id),
+    name: pickString(raw, ["name", "title"]),
+    subject: pickString(raw, ["subject", "emailSubject", "email_subject"]),
+    status: pickString(raw, ["status", "state"]),
+    sentAt: pickString(raw, ["sentAt", "sent_at", "sendAt", "send_at", "createdAt", "created_at"]),
+    recipientCount: pickNumber(raw, ["recipientCount", "recipient_count", "recipientsCount", "recipients_count"]),
+    openCount: pickNumber(raw, ["openCount", "open_count", "opensCount", "opens_count"]),
+    clickCount: pickNumber(raw, ["clickCount", "click_count", "clicksCount", "clicks_count"]),
+    raw,
+  };
+}
+
+function mapAutomationWorkflow(raw: Record<string, unknown>): SystemeIoAutomationWorkflow {
+  return {
+    id: Number(raw.id),
+    name: pickString(raw, ["name", "title"]),
+    status: pickString(raw, ["status", "state", "active"]),
+    triggerType: pickString(raw, ["triggerType", "trigger_type", "trigger"]),
     raw,
   };
 }

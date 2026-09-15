@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSystemeIoClient } from "@/lib/sync";
 import { DEFAULT_PUSH_FIELD_SLUGS } from "@/lib/systemeio";
+import { countryToCode } from "@/lib/country-flag";
 import { getDict } from "@/lib/i18n/dictionaries";
 
 const ContactSchema = z.object({
@@ -164,7 +165,10 @@ export async function updateContact(
         const fields: Record<string, string> = {};
         for (const [column, slug] of Object.entries(DEFAULT_PUSH_FIELD_SLUGS)) {
           const value = (data as Record<string, string | undefined>)[column];
-          if (value) fields[slug] = value;
+          if (!value) continue;
+          // systeme.io's "country" field expects a 2-letter ISO 3166 code
+          // (per its API docs), not the full country name the CRM stores.
+          fields[slug] = column === "country" ? (countryToCode(value) ?? value) : value;
         }
         const { skipped } = await client.updateContactFields(updated.systemeIoId, fields);
         if (skipped.length > 0) {

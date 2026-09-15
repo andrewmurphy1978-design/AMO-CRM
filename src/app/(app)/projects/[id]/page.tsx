@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import TaskRow from "./task-row";
 import QuickAddTask from "./quick-add-task";
 import DeleteProjectButton from "./delete-button";
+import QuickAddProposal from "./quick-add-proposal";
+import ProposalRow from "./proposal-row";
+import QuickAddInvoice from "./quick-add-invoice";
+import InvoiceRow from "./invoice-row";
 import InteractionLog from "../../interaction-log";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -31,6 +35,8 @@ export default async function ProjectDetailPage({
         orderBy: { occurredAt: "desc" },
         include: { loggedBy: true },
       },
+      proposals: { orderBy: { createdAt: "desc" } },
+      invoices: { orderBy: { createdAt: "desc" } },
     },
   });
 
@@ -100,6 +106,36 @@ export default async function ProjectDetailPage({
               </details>
             )}
           </>
+        )}
+      </section>
+
+      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+        <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.title}</h2>
+        <div className="mt-3">
+          <QuickAddProposal projectId={project.id} lang={lang} />
+        </div>
+        {project.proposals.length > 0 && (
+          <ul className="mt-2 divide-y divide-card-border">
+            {project.proposals.map((proposal) => (
+              <ProposalRow key={proposal.id} proposal={proposal} projectId={project.id} lang={lang} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+        <h2 className="font-display text-lg font-semibold text-ink">{t.invoices.title}</h2>
+        <div className="mt-3">
+          <QuickAddInvoice projectId={project.id} lang={lang} />
+        </div>
+        {project.invoices.length > 0 && (
+          <ul className="mt-2 divide-y divide-card-border">
+            {project.invoices.map((invoice) => (
+              <InvoiceRow key={invoice.id} invoice={invoice} projectId={project.id} lang={lang} />
+            ))}
+          </ul>
         )}
       </section>
 
