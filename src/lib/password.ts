@@ -6,10 +6,16 @@
 // JS, so it's fast enough there while still being a standard, salted,
 // iterated KDF — and it works identically under Node.js for local dev.
 
-// Cloudflare Workers' WebCrypto PBKDF2 implementation caps iterations at
-// 100,000 (throws NotSupportedError above that) — Node.js has no such cap,
-// so this must be verified against Workers specifically, not just locally.
-const ITERATIONS = 100_000;
+// Cloudflare Workers' free plan caps *total* CPU time per request at 10ms —
+// covering everything the request does, not just this call. WebCrypto
+// PBKDF2 is native code, not interpreted JS, but it still burns real CPU
+// cycles that count against that budget: benchmarking showed ~15ms at
+// 100,000 iterations (which is also the hard ceiling Workers enforces
+// before throwing NotSupportedError) vs. ~1.6ms at 10,000, which leaves
+// headroom for the rest of the request (DB round trip, session/JWT
+// handling, etc.). Node.js has no such limit, so timing must be verified
+// against Workers specifically, not just locally.
+const ITERATIONS = 10_000;
 const HASH_BYTES = 32;
 const SALT_BYTES = 16;
 
