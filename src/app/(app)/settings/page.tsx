@@ -23,6 +23,20 @@ export default async function SettingsPage() {
 
       <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-6 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+        <h2 className="font-display text-sm font-semibold text-amo-white">Your CRM link</h2>
+        <p className="mt-1 text-sm text-amo-muted">
+          Bookmark this or share it with your team to get here directly.
+        </p>
+        <a
+          href="https://crm.andrewmurphy.online"
+          className="mt-3 inline-block rounded-lg border border-amo-border bg-white/5 px-4 py-2 font-mono text-sm text-amo-lime hover:bg-white/10"
+        >
+          crm.andrewmurphy.online
+        </a>
+      </section>
+
+      <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-6 shadow-sm">
+        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
         <h2 className="font-display text-sm font-semibold text-amo-white">Your account</h2>
         <p className="mt-1 text-sm text-amo-muted">Change the password you sign in with.</p>
         <div className="mt-4">

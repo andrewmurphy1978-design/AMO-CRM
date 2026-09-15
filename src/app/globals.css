@@ -44,14 +44,16 @@ body {
   font-family: var(--font-body), Arial, Helvetica, sans-serif;
 }
 
-/* Blurred, ambient brand background for the app shell's main content area.
-   `position: absolute` (not `fixed`) so it's confined to its nearest
-   positioned ancestor (the main content wrapper) instead of the viewport —
-   a `fixed`, z-indexed element always paints above non-positioned in-flow
-   siblings regardless of DOM order, which was bleeding this over the
-   sidebar and hiding it. Scaled up slightly to hide the blur's soft edges. */
+/* Blurred, ambient brand background. `position: fixed` so it stays put as
+   the page scrolls, pinned to the viewport rather than the (possibly much
+   taller than one screen) scrolling content. The `--app` variant, used only
+   in the signed-in app shell, is offset past the sidebar's width on sm+
+   screens (where the sidebar is visible) via a later, same-specificity
+   rule that wins by source order — this must never use `left: 0` (plain
+   `inset: 0`) there, or it paints over the sidebar again like it did
+   before this was scoped. Scaled up slightly to hide the blur's edges. */
 .amo-bg-image {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 0;
   background-image: url("https://d1yei2z3i6k35z.cloudfront.net/18410699/6a62cc32379aa9.89171099_MountainbackgroundwithAICircuitry.png");
@@ -62,7 +64,7 @@ body {
 }
 
 .amo-bg-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 1;
   background: linear-gradient(
@@ -70,6 +72,13 @@ body {
     rgba(13, 43, 26, 0.72) 0%,
     rgba(13, 43, 26, 0.62) 100%
   );
+}
+
+@media (min-width: 640px) {
+  .amo-bg-image--app,
+  .amo-bg-overlay--app {
+    left: 16rem; /* matches the sidebar's w-64 */
+  }
 }
 
 /* Card top accent bar, reused across dashboard/detail cards. */

@@ -27,14 +27,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col bg-amo-green sm:flex">
-        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
+      <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto bg-amo-green sm:sticky sm:top-0 sm:z-10 sm:flex sm:h-screen">
+        <div className="flex flex-col items-center gap-2 border-b border-white/10 px-5 py-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-10 w-10 shrink-0" />
-          <div>
-            <p className="font-display text-sm font-semibold text-amo-white">Andrew Murphy Online</p>
-            <p className="text-xs text-amo-muted">CRM</p>
-          </div>
+          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-20 w-20" />
+          <p className="font-display text-lg font-semibold tracking-wide text-amo-white">CRM</p>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-4">
           {NAV_ITEMS.map((item) => (
@@ -61,13 +58,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       </aside>
 
       <div className="relative flex flex-1 flex-col">
-        <div className="amo-bg-image" />
-        <div className="amo-bg-overlay" />
+        <div className="amo-bg-image amo-bg-image--app" />
+        <div className="amo-bg-overlay amo-bg-overlay--app" />
         <header className="relative z-10 flex items-center justify-between bg-amo-green px-4 py-3 sm:hidden">
           <Link href="/" className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-7 w-7" />
-            <span className="font-display text-sm font-semibold text-amo-white">AMO CRM</span>
+            <span className="font-display text-sm font-semibold text-amo-white">CRM</span>
           </Link>
           <form
             action={async () => {

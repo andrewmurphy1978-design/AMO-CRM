@@ -114,7 +114,7 @@ export default async function ContactsPage({
           </thead>
           <tbody className="divide-y divide-white/10">
             {contacts.map((contact) => (
-              <tr key={contact.id} className="hover:bg-white/5">
+              <tr key={contact.id} className="odd:bg-black/15 even:bg-white/[0.03] hover:bg-white/10">
                 <td className="px-4 py-3">
                   <Link href={`/contacts/${contact.id}`} className="font-medium text-amo-white hover:underline">
                     {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
