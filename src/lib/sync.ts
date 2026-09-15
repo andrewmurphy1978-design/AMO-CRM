@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
 import {
   SystemeIoClient,
@@ -23,6 +23,9 @@ export interface SyncResult {
   bookingsSynced: number;
 }
 
+// Used outside the bulk sync (e.g. pushing a single contact edit back to
+// systeme.io) — a one-off query, so the regular auto-reconnecting `prisma`
+// proxy is fine here.
 export async function getSystemeIoClient(): Promise<SystemeIoClient | null> {
   const setting = await prisma.integrationSetting.findUnique({
     where: { provider: "systeme_io" },
@@ -32,13 +35,29 @@ export async function getSystemeIoClient(): Promise<SystemeIoClient | null> {
   return new SystemeIoClient(apiKey);
 }
 
+// The sync can easily make 100+ database calls for a modest contact list
+// (each contact's own upsert, plus its field values and tag links). Under
+// Cloudflare Workers, the regular `prisma` proxy builds a brand-new pooled
+// connection on every single one of those — fine for a normal page's
+// handful of queries, but that many fresh connections within one Worker
+// invocation is CPU-heavy enough to trip Cloudflare's "Error 1102" resource
+// limit on its own, regardless of how the systeme.io API calls are paced.
+// `withScopedPrismaClient` builds exactly one client for this whole
+// operation instead — see its comment in src/lib/prisma.ts for why that's
+// safe here specifically.
 export async function runSystemeIoSync(): Promise<SyncResult> {
-  const client = await getSystemeIoClient();
-  if (!client) {
+  return withScopedPrismaClient((db) => runSystemeIoSyncWith(db));
+}
+
+async function runSystemeIoSyncWith(db: PrismaClient): Promise<SyncResult> {
+  const setting = await db.integrationSetting.findUnique({ where: { provider: "systeme_io" } });
+  if (!setting?.apiKeyEncrypted) {
     throw new Error("systeme.io API key is not configured");
   }
+  const apiKey = await decryptSecret(setting.apiKeyEncrypted);
+  const client = new SystemeIoClient(apiKey);
 
-  const log = await prisma.syncLog.create({
+  const log = await db.syncLog.create({
     data: { provider: "systeme_io", status: "running" },
   });
 
@@ -55,7 +74,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     // 1. Tags
     for await (const tags of client.iterateTags()) {
       for (const tag of tags) {
-        await prisma.tag.upsert({
+        await db.tag.upsert({
           where: { systemeIoId: tag.id },
           update: { name: tag.name },
           create: { systemeIoId: tag.id, name: tag.name },
@@ -68,7 +87,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     const definitions = await client.listCustomFieldDefinitions();
     for (const def of definitions) {
       if (!def.slug) continue;
-      await prisma.customFieldDefinition.upsert({
+      await db.customFieldDefinition.upsert({
         where: { slug: def.slug },
         update: { label: def.label, type: def.type },
         create: { slug: def.slug, label: def.label, type: def.type },
@@ -78,7 +97,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     // 3. Contacts (with tags + custom field values)
     for await (const contacts of client.iterateContacts()) {
       for (const contact of contacts) {
-        await upsertContact(contact);
+        await upsertContact(db, contact);
         contactsSynced += 1;
       }
     }
@@ -86,16 +105,13 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     // 4. Subscriptions, course enrollments, community memberships. Each
     // block is wrapped separately so one failing resource type doesn't stop
     // the others.
-    const contactIdBySystemeIoId = await buildContactIdLookup();
+    const contactIdBySystemeIoId = await buildContactIdLookup(db);
 
     // GET /payment/subscriptions requires a "contact" query param — there's
-    // no global collection, so this runs once per known contact. Running
-    // these one at a time (await-in-a-loop) turns N contacts into N
-    // sequential network round-trips inside a single Worker invocation,
-    // which is what tripped a Cloudflare resource-limit error (1102) once
-    // there were enough contacts — so a handful run concurrently at a time
-    // instead. A single contact's request failing (e.g. it has none)
-    // doesn't stop the rest.
+    // no global collection, so this runs once per known contact. The
+    // network fetches run a handful at a time (systeme.io calls, not DB
+    // calls) so N contacts isn't N fully sequential round-trips; the
+    // resulting upserts stay sequential against the one scoped db client.
     const contactIds = [...contactIdBySystemeIoId.keys()];
     const SUBSCRIPTION_FETCH_CONCURRENCY = 5;
     for (let i = 0; i < contactIds.length; i += SUBSCRIPTION_FETCH_CONCURRENCY) {
@@ -113,11 +129,9 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
           return subs;
         })
       );
-      // Upserts stay sequential (see src/lib/prisma.ts on why), only the
-      // network fetches above run concurrently.
       for (const subs of results) {
         for (const sub of subs) {
-          await upsertSubscription(sub, contactIdBySystemeIoId);
+          await upsertSubscription(db, sub, contactIdBySystemeIoId);
           subscriptionsSynced += 1;
         }
       }
@@ -126,7 +140,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     try {
       for await (const enrollments of client.iterateEnrollments()) {
         for (const enrollment of enrollments) {
-          await upsertEnrollment(enrollment, contactIdBySystemeIoId);
+          await upsertEnrollment(db, enrollment, contactIdBySystemeIoId);
           enrollmentsSynced += 1;
         }
       }
@@ -137,7 +151,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     try {
       for await (const memberships of client.iterateCommunityMemberships()) {
         for (const membership of memberships) {
-          await upsertCommunityMembership(membership, contactIdBySystemeIoId);
+          await upsertCommunityMembership(db, membership, contactIdBySystemeIoId);
           membershipsSynced += 1;
         }
       }
@@ -150,7 +164,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     try {
       for await (const campaigns of client.iterateEmailCampaigns()) {
         for (const campaign of campaigns) {
-          await upsertEmailCampaign(campaign);
+          await upsertEmailCampaign(db, campaign);
           campaignsSynced += 1;
         }
       }
@@ -161,7 +175,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     try {
       for await (const automations of client.iterateAutomationWorkflows()) {
         for (const automation of automations) {
-          await upsertAutomationWorkflow(automation);
+          await upsertAutomationWorkflow(db, automation);
           automationsSynced += 1;
         }
       }
@@ -172,7 +186,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     try {
       for await (const bookings of client.iterateBookings()) {
         for (const booking of bookings) {
-          await upsertBooking(booking);
+          await upsertBooking(db, booking);
           bookingsSynced += 1;
         }
       }
@@ -180,7 +194,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       console.warn("systeme.io bookings sync skipped:", error);
     }
 
-    await prisma.integrationSetting.update({
+    await db.integrationSetting.update({
       where: { provider: "systeme_io" },
       data: {
         lastSyncedAt: new Date(),
@@ -189,7 +203,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       },
     });
 
-    await prisma.syncLog.update({
+    await db.syncLog.update({
       where: { id: log.id },
       data: {
         status: "success",
@@ -212,12 +226,12 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync error";
 
-    await prisma.integrationSetting.update({
+    await db.integrationSetting.update({
       where: { provider: "systeme_io" },
       data: { lastSyncStatus: "error", lastSyncError: message },
     });
 
-    await prisma.syncLog.update({
+    await db.syncLog.update({
       where: { id: log.id },
       data: {
         status: "error",
@@ -232,17 +246,21 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
   }
 }
 
-async function buildContactIdLookup(): Promise<Map<number, string>> {
-  const contacts = await prisma.contact.findMany({
+async function buildContactIdLookup(db: PrismaClient): Promise<Map<number, string>> {
+  const contacts = await db.contact.findMany({
     where: { systemeIoId: { not: null } },
     select: { id: true, systemeIoId: true },
   });
   return new Map(contacts.map((c) => [c.systemeIoId as number, c.id]));
 }
 
-async function upsertSubscription(sub: SystemeIoSubscription, contactIdBySystemeIoId: Map<number, string>) {
+async function upsertSubscription(
+  db: PrismaClient,
+  sub: SystemeIoSubscription,
+  contactIdBySystemeIoId: Map<number, string>
+) {
   const contactId = sub.contactSystemeIoId !== null ? (contactIdBySystemeIoId.get(sub.contactSystemeIoId) ?? null) : null;
-  await prisma.subscription.upsert({
+  await db.subscription.upsert({
     where: { systemeIoId: sub.id },
     update: {
       contactId,
@@ -268,10 +286,14 @@ async function upsertSubscription(sub: SystemeIoSubscription, contactIdBySysteme
   });
 }
 
-async function upsertEnrollment(enrollment: SystemeIoEnrollment, contactIdBySystemeIoId: Map<number, string>) {
+async function upsertEnrollment(
+  db: PrismaClient,
+  enrollment: SystemeIoEnrollment,
+  contactIdBySystemeIoId: Map<number, string>
+) {
   const contactId =
     enrollment.contactSystemeIoId !== null ? (contactIdBySystemeIoId.get(enrollment.contactSystemeIoId) ?? null) : null;
-  await prisma.courseEnrollment.upsert({
+  await db.courseEnrollment.upsert({
     where: { systemeIoId: enrollment.id },
     update: {
       contactId,
@@ -292,12 +314,13 @@ async function upsertEnrollment(enrollment: SystemeIoEnrollment, contactIdBySyst
 }
 
 async function upsertCommunityMembership(
+  db: PrismaClient,
   membership: SystemeIoCommunityMembership,
   contactIdBySystemeIoId: Map<number, string>
 ) {
   const contactId =
     membership.contactSystemeIoId !== null ? (contactIdBySystemeIoId.get(membership.contactSystemeIoId) ?? null) : null;
-  await prisma.communityMembership.upsert({
+  await db.communityMembership.upsert({
     where: { systemeIoId: membership.id },
     update: {
       contactId,
@@ -317,8 +340,8 @@ async function upsertCommunityMembership(
   });
 }
 
-async function upsertEmailCampaign(campaign: SystemeIoEmailCampaign) {
-  await prisma.emailCampaign.upsert({
+async function upsertEmailCampaign(db: PrismaClient, campaign: SystemeIoEmailCampaign) {
+  await db.emailCampaign.upsert({
     where: { systemeIoId: campaign.id },
     update: {
       name: campaign.name,
@@ -344,8 +367,8 @@ async function upsertEmailCampaign(campaign: SystemeIoEmailCampaign) {
   });
 }
 
-async function upsertAutomationWorkflow(automation: SystemeIoAutomationWorkflow) {
-  await prisma.automationWorkflow.upsert({
+async function upsertAutomationWorkflow(db: PrismaClient, automation: SystemeIoAutomationWorkflow) {
+  await db.automationWorkflow.upsert({
     where: { systemeIoId: automation.id },
     update: {
       name: automation.name,
@@ -363,8 +386,8 @@ async function upsertAutomationWorkflow(automation: SystemeIoAutomationWorkflow)
   });
 }
 
-async function upsertBooking(booking: SystemeIoBooking) {
-  await prisma.booking.upsert({
+async function upsertBooking(db: PrismaClient, booking: SystemeIoBooking) {
+  await db.booking.upsert({
     where: { systemeIoId: booking.id },
     update: {
       eventName: booking.eventName,
@@ -396,7 +419,7 @@ async function upsertBooking(booking: SystemeIoBooking) {
   });
 }
 
-async function upsertContact(contact: SystemeIoContact) {
+async function upsertContact(db: PrismaClient, contact: SystemeIoContact) {
   if (!contact.email) return;
 
   const promoted: Record<string, string> = {};
@@ -413,7 +436,7 @@ async function upsertContact(contact: SystemeIoContact) {
     }
   }
 
-  const dbContact = await prisma.contact.upsert({
+  const dbContact = await db.contact.upsert({
     where: { systemeIoId: contact.id },
     update: {
       email: contact.email,
@@ -454,7 +477,7 @@ async function upsertContact(contact: SystemeIoContact) {
 
   // Overflow custom field values: full replace for this contact.
   for (const { slug, value } of overflow) {
-    await prisma.contactFieldValue.upsert({
+    await db.contactFieldValue.upsert({
       where: { contactId_fieldSlug: { contactId: dbContact.id, fieldSlug: slug } },
       update: { value },
       create: { contactId: dbContact.id, fieldSlug: slug, value },
@@ -466,7 +489,7 @@ async function upsertContact(contact: SystemeIoContact) {
   const tagRecords = [];
   for (const tag of contact.tags) {
     tagRecords.push(
-      await prisma.tag.upsert({
+      await db.tag.upsert({
         where: { systemeIoId: tag.id },
         update: { name: tag.name },
         create: { systemeIoId: tag.id, name: tag.name },
@@ -474,7 +497,7 @@ async function upsertContact(contact: SystemeIoContact) {
     );
   }
 
-  await prisma.contactTag.deleteMany({
+  await db.contactTag.deleteMany({
     where: {
       contactId: dbContact.id,
       tagId: { notIn: tagRecords.map((t) => t.id) },
@@ -482,7 +505,7 @@ async function upsertContact(contact: SystemeIoContact) {
   });
 
   for (const tag of tagRecords) {
-    await prisma.contactTag.upsert({
+    await db.contactTag.upsert({
       where: { contactId_tagId: { contactId: dbContact.id, tagId: tag.id } },
       update: {},
       create: { contactId: dbContact.id, tagId: tag.id },

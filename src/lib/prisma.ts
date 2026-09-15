@@ -4,7 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-type PrismaClient = PrismaClientType;
+export type PrismaClient = PrismaClientType;
 
 const require = createRequire(import.meta.url);
 
@@ -106,3 +106,30 @@ export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
     return Reflect.get(getPrismaClient() as object, prop, receiver);
   },
 });
+
+// For a single operation that makes many database calls back-to-back (e.g.
+// the systeme.io sync, which can easily be 100+ upserts for a modest
+// contact list) — the `prisma` proxy above builds a brand-new client (and,
+// under Workers, a brand-new pooled connection) on every single property
+// access, which is fine for a normal page render's handful of queries but
+// turns a bulk operation into a CPU-heavy pile of fresh connections within
+// one Worker invocation, which is very likely what's tripping Cloudflare's
+// "Error 1102" resource-limit page during sync.
+//
+// This builds exactly one client, hands it to `fn` to use for every call in
+// that operation, and disconnects it when `fn` resolves or throws. This is
+// NOT the per-request-context cache that broke sign-out (see the comment
+// above `getPrismaClient`) — that failure mode was about a client being
+// read back by a *later, separate* top-level invocation (a Server Action
+// after the page render that created it). Here the client is a plain local
+// variable that never escapes this one continuous call — created, used, and
+// torn down within the same invocation — so there's no cross-invocation
+// socket reuse for Workers' I/O model to object to.
+export async function withScopedPrismaClient<T>(fn: (db: PrismaClient) => Promise<T>): Promise<T> {
+  const client = createPrismaClient(isCloudflareWorkers());
+  try {
+    return await fn(client);
+  } finally {
+    await client.$disconnect().catch(() => {});
+  }
+}
