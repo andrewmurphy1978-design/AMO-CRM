@@ -129,15 +129,82 @@ model Contact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tags         ContactTag[]
-  fieldValues  ContactFieldValue[]
-  projects     Project[]
-  activity     ActivityLogEntry[]
-  interactions Interaction[]
+  tags                 ContactTag[]
+  fieldValues          ContactFieldValue[]
+  projects             Project[]
+  activity             ActivityLogEntry[]
+  interactions         Interaction[]
+  subscriptions        Subscription[]
+  courseEnrollments    CourseEnrollment[]
+  communityMemberships CommunityMembership[]
 
   @@index([stage])
   @@index([lastName, firstName])
   @@map("contacts")
+}
+
+// --- Additional systeme.io data (subscriptions, courses, communities) ------
+// systeme.io's public API doesn't document exact response field names for
+// these resource categories the way it does for Contacts/Tags, so each
+// record keeps the full raw payload (`raw`) alongside a few defensively
+// extracted common fields — if the extracted fields turn out wrong for this
+// account's actual data, the raw JSON is still there to fix them from.
+
+model Subscription {
+  id          String   @id @default(cuid())
+  systemeIoId Int      @unique
+  contactId   String?
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  status     String?
+  planName   String?
+  amount     Float?
+  currency   String?
+  startedAt  DateTime?
+  canceledAt DateTime?
+  raw        Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+  @@map("subscriptions")
+}
+
+model CourseEnrollment {
+  id          String   @id @default(cuid())
+  systemeIoId Int      @unique
+  contactId   String?
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  courseName String?
+  status     String?
+  enrolledAt DateTime?
+  raw        Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+  @@map("course_enrollments")
+}
+
+model CommunityMembership {
+  id          String   @id @default(cuid())
+  systemeIoId Int      @unique
+  contactId   String?
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  communityName String?
+  status        String?
+  joinedAt      DateTime?
+  raw           Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+  @@map("community_memberships")
 }
 
 // Tag definitions, mirroring systeme.io tags (each has a systeme.io id/name).
@@ -313,10 +380,10 @@ enum InteractionType {
 }
 
 model Interaction {
-  id      String           @id @default(cuid())
+  id      String          @id @default(cuid())
   type    InteractionType
   subject String?
-  notes   String           @db.Text
+  notes   String          @db.Text
 
   occurredAt DateTime @default(now())
 

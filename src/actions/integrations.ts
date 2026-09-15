@@ -43,6 +43,9 @@ export async function triggerSystemeIoSync(): Promise<{
   success?: string;
   contactsSynced?: number;
   tagsSynced?: number;
+  subscriptionsSynced?: number;
+  enrollmentsSynced?: number;
+  membershipsSynced?: number;
 }> {
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -50,8 +53,9 @@ export async function triggerSystemeIoSync(): Promise<{
     const result = await runSystemeIoSync();
     revalidatePath("/settings");
     revalidatePath("/contacts");
+    const otherSynced = result.subscriptionsSynced + result.enrollmentsSynced + result.membershipsSynced;
     return {
-      success: t.actions.systemeioSynced(result.contactsSynced, result.tagsSynced),
+      success: t.actions.systemeioSynced(result.contactsSynced, result.tagsSynced, otherSynced),
       ...result,
     };
   } catch (error) {

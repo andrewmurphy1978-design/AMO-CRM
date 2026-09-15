@@ -4,11 +4,17 @@ import {
   SystemeIoClient,
   PROMOTED_FIELD_SLUGS,
   type SystemeIoContact,
+  type SystemeIoSubscription,
+  type SystemeIoEnrollment,
+  type SystemeIoCommunityMembership,
 } from "@/lib/systemeio";
 
 export interface SyncResult {
   contactsSynced: number;
   tagsSynced: number;
+  subscriptionsSynced: number;
+  enrollmentsSynced: number;
+  membershipsSynced: number;
 }
 
 export async function getSystemeIoClient(): Promise<SystemeIoClient | null> {
@@ -32,6 +38,9 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
 
   let contactsSynced = 0;
   let tagsSynced = 0;
+  let subscriptionsSynced = 0;
+  let enrollmentsSynced = 0;
+  let membershipsSynced = 0;
 
   try {
     // 1. Tags
@@ -65,6 +74,45 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       }
     }
 
+    // 4. Subscriptions, course enrollments, community memberships — best
+    // effort: these resource categories' exact endpoint/response shape isn't
+    // documented, so a missing endpoint or unexpected shape for any one of
+    // them is logged and skipped rather than failing the whole sync.
+    const contactIdBySystemeIoId = await buildContactIdLookup();
+
+    try {
+      for await (const subscriptions of client.iterateSubscriptions()) {
+        for (const sub of subscriptions) {
+          await upsertSubscription(sub, contactIdBySystemeIoId);
+          subscriptionsSynced += 1;
+        }
+      }
+    } catch (error) {
+      console.warn("systeme.io subscriptions sync skipped:", error);
+    }
+
+    try {
+      for await (const enrollments of client.iterateEnrollments()) {
+        for (const enrollment of enrollments) {
+          await upsertEnrollment(enrollment, contactIdBySystemeIoId);
+          enrollmentsSynced += 1;
+        }
+      }
+    } catch (error) {
+      console.warn("systeme.io course enrollments sync skipped:", error);
+    }
+
+    try {
+      for await (const memberships of client.iterateCommunityMemberships()) {
+        for (const membership of memberships) {
+          await upsertCommunityMembership(membership, contactIdBySystemeIoId);
+          membershipsSynced += 1;
+        }
+      }
+    } catch (error) {
+      console.warn("systeme.io community memberships sync skipped:", error);
+    }
+
     await prisma.integrationSetting.update({
       where: { provider: "systeme_io" },
       data: {
@@ -84,7 +132,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       },
     });
 
-    return { contactsSynced, tagsSynced };
+    return { contactsSynced, tagsSynced, subscriptionsSynced, enrollmentsSynced, membershipsSynced };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync error";
 
@@ -106,6 +154,91 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
 
     throw error;
   }
+}
+
+async function buildContactIdLookup(): Promise<Map<number, string>> {
+  const contacts = await prisma.contact.findMany({
+    where: { systemeIoId: { not: null } },
+    select: { id: true, systemeIoId: true },
+  });
+  return new Map(contacts.map((c) => [c.systemeIoId as number, c.id]));
+}
+
+async function upsertSubscription(sub: SystemeIoSubscription, contactIdBySystemeIoId: Map<number, string>) {
+  const contactId = sub.contactSystemeIoId !== null ? (contactIdBySystemeIoId.get(sub.contactSystemeIoId) ?? null) : null;
+  await prisma.subscription.upsert({
+    where: { systemeIoId: sub.id },
+    update: {
+      contactId,
+      status: sub.status,
+      planName: sub.planName,
+      amount: sub.amount,
+      currency: sub.currency,
+      startedAt: sub.startedAt ? new Date(sub.startedAt) : null,
+      canceledAt: sub.canceledAt ? new Date(sub.canceledAt) : null,
+      raw: sub.raw as never,
+    },
+    create: {
+      systemeIoId: sub.id,
+      contactId,
+      status: sub.status,
+      planName: sub.planName,
+      amount: sub.amount,
+      currency: sub.currency,
+      startedAt: sub.startedAt ? new Date(sub.startedAt) : null,
+      canceledAt: sub.canceledAt ? new Date(sub.canceledAt) : null,
+      raw: sub.raw as never,
+    },
+  });
+}
+
+async function upsertEnrollment(enrollment: SystemeIoEnrollment, contactIdBySystemeIoId: Map<number, string>) {
+  const contactId =
+    enrollment.contactSystemeIoId !== null ? (contactIdBySystemeIoId.get(enrollment.contactSystemeIoId) ?? null) : null;
+  await prisma.courseEnrollment.upsert({
+    where: { systemeIoId: enrollment.id },
+    update: {
+      contactId,
+      courseName: enrollment.courseName,
+      status: enrollment.status,
+      enrolledAt: enrollment.enrolledAt ? new Date(enrollment.enrolledAt) : null,
+      raw: enrollment.raw as never,
+    },
+    create: {
+      systemeIoId: enrollment.id,
+      contactId,
+      courseName: enrollment.courseName,
+      status: enrollment.status,
+      enrolledAt: enrollment.enrolledAt ? new Date(enrollment.enrolledAt) : null,
+      raw: enrollment.raw as never,
+    },
+  });
+}
+
+async function upsertCommunityMembership(
+  membership: SystemeIoCommunityMembership,
+  contactIdBySystemeIoId: Map<number, string>
+) {
+  const contactId =
+    membership.contactSystemeIoId !== null ? (contactIdBySystemeIoId.get(membership.contactSystemeIoId) ?? null) : null;
+  await prisma.communityMembership.upsert({
+    where: { systemeIoId: membership.id },
+    update: {
+      contactId,
+      communityName: membership.communityName,
+      status: membership.status,
+      joinedAt: membership.joinedAt ? new Date(membership.joinedAt) : null,
+      raw: membership.raw as never,
+    },
+    create: {
+      systemeIoId: membership.id,
+      contactId,
+      communityName: membership.communityName,
+      status: membership.status,
+      joinedAt: membership.joinedAt ? new Date(membership.joinedAt) : null,
+      raw: membership.raw as never,
+    },
+  });
 }
 
 async function upsertContact(contact: SystemeIoContact) {

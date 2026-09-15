@@ -37,6 +37,43 @@ export interface SystemeIoCustomFieldDefinition {
   type?: string | null;
 }
 
+// The three interfaces below (Subscription, CourseEnrollment,
+// CommunityMembership) cover systeme.io resource categories the public API
+// docs list by name only — no documented response field names, unlike
+// Contacts/Tags above. Each keeps the full `raw` payload alongside a few
+// defensively extracted common fields (tried under several likely key
+// names/casings); if a field comes back wrong or missing for this account's
+// real data, `raw` still has everything needed to fix the extraction below.
+export interface SystemeIoSubscription {
+  id: number;
+  contactSystemeIoId: number | null;
+  status: string | null;
+  planName: string | null;
+  amount: number | null;
+  currency: string | null;
+  startedAt: string | null;
+  canceledAt: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface SystemeIoEnrollment {
+  id: number;
+  contactSystemeIoId: number | null;
+  courseName: string | null;
+  status: string | null;
+  enrolledAt: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface SystemeIoCommunityMembership {
+  id: number;
+  contactSystemeIoId: number | null;
+  communityName: string | null;
+  status: string | null;
+  joinedAt: string | null;
+  raw: Record<string, unknown>;
+}
+
 export class SystemeIoApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -193,6 +230,18 @@ export class SystemeIoClient {
     const data = await this.request<unknown>("/contact_fields", { limit: 200 });
     return extractItems(data).map(mapCustomFieldDefinition);
   }
+
+  async *iterateSubscriptions(pageSize = 100): AsyncGenerator<SystemeIoSubscription[]> {
+    yield* this.paginate("/subscriptions", mapSubscription, pageSize);
+  }
+
+  async *iterateEnrollments(pageSize = 100): AsyncGenerator<SystemeIoEnrollment[]> {
+    yield* this.paginate("/enrollments", mapEnrollment, pageSize);
+  }
+
+  async *iterateCommunityMemberships(pageSize = 100): AsyncGenerator<SystemeIoCommunityMembership[]> {
+    yield* this.paginate("/community_memberships", mapCommunityMembership, pageSize);
+  }
 }
 
 // --- Response parsing helpers -----------------------------------------------
@@ -240,6 +289,98 @@ function mapTag(raw: unknown): SystemeIoTag {
   return {
     id: Number(tag.id),
     name: String(tag.name ?? ""),
+  };
+}
+
+// Tries several likely key names/casings for the same logical field, since
+// the exact shape of these resources isn't documented.
+function pick(raw: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    if (raw[key] !== undefined && raw[key] !== null) return raw[key];
+  }
+  return null;
+}
+
+function pickString(raw: Record<string, unknown>, keys: string[]): string | null {
+  const value = pick(raw, keys);
+  return value === null ? null : String(value);
+}
+
+function pickNumber(raw: Record<string, unknown>, keys: string[]): number | null {
+  const value = pick(raw, keys);
+  if (value === null) return null;
+  const num = Number(value);
+  return Number.isNaN(num) ? null : num;
+}
+
+// The related contact typically comes back either as a bare id
+// (`contactId`/`contact_id`), or a nested object (`contact: { id }` /
+// `customer: { id }`).
+function pickContactId(raw: Record<string, unknown>): number | null {
+  const direct = pickNumber(raw, ["contactId", "contact_id", "customerId", "customer_id"]);
+  if (direct !== null) return direct;
+  for (const key of ["contact", "customer"]) {
+    const nested = raw[key];
+    if (nested && typeof nested === "object") {
+      const id = (nested as Record<string, unknown>).id;
+      if (id !== undefined && id !== null) {
+        const num = Number(id);
+        if (!Number.isNaN(num)) return num;
+      }
+    }
+  }
+  return null;
+}
+
+function mapSubscription(raw: Record<string, unknown>): SystemeIoSubscription {
+  const plan = raw.plan ?? raw.pricePlan ?? raw.price_plan;
+  const planName =
+    pickString(raw, ["planName", "plan_name"]) ??
+    (plan && typeof plan === "object" ? pickString(plan as Record<string, unknown>, ["name", "title"]) : null);
+  const planAmount = plan && typeof plan === "object" ? pickNumber(plan as Record<string, unknown>, ["amount", "price"]) : null;
+
+  return {
+    id: Number(raw.id),
+    contactSystemeIoId: pickContactId(raw),
+    status: pickString(raw, ["status", "state"]),
+    planName,
+    amount: pickNumber(raw, ["amount", "price"]) ?? planAmount,
+    currency: pickString(raw, ["currency", "currencyCode", "currency_code"]),
+    startedAt: pickString(raw, ["startedAt", "started_at", "createdAt", "created_at"]),
+    canceledAt: pickString(raw, ["canceledAt", "canceled_at", "cancelledAt", "cancelled_at"]),
+    raw,
+  };
+}
+
+function mapEnrollment(raw: Record<string, unknown>): SystemeIoEnrollment {
+  const course = raw.course;
+  const courseName =
+    pickString(raw, ["courseName", "course_name"]) ??
+    (course && typeof course === "object" ? pickString(course as Record<string, unknown>, ["name", "title"]) : null);
+
+  return {
+    id: Number(raw.id),
+    contactSystemeIoId: pickContactId(raw),
+    courseName,
+    status: pickString(raw, ["status", "state"]),
+    enrolledAt: pickString(raw, ["enrolledAt", "enrolled_at", "createdAt", "created_at"]),
+    raw,
+  };
+}
+
+function mapCommunityMembership(raw: Record<string, unknown>): SystemeIoCommunityMembership {
+  const community = raw.community;
+  const communityName =
+    pickString(raw, ["communityName", "community_name"]) ??
+    (community && typeof community === "object" ? pickString(community as Record<string, unknown>, ["name", "title"]) : null);
+
+  return {
+    id: Number(raw.id),
+    contactSystemeIoId: pickContactId(raw),
+    communityName,
+    status: pickString(raw, ["status", "state"]),
+    joinedAt: pickString(raw, ["joinedAt", "joined_at", "createdAt", "created_at"]),
+    raw,
   };
 }
 

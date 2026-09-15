@@ -116,6 +116,9 @@ export default async function ContactDetailPage({
         include: { loggedBy: true, project: true },
       },
       owner: true,
+      subscriptions: { orderBy: { startedAt: "desc" } },
+      courseEnrollments: { orderBy: { enrolledAt: "desc" } },
+      communityMemberships: { orderBy: { joinedAt: "desc" } },
     },
   });
 
@@ -298,6 +301,75 @@ export default async function ContactDetailPage({
               </div>
             )}
           </section>
+
+          {(contact.subscriptions.length > 0 ||
+            contact.courseEnrollments.length > 0 ||
+            contact.communityMemberships.length > 0) && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.purchasesTitle}</h2>
+              <div className="mt-4 grid gap-6 sm:grid-cols-3">
+                {contact.subscriptions.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
+                      {t.contactDetail.subscriptionsTitle}
+                    </h3>
+                    <ul className="mt-2 space-y-2 text-sm text-ink">
+                      {contact.subscriptions.map((sub) => (
+                        <li key={sub.id}>
+                          <p className="font-medium">{sub.planName ?? t.contactDetail.subscriptionsTitle}</p>
+                          <p className="text-xs text-soft">
+                            {sub.status ?? "—"}
+                            {sub.amount != null && ` · ${sub.amount}${sub.currency ? ` ${sub.currency}` : ""}`}
+                            {sub.startedAt &&
+                              ` · ${t.contactDetail.since} ${format(sub.startedAt, "PP", { locale: dateLocale })}`}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {contact.courseEnrollments.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
+                      {t.contactDetail.enrollmentsTitle}
+                    </h3>
+                    <ul className="mt-2 space-y-2 text-sm text-ink">
+                      {contact.courseEnrollments.map((enrollment) => (
+                        <li key={enrollment.id}>
+                          <p className="font-medium">{enrollment.courseName ?? t.contactDetail.enrollmentsTitle}</p>
+                          <p className="text-xs text-soft">
+                            {enrollment.status ?? "—"}
+                            {enrollment.enrolledAt &&
+                              ` · ${t.contactDetail.since} ${format(enrollment.enrolledAt, "PP", { locale: dateLocale })}`}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {contact.communityMemberships.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
+                      {t.contactDetail.membershipsTitle}
+                    </h3>
+                    <ul className="mt-2 space-y-2 text-sm text-ink">
+                      {contact.communityMemberships.map((membership) => (
+                        <li key={membership.id}>
+                          <p className="font-medium">{membership.communityName ?? t.contactDetail.membershipsTitle}</p>
+                          <p className="text-xs text-soft">
+                            {membership.status ?? "—"}
+                            {membership.joinedAt &&
+                              ` · ${t.contactDetail.since} ${format(membership.joinedAt, "PP", { locale: dateLocale })}`}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
