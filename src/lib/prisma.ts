@@ -71,17 +71,31 @@ function createPrismaClient(workers: boolean): PrismaClient {
 // request that opened it — the module scope (globalThis) can be reused by
 // an unrelated later request in the same isolate, and a later request
 // reusing a socket from a previous one doesn't fail cleanly, it hangs
-// forever (this was the cause of the "Error 1101" / hung-request bugs).
-// So the client must NEVER be cached across requests when running under
-// Workers: build a fresh one every time. Hyperdrive pools connections on
-// Cloudflare's side specifically so that doing this per request is cheap.
+// forever (this was the cause of the "Error 1101" / hung-request bugs). So
+// the client must NEVER be cached on globalThis under Workers.
+//
+// But it still needs to be cached *somewhere* for the lifetime of a single
+// request — without this, every top-level `prisma.<model>` access built a
+// brand new Pool from scratch (each a fresh Hyperdrive connection), so a
+// page issuing several queries paid that connection cost several times
+// over. OpenNext's worker entrypoint creates a fresh `{ env, ctx, cf }`
+// object per request via AsyncLocalStorage (see runWithCloudflareRequestContext
+// in @opennextjs/cloudflare's init template) and getCloudflareContext()
+// returns that same object for every call made during that one request —
+// so it's a safe, per-request-scoped place to memoize the client: never
+// reused across requests, reused freely within one.
+//
 // Plain Node.js (local dev, `next build`, scripts) is a normal long-lived
-// process with no such per-request isolation, so caching there is safe and
-// avoids reconnecting on every call.
+// process with no such per-request isolation, so caching on globalThis
+// there is safe and avoids reconnecting on every call.
 function getPrismaClient(): PrismaClient {
   const workers = isCloudflareWorkers();
   if (workers) {
-    return createPrismaClient(true);
+    const ctx = getCloudflareContext() as unknown as { __prisma?: PrismaClient };
+    if (!ctx.__prisma) {
+      ctx.__prisma = createPrismaClient(true);
+    }
+    return ctx.__prisma;
   }
   if (!globalForPrisma.prisma) {
     globalForPrisma.prisma = createPrismaClient(false);
