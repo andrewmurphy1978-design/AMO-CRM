@@ -45,28 +45,30 @@ body {
 }
 
 /* Blurred, ambient brand background for the app shell's main content area.
-   A separate ::before (rather than background-* directly on the element)
-   so `filter: blur()` doesn't also blur the content sitting on top of it —
-   scaled up slightly to hide the blur's soft edges. */
+   `position: absolute` (not `fixed`) so it's confined to its nearest
+   positioned ancestor (the main content wrapper) instead of the viewport —
+   a `fixed`, z-indexed element always paints above non-positioned in-flow
+   siblings regardless of DOM order, which was bleeding this over the
+   sidebar and hiding it. Scaled up slightly to hide the blur's soft edges. */
 .amo-bg-image {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   background-image: url("https://d1yei2z3i6k35z.cloudfront.net/18410699/6a62cc32379aa9.89171099_MountainbackgroundwithAICircuitry.png");
   background-size: cover;
   background-position: center;
-  filter: blur(14px);
-  transform: scale(1.1);
+  filter: blur(6px);
+  transform: scale(1.05);
 }
 
 .amo-bg-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 1;
   background: linear-gradient(
     180deg,
-    rgba(13, 43, 26, 0.92) 0%,
-    rgba(13, 43, 26, 0.86) 100%
+    rgba(13, 43, 26, 0.72) 0%,
+    rgba(13, 43, 26, 0.62) 100%
   );
 }
 
