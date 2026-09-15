@@ -4,6 +4,7 @@ import { useState } from "react";
 import PhoneInput, { type Value, type Country } from "react-phone-number-input";
 import flags from "react-phone-number-input/flags";
 import "react-phone-number-input/style.css";
+import { toE164 } from "@/lib/phone-display";
 
 // A flag-first international phone field (like the one on the marketing
 // site's funnel forms): the calling code is picked from the flag dropdown
@@ -26,7 +27,13 @@ export default function PhoneField({
   defaultValue?: string | null;
   hideLabel?: boolean;
 }) {
-  const [value, setValue] = useState<Value | undefined>((defaultValue as Value) || undefined);
+  // Contacts synced from systeme.io often have phone numbers stored in
+  // national format (e.g. "(514) 950-6985") rather than the E.164 string
+  // this widget's controlled `value` prop requires to render formatted —
+  // normalize once up front using the same country hint as the flag.
+  const [value, setValue] = useState<Value | undefined>(
+    (toE164(defaultValue, defaultCountry) as Value) || undefined
+  );
 
   return (
     <div>

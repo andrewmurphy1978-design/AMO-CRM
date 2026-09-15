@@ -175,11 +175,11 @@ export default async function ContactDetailPage({
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldPhones}</dt>
                 <dd className="space-y-0.5 text-ink">
                   <div>
-                    <PhoneDisplay value={contact.phone} />
+                    <PhoneDisplay value={contact.phone} country={contact.country} />
                   </div>
                   {contact.phone2 && (
                     <div>
-                      <PhoneDisplay value={contact.phone2} />
+                      <PhoneDisplay value={contact.phone2} country={contact.country} />
                     </div>
                   )}
                 </dd>
@@ -187,7 +187,7 @@ export default async function ContactDetailPage({
               <div>
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldWhatsapp}</dt>
                 <dd className="text-ink">
-                  <PhoneDisplay value={contact.whatsapp} />
+                  <PhoneDisplay value={contact.whatsapp} country={contact.country} />
                 </dd>
               </div>
             </dl>
@@ -246,7 +246,7 @@ export default async function ContactDetailPage({
                         </span>
                         <span className="text-ink">
                           {colonSep(lang)}
-                          <PhoneDisplay value={contact.billingPhone} />
+                          <PhoneDisplay value={contact.billingPhone} country={contact.billingCountry} />
                         </span>
                       </p>
                     )}

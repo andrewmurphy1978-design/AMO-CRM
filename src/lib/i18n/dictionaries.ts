@@ -1,5 +1,33 @@
 export type Lang = "en" | "fr";
 
+// Friendly labels for systeme.io custom-field slugs, used when reporting
+// which fields a contact-update push to systeme.io couldn't accept (see
+// contactUpdatedPartialWarning below). Falls back to the raw slug for any
+// slug not listed here.
+const SYSTEMEIO_SLUG_LABELS_EN: Record<string, string> = {
+  first_name: "First name",
+  surname: "Last name",
+  phone_number: "Phone number",
+  street_address: "Address",
+  city: "City",
+  state: "State/Province",
+  postcode: "Postal code",
+  country: "Country",
+  company_name: "Company",
+};
+
+const SYSTEMEIO_SLUG_LABELS_FR: Record<string, string> = {
+  first_name: "Prénom",
+  surname: "Nom de famille",
+  phone_number: "Numéro de téléphone",
+  street_address: "Adresse",
+  city: "Ville",
+  state: "Province/État",
+  postcode: "Code postal",
+  country: "Pays",
+  company_name: "Entreprise",
+};
+
 // Flat-ish, per-screen dictionaries. Every screen/component that shows text
 // pulls from here via `dictionaries[lang]`, with `lang` computed once per
 // request server-side (see get-lang.ts) and passed down as a prop to any
@@ -305,6 +333,8 @@ export const dictionaries = {
       contactEmailExistsOther: "Another contact already uses this email.",
       contactUpdated: "Contact updated.",
       contactUpdatedWarning: (message: string) => ` (saved here, but systeme.io update failed: ${message})`,
+      contactUpdatedPartialWarning: (skippedSlugs: string[]) =>
+        ` (saved here, but systeme.io didn't accept: ${skippedSlugs.map((s) => SYSTEMEIO_SLUG_LABELS_EN[s] ?? s).join(", ")})`,
       projectUpdated: "Project updated.",
       taskUpdated: "Task updated.",
       userAdded: (name: string) => `Added ${name}.`,
@@ -625,6 +655,8 @@ export const dictionaries = {
       contactEmailExistsOther: "Un autre contact utilise déjà ce courriel.",
       contactUpdated: "Contact mis à jour.",
       contactUpdatedWarning: (message: string) => ` (enregistré ici, mais la mise à jour systeme.io a échoué : ${message})`,
+      contactUpdatedPartialWarning: (skippedSlugs: string[]) =>
+        ` (enregistré ici, mais systeme.io a refusé : ${skippedSlugs.map((s) => SYSTEMEIO_SLUG_LABELS_FR[s] ?? s).join(", ")})`,
       projectUpdated: "Projet mis à jour.",
       taskUpdated: "Tâche mise à jour.",
       userAdded: (name: string) => `${name} a été ajouté(e).`,

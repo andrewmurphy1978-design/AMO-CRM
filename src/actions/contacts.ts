@@ -166,7 +166,10 @@ export async function updateContact(
           const value = (data as Record<string, string | undefined>)[column];
           if (value) fields[slug] = value;
         }
-        await client.updateContactFields(updated.systemeIoId, fields);
+        const { skipped } = await client.updateContactFields(updated.systemeIoId, fields);
+        if (skipped.length > 0) {
+          warning = t.actions.contactUpdatedPartialWarning(skipped);
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown error";

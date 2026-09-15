@@ -120,7 +120,7 @@ export default async function ContactsPage({
               </div>
               <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
               <p className="mt-0.5 text-sm text-ink/70">
-                <PhoneDisplay value={contact.phone} />
+                <PhoneDisplay value={contact.phone} country={contact.country} />
                 {contact.country && (
                   <>
                     {" · "}
@@ -177,7 +177,7 @@ export default async function ContactsPage({
                   </td>
                   <td className="px-4 py-3 text-ink/70">{contact.email}</td>
                   <td className="px-4 py-3 text-ink/70">
-                    <PhoneDisplay value={contact.phone} />
+                    <PhoneDisplay value={contact.phone} country={contact.country} />
                   </td>
                   <td className="px-4 py-3 text-ink/70">
                     {contact.country ? (

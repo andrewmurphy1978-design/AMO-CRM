@@ -76,10 +76,13 @@ export interface SystemeIoCommunityMembership {
 
 export class SystemeIoApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** Full, untruncated response body — `message` is truncated for display. */
+  body: string;
+  constructor(message: string, status: number, body = "") {
     super(message);
     this.name = "SystemeIoApiError";
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -140,7 +143,8 @@ export class SystemeIoClient {
       const text = await response.text().catch(() => "");
       throw new SystemeIoApiError(
         `systeme.io API request to ${method} ${path} failed with ${response.status}: ${text.slice(0, 300)}`,
-        response.status
+        response.status,
+        text
       );
     }
 
@@ -153,17 +157,36 @@ export class SystemeIoClient {
    * `fields` keys must be systeme.io custom-field slugs (see
    * DEFAULT_PUSH_FIELD_SLUGS below) — NOT our own column names.
    *
-   * NOTE: built from systeme.io's published API conventions (this
-   * environment couldn't reach developer.systeme.io to confirm the exact
-   * request shape). If updates don't show up as expected in systeme.io, the
-   * most likely cause is a field slug mismatch with this account's actual
-   * custom field slugs — tell Claude the real slugs (visible in systeme.io
-   * under Contacts > Custom fields) and this can be adjusted.
+   * systeme.io rejects the *entire* PATCH if any one field's slug doesn't
+   * exist on this account or its value isn't a valid choice for a
+   * select-type field (422, with a per-field `fields[N].slug`/`fields[N].value`
+   * message). Rather than losing every field over one bad one, this parses
+   * the rejected indexes out of the error body, drops just those fields, and
+   * retries — so e.g. a stale "country" value doesn't also block "city" and
+   * "state" from saving. Returns the slugs that had to be dropped so the
+   * caller can tell the user which fields didn't make it to systeme.io.
    */
-  async updateContactFields(contactId: number, fields: Record<string, string>): Promise<void> {
+  async updateContactFields(contactId: number, fields: Record<string, string>): Promise<{ skipped: string[] }> {
     const fieldsArray = Object.entries(fields).map(([slug, value]) => ({ slug, value }));
-    if (fieldsArray.length === 0) return;
-    await this.mutate("PATCH", `/contacts/${contactId}`, { fields: fieldsArray }, "application/merge-patch+json");
+    const skipped: string[] = [];
+
+    while (fieldsArray.length > 0) {
+      try {
+        await this.mutate("PATCH", `/contacts/${contactId}`, { fields: fieldsArray }, "application/merge-patch+json");
+        return { skipped };
+      } catch (error) {
+        if (!(error instanceof SystemeIoApiError) || error.status !== 422) throw error;
+        const badIndexes = [...new Set([...error.body.matchAll(/fields\[(\d+)\]/g)].map((m) => Number(m[1])))];
+        if (badIndexes.length === 0) throw error;
+        for (const index of badIndexes.sort((a, b) => b - a)) {
+          const bad = fieldsArray[index];
+          if (bad) skipped.push(bad.slug);
+          fieldsArray.splice(index, 1);
+        }
+      }
+    }
+
+    return { skipped };
   }
 
   async addTagToContact(contactId: number, tagId: number): Promise<void> {
@@ -414,18 +437,19 @@ export const PROMOTED_FIELD_SLUGS: Record<string, string> = {
 // The reverse of the above, for pushing CRM edits back to systeme.io. Some
 // columns above accept more than one systeme.io slug (e.g. "surname" or
 // "last_name" both map to lastName) — this picks one default to write to.
-// If this account's systeme.io fields actually use the other variant, a
-// pushed edit will create a new field under this slug instead of updating
-// the existing one; adjust these to match if that happens.
+// Confirmed 2026-09 against this account's actual custom field slugs (via
+// the synced CustomFieldDefinition table): "street_address" not "address",
+// "postcode" not "zip_code", "company_name" not "company". There is no
+// "website" field on this account at all, so it isn't pushed — an edit to
+// it only lives in the CRM's own database.
 export const DEFAULT_PUSH_FIELD_SLUGS: Record<string, string> = {
   firstName: "first_name",
   lastName: "surname",
   phone: "phone_number",
-  address: "address",
+  address: "street_address",
   city: "city",
   state: "state",
-  zip: "zip_code",
+  zip: "postcode",
   country: "country",
-  company: "company",
-  website: "website",
+  company: "company_name",
 };
