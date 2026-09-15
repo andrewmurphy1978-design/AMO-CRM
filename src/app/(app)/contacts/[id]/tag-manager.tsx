@@ -1,36 +1,42 @@
 "use client";
 
-import { useRef, useTransition } from "react";
+import { useTransition } from "react";
 import { addTagToContact, removeTagFromContact } from "@/actions/contacts";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { tagKind, TAG_KIND_COLORS, sortTags } from "@/lib/tag-colors";
 
 export default function TagManager({
   contactId,
   tags,
+  allTags,
   lang,
 }: {
   contactId: string;
   tags: { id: string; name: string }[];
+  allTags: { id: string; name: string }[];
   lang: Lang;
 }) {
   const [pending, startTransition] = useTransition();
-  const inputRef = useRef<HTMLInputElement>(null);
   const t = getDict(lang);
+
+  const appliedIds = new Set(tags.map((tag) => tag.id));
+  const availableTags = allTags.filter((tag) => !appliedIds.has(tag.id));
+  const displayTags = sortTags(tags.map((tag) => ({ tag })));
 
   return (
     <div className="mt-3">
       <div className="flex flex-wrap gap-2">
-        {tags.map((tag) => (
+        {displayTags.map(({ tag }) => (
           <span
             key={tag.id}
-            className="flex items-center gap-1 rounded-full border border-card-border bg-black/5 px-2 py-1 text-xs text-ink"
+            className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${TAG_KIND_COLORS[tagKind(tag.name)]}`}
           >
             {tag.name}
             <button
               type="button"
               disabled={pending}
               onClick={() => startTransition(() => removeTagFromContact(contactId, tag.id))}
-              className="text-soft hover:text-red-600"
+              className="opacity-70 hover:opacity-100"
               aria-label={`${t.tagManager.remove} ${tag.name}`}
             >
               ×
@@ -39,30 +45,23 @@ export default function TagManager({
         ))}
         {tags.length === 0 && <p className="text-sm text-soft">{t.tagManager.noTags}</p>}
       </div>
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const value = inputRef.current?.value.trim();
-          if (!value) return;
-          startTransition(() => addTagToContact(contactId, value));
-          if (inputRef.current) inputRef.current.value = "";
+      <select
+        disabled={pending || availableTags.length === 0}
+        value=""
+        onChange={(e) => {
+          const name = e.target.value;
+          if (!name) return;
+          startTransition(() => addTagToContact(contactId, name));
         }}
+        className="mt-3 w-full rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30 disabled:opacity-60"
       >
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder={t.tagManager.addPlaceholder}
-          className="flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-        />
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-md border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5"
-        >
-          {t.tagManager.add}
-        </button>
-      </form>
+        <option value="">{t.contactDetail.addTagPlaceholder}</option>
+        {availableTags.map((tag) => (
+          <option key={tag.id} value={tag.name}>
+            {tag.name}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

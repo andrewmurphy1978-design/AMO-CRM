@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { tagKind, TAG_KIND_COLORS, sortTags } from "@/lib/tag-colors";
+import { countryFlag } from "@/lib/country-flag";
+import ContactFilters from "./filters";
 
 const STAGE_COLORS: Record<string, string> = {
   LEAD: "bg-emerald-50 text-emerald-700",
@@ -12,44 +15,26 @@ const STAGE_COLORS: Record<string, string> = {
   UNSUBSCRIBED: "bg-red-50 text-red-600",
 };
 
-type TagKind = "fr" | "en" | "other";
-
-function tagKind(name: string): TagKind {
-  const n = name.trim().toLowerCase();
-  if (n === "français" || n === "francais" || n === "french") return "fr";
-  if (n === "english" || n === "anglais") return "en";
-  return "other";
-}
-
-const TAG_KIND_RANK: Record<TagKind, number> = { fr: 0, en: 1, other: 2 };
-
-const TAG_KIND_COLORS: Record<TagKind, string> = {
-  fr: "bg-sky-50 text-sky-700",
-  en: "bg-red-50 text-red-600",
-  other: "bg-black/5 text-soft",
-};
-
-function sortTags<T extends { tag: { name: string } }>(tags: T[]): T[] {
-  return [...tags].sort((a, b) => {
-    const rankDiff = TAG_KIND_RANK[tagKind(a.tag.name)] - TAG_KIND_RANK[tagKind(b.tag.name)];
-    if (rankDiff !== 0) return rankDiff;
-    return a.tag.name.localeCompare(b.tag.name);
-  });
+function toArray(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; tag?: string }>;
+  searchParams: Promise<{ q?: string; stage?: string | string[]; tag?: string | string[] }>;
 }) {
   const { q, stage, tag } = await searchParams;
+  const stages = toArray(stage);
+  const selectedTags = toArray(tag);
   const lang = await getLang();
   const t = getDict(lang);
   const STAGE_LABELS = t.stages;
 
   const where: Prisma.ContactWhereInput = {};
-  if (stage) where.stage = stage as Prisma.ContactWhereInput["stage"];
-  if (tag) where.tags = { some: { tag: { name: tag } } };
+  if (stages.length > 0) where.stage = { in: stages } as Prisma.ContactWhereInput["stage"];
+  if (selectedTags.length > 0) where.tags = { some: { tag: { name: { in: selectedTags } } } };
   if (q) {
     where.OR = [
       { email: { contains: q, mode: "insensitive" } },
@@ -68,6 +53,9 @@ export default async function ContactsPage({
   });
   const tags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
 
+  const stageOptions = Object.entries(STAGE_LABELS).map(([value, label]) => ({ value, label }));
+  const tagOptions = tags.map((tg) => ({ value: tg.name, label: tg.name }));
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -83,45 +71,17 @@ export default async function ContactsPage({
         </Link>
       </div>
 
-      <form className="flex flex-wrap gap-3" method="get">
-        <input
-          type="search"
-          name="q"
-          defaultValue={q}
-          placeholder={t.contacts.searchPlaceholder}
-          className="w-64 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-        />
-        <select
-          name="stage"
-          defaultValue={stage ?? ""}
-          className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-        >
-          <option value="">{t.contacts.allStages}</option>
-          {Object.entries(STAGE_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <select
-          name="tag"
-          defaultValue={tag ?? ""}
-          className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-        >
-          <option value="">{t.contacts.allTags}</option>
-          {tags.map((tagOption) => (
-            <option key={tagOption.id} value={tagOption.name}>
-              {tagOption.name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
-        >
-          {t.common.filter}
-        </button>
-      </form>
+      <ContactFilters
+        q={q ?? ""}
+        stageOptions={stageOptions}
+        tagOptions={tagOptions}
+        selectedStages={stages}
+        selectedTags={selectedTags}
+        searchPlaceholder={t.contacts.searchPlaceholder}
+        allStagesLabel={t.contacts.allStages}
+        allTagsLabel={t.contacts.allTags}
+        filterLabel={t.common.filter}
+      />
 
       {/* Mobile: stacked cards instead of a cramped multi-column table. */}
       <div className="divide-y divide-card-border rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
@@ -129,15 +89,25 @@ export default async function ContactsPage({
           <Link
             key={contact.id}
             href={`/contacts/${contact.id}`}
-            className={`block px-4 py-3 ${i % 2 === 0 ? "bg-black/15" : "bg-white/[0.03]"}`}
+            className="block px-4 py-3"
+            style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}
           >
             <div className="flex items-start justify-between gap-2">
               <p className="font-medium text-ink">
                 {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
               </p>
-              <span className="shrink-0 text-xs text-soft">{contact.source ?? "—"}</span>
+              <span className="shrink-0 text-xs text-ink/70">{contact.source ?? "—"}</span>
             </div>
-            <p className="mt-1 truncate text-sm text-soft">{contact.email}</p>
+            <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
+            <p className="mt-0.5 text-sm text-ink/70">
+              {contact.phone ?? "—"}
+              {contact.country && (
+                <>
+                  {" · "}
+                  {countryFlag(contact.country)} {contact.country}
+                </>
+              )}
+            </p>
             <div className="mt-2">
               <span className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
                 {STAGE_LABELS[contact.stage]}
@@ -163,24 +133,36 @@ export default async function ContactsPage({
       {/* Desktop/tablet: full table. */}
       <div className="hidden overflow-x-auto rounded-lg border border-card-border bg-card-bg shadow-sm sm:block">
         <table className="min-w-full divide-y divide-card-border text-sm">
-          <thead className="bg-field-bg text-left text-xs font-medium uppercase tracking-wide text-soft">
+          <thead className="text-left text-xs font-medium uppercase tracking-wide" style={{ backgroundColor: "#1e4430", color: "#f4faf6" }}>
             <tr>
               <th className="px-4 py-3">{t.contacts.colName}</th>
               <th className="px-4 py-3">{t.contacts.colEmail}</th>
+              <th className="px-4 py-3">{t.contacts.colPhone}</th>
+              <th className="px-4 py-3">{t.contacts.colCountry}</th>
               <th className="px-4 py-3">{t.contacts.colStage}</th>
               <th className="px-4 py-3">{t.contacts.colTags}</th>
               <th className="px-4 py-3">{t.contacts.colSource}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-card-border">
-            {contacts.map((contact) => (
-              <tr key={contact.id} className="odd:bg-black/15 even:bg-white/[0.03] hover:bg-black/5">
+            {contacts.map((contact, i) => (
+              <tr key={contact.id} style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}>
                 <td className="px-4 py-3">
                   <Link href={`/contacts/${contact.id}`} className="font-medium text-ink hover:underline">
                     {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-soft">{contact.email}</td>
+                <td className="px-4 py-3 text-ink/70">{contact.email}</td>
+                <td className="px-4 py-3 text-ink/70">{contact.phone ?? "—"}</td>
+                <td className="px-4 py-3 text-ink/70">
+                  {contact.country ? (
+                    <>
+                      {countryFlag(contact.country)} {contact.country}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}
@@ -200,12 +182,12 @@ export default async function ContactsPage({
                     ))}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-soft">{contact.source ?? "—"}</td>
+                <td className="px-4 py-3 text-ink/70">{contact.source ?? "—"}</td>
               </tr>
             ))}
             {contacts.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-soft">
+                <td colSpan={7} className="px-4 py-8 text-center text-soft">
                   {t.contacts.noContactsFound}
                 </td>
               </tr>

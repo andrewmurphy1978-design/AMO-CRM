@@ -97,6 +97,27 @@ model Contact {
   website   String?
 
   // --- Our own CRM-level fields (not from systeme.io) ---
+  // Only the core fields above (phone/address/city/state/zip/country) are
+  // pushed back to systeme.io on save — everything below is CRM-only
+  // enrichment with no systeme.io equivalent.
+  phone2   String?
+  whatsapp String?
+
+  otherAddress String?
+  otherCity    String?
+  otherState   String?
+  otherZip     String?
+  otherCountry String?
+
+  billingAddress     String?
+  billingCity        String?
+  billingState       String?
+  billingZip         String?
+  billingCountry     String?
+  billingContactName String?
+  billingEmail       String?
+  billingPhone       String?
+
   stage   ContactStage @default(LEAD)
   notes   String?      @db.Text
   ownerId String?

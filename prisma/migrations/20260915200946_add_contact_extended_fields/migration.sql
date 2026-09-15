@@ -1,0 +1,16 @@
+-- AlterTable
+ALTER TABLE "contacts" ADD COLUMN     "billingAddress" TEXT,
+ADD COLUMN     "billingCity" TEXT,
+ADD COLUMN     "billingContactName" TEXT,
+ADD COLUMN     "billingCountry" TEXT,
+ADD COLUMN     "billingEmail" TEXT,
+ADD COLUMN     "billingPhone" TEXT,
+ADD COLUMN     "billingState" TEXT,
+ADD COLUMN     "billingZip" TEXT,
+ADD COLUMN     "otherAddress" TEXT,
+ADD COLUMN     "otherCity" TEXT,
+ADD COLUMN     "otherCountry" TEXT,
+ADD COLUMN     "otherState" TEXT,
+ADD COLUMN     "otherZip" TEXT,
+ADD COLUMN     "phone2" TEXT,
+ADD COLUMN     "whatsapp" TEXT;

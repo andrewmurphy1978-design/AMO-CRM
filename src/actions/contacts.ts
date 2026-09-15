@@ -14,25 +14,69 @@ const ContactSchema = z.object({
   firstName: z.string().trim().optional(),
   lastName: z.string().trim().optional(),
   phone: z.string().trim().optional(),
+  phone2: z.string().trim().optional(),
+  whatsapp: z.string().trim().optional(),
   company: z.string().trim().optional(),
+  locale: z.string().trim().optional(),
+  address: z.string().trim().optional(),
   city: z.string().trim().optional(),
+  state: z.string().trim().optional(),
+  zip: z.string().trim().optional(),
   country: z.string().trim().optional(),
+  otherAddress: z.string().trim().optional(),
+  otherCity: z.string().trim().optional(),
+  otherState: z.string().trim().optional(),
+  otherZip: z.string().trim().optional(),
+  otherCountry: z.string().trim().optional(),
+  billingAddress: z.string().trim().optional(),
+  billingCity: z.string().trim().optional(),
+  billingState: z.string().trim().optional(),
+  billingZip: z.string().trim().optional(),
+  billingCountry: z.string().trim().optional(),
+  billingContactName: z.string().trim().optional(),
+  billingEmail: z.string().trim().optional(),
+  billingPhone: z.string().trim().optional(),
   stage: z.enum(["LEAD", "PROSPECT", "CLIENT", "PAST_CLIENT", "UNSUBSCRIBED"]),
   notes: z.string().trim().optional(),
 });
 
+const CONTACT_FORM_FIELDS = [
+  "firstName",
+  "lastName",
+  "phone",
+  "phone2",
+  "whatsapp",
+  "company",
+  "locale",
+  "address",
+  "city",
+  "state",
+  "zip",
+  "country",
+  "otherAddress",
+  "otherCity",
+  "otherState",
+  "otherZip",
+  "otherCountry",
+  "billingAddress",
+  "billingCity",
+  "billingState",
+  "billingZip",
+  "billingCountry",
+  "billingContactName",
+  "billingEmail",
+  "billingPhone",
+  "notes",
+] as const;
+
 function readContactForm(formData: FormData) {
-  const raw = {
+  const raw: Record<string, string | undefined> = {
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
-    firstName: String(formData.get("firstName") ?? "").trim() || undefined,
-    lastName: String(formData.get("lastName") ?? "").trim() || undefined,
-    phone: String(formData.get("phone") ?? "").trim() || undefined,
-    company: String(formData.get("company") ?? "").trim() || undefined,
-    city: String(formData.get("city") ?? "").trim() || undefined,
-    country: String(formData.get("country") ?? "").trim() || undefined,
     stage: String(formData.get("stage") ?? "LEAD"),
-    notes: String(formData.get("notes") ?? "").trim() || undefined,
   };
+  for (const field of CONTACT_FORM_FIELDS) {
+    raw[field] = String(formData.get(field) ?? "").trim() || undefined;
+  }
   return ContactSchema.parse(raw);
 }
 

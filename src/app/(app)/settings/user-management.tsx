@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { createUser, updateUser, deleteUser, resetUserPassword } from "@/actions/users";
-import PhoneField from "./phone-input";
+import PhoneField from "@/components/phone-field";
 import { COUNTRIES } from "@/lib/countries";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 

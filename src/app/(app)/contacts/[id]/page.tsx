@@ -9,6 +9,36 @@ import InteractionLog from "../../interaction-log";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
+import { countryFlag } from "@/lib/country-flag";
+import { formatPhoneDisplay } from "@/lib/phone-display";
+
+function AddressLines({
+  address,
+  city,
+  state,
+  zip,
+  country,
+}: {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country?: string | null;
+}) {
+  const cityLine = [city, state, zip].filter(Boolean).join(" ");
+  if (!address && !cityLine && !country) return <p className="text-sm text-soft">—</p>;
+  return (
+    <div className="text-sm text-ink">
+      {address && <p>{address}</p>}
+      {cityLine && <p>{cityLine}</p>}
+      {country && (
+        <p>
+          {countryFlag(country)} {country}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default async function ContactDetailPage({
   params,
@@ -38,20 +68,11 @@ export default async function ContactDetailPage({
 
   if (!contact) notFound();
 
+  const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
+
   const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email;
 
-  const coreFields: { label: string; value: string | null }[] = [
-    { label: t.contactDetail.fieldEmail, value: contact.email },
-    { label: t.contactDetail.fieldPhone, value: contact.phone },
-    { label: t.contactDetail.fieldCompany, value: contact.company },
-    { label: t.contactDetail.fieldAddress, value: contact.address },
-    { label: t.contactDetail.fieldCity, value: contact.city },
-    { label: t.contactDetail.fieldState, value: contact.state },
-    { label: t.contactDetail.fieldZip, value: contact.zip },
-    { label: t.contactDetail.fieldCountry, value: contact.country },
-    { label: t.contactDetail.fieldWebsite, value: contact.website },
-    { label: t.contactDetail.fieldLocale, value: contact.locale },
-    { label: t.contactDetail.fieldOwner, value: contact.owner?.name ?? null },
+  const systemFields: { label: string; value: string | null }[] = [
     { label: t.contactDetail.fieldSource, value: contact.source },
     {
       label: t.contactDetail.fieldSystemeIoRegistered,
@@ -97,34 +118,141 @@ export default async function ContactDetailPage({
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
             <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.contactDetailsTitle}</h2>
-            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-              {coreFields
-                .filter((f) => f.value)
-                .map((f) => (
-                  <div key={f.label}>
-                    <dt className="text-xs uppercase tracking-wide text-soft">{f.label}</dt>
-                    <dd className="text-ink">{f.value}</dd>
-                  </div>
-                ))}
+
+            {/* Line 1: Email, Phone, Second phone, WhatsApp */}
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldEmail}</dt>
+                <dd className="text-ink">{contact.email}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldPhone}</dt>
+                <dd className="text-ink">{formatPhoneDisplay(contact.phone) ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldPhone2}</dt>
+                <dd className="text-ink">{formatPhoneDisplay(contact.phone2) ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldWhatsapp}</dt>
+                <dd className="text-ink">{formatPhoneDisplay(contact.whatsapp) ?? "—"}</dd>
+              </div>
             </dl>
 
-            {contact.fieldValues.length > 0 && (
-              <>
-                <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-soft">
-                  {t.contactDetail.otherFields}
+            {/* Line 2: Company, Language */}
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldCompany}</dt>
+                <dd className="text-ink">{contact.company ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldLanguage}</dt>
+                <dd className="text-ink">{contact.locale ?? "—"}</dd>
+              </div>
+            </dl>
+
+            {/* Addresses: Main on the left, Other + Billing stacked on the right */}
+            <div className="mt-6 grid gap-6 sm:grid-cols-2">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
+                  {t.contactDetail.mainAddressTitle}
                 </h3>
-                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  {contact.fieldValues.map((fv) => (
-                    <div key={fv.id}>
-                      <dt className="text-xs uppercase tracking-wide text-soft">
-                        {fv.definition?.label ?? fv.fieldSlug}
-                      </dt>
-                      <dd className="text-ink">{fv.value}</dd>
+                <div className="mt-2">
+                  <AddressLines
+                    address={contact.address}
+                    city={contact.city}
+                    state={contact.state}
+                    zip={contact.zip}
+                    country={contact.country}
+                  />
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
+                    {t.contactDetail.otherAddressTitle}
+                  </h3>
+                  <div className="mt-2">
+                    <AddressLines
+                      address={contact.otherAddress}
+                      city={contact.otherCity}
+                      state={contact.otherState}
+                      zip={contact.otherZip}
+                      country={contact.otherCountry}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
+                    {t.contactDetail.billingAddressTitle}
+                  </h3>
+                  <div className="mt-2">
+                    <AddressLines
+                      address={contact.billingAddress}
+                      city={contact.billingCity}
+                      state={contact.billingState}
+                      zip={contact.billingZip}
+                      country={contact.billingCountry}
+                    />
+                  </div>
+                  {(contact.billingContactName || contact.billingEmail || contact.billingPhone) && (
+                    <dl className="mt-2 space-y-1 text-sm">
+                      {contact.billingContactName && (
+                        <div>
+                          <dt className="text-xs uppercase tracking-wide text-soft">
+                            {t.contactDetail.billingContactName}
+                          </dt>
+                          <dd className="text-ink">{contact.billingContactName}</dd>
+                        </div>
+                      )}
+                      {contact.billingEmail && (
+                        <div>
+                          <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.billingEmail}</dt>
+                          <dd className="text-ink">{contact.billingEmail}</dd>
+                        </div>
+                      )}
+                      {contact.billingPhone && (
+                        <div>
+                          <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.billingPhone}</dt>
+                          <dd className="text-ink">{formatPhoneDisplay(contact.billingPhone)}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Source / systeme.io registered / last synced, and other systeme.io fields */}
+            <div className="mt-6 grid gap-6 sm:grid-cols-2">
+              <dl className="grid grid-cols-1 gap-3 text-sm">
+                {systemFields
+                  .filter((f) => f.value)
+                  .map((f) => (
+                    <div key={f.label}>
+                      <dt className="text-xs uppercase tracking-wide text-soft">{f.label}</dt>
+                      <dd className="text-ink">{f.value}</dd>
                     </div>
                   ))}
-                </dl>
-              </>
-            )}
+              </dl>
+              {contact.fieldValues.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
+                    {t.contactDetail.otherFields}
+                  </h3>
+                  <dl className="mt-2 grid grid-cols-1 gap-3 text-sm">
+                    {contact.fieldValues.map((fv) => (
+                      <div key={fv.id}>
+                        <dt className="text-xs uppercase tracking-wide text-soft">
+                          {fv.definition?.label ?? fv.fieldSlug}
+                        </dt>
+                        <dd className="text-ink">{fv.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              )}
+            </div>
 
             {contact.notes && (
               <div className="mt-6">
@@ -200,6 +328,7 @@ export default async function ContactDetailPage({
               lang={lang}
               contactId={contact.id}
               tags={contact.tags.map((ct) => ({ id: ct.tagId, name: ct.tag.name }))}
+              allTags={allTags}
             />
           </section>
         </div>
