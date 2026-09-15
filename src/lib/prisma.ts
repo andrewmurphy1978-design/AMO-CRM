@@ -54,17 +54,12 @@ function loadPrismaClientClass(workers: boolean): typeof PrismaClientType {
   return mod.PrismaClient;
 }
 
-function createPrismaClient(): PrismaClient {
-  const workers = isCloudflareWorkers();
+function createPrismaClient(workers: boolean): PrismaClient {
   const PrismaClient = loadPrismaClientClass(workers);
-  // Cloudflare Hyperdrive already pools connections on its side; opening
-  // several *new* connections at once from a single cold Worker request
-  // (e.g. a page that fires multiple queries concurrently) has been
-  // observed to hang rather than queue, so the local pool here is kept
-  // deliberately small. Combined with running Prisma calls sequentially
-  // rather than via Promise.all (see the page/action call sites), this
-  // avoids ever needing more than one or two connections at once.
-  const pool = new Pool({ connectionString: resolveConnectionString(workers), max: 3 });
+  // Cloudflare Hyperdrive already pools connections on its side, so the
+  // local pool here only ever needs to hold the connection(s) for a single
+  // request; keep it small.
+  const pool = new Pool({ connectionString: resolveConnectionString(workers), max: workers ? 1 : 3 });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({
     adapter,
@@ -72,15 +67,24 @@ function createPrismaClient(): PrismaClient {
   });
 }
 
-// The client must not be built until something actually uses it (see
-// isCloudflareWorkers() above), so this Proxy defers that first real Prisma
-// call to whichever request-scoped function (Server Component, Server
-// Action, Route Handler) triggers it, while every caller can keep importing
-// `prisma` and using it exactly like a normal, already-constructed
-// PrismaClient.
+// In Cloudflare Workers, a Pool's underlying TCP socket belongs only to the
+// request that opened it — the module scope (globalThis) can be reused by
+// an unrelated later request in the same isolate, and a later request
+// reusing a socket from a previous one doesn't fail cleanly, it hangs
+// forever (this was the cause of the "Error 1101" / hung-request bugs).
+// So the client must NEVER be cached across requests when running under
+// Workers: build a fresh one every time. Hyperdrive pools connections on
+// Cloudflare's side specifically so that doing this per request is cheap.
+// Plain Node.js (local dev, `next build`, scripts) is a normal long-lived
+// process with no such per-request isolation, so caching there is safe and
+// avoids reconnecting on every call.
 function getPrismaClient(): PrismaClient {
+  const workers = isCloudflareWorkers();
+  if (workers) {
+    return createPrismaClient(true);
+  }
   if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = createPrismaClient();
+    globalForPrisma.prisma = createPrismaClient(false);
   }
   return globalForPrisma.prisma;
 }
