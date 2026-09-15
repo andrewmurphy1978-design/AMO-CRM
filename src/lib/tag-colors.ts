@@ -46,6 +46,11 @@ export function tagKind(name: string): TagKind {
   return NAME_TO_KIND[name.trim().toLowerCase()] ?? "other";
 }
 
+export function isLanguageTag(name: string): boolean {
+  const kind = tagKind(name);
+  return kind === "fr" || kind === "en";
+}
+
 export const TAG_KIND_RANK: Record<TagKind, number> = {
   fr: 0,
   en: 1,

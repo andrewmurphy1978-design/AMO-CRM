@@ -3,8 +3,10 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { tagKind, TAG_KIND_COLORS, sortTags } from "@/lib/tag-colors";
-import { countryFlag } from "@/lib/country-flag";
+import { tagKind, TAG_KIND_COLORS, sortTags, isLanguageTag } from "@/lib/tag-colors";
+import { countryFullName } from "@/lib/country-flag";
+import CountryFlag from "@/components/country-flag";
+import PhoneDisplay from "@/components/phone-display";
 import ContactFilters from "./filters";
 
 const STAGE_COLORS: Record<string, string> = {
@@ -18,6 +20,21 @@ const STAGE_COLORS: Record<string, string> = {
 function toArray(value: string | string[] | undefined): string[] {
   if (!value) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+function TagPills({ tags }: { tags: { tagId: string; tag: { name: string } }[] }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {sortTags(tags).map((ct) => (
+        <span
+          key={ct.tagId}
+          className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(ct.tag.name)]}`}
+        >
+          {ct.tag.name}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export default async function ContactsPage({
@@ -85,48 +102,50 @@ export default async function ContactsPage({
 
       {/* Mobile: stacked cards instead of a cramped multi-column table. */}
       <div className="divide-y divide-card-border rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
-        {contacts.map((contact, i) => (
-          <Link
-            key={contact.id}
-            href={`/contacts/${contact.id}`}
-            className="block px-4 py-3"
-            style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-medium text-ink">
-                {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
-              </p>
-              <span className="shrink-0 text-xs text-ink/70">{contact.source ?? "—"}</span>
-            </div>
-            <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
-            <p className="mt-0.5 text-sm text-ink/70">
-              {contact.phone ?? "—"}
-              {contact.country && (
-                <>
-                  {" · "}
-                  {countryFlag(contact.country)} {contact.country}
-                </>
-              )}
-            </p>
-            <div className="mt-2">
-              <span className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
-                {STAGE_LABELS[contact.stage]}
-              </span>
-            </div>
-            {contact.tags.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                {sortTags(contact.tags).map((ct) => (
-                  <span
-                    key={ct.tagId}
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(ct.tag.name)]}`}
-                  >
-                    {ct.tag.name}
-                  </span>
-                ))}
+        {contacts.map((contact, i) => {
+          const languageTags = contact.tags.filter((ct) => isLanguageTag(ct.tag.name));
+          const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
+          return (
+            <Link
+              key={contact.id}
+              href={`/contacts/${contact.id}`}
+              className="block px-4 py-3"
+              style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-medium text-ink">
+                  {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
+                </p>
+                <span className="shrink-0 text-xs text-ink/70">{contact.source ?? "—"}</span>
               </div>
-            )}
-          </Link>
-        ))}
+              <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
+              <p className="mt-0.5 text-sm text-ink/70">
+                <PhoneDisplay value={contact.phone} />
+                {contact.country && (
+                  <>
+                    {" · "}
+                    <CountryFlag country={contact.country} /> {countryFullName(contact.country)}
+                  </>
+                )}
+              </p>
+              <div className="mt-2">
+                <span className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
+                  {STAGE_LABELS[contact.stage]}
+                </span>
+              </div>
+              {languageTags.length > 0 && (
+                <div className="mt-1.5">
+                  <TagPills tags={languageTags} />
+                </div>
+              )}
+              {otherTags.length > 0 && (
+                <div className="mt-1.5">
+                  <TagPills tags={otherTags} />
+                </div>
+              )}
+            </Link>
+          );
+        })}
         {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-soft">{t.contacts.noContactsFound}</p>}
       </div>
 
@@ -140,54 +159,55 @@ export default async function ContactsPage({
               <th className="px-4 py-3">{t.contacts.colPhone}</th>
               <th className="px-4 py-3">{t.contacts.colCountry}</th>
               <th className="px-4 py-3">{t.contacts.colStage}</th>
+              <th className="px-4 py-3">{t.contacts.colLanguages}</th>
               <th className="px-4 py-3">{t.contacts.colTags}</th>
               <th className="px-4 py-3">{t.contacts.colSource}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-card-border">
-            {contacts.map((contact, i) => (
-              <tr key={contact.id} style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}>
-                <td className="px-4 py-3">
-                  <Link href={`/contacts/${contact.id}`} className="font-medium text-ink hover:underline">
-                    {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-ink/70">{contact.email}</td>
-                <td className="px-4 py-3 text-ink/70">{contact.phone ?? "—"}</td>
-                <td className="px-4 py-3 text-ink/70">
-                  {contact.country ? (
-                    <>
-                      {countryFlag(contact.country)} {contact.country}
-                    </>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}
-                  >
-                    {STAGE_LABELS[contact.stage]}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {sortTags(contact.tags).map((ct) => (
-                      <span
-                        key={ct.tagId}
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(ct.tag.name)]}`}
-                      >
-                        {ct.tag.name}
+            {contacts.map((contact, i) => {
+              const languageTags = contact.tags.filter((ct) => isLanguageTag(ct.tag.name));
+              const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
+              return (
+                <tr key={contact.id} style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}>
+                  <td className="px-4 py-3">
+                    <Link href={`/contacts/${contact.id}`} className="font-medium text-ink hover:underline">
+                      {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-ink/70">{contact.email}</td>
+                  <td className="px-4 py-3 text-ink/70">
+                    <PhoneDisplay value={contact.phone} />
+                  </td>
+                  <td className="px-4 py-3 text-ink/70">
+                    {contact.country ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <CountryFlag country={contact.country} /> {countryFullName(contact.country)}
                       </span>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-ink/70">{contact.source ?? "—"}</td>
-              </tr>
-            ))}
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}
+                    >
+                      {STAGE_LABELS[contact.stage]}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <TagPills tags={languageTags} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <TagPills tags={otherTags} />
+                  </td>
+                  <td className="px-4 py-3 text-ink/70">{contact.source ?? "—"}</td>
+                </tr>
+              );
+            })}
             {contacts.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-soft">
+                <td colSpan={8} className="px-4 py-8 text-center text-soft">
                   {t.contacts.noContactsFound}
                 </td>
               </tr>

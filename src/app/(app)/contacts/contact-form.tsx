@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { COUNTRIES } from "@/lib/countries";
 import { countryToCode } from "@/lib/country-flag";
 import PhoneField from "@/components/phone-field";
+import MultiSelect from "@/components/multi-select";
 
 type ContactFormValues = {
   email?: string;
@@ -46,6 +47,8 @@ export default function ContactForm({
   defaultValues,
   submitLabel,
   lang,
+  allTags,
+  currentTags,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -54,9 +57,12 @@ export default function ContactForm({
   defaultValues?: ContactFormValues;
   submitLabel: string;
   lang: Lang;
+  allTags: { id: string; name: string }[];
+  currentTags?: string[];
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const t = getDict(lang);
+  const [selectedTags, setSelectedTags] = useState<string[]>(currentTags ?? []);
 
   // Only seeds the phone fields' initial flag — each PhoneField's flag is
   // independently changeable afterward regardless of the address country.
@@ -73,15 +79,26 @@ export default function ContactForm({
 
   return (
     <form action={formAction} className="space-y-6">
-      {/* Line 1: Email, Phone, Second phone, WhatsApp */}
+      {selectedTags.map((name) => (
+        <input key={name} type="hidden" name="tags" value={name} />
+      ))}
+
+      {/* Line 1: Email (wide), Phone numbers (stacked), WhatsApp */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
-        <PhoneField name="phone" label={t.contactForm.phone} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone} />
-        <PhoneField name="phone2" label={t.contactForm.phone2} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone2} />
+        <div className="sm:col-span-2">
+          <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</label>
+          <div className="mt-1 space-y-1.5">
+            <PhoneField name="phone" label={t.contactForm.phone} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone} hideLabel />
+            <PhoneField name="phone2" label={t.contactForm.phone2} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone2} hideLabel />
+          </div>
+        </div>
         <PhoneField name="whatsapp" label={t.contactForm.whatsapp} defaultCountry={phoneCountry} defaultValue={defaultValues?.whatsapp} />
       </div>
 
-      {/* Name + Stage */}
+      {/* Name + Stage + Tags */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label={t.contactForm.firstName} name="firstName" defaultValue={defaultValues?.firstName ?? ""} />
         <Field label={t.contactForm.lastName} name="lastName" defaultValue={defaultValues?.lastName ?? ""} />
@@ -92,30 +109,63 @@ export default function ContactForm({
           defaultValue={defaultValues?.stage ?? "LEAD"}
           options={STAGES}
         />
+        <div>
+          <label className={LABEL_CLASS}>{t.contactForm.tags}</label>
+          <div className="mt-1">
+            <MultiSelect
+              options={allTags.map((tag) => ({ value: tag.name, label: tag.name }))}
+              selected={selectedTags}
+              placeholder={t.contacts.allTags}
+              onChange={setSelectedTags}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Line 2: Company, Language */}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t.contactForm.company} name="company" defaultValue={defaultValues?.company ?? ""} />
-        <Field label={t.contactForm.language} name="locale" defaultValue={defaultValues?.locale ?? ""} />
+        <div>
+          <label className={LABEL_CLASS}>{t.contactForm.language}</label>
+          <div className="mt-2 flex items-center gap-4 text-sm text-ink">
+            <label className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="locale"
+                value="en"
+                defaultChecked={(defaultValues?.locale ?? "en").toLowerCase().startsWith("en")}
+                className="accent-amo-lime"
+              />
+              {t.team.english}
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="locale"
+                value="fr"
+                defaultChecked={(defaultValues?.locale ?? "").toLowerCase().startsWith("fr")}
+                className="accent-amo-lime"
+              />
+              {t.team.french}
+            </label>
+          </div>
+        </div>
       </div>
 
-      {/* Line 3: addresses — Main on the left, Other + Billing stacked on the right */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* Line 3: addresses — Main, Other, Billing side by side */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <AddressGroup title={t.contactForm.mainAddressTitle} prefix="" t={t} values={defaultValues} />
-        <div className="space-y-6">
-          <AddressGroup title={t.contactForm.otherAddressTitle} prefix="other" t={t} values={defaultValues} />
-          <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} values={defaultValues}>
-            <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={defaultValues?.billingContactName ?? ""} />
-            <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={defaultValues?.billingEmail ?? ""} />
-            <PhoneField
-              name="billingPhone"
-              label={t.contactForm.billingPhone}
-              defaultCountry={billingPhoneCountry}
-              defaultValue={defaultValues?.billingPhone}
-            />
-          </AddressGroup>
-        </div>
+        <AddressGroup title={t.contactForm.otherAddressTitle} prefix="other" t={t} values={defaultValues} />
+        <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} values={defaultValues}>
+          <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={defaultValues?.billingContactName ?? ""} />
+          <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={defaultValues?.billingEmail ?? ""} />
+          <PhoneField
+            name="billingPhone"
+            label={t.contactForm.billingPhone}
+            defaultCountry={billingPhoneCountry}
+            defaultValue={defaultValues?.billingPhone}
+          />
+        </AddressGroup>
       </div>
 
       <div>
@@ -164,23 +214,27 @@ function AddressGroup({
   return (
     <div className="rounded-lg border border-card-border p-4">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h3>
-      <div className="mt-3 grid gap-4 sm:grid-cols-2">
-        <div className="sm:col-span-2">
+      <div className="mt-3 grid gap-4">
+        <div>
           <label className={LABEL_CLASS}>{t.contactForm.addressLine}</label>
           <input name={field("Address")} defaultValue={get("Address")} className={FIELD_CLASS} />
         </div>
-        <Field label={t.contactForm.city} name={field("City")} defaultValue={get("City")} />
-        <Field label={t.contactForm.state} name={field("State")} defaultValue={get("State")} />
-        <Field label={t.contactForm.zip} name={field("Zip")} defaultValue={get("Zip")} />
-        <div>
-          <label className={LABEL_CLASS}>{t.contactForm.country}</label>
-          <select name={field("Country")} defaultValue={get("Country") || "Canada"} className={FIELD_CLASS}>
-            {COUNTRIES.map((c) => (
-              <option key={c.code} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label={t.contactForm.city} name={field("City")} defaultValue={get("City")} />
+          <Field label={t.contactForm.state} name={field("State")} defaultValue={get("State")} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label={t.contactForm.zip} name={field("Zip")} defaultValue={get("Zip")} />
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.country}</label>
+            <select name={field("Country")} defaultValue={get("Country") || "Canada"} className={FIELD_CLASS}>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {children}
       </div>

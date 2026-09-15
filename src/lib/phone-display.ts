@@ -5,20 +5,19 @@
 // parsePhoneNumber). libphonenumber-js/min is the same parser with none of
 // that, used directly here for parsing only.
 import { parsePhoneNumber } from "libphonenumber-js/min";
-import { countryFlag } from "./country-flag";
 
-// Renders a stored phone value the same way the flag-based PhoneField
-// collects it: flag + internationally formatted number. Falls back to the
-// raw stored value untouched when it isn't a parseable E.164 string (e.g.
-// older free-text numbers synced in from systeme.io before this existed).
-export function formatPhoneDisplay(value?: string | null): string | null {
+// Splits a stored phone value into its country (for the flag) and an
+// internationally formatted number, the same way the flag-based PhoneField
+// collects it. Falls back to the raw stored value untouched when it isn't a
+// parseable E.164 string (e.g. older free-text numbers synced in from
+// systeme.io before this existed).
+export function parsePhoneForDisplay(value?: string | null): { country: string | null; formatted: string } | null {
   if (!value) return null;
   try {
     const parsed = parsePhoneNumber(value);
-    if (!parsed) return value;
-    const flag = parsed.country ? countryFlag(parsed.country) : "";
-    return `${flag} ${parsed.formatInternational()}`.trim();
+    if (!parsed) return { country: null, formatted: value };
+    return { country: parsed.country ?? null, formatted: parsed.formatInternational() };
   } catch {
-    return value;
+    return { country: null, formatted: value };
   }
 }

@@ -7,18 +7,62 @@ import NoteForm from "./note-form";
 import DeleteContactButton from "./delete-button";
 import InteractionLog from "../../interaction-log";
 import { getLang } from "@/lib/i18n/get-lang";
-import { getDict } from "@/lib/i18n/dictionaries";
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
-import { countryFlag } from "@/lib/country-flag";
-import { formatPhoneDisplay } from "@/lib/phone-display";
+import { countryFullName } from "@/lib/country-flag";
+import CountryFlag from "@/components/country-flag";
+import PhoneDisplay from "@/components/phone-display";
 
-function AddressLines({
+// Systeme.io custom field slugs that duplicate a real Contact column shown
+// elsewhere on this page — hidden from "Other systeme.io fields" so the
+// same data isn't shown twice. Matched loosely (case/punctuation-insensitive)
+// since systeme.io's own slugs vary in casing.
+const DUPLICATE_FIELD_SLUGS = new Set(["companyname", "postcode", "streetnumber", "streetaddress"]);
+
+function normalizeSlug(slug: string): string {
+  return slug.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function fieldLabel(fv: { fieldSlug: string; definition: { label: string } | null }, t: ReturnType<typeof getDict>): string {
+  const normalized = normalizeSlug(fv.fieldSlug);
+  if (normalized === "servicesrequired") return t.contactDetail.servicesRequiredLabel;
+  if (normalized === "projectgoaldescription") return t.contactDetail.projectGoalLabel;
+  return fv.definition?.label ?? fv.fieldSlug;
+}
+
+function colonSep(lang: Lang): string {
+  return lang === "fr" ? " :  " : ": ";
+}
+
+function ColonLine({ label, value, lang }: { label: string; value: string; lang: Lang }) {
+  return (
+    <p className="text-sm">
+      <span className="text-xs font-semibold uppercase tracking-wide text-soft">{label}</span>
+      <span className="text-ink">
+        {colonSep(lang)}
+        {value}
+      </span>
+    </p>
+  );
+}
+
+function languageDisplay(locale: string | null, t: ReturnType<typeof getDict>): string {
+  if (!locale) return "—";
+  const normalized = locale.trim().toLowerCase();
+  if (normalized.startsWith("en")) return t.contactDetail.languageEnglish;
+  if (normalized.startsWith("fr")) return t.contactDetail.languageFrench;
+  return locale;
+}
+
+function AddressBlock({
+  title,
   address,
   city,
   state,
   zip,
   country,
 }: {
+  title: string;
   address?: string | null;
   city?: string | null;
   state?: string | null;
@@ -26,16 +70,25 @@ function AddressLines({
   country?: string | null;
 }) {
   const cityLine = [city, state, zip].filter(Boolean).join(" ");
-  if (!address && !cityLine && !country) return <p className="text-sm text-soft">—</p>;
+  const isEmpty = !address && !cityLine && !country;
   return (
-    <div className="text-sm text-ink">
-      {address && <p>{address}</p>}
-      {cityLine && <p>{cityLine}</p>}
-      {country && (
-        <p>
-          {countryFlag(country)} {country}
-        </p>
-      )}
+    <div>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h3>
+      <div className="mt-2 text-sm text-ink">
+        {isEmpty ? (
+          <p className="text-soft">—</p>
+        ) : (
+          <>
+            {address && <p>{address}</p>}
+            {cityLine && <p>{cityLine}</p>}
+            {country && (
+              <p className="inline-flex items-center gap-1.5">
+                <CountryFlag country={country} /> {countryFullName(country)}
+              </p>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -72,19 +125,9 @@ export default async function ContactDetailPage({
 
   const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email;
 
-  const systemFields: { label: string; value: string | null }[] = [
-    { label: t.contactDetail.fieldSource, value: contact.source },
-    {
-      label: t.contactDetail.fieldSystemeIoRegistered,
-      value: contact.systemeIoRegisteredAt
-        ? format(contact.systemeIoRegisteredAt, "PP", { locale: dateLocale })
-        : null,
-    },
-    {
-      label: t.contactDetail.fieldLastSynced,
-      value: contact.lastSyncedAt ? formatDistanceToNow(contact.lastSyncedAt, { addSuffix: true, locale: dateLocale }) : null,
-    },
-  ];
+  const otherFields = contact.fieldValues.filter((fv) => !DUPLICATE_FIELD_SLUGS.has(normalizeSlug(fv.fieldSlug)));
+
+  const hasBillingContactInfo = contact.billingContactName || contact.billingEmail || contact.billingPhone;
 
   return (
     <div className="space-y-6">
@@ -119,23 +162,30 @@ export default async function ContactDetailPage({
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
             <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.contactDetailsTitle}</h2>
 
-            {/* Line 1: Email, Phone, Second phone, WhatsApp */}
+            {/* Line 1: Email (wide), Phone numbers (stacked), WhatsApp */}
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
-              <div>
+              <div className="sm:col-span-2">
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldEmail}</dt>
                 <dd className="text-ink">{contact.email}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldPhone}</dt>
-                <dd className="text-ink">{formatPhoneDisplay(contact.phone) ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldPhone2}</dt>
-                <dd className="text-ink">{formatPhoneDisplay(contact.phone2) ?? "—"}</dd>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldPhones}</dt>
+                <dd className="space-y-0.5 text-ink">
+                  <div>
+                    <PhoneDisplay value={contact.phone} />
+                  </div>
+                  {contact.phone2 && (
+                    <div>
+                      <PhoneDisplay value={contact.phone2} />
+                    </div>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldWhatsapp}</dt>
-                <dd className="text-ink">{formatPhoneDisplay(contact.whatsapp) ?? "—"}</dd>
+                <dd className="text-ink">
+                  <PhoneDisplay value={contact.whatsapp} />
+                </dd>
               </div>
             </dl>
 
@@ -147,105 +197,92 @@ export default async function ContactDetailPage({
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldLanguage}</dt>
-                <dd className="text-ink">{contact.locale ?? "—"}</dd>
+                <dd className="text-ink">{languageDisplay(contact.locale, t)}</dd>
               </div>
             </dl>
 
-            {/* Addresses: Main on the left, Other + Billing stacked on the right */}
-            <div className="mt-6 grid gap-6 sm:grid-cols-2">
+            {/* Addresses: Main, Other, Billing side by side */}
+            <div className="mt-6 grid gap-6 sm:grid-cols-3">
+              <AddressBlock
+                title={t.contactDetail.mainAddressTitle}
+                address={contact.address}
+                city={contact.city}
+                state={contact.state}
+                zip={contact.zip}
+                country={contact.country}
+              />
+              <AddressBlock
+                title={t.contactDetail.otherAddressTitle}
+                address={contact.otherAddress}
+                city={contact.otherCity}
+                state={contact.otherState}
+                zip={contact.otherZip}
+                country={contact.otherCountry}
+              />
               <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
-                  {t.contactDetail.mainAddressTitle}
-                </h3>
-                <div className="mt-2">
-                  <AddressLines
-                    address={contact.address}
-                    city={contact.city}
-                    state={contact.state}
-                    zip={contact.zip}
-                    country={contact.country}
-                  />
-                </div>
-              </div>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
-                    {t.contactDetail.otherAddressTitle}
-                  </h3>
-                  <div className="mt-2">
-                    <AddressLines
-                      address={contact.otherAddress}
-                      city={contact.otherCity}
-                      state={contact.otherState}
-                      zip={contact.otherZip}
-                      country={contact.otherCountry}
-                    />
+                <AddressBlock
+                  title={t.contactDetail.billingAddressTitle}
+                  address={contact.billingAddress}
+                  city={contact.billingCity}
+                  state={contact.billingState}
+                  zip={contact.billingZip}
+                  country={contact.billingCountry}
+                />
+                {hasBillingContactInfo && (
+                  <div className="mt-3 space-y-1">
+                    {contact.billingContactName && (
+                      <ColonLine label={t.contactDetail.billingLabelContact} value={contact.billingContactName} lang={lang} />
+                    )}
+                    {contact.billingEmail && (
+                      <ColonLine label={t.contactDetail.billingLabelEmail} value={contact.billingEmail} lang={lang} />
+                    )}
+                    {contact.billingPhone && (
+                      <p className="text-sm">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-soft">
+                          {t.contactDetail.billingLabelPhone}
+                        </span>
+                        <span className="text-ink">
+                          {colonSep(lang)}
+                          <PhoneDisplay value={contact.billingPhone} />
+                        </span>
+                      </p>
+                    )}
                   </div>
-                </div>
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
-                    {t.contactDetail.billingAddressTitle}
-                  </h3>
-                  <div className="mt-2">
-                    <AddressLines
-                      address={contact.billingAddress}
-                      city={contact.billingCity}
-                      state={contact.billingState}
-                      zip={contact.billingZip}
-                      country={contact.billingCountry}
-                    />
-                  </div>
-                  {(contact.billingContactName || contact.billingEmail || contact.billingPhone) && (
-                    <dl className="mt-2 space-y-1 text-sm">
-                      {contact.billingContactName && (
-                        <div>
-                          <dt className="text-xs uppercase tracking-wide text-soft">
-                            {t.contactDetail.billingContactName}
-                          </dt>
-                          <dd className="text-ink">{contact.billingContactName}</dd>
-                        </div>
-                      )}
-                      {contact.billingEmail && (
-                        <div>
-                          <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.billingEmail}</dt>
-                          <dd className="text-ink">{contact.billingEmail}</dd>
-                        </div>
-                      )}
-                      {contact.billingPhone && (
-                        <div>
-                          <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.billingPhone}</dt>
-                          <dd className="text-ink">{formatPhoneDisplay(contact.billingPhone)}</dd>
-                        </div>
-                      )}
-                    </dl>
-                  )}
-                </div>
+                )}
               </div>
             </div>
 
-            {/* Source / systeme.io registered / last synced, and other systeme.io fields */}
+            {/* Source (grouped) and other systeme.io fields */}
             <div className="mt-6 grid gap-6 sm:grid-cols-2">
-              <dl className="grid grid-cols-1 gap-3 text-sm">
-                {systemFields
-                  .filter((f) => f.value)
-                  .map((f) => (
-                    <div key={f.label}>
-                      <dt className="text-xs uppercase tracking-wide text-soft">{f.label}</dt>
-                      <dd className="text-ink">{f.value}</dd>
-                    </div>
-                  ))}
-              </dl>
-              {contact.fieldValues.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactDetail.fieldSource}</h3>
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm text-ink">{contact.source ?? "—"}</p>
+                  {contact.systemeIoRegisteredAt && (
+                    <ColonLine
+                      label={t.contactDetail.registeredPrefix}
+                      value={format(contact.systemeIoRegisteredAt, "PP", { locale: dateLocale })}
+                      lang={lang}
+                    />
+                  )}
+                  {contact.lastSyncedAt && (
+                    <ColonLine
+                      label={t.contactDetail.lastSyncedPrefix}
+                      value={formatDistanceToNow(contact.lastSyncedAt, { addSuffix: true, locale: dateLocale })}
+                      lang={lang}
+                    />
+                  )}
+                </div>
+              </div>
+              {otherFields.length > 0 && (
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
                     {t.contactDetail.otherFields}
                   </h3>
                   <dl className="mt-2 grid grid-cols-1 gap-3 text-sm">
-                    {contact.fieldValues.map((fv) => (
+                    {otherFields.map((fv) => (
                       <div key={fv.id}>
-                        <dt className="text-xs uppercase tracking-wide text-soft">
-                          {fv.definition?.label ?? fv.fieldSlug}
-                        </dt>
+                        <dt className="text-xs uppercase tracking-wide text-soft">{fieldLabel(fv, t)}</dt>
                         <dd className="text-ink">{fv.value}</dd>
                       </div>
                     ))}

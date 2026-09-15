@@ -107,6 +107,11 @@ export async function createContact(
     data: { ...data, source: "manual", ownerId: session.user.id },
   });
 
+  const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
+  for (const name of desiredTags) {
+    await addTagToContact(contact.id, name);
+  }
+
   await prisma.activityLogEntry.create({
     data: {
       contactId: contact.id,
@@ -146,6 +151,9 @@ export async function updateContact(
   }
 
   const updated = await prisma.contact.update({ where: { id: contactId }, data });
+
+  const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
+  await syncContactTags(contactId, desiredTags);
 
   // Best-effort push back to systeme.io — never fails the CRM save itself.
   let warning = "";
@@ -219,6 +227,23 @@ export async function addTagToContact(contactId: string, tagName: string) {
   }
 
   revalidatePath(`/contacts/${contactId}`);
+}
+
+async function syncContactTags(contactId: string, desiredNames: string[]) {
+  const current = await prisma.contactTag.findMany({ where: { contactId }, include: { tag: true } });
+  const currentNames = new Set(current.map((ct) => ct.tag.name));
+  const desiredSet = new Set(desiredNames);
+
+  for (const name of desiredNames) {
+    if (!currentNames.has(name)) {
+      await addTagToContact(contactId, name);
+    }
+  }
+  for (const ct of current) {
+    if (!desiredSet.has(ct.tag.name)) {
+      await removeTagFromContact(contactId, ct.tagId);
+    }
+  }
 }
 
 export async function removeTagFromContact(contactId: string, tagId: string) {

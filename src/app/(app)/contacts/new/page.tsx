@@ -2,17 +2,19 @@ import ContactForm from "../contact-form";
 import { createContact } from "@/actions/contacts";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { prisma } from "@/lib/prisma";
 
 export default async function NewContactPage() {
   const lang = await getLang();
   const t = getDict(lang);
+  const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
 
   return (
     <div className="max-w-5xl">
       <h1 className="font-display text-2xl font-semibold text-ink">{t.newContactPage.title}</h1>
       <p className="mt-1 text-sm text-soft">{t.newContactPage.subtitle}</p>
       <div className="mt-6 rounded-lg border border-card-border bg-card-bg p-6 shadow-sm">
-        <ContactForm action={createContact} submitLabel={t.contactForm.createContact} lang={lang} />
+        <ContactForm action={createContact} submitLabel={t.contactForm.createContact} lang={lang} allTags={allTags} />
       </div>
     </div>
   );

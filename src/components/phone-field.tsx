@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import PhoneInput, { type Value, type Country } from "react-phone-number-input";
+import flags from "react-phone-number-input/flags";
 import "react-phone-number-input/style.css";
 
 // A flag-first international phone field (like the one on the marketing
@@ -17,23 +18,26 @@ export default function PhoneField({
   label,
   defaultCountry,
   defaultValue,
+  hideLabel,
 }: {
   name: string;
   label: string;
   defaultCountry: string;
   defaultValue?: string | null;
+  hideLabel?: boolean;
 }) {
   const [value, setValue] = useState<Value | undefined>((defaultValue as Value) || undefined);
 
   return (
     <div>
-      <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{label}</label>
+      {!hideLabel && <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{label}</label>}
       <PhoneInput
         international
+        flags={flags}
         defaultCountry={defaultCountry as Country}
         value={value}
         onChange={setValue}
-        className="amo-phone-input mt-1"
+        className={hideLabel ? "amo-phone-input" : "amo-phone-input mt-1"}
       />
       <input type="hidden" name={name} value={value ?? ""} />
     </div>
