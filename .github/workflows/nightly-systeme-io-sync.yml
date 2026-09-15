@@ -1,0 +1,26 @@
+name: Nightly systeme.io sync
+
+# Calls the CRM's own sync endpoint on a schedule. The endpoint itself
+# (src/app/api/cron/systeme-io-sync/route.ts) checks the "Enable scheduled
+# auto-sync" toggle in Settings and no-ops if it's off, so this is safe to
+# leave running even when auto-sync is disabled.
+#
+# Setup required (one-time):
+#   1. In the GitHub repo: Settings > Secrets and variables > Actions >
+#      New repository secret, named CRON_SECRET, set to the same value used
+#      for the CRON_SECRET Cloudflare Worker secret.
+#   2. In the CRM: Settings > "Enable scheduled auto-sync".
+
+on:
+  schedule:
+    - cron: "0 8 * * *" # ~03:00–04:00 Eastern, depending on DST
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger systeme.io sync
+        run: |
+          curl -sS -f -X GET "https://crm.andrewmurphy.online/api/cron/systeme-io-sync" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

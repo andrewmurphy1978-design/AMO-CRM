@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSystemeIoClient } from "@/lib/sync";
+import { DEFAULT_PUSH_FIELD_SLUGS } from "@/lib/systemeio";
 
 const ContactSchema = z.object({
   email: z.string().email("A valid email is required"),
@@ -96,11 +98,30 @@ export async function updateContact(
     return { error: "Another contact already uses this email." };
   }
 
-  await prisma.contact.update({ where: { id: contactId }, data });
+  const updated = await prisma.contact.update({ where: { id: contactId }, data });
+
+  // Best-effort push back to systeme.io — never fails the CRM save itself.
+  let warning = "";
+  if (updated.systemeIoId) {
+    try {
+      const client = await getSystemeIoClient();
+      if (client) {
+        const fields: Record<string, string> = {};
+        for (const [column, slug] of Object.entries(DEFAULT_PUSH_FIELD_SLUGS)) {
+          const value = (data as Record<string, string | undefined>)[column];
+          if (value) fields[slug] = value;
+        }
+        await client.updateContactFields(updated.systemeIoId, fields);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      warning = ` (saved here, but systeme.io update failed: ${message})`;
+    }
+  }
 
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${contactId}`);
-  return { success: "Contact updated." };
+  return { success: `Contact updated.${warning}` };
 }
 
 export async function deleteContact(contactId: string) {
@@ -131,6 +152,25 @@ export async function addTagToContact(contactId: string, tagName: string) {
     create: { contactId, tagId: tag.id },
   });
 
+  // Best-effort push back to systeme.io — never fails the CRM save itself.
+  try {
+    const contact = await prisma.contact.findUnique({ where: { id: contactId } });
+    if (contact?.systemeIoId) {
+      const client = await getSystemeIoClient();
+      if (client) {
+        let systemeIoTagId = tag.systemeIoId;
+        if (!systemeIoTagId) {
+          const created = await client.createTag(tag.name);
+          systemeIoTagId = created.id;
+          await prisma.tag.update({ where: { id: tag.id }, data: { systemeIoId: created.id } });
+        }
+        await client.addTagToContact(contact.systemeIoId, systemeIoTagId);
+      }
+    }
+  } catch {
+    // Tag is still saved locally even if the systeme.io push fails.
+  }
+
   revalidatePath(`/contacts/${contactId}`);
 }
 
@@ -141,6 +181,20 @@ export async function removeTagFromContact(contactId: string, tagId: string) {
   await prisma.contactTag.delete({
     where: { contactId_tagId: { contactId, tagId } },
   });
+
+  // Best-effort push back to systeme.io — never fails the CRM save itself.
+  try {
+    const contact = await prisma.contact.findUnique({ where: { id: contactId } });
+    const tag = await prisma.tag.findUnique({ where: { id: tagId } });
+    if (contact?.systemeIoId && tag?.systemeIoId) {
+      const client = await getSystemeIoClient();
+      if (client) {
+        await client.removeTagFromContact(contact.systemeIoId, tag.systemeIoId);
+      }
+    }
+  } catch {
+    // Non-fatal — the tag is still removed locally either way.
+  }
 
   revalidatePath(`/contacts/${contactId}`);
 }

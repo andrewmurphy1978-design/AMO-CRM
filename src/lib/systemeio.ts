@@ -80,6 +80,68 @@ export class SystemeIoClient {
     return (await response.json()) as T;
   }
 
+  // Write requests (create/update/delete). Unlike `request`, systeme.io's
+  // write endpoints commonly reply with an empty 204 body, so this doesn't
+  // assume a JSON response.
+  private async mutate<T = void>(
+    method: "POST" | "PATCH" | "DELETE",
+    path: string,
+    body?: unknown,
+    contentType = "application/json"
+  ): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: {
+        "X-API-Key": this.apiKey,
+        Accept: "application/json",
+        ...(body !== undefined ? { "Content-Type": contentType } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new SystemeIoApiError(
+        `systeme.io API request to ${method} ${path} failed with ${response.status}: ${text.slice(0, 300)}`,
+        response.status
+      );
+    }
+
+    const text = await response.text().catch(() => "");
+    return (text ? JSON.parse(text) : undefined) as T;
+  }
+
+  /**
+   * Pushes contact field edits made in the CRM back to systeme.io.
+   * `fields` keys must be systeme.io custom-field slugs (see
+   * DEFAULT_PUSH_FIELD_SLUGS below) — NOT our own column names.
+   *
+   * NOTE: built from systeme.io's published API conventions (this
+   * environment couldn't reach developer.systeme.io to confirm the exact
+   * request shape). If updates don't show up as expected in systeme.io, the
+   * most likely cause is a field slug mismatch with this account's actual
+   * custom field slugs — tell Claude the real slugs (visible in systeme.io
+   * under Contacts > Custom fields) and this can be adjusted.
+   */
+  async updateContactFields(contactId: number, fields: Record<string, string>): Promise<void> {
+    const fieldsArray = Object.entries(fields).map(([slug, value]) => ({ slug, value }));
+    if (fieldsArray.length === 0) return;
+    await this.mutate("PATCH", `/contacts/${contactId}`, { fields: fieldsArray }, "application/merge-patch+json");
+  }
+
+  async addTagToContact(contactId: number, tagId: number): Promise<void> {
+    await this.mutate("POST", `/contacts/${contactId}/tags`, { tagId });
+  }
+
+  async removeTagFromContact(contactId: number, tagId: number): Promise<void> {
+    await this.mutate("DELETE", `/contacts/${contactId}/tags/${tagId}`);
+  }
+
+  async createTag(name: string): Promise<SystemeIoTag> {
+    const data = await this.mutate<Record<string, unknown>>("POST", "/tags", { name });
+    return mapTag(data);
+  }
+
   /** Confirms the API key is valid by requesting one page of contacts. */
   async verifyApiKey(): Promise<boolean> {
     try {
@@ -94,29 +156,36 @@ export class SystemeIoClient {
   }
 
   async *iterateContacts(pageSize = 100): AsyncGenerator<SystemeIoContact[]> {
-    let page = 1;
-    for (;;) {
-      const data = await this.request<unknown>("/contacts", {
-        page,
-        limit: pageSize,
-      });
-      const items = extractItems(data).map(mapContact);
-      if (items.length === 0) break;
-      yield items;
-      if (items.length < pageSize) break;
-      page += 1;
-    }
+    yield* this.paginate("/contacts", mapContact, pageSize);
   }
 
   async *iterateTags(pageSize = 100): AsyncGenerator<SystemeIoTag[]> {
-    let page = 1;
+    yield* this.paginate("/tags", mapTag, pageSize);
+  }
+
+  // systeme.io uses cursor-based pagination (startingAfter = last item's id,
+  // hasMore in the response), not page numbers — confirmed against their
+  // public API docs. Stops once hasMore is false or a page comes back empty.
+  private async *paginate<T>(
+    path: string,
+    mapper: (raw: Record<string, unknown>) => T,
+    pageSize: number
+  ): AsyncGenerator<T[]> {
+    let startingAfter: string | number | undefined;
     for (;;) {
-      const data = await this.request<unknown>("/tags", { page, limit: pageSize });
-      const items = extractItems(data).map(mapTag);
-      if (items.length === 0) break;
-      yield items;
-      if (items.length < pageSize) break;
-      page += 1;
+      const params: Record<string, string | number> = { limit: pageSize, order: "asc" };
+      if (startingAfter !== undefined) params.startingAfter = startingAfter;
+
+      const data = await this.request<unknown>(path, params);
+      const rawItems = extractItems(data);
+      if (rawItems.length === 0) break;
+
+      yield rawItems.map(mapper);
+
+      const hasMore = Boolean((data as Record<string, unknown>)?.hasMore);
+      const lastId = rawItems[rawItems.length - 1]?.id as string | number | undefined;
+      if (!hasMore || lastId === undefined) break;
+      startingAfter = lastId;
     }
   }
 
@@ -196,6 +265,25 @@ export const PROMOTED_FIELD_SLUGS: Record<string, string> = {
   state: "state",
   zip_code: "zip",
   zip: "zip",
+  country: "country",
+  company: "company",
+  website: "website",
+};
+
+// The reverse of the above, for pushing CRM edits back to systeme.io. Some
+// columns above accept more than one systeme.io slug (e.g. "surname" or
+// "last_name" both map to lastName) — this picks one default to write to.
+// If this account's systeme.io fields actually use the other variant, a
+// pushed edit will create a new field under this slug instead of updating
+// the existing one; adjust these to match if that happens.
+export const DEFAULT_PUSH_FIELD_SLUGS: Record<string, string> = {
+  firstName: "first_name",
+  lastName: "surname",
+  phone: "phone_number",
+  address: "address",
+  city: "city",
+  state: "state",
+  zip: "zip_code",
   country: "country",
   company: "company",
   website: "website",

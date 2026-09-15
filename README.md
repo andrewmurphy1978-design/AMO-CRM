@@ -75,9 +75,8 @@ npm run dev
 ```
 
 Visit `http://localhost:3000/login` and sign in with the admin credentials
-from your `.env`. **Change your password by adding a new admin user in
-Settings and removing the seed one, or change `SEED_ADMIN_PASSWORD` and
-re-seed a fresh database** — there's no in-app "change password" screen yet.
+from your `.env`. Change your password any time from **Settings → Your
+account**.
 
 ### 6. Connect systeme.io
 
@@ -87,20 +86,30 @@ re-seed a fresh database** — there's no in-app "change password" screen yet.
 2. In the CRM: **Settings → systeme.io integration**, paste the key, **Save
    key**, then **Sync now**.
 
-To keep contacts synced automatically without visiting Settings, deploy a
-scheduled trigger that calls `GET /api/cron/systeme-io-sync` with header
-`Authorization: Bearer <CRON_SECRET>`, and turn on "Enable scheduled
-auto-sync" in Settings. On Vercel, add to `vercel.json`:
+To keep contacts synced automatically without visiting Settings, a nightly
+trigger is already set up via GitHub Actions
+(`.github/workflows/nightly-systeme-io-sync.yml`), which calls
+`GET /api/cron/systeme-io-sync` with header
+`Authorization: Bearer <CRON_SECRET>`. Two one-time steps to turn it on:
+
+1. In the GitHub repo: **Settings → Secrets and variables → Actions → New
+   repository secret**, named `CRON_SECRET`, set to the same value used for
+   the `CRON_SECRET` Cloudflare Worker secret.
+2. In the CRM: **Settings → "Enable scheduled auto-sync"**.
+
+(The workflow runs once around 03:00–04:00 Eastern nightly by default —
+adjust the `cron:` line in the workflow file to change the schedule, and use
+its "Run workflow" button on GitHub for an on-demand test run.)
+
+Deploying somewhere other than Cloudflare Pages/Workers? On Vercel, use
+[Vercel Cron Jobs](https://vercel.com/docs/cron-jobs) instead by adding to
+`vercel.json`:
 
 ```json
 {
-  "crons": [{ "path": "/api/cron/systeme-io-sync", "schedule": "0 * * * *" }]
+  "crons": [{ "path": "/api/cron/systeme-io-sync", "schedule": "0 8 * * *" }]
 }
 ```
-
-(Vercel Cron sends its own auth header automatically if `CRON_SECRET` is set
-as the `CRON_SECRET` env var in your Vercel project — see
-[Vercel Cron Jobs](https://vercel.com/docs/cron-jobs).)
 
 > **Note on the systeme.io API shape:** this integration was built from
 > systeme.io's published API reference (contacts carry `email`, `locale`,
