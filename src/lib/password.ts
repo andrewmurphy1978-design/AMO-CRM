@@ -6,7 +6,10 @@
 // JS, so it's fast enough there while still being a standard, salted,
 // iterated KDF — and it works identically under Node.js for local dev.
 
-const ITERATIONS = 210_000; // OWASP-recommended minimum for PBKDF2-SHA256
+// Cloudflare Workers' WebCrypto PBKDF2 implementation caps iterations at
+// 100,000 (throws NotSupportedError above that) — Node.js has no such cap,
+// so this must be verified against Workers specifically, not just locally.
+const ITERATIONS = 100_000;
 const HASH_BYTES = 32;
 const SALT_BYTES = 16;
 
