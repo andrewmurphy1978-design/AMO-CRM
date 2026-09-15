@@ -57,7 +57,14 @@ function loadPrismaClientClass(workers: boolean): typeof PrismaClientType {
 function createPrismaClient(): PrismaClient {
   const workers = isCloudflareWorkers();
   const PrismaClient = loadPrismaClientClass(workers);
-  const pool = new Pool({ connectionString: resolveConnectionString(workers) });
+  // Cloudflare Hyperdrive already pools connections on its side; opening
+  // several *new* connections at once from a single cold Worker request
+  // (e.g. a page that fires multiple queries concurrently) has been
+  // observed to hang rather than queue, so the local pool here is kept
+  // deliberately small. Combined with running Prisma calls sequentially
+  // rather than via Promise.all (see the page/action call sites), this
+  // avoids ever needing more than one or two connections at once.
+  const pool = new Pool({ connectionString: resolveConnectionString(workers), max: 3 });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({
     adapter,

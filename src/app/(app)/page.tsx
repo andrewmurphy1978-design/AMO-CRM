@@ -3,28 +3,32 @@ import { prisma } from "@/lib/prisma";
 import { formatDistanceToNow } from "date-fns";
 
 export default async function DashboardPage() {
-  const [contactCount, clientCount, activeProjectCount, openTaskCount, dueSoonTasks, recentActivity, integration] =
-    await Promise.all([
-      prisma.contact.count(),
-      prisma.contact.count({ where: { stage: "CLIENT" } }),
-      prisma.project.count({ where: { status: "ACTIVE" } }),
-      prisma.task.count({ where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } } }),
-      prisma.task.findMany({
-        where: {
-          status: { in: ["TODO", "IN_PROGRESS"] },
-          dueDate: { not: null },
-        },
-        orderBy: { dueDate: "asc" },
-        take: 5,
-        include: { project: { include: { contact: true } } },
-      }),
-      prisma.activityLogEntry.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 8,
-        include: { contact: true, project: true },
-      }),
-      prisma.integrationSetting.findUnique({ where: { provider: "systeme_io" } }),
-    ]);
+  // Sequential, not Promise.all: Cloudflare Hyperdrive hangs rather than
+  // queues when a single cold request tries to open several new database
+  // connections at once. See src/lib/prisma.ts.
+  const contactCount = await prisma.contact.count();
+  const clientCount = await prisma.contact.count({ where: { stage: "CLIENT" } });
+  const activeProjectCount = await prisma.project.count({ where: { status: "ACTIVE" } });
+  const openTaskCount = await prisma.task.count({
+    where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
+  });
+  const dueSoonTasks = await prisma.task.findMany({
+    where: {
+      status: { in: ["TODO", "IN_PROGRESS"] },
+      dueDate: { not: null },
+    },
+    orderBy: { dueDate: "asc" },
+    take: 5,
+    include: { project: { include: { contact: true } } },
+  });
+  const recentActivity = await prisma.activityLogEntry.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 8,
+    include: { contact: true, project: true },
+  });
+  const integration = await prisma.integrationSetting.findUnique({
+    where: { provider: "systeme_io" },
+  });
 
   const stats = [
     { label: "Total contacts", value: contactCount, href: "/contacts" },

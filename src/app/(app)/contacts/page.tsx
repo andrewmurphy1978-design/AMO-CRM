@@ -37,15 +37,14 @@ export default async function ContactsPage({
     ];
   }
 
-  const [contacts, tags] = await Promise.all([
-    prisma.contact.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      include: { tags: { include: { tag: true } } },
-    }),
-    prisma.tag.findMany({ orderBy: { name: "asc" } }),
-  ]);
+  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
+  const contacts = await prisma.contact.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: { tags: { include: { tag: true } } },
+  });
+  const tags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
 
   return (
     <div className="space-y-6">

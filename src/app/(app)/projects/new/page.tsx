@@ -9,13 +9,12 @@ export default async function NewProjectPage({
 }) {
   const { contactId } = await searchParams;
 
-  const [contacts, users] = await Promise.all([
-    prisma.contact.findMany({
-      orderBy: { createdAt: "desc" },
-      select: { id: true, email: true, firstName: true, lastName: true },
-    }),
-    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-  ]);
+  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
+  const contacts = await prisma.contact.findMany({
+    orderBy: { createdAt: "desc" },
+    select: { id: true, email: true, firstName: true, lastName: true },
+  });
+  const users = await prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 
   return (
     <div className="max-w-2xl">

@@ -10,10 +10,9 @@ export default async function EditTaskPage({
 }) {
   const { id, taskId } = await params;
 
-  const [task, users] = await Promise.all([
-    prisma.task.findUnique({ where: { id: taskId } }),
-    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-  ]);
+  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
+  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const users = await prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 
   if (!task || task.projectId !== id) notFound();
 

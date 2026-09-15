@@ -7,12 +7,11 @@ export default async function SettingsPage() {
   const session = await auth();
   const isAdmin = session?.user.role === "ADMIN";
 
-  const [integration, users] = await Promise.all([
-    prisma.integrationSetting.findUnique({ where: { provider: "systeme_io" } }),
-    isAdmin
-      ? prisma.user.findMany({ orderBy: { name: "asc" } })
-      : Promise.resolve([]),
-  ]);
+  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
+  const integration = await prisma.integrationSetting.findUnique({
+    where: { provider: "systeme_io" },
+  });
+  const users = isAdmin ? await prisma.user.findMany({ orderBy: { name: "asc" } }) : [];
 
   return (
     <div className="max-w-3xl space-y-8">

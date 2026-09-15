@@ -174,15 +174,17 @@ async function upsertContact(contact: SystemeIoContact) {
   }
 
   // Tags: sync membership to match systeme.io exactly.
-  const tagRecords = await Promise.all(
-    contact.tags.map((tag) =>
-      prisma.tag.upsert({
+  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
+  const tagRecords = [];
+  for (const tag of contact.tags) {
+    tagRecords.push(
+      await prisma.tag.upsert({
         where: { systemeIoId: tag.id },
         update: { name: tag.name },
         create: { systemeIoId: tag.id, name: tag.name },
       })
-    )
-  );
+    );
+  }
 
   await prisma.contactTag.deleteMany({
     where: {
