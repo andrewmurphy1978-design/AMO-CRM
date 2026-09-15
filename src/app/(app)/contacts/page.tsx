@@ -11,12 +11,37 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_COLORS: Record<string, string> = {
-  LEAD: "bg-white/10 text-amo-muted",
-  PROSPECT: "bg-amo-blue/15 text-amo-blue",
-  CLIENT: "bg-amo-lime/15 text-amo-lime",
-  PAST_CLIENT: "bg-amo-gold/15 text-amo-gold",
+  LEAD: "bg-amo-lime/15 text-amo-lime",
+  PROSPECT: "bg-amo-teal/15 text-amo-teal",
+  CLIENT: "bg-amo-blue/15 text-amo-blue",
+  PAST_CLIENT: "bg-red-900/40 text-red-300",
   UNSUBSCRIBED: "bg-red-500/15 text-red-400",
 };
+
+type TagKind = "fr" | "en" | "other";
+
+function tagKind(name: string): TagKind {
+  const n = name.trim().toLowerCase();
+  if (n === "français" || n === "francais" || n === "french") return "fr";
+  if (n === "english" || n === "anglais") return "en";
+  return "other";
+}
+
+const TAG_KIND_RANK: Record<TagKind, number> = { fr: 0, en: 1, other: 2 };
+
+const TAG_KIND_COLORS: Record<TagKind, string> = {
+  fr: "bg-amo-blue/15 text-amo-blue",
+  en: "bg-red-500/15 text-red-400",
+  other: "bg-white/10 text-amo-muted",
+};
+
+function sortTags<T extends { tag: { name: string } }>(tags: T[]): T[] {
+  return [...tags].sort((a, b) => {
+    const rankDiff = TAG_KIND_RANK[tagKind(a.tag.name)] - TAG_KIND_RANK[tagKind(b.tag.name)];
+    if (rankDiff !== 0) return rankDiff;
+    return a.tag.name.localeCompare(b.tag.name);
+  });
+}
 
 export default async function ContactsPage({
   searchParams,
@@ -116,16 +141,23 @@ export default async function ContactsPage({
               <span className="shrink-0 text-xs text-amo-muted">{contact.source ?? "—"}</span>
             </div>
             <p className="mt-1 truncate text-sm text-amo-muted">{contact.email}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-2">
               <span className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
                 {STAGE_LABELS[contact.stage]}
               </span>
-              {contact.tags.map((ct) => (
-                <span key={ct.tagId} className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-amo-muted">
-                  {ct.tag.name}
-                </span>
-              ))}
             </div>
+            {contact.tags.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {sortTags(contact.tags).map((ct) => (
+                  <span
+                    key={ct.tagId}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(ct.tag.name)]}`}
+                  >
+                    {ct.tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </Link>
         ))}
         {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-amo-muted">No contacts found.</p>}
@@ -161,10 +193,10 @@ export default async function ContactsPage({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {contact.tags.map((ct) => (
+                    {sortTags(contact.tags).map((ct) => (
                       <span
                         key={ct.tagId}
-                        className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-amo-muted"
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(ct.tag.name)]}`}
                       >
                         {ct.tag.name}
                       </span>
