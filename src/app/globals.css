@@ -80,6 +80,13 @@ body {
   transform: scale(1.05);
 }
 
+/* Login page shows the background image almost sharp, unlike the signed-in
+   app shell's softer blur above — same source rule for `.amo-bg-image`,
+   overridden here by a later, equal-specificity single-class selector. */
+.amo-bg-image--login {
+  filter: blur(0.5px);
+}
+
 .amo-bg-overlay {
   position: fixed;
   inset: 0;

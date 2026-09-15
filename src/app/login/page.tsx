@@ -20,14 +20,14 @@ export default async function LoginPage({
 
   return (
     <div className="relative flex min-h-screen items-center justify-center px-4">
-      <div className="amo-bg-image" />
+      <div className="amo-bg-image amo-bg-image--login" />
       <div className="amo-bg-overlay" />
 
-      <div className="relative z-10 w-full max-w-sm rounded-3xl border border-card-border bg-card-bg p-8 shadow-2xl">
-        <div className="mb-6 h-[3px] w-full rounded-full amo-card-accent" />
+      <div className="relative z-10 w-full max-w-sm overflow-hidden rounded-3xl bg-[#1e4430] p-8 shadow-2xl">
+        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-full" />
-        <p className="mt-2 text-center text-sm text-soft">{dictionaries.en.login.subtitle}</p>
+        <p className="mt-2 text-center text-sm text-amo-muted">{dictionaries.en.login.subtitle}</p>
         <LoginForm callbackUrl={callbackUrl ?? "/"} />
       </div>
     </div>

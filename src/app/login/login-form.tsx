@@ -39,7 +39,7 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       }}
     >
       <div>
-        <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wide text-soft">
+        <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">
           Email
         </label>
         <input
@@ -52,7 +52,7 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         />
       </div>
       <div>
-        <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wide text-soft">
+        <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">
           Password
         </label>
         <input

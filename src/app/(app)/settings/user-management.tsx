@@ -99,7 +99,7 @@ export default function UserManagement({
           <button
             type="button"
             onClick={openCreate}
-            className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+            className="rounded-md bg-[#0fa38a] px-3 py-1.5 text-xs font-medium text-[#f4faf6] hover:opacity-90"
           >
             {t.team.add}
           </button>
@@ -107,7 +107,7 @@ export default function UserManagement({
             type="button"
             onClick={handleDelete}
             disabled={!selected || isSelf || deletePending}
-            className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-30"
+            className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-30"
           >
             {t.team.delete}
           </button>

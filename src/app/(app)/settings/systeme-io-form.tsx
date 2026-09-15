@@ -84,7 +84,7 @@ export default function SystemeIoForm({
       {saveState?.error && <p className="text-sm text-red-600">{saveState.error}</p>}
       {saveState?.success && <p className="text-sm text-emerald-700">{saveState.success}</p>}
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -114,12 +114,10 @@ export default function SystemeIoForm({
             />
             {t.systemeio.enableAutoSync}
           </label>
-        </div>
 
-        {autoSync && (
-          <form action={timeAction} className="flex flex-wrap items-end gap-3">
-            <div>
-              <label htmlFor="autoSyncTime" className="block text-xs font-semibold uppercase tracking-wide text-soft">
+          {autoSync && (
+            <form action={timeAction} className="flex flex-wrap items-center gap-3">
+              <label htmlFor="autoSyncTime" className="text-xs font-semibold uppercase tracking-wide text-soft">
                 {t.systemeio.runTime}
               </label>
               <input
@@ -127,20 +125,20 @@ export default function SystemeIoForm({
                 name="autoSyncTime"
                 type="time"
                 defaultValue={autoSyncTime}
-                className="mt-1 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+                className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
               />
-            </div>
-            <button
-              type="submit"
-              disabled={timePending}
-              className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60"
-            >
-              {timePending ? t.systemeio.saving : t.systemeio.save}
-            </button>
-            {timeState?.error && <p className="text-sm text-red-600">{timeState.error}</p>}
-            {timeState?.success && <p className="text-sm text-emerald-700">{timeState.success}</p>}
-          </form>
-        )}
+              <button
+                type="submit"
+                disabled={timePending}
+                className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
+              >
+                {timePending ? t.systemeio.saving : t.systemeio.save}
+              </button>
+            </form>
+          )}
+        </div>
+        {timeState?.error && <p className="text-sm text-red-600">{timeState.error}</p>}
+        {timeState?.success && <p className="text-sm text-emerald-700">{timeState.success}</p>}
       </div>
       {syncResult?.error && <p className="text-sm text-red-600">{syncResult.error}</p>}
       {syncResult?.success && <p className="text-sm text-emerald-700">{syncResult.success}</p>}
