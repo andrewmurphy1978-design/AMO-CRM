@@ -25,11 +25,8 @@ export default async function LoginPage({
       <div className="relative z-10 w-full max-w-sm rounded-3xl border border-amo-border bg-amo-card p-8 shadow-2xl">
         <div className="mb-6 h-[3px] w-full rounded-full amo-card-accent" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="mx-auto h-16 w-16" />
-        <h1 className="mt-4 text-center font-display text-xl font-semibold text-amo-white">
-          Andrew Murphy Online
-        </h1>
-        <p className="mt-1 text-center text-sm text-amo-muted">Sign in to your CRM</p>
+        <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-full" />
+        <p className="mt-2 text-center text-sm text-amo-muted">Sign in to your CRM</p>
         <LoginForm callbackUrl={callbackUrl ?? "/"} />
       </div>
     </div>

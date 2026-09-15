@@ -28,9 +28,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto bg-amo-green sm:sticky sm:top-0 sm:z-10 sm:flex sm:h-screen">
-        <div className="flex flex-col items-center gap-2 border-b border-white/10 px-5 py-6">
+        <div className="flex flex-col items-center gap-2 border-b border-white/10 px-4 py-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-20 w-20" />
+          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-full" />
           <p className="font-display text-lg font-semibold tracking-wide text-amo-white">CRM</p>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-4">

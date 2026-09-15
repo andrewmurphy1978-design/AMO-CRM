@@ -101,7 +101,38 @@ export default async function ContactsPage({
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-lg border border-amo-border bg-amo-card shadow-sm">
+      {/* Mobile: stacked cards instead of a cramped multi-column table. */}
+      <div className="divide-y divide-white/10 rounded-lg border border-amo-border bg-amo-card shadow-sm sm:hidden">
+        {contacts.map((contact, i) => (
+          <Link
+            key={contact.id}
+            href={`/contacts/${contact.id}`}
+            className={`block px-4 py-3 ${i % 2 === 0 ? "bg-black/15" : "bg-white/[0.03]"}`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-medium text-amo-white">
+                {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
+              </p>
+              <span className="shrink-0 text-xs text-amo-muted">{contact.source ?? "—"}</span>
+            </div>
+            <p className="mt-1 truncate text-sm text-amo-muted">{contact.email}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
+                {STAGE_LABELS[contact.stage]}
+              </span>
+              {contact.tags.map((ct) => (
+                <span key={ct.tagId} className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-amo-muted">
+                  {ct.tag.name}
+                </span>
+              ))}
+            </div>
+          </Link>
+        ))}
+        {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-amo-muted">No contacts found.</p>}
+      </div>
+
+      {/* Desktop/tablet: full table. */}
+      <div className="hidden overflow-x-auto rounded-lg border border-amo-border bg-amo-card shadow-sm sm:block">
         <table className="min-w-full divide-y divide-white/10 text-sm">
           <thead className="bg-white/5 text-left text-xs font-medium uppercase tracking-wide text-amo-muted">
             <tr>
