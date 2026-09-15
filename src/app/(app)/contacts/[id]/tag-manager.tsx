@@ -2,16 +2,20 @@
 
 import { useRef, useTransition } from "react";
 import { addTagToContact, removeTagFromContact } from "@/actions/contacts";
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 export default function TagManager({
   contactId,
   tags,
+  lang,
 }: {
   contactId: string;
   tags: { id: string; name: string }[];
+  lang: Lang;
 }) {
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+  const t = getDict(lang);
 
   return (
     <div className="mt-3">
@@ -27,13 +31,13 @@ export default function TagManager({
               disabled={pending}
               onClick={() => startTransition(() => removeTagFromContact(contactId, tag.id))}
               className="text-soft hover:text-red-600"
-              aria-label={`Remove ${tag.name}`}
+              aria-label={`${t.tagManager.remove} ${tag.name}`}
             >
               ×
             </button>
           </span>
         ))}
-        {tags.length === 0 && <p className="text-sm text-soft">No tags yet.</p>}
+        {tags.length === 0 && <p className="text-sm text-soft">{t.tagManager.noTags}</p>}
       </div>
       <form
         className="mt-3 flex gap-2"
@@ -48,7 +52,7 @@ export default function TagManager({
         <input
           ref={inputRef}
           type="text"
-          placeholder="Add a tag..."
+          placeholder={t.tagManager.addPlaceholder}
           className="flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
         <button
@@ -56,7 +60,7 @@ export default function TagManager({
           disabled={pending}
           className="rounded-md border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5"
         >
-          Add
+          {t.tagManager.add}
         </button>
       </form>
     </div>

@@ -2,15 +2,17 @@
 
 import { useActionState } from "react";
 import { changePassword } from "@/actions/users";
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
-export default function ChangePasswordForm() {
+export default function ChangePasswordForm({ lang }: { lang: Lang }) {
   const [state, formAction, pending] = useActionState(changePassword, undefined);
+  const t = getDict(lang);
 
   return (
     <form action={formAction} className="grid gap-3 sm:max-w-sm">
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
-          Current password
+          {t.changePasswordForm.currentPassword}
         </label>
         <input
           name="currentPassword"
@@ -22,7 +24,7 @@ export default function ChangePasswordForm() {
       </div>
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
-          New password
+          {t.changePasswordForm.newPassword}
         </label>
         <input
           name="newPassword"
@@ -35,7 +37,7 @@ export default function ChangePasswordForm() {
       </div>
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
-          Confirm new password
+          {t.changePasswordForm.confirmPassword}
         </label>
         <input
           name="confirmPassword"
@@ -55,7 +57,7 @@ export default function ChangePasswordForm() {
         disabled={pending}
         className="justify-self-start btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
-        {pending ? "Updating..." : "Update password"}
+        {pending ? t.changePasswordForm.updating : t.changePasswordForm.update}
       </button>
     </form>
   );

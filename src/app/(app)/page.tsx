@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatDistanceToNow } from "date-fns";
+import { getLang } from "@/lib/i18n/get-lang";
+import { getDict } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 
 const STAT_ICONS = {
   contacts: (
@@ -34,6 +37,10 @@ const STAT_ICONS = {
 } as const;
 
 export default async function DashboardPage() {
+  const lang = await getLang();
+  const t = getDict(lang);
+  const dateLocale = getDateLocale(lang);
+
   // Sequential, not Promise.all: Cloudflare Hyperdrive hangs rather than
   // queues when a single cold request tries to open several new database
   // connections at once. See src/lib/prisma.ts.
@@ -62,16 +69,16 @@ export default async function DashboardPage() {
   });
 
   const stats = [
-    { label: "Total contacts", value: contactCount, href: "/contacts", icon: STAT_ICONS.contacts, color: "lime" },
-    { label: "Clients", value: clientCount, href: "/contacts?stage=CLIENT", icon: STAT_ICONS.clients, color: "teal" },
+    { label: t.dashboard.statTotalContacts, value: contactCount, href: "/contacts", icon: STAT_ICONS.contacts, color: "lime" },
+    { label: t.dashboard.statClients, value: clientCount, href: "/contacts?stage=CLIENT", icon: STAT_ICONS.clients, color: "teal" },
     {
-      label: "Active projects",
+      label: t.dashboard.statActiveProjects,
       value: activeProjectCount,
       href: "/projects?status=ACTIVE",
       icon: STAT_ICONS.projects,
       color: "blue",
     },
-    { label: "Open tasks", value: openTaskCount, href: "/projects", icon: STAT_ICONS.tasks, color: "gold" },
+    { label: t.dashboard.statOpenTasks, value: openTaskCount, href: "/projects", icon: STAT_ICONS.tasks, color: "gold" },
   ] as const;
 
   const colorClasses = {
@@ -84,19 +91,17 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-ink">Dashboard</h1>
-        <p className="mt-1 text-sm text-soft">
-          Overview of your contacts, clients, and active work.
-        </p>
+        <h1 className="font-display text-2xl font-semibold text-ink">{t.dashboard.title}</h1>
+        <p className="mt-1 text-sm text-soft">{t.dashboard.subtitle}</p>
       </div>
 
       {!integration?.apiKeyEncrypted && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Your systeme.io account isn&apos;t connected yet.{" "}
+          {t.dashboard.notConnected}{" "}
           <Link href="/settings" className="font-semibold underline">
-            Connect it in Settings
+            {t.dashboard.connectInSettings}
           </Link>{" "}
-          to sync your contacts and tags automatically.
+          {t.dashboard.connectSuffix}
         </div>
       )}
 
@@ -122,9 +127,9 @@ export default async function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-          <h2 className="font-display text-sm font-semibold text-ink">Upcoming tasks</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.upcomingTasks}</h2>
           {dueSoonTasks.length === 0 ? (
-            <p className="mt-3 text-sm text-soft">No upcoming tasks with a due date.</p>
+            <p className="mt-3 text-sm text-soft">{t.dashboard.noUpcomingTasks}</p>
           ) : (
             <ul className="mt-3 space-y-3">
               {dueSoonTasks.map((task) => (
@@ -139,7 +144,7 @@ export default async function DashboardPage() {
                     </Link>
                     <p className="text-xs text-soft">
                       {task.project.name} · {task.project.contact.firstName ?? task.project.contact.email}
-                      {task.dueDate && ` · due ${formatDistanceToNow(task.dueDate, { addSuffix: true })}`}
+                      {task.dueDate && ` · ${t.dashboard.due} ${formatDistanceToNow(task.dueDate, { addSuffix: true, locale: dateLocale })}`}
                     </p>
                   </div>
                 </li>
@@ -150,9 +155,9 @@ export default async function DashboardPage() {
 
         <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-          <h2 className="font-display text-sm font-semibold text-ink">Recent activity</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.recentActivity}</h2>
           {recentActivity.length === 0 ? (
-            <p className="mt-3 text-sm text-soft">No activity yet.</p>
+            <p className="mt-3 text-sm text-soft">{t.dashboard.noActivity}</p>
           ) : (
             <ul className="mt-3 space-y-3">
               {recentActivity.map((entry) => (
@@ -161,7 +166,7 @@ export default async function DashboardPage() {
                   <div>
                     <p className="text-ink">{entry.message}</p>
                     <p className="text-xs text-soft">
-                      {formatDistanceToNow(entry.createdAt, { addSuffix: true })}
+                      {formatDistanceToNow(entry.createdAt, { addSuffix: true, locale: dateLocale })}
                     </p>
                   </div>
                 </li>

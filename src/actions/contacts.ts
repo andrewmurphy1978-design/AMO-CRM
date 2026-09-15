@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSystemeIoClient } from "@/lib/sync";
 import { DEFAULT_PUSH_FIELD_SLUGS } from "@/lib/systemeio";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 const ContactSchema = z.object({
   email: z.string().email("A valid email is required"),
@@ -41,20 +42,21 @@ export async function createContact(
 ): Promise<{ error?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   let data;
   try {
     data = readContactForm(formData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
 
   const existing = await prisma.contact.findUnique({ where: { email: data.email } });
   if (existing) {
-    return { error: "A contact with this email already exists." };
+    return { error: t.actions.contactEmailExists };
   }
 
   const contact = await prisma.contact.create({
@@ -65,7 +67,7 @@ export async function createContact(
     data: {
       contactId: contact.id,
       userId: session.user.id,
-      message: `${session.user.name} created this contact.`,
+      message: t.actions.createdContact(session.user.name ?? ""),
     },
   });
 
@@ -80,13 +82,14 @@ export async function updateContact(
 ): Promise<{ error?: string; success?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   let data;
   try {
     data = readContactForm(formData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
@@ -95,7 +98,7 @@ export async function updateContact(
     where: { email: data.email, NOT: { id: contactId } },
   });
   if (existing) {
-    return { error: "Another contact already uses this email." };
+    return { error: t.actions.contactEmailExistsOther };
   }
 
   const updated = await prisma.contact.update({ where: { id: contactId }, data });
@@ -115,13 +118,13 @@ export async function updateContact(
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown error";
-      warning = ` (saved here, but systeme.io update failed: ${message})`;
+      warning = t.actions.contactUpdatedWarning(message);
     }
   }
 
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${contactId}`);
-  return { success: `Contact updated.${warning}` };
+  return { success: `${t.actions.contactUpdated}${warning}` };
 }
 
 export async function deleteContact(contactId: string) {
@@ -202,6 +205,7 @@ export async function removeTagFromContact(contactId: string, tagId: string) {
 export async function addContactNote(contactId: string, formData: FormData) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   const message = String(formData.get("note") ?? "").trim();
   if (!message) return;
@@ -210,7 +214,7 @@ export async function addContactNote(contactId: string, formData: FormData) {
     data: {
       contactId,
       userId: session.user.id,
-      message: `${session.user.name}: ${message}`,
+      message: t.actions.addedNote(session.user.name ?? "", message),
     },
   });
 

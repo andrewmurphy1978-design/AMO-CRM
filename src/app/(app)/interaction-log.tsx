@@ -3,13 +3,8 @@
 import { useActionState, useTransition } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { logInteraction, deleteInteraction } from "@/actions/interactions";
-
-const TYPE_OPTIONS = [
-  { value: "CALL", label: "Call" },
-  { value: "EMAIL", label: "Email" },
-  { value: "MEETING", label: "Meeting" },
-  { value: "NOTE", label: "Note" },
-] as const;
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 
 const TYPE_STYLES: Record<string, { dot: string; badge: string; icon: React.ReactNode }> = {
   CALL: {
@@ -72,13 +67,24 @@ export default function InteractionLog({
   contactId,
   projectId,
   interactions,
+  lang,
 }: {
   contactId: string;
   projectId?: string;
   interactions: InteractionEntry[];
+  lang: Lang;
 }) {
   const [state, formAction, pending] = useActionState(logInteraction, undefined);
   const [, startTransition] = useTransition();
+  const t = getDict(lang);
+  const dateLocale = getDateLocale(lang);
+
+  const TYPE_OPTIONS = [
+    { value: "CALL", label: t.interactionLog.typeCall },
+    { value: "EMAIL", label: t.interactionLog.typeEmail },
+    { value: "MEETING", label: t.interactionLog.typeMeeting },
+    { value: "NOTE", label: t.interactionLog.typeNote },
+  ] as const;
 
   return (
     <div>
@@ -99,7 +105,7 @@ export default function InteractionLog({
         </select>
         <input
           name="subject"
-          placeholder="Subject (optional)"
+          placeholder={t.interactionLog.subjectPlaceholder}
           className="rounded-lg border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
 
@@ -107,7 +113,7 @@ export default function InteractionLog({
           name="notes"
           required
           rows={2}
-          placeholder="What was discussed..."
+          placeholder={t.interactionLog.notesPlaceholder}
           className="sm:col-span-2 rounded-lg border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
 
@@ -117,7 +123,7 @@ export default function InteractionLog({
             disabled={pending}
             className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
           >
-            {pending ? "Logging..." : "Log interaction"}
+            {pending ? t.interactionLog.logging : t.interactionLog.logInteraction}
           </button>
           {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
         </div>
@@ -147,7 +153,7 @@ export default function InteractionLog({
                 </div>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{entry.notes}</p>
                 <p className="mt-1 text-xs text-soft">
-                  {formatDistanceToNow(new Date(entry.occurredAt), { addSuffix: true })}
+                  {formatDistanceToNow(new Date(entry.occurredAt), { addSuffix: true, locale: dateLocale })}
                   {entry.loggedBy && ` · ${entry.loggedBy.name}`}
                 </p>
               </div>
@@ -157,7 +163,7 @@ export default function InteractionLog({
                   startTransition(() => deleteInteraction(entry.id, contactId, projectId ?? null))
                 }
                 className="shrink-0 text-xs text-soft hover:text-red-600"
-                aria-label="Delete"
+                aria-label={t.interactionLog.delete}
               >
                 ×
               </button>
@@ -165,7 +171,7 @@ export default function InteractionLog({
           );
         })}
         {interactions.length === 0 && (
-          <p className="text-sm text-soft">No calls, emails, or meetings logged yet.</p>
+          <p className="text-sm text-soft">{t.interactionLog.noInteractions}</p>
         )}
       </ul>
     </div>

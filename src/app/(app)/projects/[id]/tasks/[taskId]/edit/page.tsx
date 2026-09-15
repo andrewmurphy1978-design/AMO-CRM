@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { updateTask } from "@/actions/tasks";
 import TaskForm from "../../../task-form";
+import { getLang } from "@/lib/i18n/get-lang";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 export default async function EditTaskPage({
   params,
@@ -16,13 +18,22 @@ export default async function EditTaskPage({
 
   if (!task || task.projectId !== id) notFound();
 
+  const lang = await getLang();
+  const t = getDict(lang);
   const boundUpdate = updateTask.bind(null, task.id);
 
   return (
     <div className="max-w-2xl">
-      <h1 className="font-display text-2xl font-semibold text-ink">Edit task</h1>
+      <h1 className="font-display text-2xl font-semibold text-ink">{t.editTaskPage.title}</h1>
       <div className="mt-6 rounded-lg border border-card-border bg-card-bg p-6 shadow-sm">
-        <TaskForm action={boundUpdate} projectId={id} defaultValues={task} users={users} submitLabel="Save changes" />
+        <TaskForm
+          action={boundUpdate}
+          projectId={id}
+          defaultValues={task}
+          users={users}
+          submitLabel={t.taskForm.saveChanges}
+          lang={lang}
+        />
       </div>
     </div>
   );

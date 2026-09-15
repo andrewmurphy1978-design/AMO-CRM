@@ -1,14 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-
-const STATUSES = [
-  { value: "PLANNING", label: "Planning" },
-  { value: "ACTIVE", label: "Active" },
-  { value: "ON_HOLD", label: "On hold" },
-  { value: "COMPLETED", label: "Completed" },
-  { value: "CANCELLED", label: "Cancelled" },
-];
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 type ProjectFormValues = {
   name?: string;
@@ -26,6 +19,7 @@ export default function ProjectForm({
   contacts,
   users,
   submitLabel,
+  lang,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -35,13 +29,23 @@ export default function ProjectForm({
   contacts: { id: string; label: string }[];
   users: { id: string; name: string }[];
   submitLabel: string;
+  lang: Lang;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  const t = getDict(lang);
+
+  const STATUSES = [
+    { value: "PLANNING", label: t.projectStatuses.PLANNING },
+    { value: "ACTIVE", label: t.projectStatuses.ACTIVE },
+    { value: "ON_HOLD", label: t.projectStatuses.ON_HOLD },
+    { value: "COMPLETED", label: t.projectStatuses.COMPLETED },
+    { value: "CANCELLED", label: t.projectStatuses.CANCELLED },
+  ];
 
   return (
     <form action={formAction} className="space-y-4">
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Project name</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.projectName}</label>
         <input
           name="name"
           required
@@ -52,7 +56,7 @@ export default function ProjectForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Client</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.client}</label>
           <select
             name="contactId"
             required
@@ -60,7 +64,7 @@ export default function ProjectForm({
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
             <option value="" disabled>
-              Select a client...
+              {t.projectForm.selectClient}
             </option>
             {contacts.map((c) => (
               <option key={c.id} value={c.id}>
@@ -70,7 +74,7 @@ export default function ProjectForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Status</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.status}</label>
           <select
             name="status"
             defaultValue={defaultValues?.status ?? "PLANNING"}
@@ -84,13 +88,13 @@ export default function ProjectForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Owner</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.owner}</label>
           <select
             name="ownerId"
             defaultValue={defaultValues?.ownerId ?? ""}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
-            <option value="">Unassigned</option>
+            <option value="">{t.common.unassigned}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
@@ -100,7 +104,7 @@ export default function ProjectForm({
         </div>
         <div />
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Start date</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.startDate}</label>
           <input
             type="date"
             name="startDate"
@@ -109,7 +113,7 @@ export default function ProjectForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Due date</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.dueDate}</label>
           <input
             type="date"
             name="dueDate"
@@ -120,7 +124,7 @@ export default function ProjectForm({
       </div>
 
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Description</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.description}</label>
         <textarea
           name="description"
           rows={3}
@@ -137,7 +141,7 @@ export default function ProjectForm({
         disabled={pending}
         className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
-        {pending ? "Saving..." : submitLabel}
+        {pending ? t.common.saving : submitLabel}
       </button>
     </form>
   );

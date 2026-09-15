@@ -5,14 +5,8 @@ import TaskRow from "./task-row";
 import QuickAddTask from "./quick-add-task";
 import DeleteProjectButton from "./delete-button";
 import InteractionLog from "../../interaction-log";
-
-const STATUS_LABELS: Record<string, string> = {
-  PLANNING: "Planning",
-  ACTIVE: "Active",
-  ON_HOLD: "On hold",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-};
+import { getLang } from "@/lib/i18n/get-lang";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 export default async function ProjectDetailPage({
   params,
@@ -20,6 +14,9 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const lang = await getLang();
+  const t = getDict(lang);
+  const STATUS_LABELS = t.projectStatuses;
 
   const project = await prisma.project.findUnique({
     where: { id },
@@ -55,8 +52,8 @@ export default async function ProjectDetailPage({
           <h1 className="font-display text-2xl font-semibold text-ink">{project.name}</h1>
           <p className="mt-1 text-sm text-soft">
             {STATUS_LABELS[project.status]}
-            {project.owner && ` · Owner: ${project.owner.name}`}
-            {project.dueDate && ` · Due ${new Date(project.dueDate).toLocaleDateString()}`}
+            {project.owner && ` · ${t.projectDetail.owner}: ${project.owner.name}`}
+            {project.dueDate && ` · ${t.projectDetail.due} ${new Date(project.dueDate).toLocaleDateString()}`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -64,9 +61,9 @@ export default async function ProjectDetailPage({
             href={`/projects/${project.id}/edit`}
             className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
           >
-            Edit
+            {t.projectDetail.edit}
           </Link>
-          <DeleteProjectButton projectId={project.id} />
+          <DeleteProjectButton projectId={project.id} lang={lang} />
         </div>
       </div>
 
@@ -76,28 +73,28 @@ export default async function ProjectDetailPage({
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <h2 className="font-display text-sm font-semibold text-ink">Tasks</h2>
+        <h2 className="font-display text-lg font-semibold text-ink">{t.projectDetail.tasksTitle}</h2>
         <div className="mt-3">
-          <QuickAddTask projectId={project.id} />
+          <QuickAddTask projectId={project.id} lang={lang} />
         </div>
 
         {openTasks.length === 0 && doneTasks.length === 0 ? (
-          <p className="mt-4 text-sm text-soft">No tasks yet.</p>
+          <p className="mt-4 text-sm text-soft">{t.projectDetail.noTasksYet}</p>
         ) : (
           <>
             <ul className="mt-2 divide-y divide-card-border">
               {openTasks.map((task) => (
-                <TaskRow key={task.id} task={task} projectId={project.id} />
+                <TaskRow key={task.id} task={task} projectId={project.id} lang={lang} />
               ))}
             </ul>
             {doneTasks.length > 0 && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-xs font-medium text-soft">
-                  {doneTasks.length} completed
+                  {t.projectDetail.completed(doneTasks.length)}
                 </summary>
                 <ul className="mt-2 divide-y divide-card-border">
                   {doneTasks.map((task) => (
-                    <TaskRow key={task.id} task={task} projectId={project.id} />
+                    <TaskRow key={task.id} task={task} projectId={project.id} lang={lang} />
                   ))}
                 </ul>
               </details>
@@ -108,9 +105,10 @@ export default async function ProjectDetailPage({
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <h2 className="font-display text-sm font-semibold text-ink">Calls &amp; emails</h2>
+        <h2 className="font-display text-lg font-semibold text-ink">{t.projectDetail.callsEmails}</h2>
         <div className="mt-3">
           <InteractionLog
+            lang={lang}
             contactId={project.contactId}
             projectId={project.id}
             interactions={project.interactions.map((i) => ({

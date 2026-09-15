@@ -2,8 +2,9 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { createUser, updateUser, deleteUser, resetUserPassword } from "@/actions/users";
-import PhoneInput from "./phone-input";
+import PhoneField from "./phone-input";
 import { COUNTRIES } from "@/lib/countries";
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 type TeamUser = {
   id: string;
@@ -30,9 +31,11 @@ function generateTempPassword(): string {
 export default function UserManagement({
   users,
   currentUserId,
+  lang,
 }: {
   users: TeamUser[];
   currentUserId: string;
+  lang: Lang;
 }) {
   const [selected, setSelected] = useState<TeamUser | null>(null);
   const [mode, setMode] = useState<"none" | "create" | "edit">("none");
@@ -40,6 +43,7 @@ export default function UserManagement({
   const [tempPassword, setTempPassword] = useState("");
   const [deletePending, startDeleteTransition] = useTransition();
   const [resetPending, startResetTransition] = useTransition();
+  const t = getDict(lang);
 
   const [createState, createAction, createPending] = useActionState(createUser, undefined);
   const [updateState, updateAction, updatePending] = useActionState(updateUser, undefined);
@@ -66,7 +70,7 @@ export default function UserManagement({
 
   function handleDelete() {
     if (!selected) return;
-    if (!confirm(`Remove ${selected.name}?`)) return;
+    if (!confirm(t.team.deleteConfirm(selected.name))) return;
     startDeleteTransition(() => deleteUser(selected.id));
     closeForm();
   }
@@ -89,22 +93,25 @@ export default function UserManagement({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={openCreate}
-          className="rounded-md border border-card-border px-3 py-1.5 text-xs font-medium text-ink hover:bg-black/5"
-        >
-          Add
-        </button>
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={!selected || isSelf || deletePending}
-          className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-30"
-        >
-          Delete
-        </button>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-display text-lg font-semibold text-ink">{t.settings.teamTitle}</h2>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={openCreate}
+            className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+          >
+            {t.team.add}
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={!selected || isSelf || deletePending}
+            className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-30"
+          >
+            {t.team.delete}
+          </button>
+        </div>
       </div>
 
       <ul className="divide-y divide-card-border rounded-md border border-card-border">
@@ -119,12 +126,12 @@ export default function UserManagement({
             >
               <p className="text-sm font-medium text-ink">{user.name}</p>
               <p className="text-xs text-soft">
-                {user.email} · {user.role === "ADMIN" ? "Admin" : "Member"}
+                {user.email} · {user.role === "ADMIN" ? t.team.admin : t.team.member}
               </p>
             </button>
           </li>
         ))}
-        {users.length === 0 && <p className="px-3 py-4 text-sm text-soft">No team members yet.</p>}
+        {users.length === 0 && <p className="px-3 py-4 text-sm text-soft">{t.team.noMembers}</p>}
       </ul>
 
       {mode !== "none" && (
@@ -137,17 +144,17 @@ export default function UserManagement({
 
           {/* Line 1: Name, Email */}
           <div>
-            <label className={LABEL_CLASS}>Name</label>
+            <label className={LABEL_CLASS}>{t.team.name}</label>
             <input name="name" required defaultValue={selected?.name} className={FIELD_CLASS} />
           </div>
           <div>
-            <label className={LABEL_CLASS}>Email</label>
+            <label className={LABEL_CLASS}>{t.team.email}</label>
             <input name="email" type="email" required defaultValue={selected?.email} className={FIELD_CLASS} />
           </div>
 
           {/* Country — governs how phone/WhatsApp below are formatted. */}
           <div className="sm:col-span-2">
-            <label className={LABEL_CLASS}>Country</label>
+            <label className={LABEL_CLASS}>{t.team.country}</label>
             <select
               name="country"
               value={country}
@@ -162,31 +169,31 @@ export default function UserManagement({
             </select>
           </div>
 
-          {/* Line 2: Phone, WhatsApp */}
-          <PhoneInput name="phone" label="Phone number" country={country} defaultValue={selected?.phone} className={FIELD_CLASS} />
-          <PhoneInput
+          {/* Line 2: Phone, WhatsApp — each has its own flag/calling-code
+              picker, seeded from Country above but independently changeable. */}
+          <PhoneField name="phone" label={t.team.phoneNumber} defaultCountry={country} defaultValue={selected?.phone} />
+          <PhoneField
             name="whatsapp"
-            label="WhatsApp number"
-            country={country}
+            label={t.team.whatsappNumber}
+            defaultCountry={country}
             defaultValue={selected?.whatsapp}
-            className={FIELD_CLASS}
           />
 
           {/* Line 3: Role, Language */}
           <div>
-            <label className={LABEL_CLASS}>Role</label>
+            <label className={LABEL_CLASS}>{t.team.role}</label>
             <select
               name="role"
               defaultValue={selected?.role ?? "MEMBER"}
               disabled={isSelf}
               className={`${FIELD_CLASS} disabled:opacity-60`}
             >
-              <option value="MEMBER">Member</option>
-              <option value="ADMIN">Admin</option>
+              <option value="MEMBER">{t.team.member}</option>
+              <option value="ADMIN">{t.team.admin}</option>
             </select>
           </div>
           <div>
-            <label className={LABEL_CLASS}>Language</label>
+            <label className={LABEL_CLASS}>{t.team.language}</label>
             <div className="mt-2 flex items-center gap-4 text-sm text-ink">
               <label className="flex items-center gap-1.5">
                 <input
@@ -196,7 +203,7 @@ export default function UserManagement({
                   defaultChecked={(selected?.language ?? "EN") === "EN"}
                   className="accent-amo-lime"
                 />
-                English
+                {t.team.english}
               </label>
               <label className="flex items-center gap-1.5">
                 <input
@@ -206,7 +213,7 @@ export default function UserManagement({
                   defaultChecked={selected?.language === "FR"}
                   className="accent-amo-lime"
                 />
-                Français
+                {t.team.french}
               </label>
             </div>
           </div>
@@ -214,13 +221,13 @@ export default function UserManagement({
           {/* Line 4: Temporary password + Reset Password */}
           <div className="sm:col-span-2 flex items-end gap-2">
             <div className="flex-1">
-              <label className={LABEL_CLASS}>Temporary password</label>
+              <label className={LABEL_CLASS}>{t.team.temporaryPassword}</label>
               <input
                 name="password"
                 type="text"
                 value={tempPassword}
                 onChange={(e) => setTempPassword(e.target.value)}
-                placeholder="Click Reset Password"
+                placeholder={t.team.tempPasswordPlaceholder}
                 className={FIELD_CLASS}
               />
             </div>
@@ -230,7 +237,7 @@ export default function UserManagement({
               disabled={resetPending}
               className="rounded-md border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60"
             >
-              {resetPending ? "Resetting..." : "Reset Password"}
+              {resetPending ? t.team.resetting : t.team.resetPassword}
             </button>
           </div>
 
@@ -245,14 +252,14 @@ export default function UserManagement({
               disabled={activePending}
               className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
             >
-              {activePending ? "Saving..." : "Save"}
+              {activePending ? t.team.saving : t.team.save}
             </button>
             <button
               type="button"
               onClick={closeForm}
               className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
             >
-              Cancel
+              {t.team.cancel}
             </button>
           </div>
         </form>

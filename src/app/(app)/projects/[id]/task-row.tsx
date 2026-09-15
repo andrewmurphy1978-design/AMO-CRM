@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import { toggleTaskStatus, deleteTask } from "@/actions/tasks";
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 const PRIORITY_COLORS: Record<string, string> = {
   LOW: "bg-black/5 text-soft",
@@ -14,6 +15,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 export default function TaskRow({
   task,
   projectId,
+  lang,
 }: {
   task: {
     id: string;
@@ -24,8 +26,10 @@ export default function TaskRow({
     assignee: { name: string } | null;
   };
   projectId: string;
+  lang: Lang;
 }) {
   const [pending, startTransition] = useTransition();
+  const t = getDict(lang);
 
   return (
     <li className="flex items-center gap-3 py-3">
@@ -47,22 +51,22 @@ export default function TaskRow({
         </Link>
         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-soft">
           <span className={`rounded-full px-2 py-0.5 font-medium ${PRIORITY_COLORS[task.priority]}`}>
-            {task.priority}
+            {t.priorities[task.priority as keyof typeof t.priorities]}
           </span>
           {task.assignee && <span>{task.assignee.name}</span>}
-          {task.dueDate && <span>Due {new Date(task.dueDate).toLocaleDateString()}</span>}
+          {task.dueDate && <span>{t.projectDetail.due} {new Date(task.dueDate).toLocaleDateString()}</span>}
         </div>
       </div>
       <button
         type="button"
         disabled={pending}
         onClick={() => {
-          if (!confirm("Delete this task?")) return;
+          if (!confirm(t.taskRow.deleteConfirm)) return;
           startTransition(() => deleteTask(task.id, projectId));
         }}
         className="text-xs text-soft hover:text-red-600"
       >
-        Delete
+        {t.taskRow.delete}
       </button>
     </li>
   );

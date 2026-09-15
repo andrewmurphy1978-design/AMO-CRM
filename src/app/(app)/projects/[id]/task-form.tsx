@@ -1,20 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-
-const STATUSES = [
-  { value: "TODO", label: "To do" },
-  { value: "IN_PROGRESS", label: "In progress" },
-  { value: "BLOCKED", label: "Blocked" },
-  { value: "DONE", label: "Done" },
-];
-
-const PRIORITIES = [
-  { value: "LOW", label: "Low" },
-  { value: "MEDIUM", label: "Medium" },
-  { value: "HIGH", label: "High" },
-  { value: "URGENT", label: "Urgent" },
-];
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 type TaskFormValues = {
   title?: string;
@@ -31,6 +18,7 @@ export default function TaskForm({
   defaultValues,
   users,
   submitLabel,
+  lang,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -40,14 +28,30 @@ export default function TaskForm({
   defaultValues?: TaskFormValues;
   users: { id: string; name: string }[];
   submitLabel: string;
+  lang: Lang;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  const t = getDict(lang);
+
+  const STATUSES = [
+    { value: "TODO", label: t.taskStatuses.TODO },
+    { value: "IN_PROGRESS", label: t.taskStatuses.IN_PROGRESS },
+    { value: "BLOCKED", label: t.taskStatuses.BLOCKED },
+    { value: "DONE", label: t.taskStatuses.DONE },
+  ];
+
+  const PRIORITIES = [
+    { value: "LOW", label: t.priorities.LOW },
+    { value: "MEDIUM", label: t.priorities.MEDIUM },
+    { value: "HIGH", label: t.priorities.HIGH },
+    { value: "URGENT", label: t.priorities.URGENT },
+  ];
 
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="projectId" value={projectId} />
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Title</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.title}</label>
         <input
           name="title"
           required
@@ -58,7 +62,7 @@ export default function TaskForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Status</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.status}</label>
           <select
             name="status"
             defaultValue={defaultValues?.status ?? "TODO"}
@@ -72,7 +76,7 @@ export default function TaskForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Priority</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.priority}</label>
           <select
             name="priority"
             defaultValue={defaultValues?.priority ?? "MEDIUM"}
@@ -86,13 +90,13 @@ export default function TaskForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Assignee</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.assignee}</label>
           <select
             name="assigneeId"
             defaultValue={defaultValues?.assigneeId ?? ""}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
-            <option value="">Unassigned</option>
+            <option value="">{t.common.unassigned}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
@@ -101,7 +105,7 @@ export default function TaskForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Due date</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.dueDate}</label>
           <input
             type="date"
             name="dueDate"
@@ -112,7 +116,7 @@ export default function TaskForm({
       </div>
 
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Description</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.description}</label>
         <textarea
           name="description"
           rows={3}
@@ -129,7 +133,7 @@ export default function TaskForm({
         disabled={pending}
         className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
-        {pending ? "Saving..." : submitLabel}
+        {pending ? t.common.saving : submitLabel}
       </button>
     </form>
   );

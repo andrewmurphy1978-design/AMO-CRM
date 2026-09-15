@@ -76,7 +76,7 @@ body {
   background-image: url("https://d1yei2z3i6k35z.cloudfront.net/18410699/6a62cc32379aa9.89171099_MountainbackgroundwithAICircuitry.png");
   background-size: cover;
   background-position: center;
-  filter: blur(6px);
+  filter: blur(2px);
   transform: scale(1.05);
 }
 
@@ -115,6 +115,35 @@ body {
 .btn-primary:hover:not(:disabled) {
   background: var(--amo-blue);
   color: #ffffff;
+}
+
+/* Flag-first international phone field (react-phone-number-input), restyled
+   to match the app's light field style instead of the library's defaults. */
+.amo-phone-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid var(--field-border);
+  background: var(--field-bg);
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.amo-phone-input:focus-within {
+  border-color: var(--amo-gold);
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 2px rgba(240, 192, 64, 0.3);
+}
+.amo-phone-input .PhoneInputInput {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.875rem;
+  color: var(--ink);
+}
+.amo-phone-input .PhoneInputCountrySelectArrow {
+  opacity: 0.6;
 }
 
 /* Secondary/outline button used on light cards. */

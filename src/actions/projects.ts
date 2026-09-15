@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 const ProjectSchema = z.object({
   name: z.string().trim().min(1, "Project name is required"),
@@ -35,13 +36,14 @@ export async function createProject(
 ): Promise<{ error?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   let data;
   try {
     data = readProjectForm(formData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
@@ -63,7 +65,7 @@ export async function createProject(
       projectId: project.id,
       contactId: data.contactId,
       userId: session.user.id,
-      message: `${session.user.name} created project "${project.name}".`,
+      message: t.actions.createdProject(session.user.name ?? "", project.name),
     },
   });
 
@@ -79,13 +81,14 @@ export async function updateProject(
 ): Promise<{ error?: string; success?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   let data;
   try {
     data = readProjectForm(formData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
@@ -105,7 +108,7 @@ export async function updateProject(
 
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
-  return { success: "Project updated." };
+  return { success: t.actions.projectUpdated };
 }
 
 export async function deleteProject(projectId: string) {

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 async function requireAdmin() {
   const session = await auth();
@@ -44,7 +45,8 @@ export async function createUser(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
-  await requireAdmin();
+  const session = await requireAdmin();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   let data;
   try {
@@ -64,14 +66,14 @@ export async function createUser(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
 
   const existing = await prisma.user.findUnique({ where: { email: data.email } });
   if (existing) {
-    return { error: "A user with this email already exists." };
+    return { error: t.actions.userEmailExists };
   }
 
   const passwordHash = await hashPassword(data.password);
@@ -89,7 +91,7 @@ export async function createUser(
   });
 
   revalidatePath("/settings");
-  return { success: `Added ${data.name}.` };
+  return { success: t.actions.userAdded(data.name) };
 }
 
 export async function updateUser(
@@ -97,6 +99,7 @@ export async function updateUser(
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
   const session = await requireAdmin();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   const userId = String(formData.get("userId") ?? "");
   if (!userId) return { error: "Missing user." };
@@ -106,7 +109,7 @@ export async function updateUser(
     data = readProfileForm(formData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
@@ -115,7 +118,7 @@ export async function updateUser(
     where: { email: data.email, NOT: { id: userId } },
   });
   if (existing) {
-    return { error: "Another user already uses this email." };
+    return { error: t.actions.userEmailExistsOther };
   }
 
   // Admins can't change their own role away from Admin (would lock them out).
@@ -135,7 +138,7 @@ export async function updateUser(
   });
 
   revalidatePath("/settings");
-  return { success: "Saved." };
+  return { success: t.actions.userSaved };
 }
 
 function generateTempPassword(): string {
@@ -183,6 +186,7 @@ export async function changePassword(
 ): Promise<{ error?: string; success?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   let data;
   try {
@@ -193,7 +197,7 @@ export async function changePassword(
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
@@ -201,11 +205,11 @@ export async function changePassword(
   const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } });
   const valid = await verifyPassword(data.currentPassword, user.passwordHash);
   if (!valid) {
-    return { error: "Current password is incorrect." };
+    return { error: t.actions.passwordIncorrect };
   }
 
   const passwordHash = await hashPassword(data.newPassword);
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
 
-  return { success: "Password updated." };
+  return { success: t.actions.passwordUpdated };
 }

@@ -1,14 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
+import { getLang } from "@/lib/i18n/get-lang";
+import { getDict } from "@/lib/i18n/dictionaries";
 import NavLink from "./nav-link";
-
-const NAV_ITEMS = [
-  { href: "/", label: "Dashboard" },
-  { href: "/contacts", label: "Contacts" },
-  { href: "/projects", label: "Projects" },
-  { href: "/settings", label: "Settings" },
-];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -21,6 +16,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) {
     redirect("/login");
   }
+
+  const lang = await getLang();
+  const t = getDict(lang);
+  const NAV_ITEMS = [
+    { href: "/", label: t.nav.dashboard },
+    { href: "/contacts", label: t.nav.contacts },
+    { href: "/projects", label: t.nav.projects },
+    { href: "/settings", label: t.nav.settings },
+  ];
 
   const AMO_LOGO_URL =
     "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
@@ -51,7 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               type="submit"
               className="mt-2 text-xs font-medium text-amo-muted transition-colors hover:text-amo-lime"
             >
-              Sign out
+              {t.nav.signOut}
             </button>
           </form>
         </div>
@@ -73,7 +77,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             }}
           >
             <button type="submit" className="text-xs font-medium text-amo-muted">
-              Sign out
+              {t.nav.signOut}
             </button>
           </form>
         </header>

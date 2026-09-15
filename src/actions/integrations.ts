@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
 import { runSystemeIoSync } from "@/lib/sync";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 async function requireAdmin() {
   const session = await auth();
@@ -18,10 +19,11 @@ export async function saveSystemeIoApiKey(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
-  await requireAdmin();
+  const session = await requireAdmin();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const apiKey = String(formData.get("apiKey") ?? "").trim();
   if (!apiKey) {
-    return { error: "API key is required." };
+    return { error: t.actions.systemeioKeyRequired };
   }
 
   const encrypted = await encryptSecret(apiKey);
@@ -33,7 +35,7 @@ export async function saveSystemeIoApiKey(
   });
 
   revalidatePath("/settings");
-  return { success: "systeme.io API key saved." };
+  return { success: t.actions.systemeioKeySaved };
 }
 
 export async function triggerSystemeIoSync(): Promise<{
@@ -42,17 +44,18 @@ export async function triggerSystemeIoSync(): Promise<{
   contactsSynced?: number;
   tagsSynced?: number;
 }> {
-  await requireAdmin();
+  const session = await requireAdmin();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
   try {
     const result = await runSystemeIoSync();
     revalidatePath("/settings");
     revalidatePath("/contacts");
     return {
-      success: `Synced ${result.contactsSynced} contacts and ${result.tagsSynced} tags.`,
+      success: t.actions.systemeioSynced(result.contactsSynced, result.tagsSynced),
       ...result,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Sync failed";
+    const message = error instanceof Error ? error.message : t.actions.systemeioSyncFailed;
     return { error: message };
   }
 }
@@ -65,4 +68,25 @@ export async function toggleAutoSync(enabled: boolean) {
     create: { provider: "systeme_io", autoSyncEnabled: enabled },
   });
   revalidatePath("/settings");
+}
+
+export async function saveAutoSyncTime(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await requireAdmin();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+  const time = String(formData.get("autoSyncTime") ?? "");
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    return { error: t.actions.scheduleInvalidTime };
+  }
+
+  await prisma.integrationSetting.upsert({
+    where: { provider: "systeme_io" },
+    update: { autoSyncTime: time },
+    create: { provider: "systeme_io", autoSyncTime: time },
+  });
+
+  revalidatePath("/settings");
+  return { success: t.actions.scheduleSaved };
 }

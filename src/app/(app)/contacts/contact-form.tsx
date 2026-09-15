@@ -1,14 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-
-const STAGES = [
-  { value: "LEAD", label: "Lead" },
-  { value: "PROSPECT", label: "Prospect" },
-  { value: "CLIENT", label: "Client" },
-  { value: "PAST_CLIENT", label: "Past client" },
-  { value: "UNSUBSCRIBED", label: "Unsubscribed" },
-];
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 type ContactFormValues = {
   email?: string;
@@ -26,6 +19,7 @@ export default function ContactForm({
   action,
   defaultValues,
   submitLabel,
+  lang,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -33,29 +27,39 @@ export default function ContactForm({
   ) => Promise<{ error?: string; success?: string }>;
   defaultValues?: ContactFormValues;
   submitLabel: string;
+  lang: Lang;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  const t = getDict(lang);
+
+  const STAGES = [
+    { value: "LEAD", label: t.stages.LEAD },
+    { value: "PROSPECT", label: t.stages.PROSPECT },
+    { value: "CLIENT", label: t.stages.CLIENT },
+    { value: "PAST_CLIENT", label: t.stages.PAST_CLIENT },
+    { value: "UNSUBSCRIBED", label: t.stages.UNSUBSCRIBED },
+  ];
 
   return (
     <form action={formAction} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Email" name="email" type="email" required defaultValue={defaultValues?.email} />
+        <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
         <Field
-          label="Stage"
+          label={t.contactForm.stage}
           name="stage"
           as="select"
           defaultValue={defaultValues?.stage ?? "LEAD"}
           options={STAGES}
         />
-        <Field label="First name" name="firstName" defaultValue={defaultValues?.firstName ?? ""} />
-        <Field label="Last name" name="lastName" defaultValue={defaultValues?.lastName ?? ""} />
-        <Field label="Phone" name="phone" defaultValue={defaultValues?.phone ?? ""} />
-        <Field label="Company" name="company" defaultValue={defaultValues?.company ?? ""} />
-        <Field label="City" name="city" defaultValue={defaultValues?.city ?? ""} />
-        <Field label="Country" name="country" defaultValue={defaultValues?.country ?? ""} />
+        <Field label={t.contactForm.firstName} name="firstName" defaultValue={defaultValues?.firstName ?? ""} />
+        <Field label={t.contactForm.lastName} name="lastName" defaultValue={defaultValues?.lastName ?? ""} />
+        <Field label={t.contactForm.phone} name="phone" defaultValue={defaultValues?.phone ?? ""} />
+        <Field label={t.contactForm.company} name="company" defaultValue={defaultValues?.company ?? ""} />
+        <Field label={t.contactForm.city} name="city" defaultValue={defaultValues?.city ?? ""} />
+        <Field label={t.contactForm.country} name="country" defaultValue={defaultValues?.country ?? ""} />
       </div>
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Notes</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.notes}</label>
         <textarea
           name="notes"
           rows={3}
@@ -72,7 +76,7 @@ export default function ContactForm({
         disabled={pending}
         className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
-        {pending ? "Saving..." : submitLabel}
+        {pending ? t.common.saving : submitLabel}
       </button>
     </form>
   );

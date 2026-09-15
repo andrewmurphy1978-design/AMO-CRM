@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 const TaskSchema = z.object({
   title: z.string().trim().min(1, "Task title is required"),
@@ -34,13 +35,14 @@ export async function createTask(
 ): Promise<{ error?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   let data;
   try {
     data = readTaskForm(formData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
@@ -68,13 +70,14 @@ export async function updateTask(
 ): Promise<{ error?: string; success?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   let data;
   try {
     data = readTaskForm(formData);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.issues[0]?.message ?? "Invalid input" };
+      return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     }
     throw error;
   }
@@ -93,7 +96,7 @@ export async function updateTask(
   });
 
   revalidatePath(`/projects/${data.projectId}`);
-  return { success: "Task updated." };
+  return { success: t.actions.taskUpdated };
 }
 
 export async function toggleTaskStatus(taskId: string, projectId: string, done: boolean) {

@@ -6,14 +6,9 @@ import TagManager from "./tag-manager";
 import NoteForm from "./note-form";
 import DeleteContactButton from "./delete-button";
 import InteractionLog from "../../interaction-log";
-
-const STAGE_LABELS: Record<string, string> = {
-  LEAD: "Lead",
-  PROSPECT: "Prospect",
-  CLIENT: "Client",
-  PAST_CLIENT: "Past client",
-  UNSUBSCRIBED: "Unsubscribed",
-};
+import { getLang } from "@/lib/i18n/get-lang";
+import { getDict } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 
 export default async function ContactDetailPage({
   params,
@@ -21,6 +16,10 @@ export default async function ContactDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const lang = await getLang();
+  const t = getDict(lang);
+  const dateLocale = getDateLocale(lang);
+  const STAGE_LABELS = t.stages;
 
   const contact = await prisma.contact.findUnique({
     where: { id },
@@ -42,27 +41,27 @@ export default async function ContactDetailPage({
   const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email;
 
   const coreFields: { label: string; value: string | null }[] = [
-    { label: "Email", value: contact.email },
-    { label: "Phone", value: contact.phone },
-    { label: "Company", value: contact.company },
-    { label: "Address", value: contact.address },
-    { label: "City", value: contact.city },
-    { label: "State", value: contact.state },
-    { label: "Zip", value: contact.zip },
-    { label: "Country", value: contact.country },
-    { label: "Website", value: contact.website },
-    { label: "Locale", value: contact.locale },
-    { label: "Owner", value: contact.owner?.name ?? null },
-    { label: "Source", value: contact.source },
+    { label: t.contactDetail.fieldEmail, value: contact.email },
+    { label: t.contactDetail.fieldPhone, value: contact.phone },
+    { label: t.contactDetail.fieldCompany, value: contact.company },
+    { label: t.contactDetail.fieldAddress, value: contact.address },
+    { label: t.contactDetail.fieldCity, value: contact.city },
+    { label: t.contactDetail.fieldState, value: contact.state },
+    { label: t.contactDetail.fieldZip, value: contact.zip },
+    { label: t.contactDetail.fieldCountry, value: contact.country },
+    { label: t.contactDetail.fieldWebsite, value: contact.website },
+    { label: t.contactDetail.fieldLocale, value: contact.locale },
+    { label: t.contactDetail.fieldOwner, value: contact.owner?.name ?? null },
+    { label: t.contactDetail.fieldSource, value: contact.source },
     {
-      label: "systeme.io registered",
+      label: t.contactDetail.fieldSystemeIoRegistered,
       value: contact.systemeIoRegisteredAt
-        ? format(contact.systemeIoRegisteredAt, "PP")
+        ? format(contact.systemeIoRegisteredAt, "PP", { locale: dateLocale })
         : null,
     },
     {
-      label: "Last synced",
-      value: contact.lastSyncedAt ? formatDistanceToNow(contact.lastSyncedAt, { addSuffix: true }) : null,
+      label: t.contactDetail.fieldLastSynced,
+      value: contact.lastSyncedAt ? formatDistanceToNow(contact.lastSyncedAt, { addSuffix: true, locale: dateLocale }) : null,
     },
   ];
 
@@ -81,15 +80,15 @@ export default async function ContactDetailPage({
             href={`/contacts/${contact.id}/edit`}
             className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
           >
-            Edit
+            {t.contactDetail.edit}
           </Link>
           <Link
             href={`/projects/new?contactId=${contact.id}`}
             className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
           >
-            New project
+            {t.contactDetail.newProject}
           </Link>
-          <DeleteContactButton contactId={contact.id} />
+          <DeleteContactButton lang={lang} contactId={contact.id} />
         </div>
       </div>
 
@@ -97,7 +96,7 @@ export default async function ContactDetailPage({
         <div className="space-y-6 lg:col-span-2">
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-sm font-semibold text-ink">Contact details</h2>
+            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.contactDetailsTitle}</h2>
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               {coreFields
                 .filter((f) => f.value)
@@ -112,7 +111,7 @@ export default async function ContactDetailPage({
             {contact.fieldValues.length > 0 && (
               <>
                 <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-soft">
-                  Other systeme.io fields
+                  {t.contactDetail.otherFields}
                 </h3>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                   {contact.fieldValues.map((fv) => (
@@ -129,7 +128,7 @@ export default async function ContactDetailPage({
 
             {contact.notes && (
               <div className="mt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">Notes</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactDetail.notes}</h3>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{contact.notes}</p>
               </div>
             )}
@@ -138,10 +137,10 @@ export default async function ContactDetailPage({
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-sm font-semibold text-ink">Projects</h2>
+              <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.projectsTitle}</h2>
             </div>
             {contact.projects.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">No projects yet.</p>
+              <p className="mt-3 text-sm text-soft">{t.contactDetail.noProjectsYet}</p>
             ) : (
               <ul className="mt-3 divide-y divide-card-border">
                 {contact.projects.map((project) => (
@@ -149,7 +148,7 @@ export default async function ContactDetailPage({
                     <Link href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
                       {project.name}
                     </Link>
-                    <span className="ml-2 text-xs text-soft">{project.status}</span>
+                    <span className="ml-2 text-xs text-soft">{t.projectStatuses[project.status]}</span>
                   </li>
                 ))}
               </ul>
@@ -158,9 +157,10 @@ export default async function ContactDetailPage({
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-sm font-semibold text-ink">Calls &amp; emails</h2>
+            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.callsEmails}</h2>
             <div className="mt-3">
               <InteractionLog
+                lang={lang}
                 contactId={contact.id}
                 interactions={contact.interactions.map((i) => ({
                   id: i.id,
@@ -177,14 +177,14 @@ export default async function ContactDetailPage({
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-sm font-semibold text-ink">System activity</h2>
-            <NoteForm contactId={contact.id} />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.systemActivity}</h2>
+            <NoteForm lang={lang} contactId={contact.id} />
             <ul className="mt-4 space-y-3">
               {contact.activity.map((entry) => (
                 <li key={entry.id} className="text-sm">
                   <p className="text-ink">{entry.message}</p>
                   <p className="text-xs text-soft">
-                    {formatDistanceToNow(entry.createdAt, { addSuffix: true })}
+                    {formatDistanceToNow(entry.createdAt, { addSuffix: true, locale: dateLocale })}
                   </p>
                 </li>
               ))}
@@ -195,8 +195,9 @@ export default async function ContactDetailPage({
         <div className="space-y-6">
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-sm font-semibold text-ink">Tags</h2>
+            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.tagsTitle}</h2>
             <TagManager
+              lang={lang}
               contactId={contact.id}
               tags={contact.tags.map((ct) => ({ id: ct.tagId, name: ct.tag.name }))}
             />

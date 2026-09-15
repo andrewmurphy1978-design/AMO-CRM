@@ -2,10 +2,12 @@
 
 import { useActionState, useRef, useEffect } from "react";
 import { createTask } from "@/actions/tasks";
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
-export default function QuickAddTask({ projectId }: { projectId: string }) {
+export default function QuickAddTask({ projectId, lang }: { projectId: string; lang: Lang }) {
   const [state, formAction, pending] = useActionState(createTask, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  const t = getDict(lang);
 
   useEffect(() => {
     if (!pending && !state?.error) {
@@ -21,7 +23,7 @@ export default function QuickAddTask({ projectId }: { projectId: string }) {
       <input
         name="title"
         required
-        placeholder="Add a task..."
+        placeholder={t.quickAddTask.placeholder}
         className="flex-1 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
       />
       <button
@@ -29,7 +31,7 @@ export default function QuickAddTask({ projectId }: { projectId: string }) {
         disabled={pending}
         className="btn-primary rounded-lg px-3 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
-        Add task
+        {t.quickAddTask.addTask}
       </button>
     </form>
   );

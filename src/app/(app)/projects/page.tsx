@@ -1,14 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-
-const STATUS_LABELS: Record<string, string> = {
-  PLANNING: "Planning",
-  ACTIVE: "Active",
-  ON_HOLD: "On hold",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-};
+import { getLang } from "@/lib/i18n/get-lang";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 const STATUS_COLORS: Record<string, string> = {
   PLANNING: "bg-black/5 text-soft",
@@ -24,6 +18,9 @@ export default async function ProjectsPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { status } = await searchParams;
+  const lang = await getLang();
+  const t = getDict(lang);
+  const STATUS_LABELS = t.projectStatuses;
 
   const where: Prisma.ProjectWhereInput = {};
   if (status) where.status = status as Prisma.ProjectWhereInput["status"];
@@ -42,14 +39,14 @@ export default async function ProjectsPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Projects</h1>
-          <p className="mt-1 text-sm text-soft">{projects.length} shown</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">{t.projects.title}</h1>
+          <p className="mt-1 text-sm text-soft">{t.projects.shown(projects.length)}</p>
         </div>
         <Link
           href="/projects/new"
           className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
         >
-          New project
+          {t.projects.newProject}
         </Link>
       </div>
 
@@ -59,7 +56,7 @@ export default async function ProjectsPage({
           defaultValue={status ?? ""}
           className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         >
-          <option value="">All statuses</option>
+          <option value="">{t.projects.allStatuses}</option>
           {Object.entries(STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -70,7 +67,7 @@ export default async function ProjectsPage({
           type="submit"
           className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
         >
-          Filter
+          {t.common.filter}
         </button>
       </form>
 
@@ -97,14 +94,14 @@ export default async function ProjectsPage({
                   project.contact.email}
               </p>
               <p className="mt-3 text-xs text-soft">
-                {doneCount}/{project.tasks.length} tasks done
+                {t.projects.tasksDone(doneCount, project.tasks.length)}
                 {project.owner && ` · ${project.owner.name}`}
               </p>
             </Link>
           );
         })}
         {projects.length === 0 && (
-          <p className="col-span-full py-8 text-center text-sm text-soft">No projects found.</p>
+          <p className="col-span-full py-8 text-center text-sm text-soft">{t.projects.noProjectsFound}</p>
         )}
       </div>
     </div>

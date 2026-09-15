@@ -327,6 +327,7 @@ model IntegrationSetting {
   lastSyncStatus  String?
   lastSyncError   String?   @db.Text
   autoSyncEnabled Boolean   @default(false)
+  autoSyncTime    String    @default("03:00") // "HH:MM", America/Montreal time
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

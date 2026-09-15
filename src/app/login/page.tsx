@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import LoginForm from "./login-form";
+import { dictionaries } from "@/lib/i18n/dictionaries";
 
 const AMO_LOGO_URL =
   "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
@@ -26,7 +27,7 @@ export default async function LoginPage({
         <div className="mb-6 h-[3px] w-full rounded-full amo-card-accent" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-full" />
-        <p className="mt-2 text-center text-sm text-soft">Sign in to your CRM</p>
+        <p className="mt-2 text-center text-sm text-soft">{dictionaries.en.login.subtitle}</p>
         <LoginForm callbackUrl={callbackUrl ?? "/"} />
       </div>
     </div>

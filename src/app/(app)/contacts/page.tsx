@@ -1,14 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-
-const STAGE_LABELS: Record<string, string> = {
-  LEAD: "Lead",
-  PROSPECT: "Prospect",
-  CLIENT: "Client",
-  PAST_CLIENT: "Past client",
-  UNSUBSCRIBED: "Unsubscribed",
-};
+import { getLang } from "@/lib/i18n/get-lang";
+import { getDict } from "@/lib/i18n/dictionaries";
 
 const STAGE_COLORS: Record<string, string> = {
   LEAD: "bg-emerald-50 text-emerald-700",
@@ -49,6 +43,9 @@ export default async function ContactsPage({
   searchParams: Promise<{ q?: string; stage?: string; tag?: string }>;
 }) {
   const { q, stage, tag } = await searchParams;
+  const lang = await getLang();
+  const t = getDict(lang);
+  const STAGE_LABELS = t.stages;
 
   const where: Prisma.ContactWhereInput = {};
   if (stage) where.stage = stage as Prisma.ContactWhereInput["stage"];
@@ -75,14 +72,14 @@ export default async function ContactsPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Contacts</h1>
-          <p className="mt-1 text-sm text-soft">{contacts.length} shown</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">{t.contacts.title}</h1>
+          <p className="mt-1 text-sm text-soft">{t.contacts.shown(contacts.length)}</p>
         </div>
         <Link
           href="/contacts/new"
           className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
         >
-          New contact
+          {t.contacts.newContact}
         </Link>
       </div>
 
@@ -91,7 +88,7 @@ export default async function ContactsPage({
           type="search"
           name="q"
           defaultValue={q}
-          placeholder="Search name, email, company..."
+          placeholder={t.contacts.searchPlaceholder}
           className="w-64 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
         <select
@@ -99,7 +96,7 @@ export default async function ContactsPage({
           defaultValue={stage ?? ""}
           className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         >
-          <option value="">All stages</option>
+          <option value="">{t.contacts.allStages}</option>
           {Object.entries(STAGE_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -111,10 +108,10 @@ export default async function ContactsPage({
           defaultValue={tag ?? ""}
           className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         >
-          <option value="">All tags</option>
-          {tags.map((t) => (
-            <option key={t.id} value={t.name}>
-              {t.name}
+          <option value="">{t.contacts.allTags}</option>
+          {tags.map((tagOption) => (
+            <option key={tagOption.id} value={tagOption.name}>
+              {tagOption.name}
             </option>
           ))}
         </select>
@@ -122,7 +119,7 @@ export default async function ContactsPage({
           type="submit"
           className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
         >
-          Filter
+          {t.common.filter}
         </button>
       </form>
 
@@ -160,7 +157,7 @@ export default async function ContactsPage({
             )}
           </Link>
         ))}
-        {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-soft">No contacts found.</p>}
+        {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-soft">{t.contacts.noContactsFound}</p>}
       </div>
 
       {/* Desktop/tablet: full table. */}
@@ -168,11 +165,11 @@ export default async function ContactsPage({
         <table className="min-w-full divide-y divide-card-border text-sm">
           <thead className="bg-field-bg text-left text-xs font-medium uppercase tracking-wide text-soft">
             <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Stage</th>
-              <th className="px-4 py-3">Tags</th>
-              <th className="px-4 py-3">Source</th>
+              <th className="px-4 py-3">{t.contacts.colName}</th>
+              <th className="px-4 py-3">{t.contacts.colEmail}</th>
+              <th className="px-4 py-3">{t.contacts.colStage}</th>
+              <th className="px-4 py-3">{t.contacts.colTags}</th>
+              <th className="px-4 py-3">{t.contacts.colSource}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-card-border">
@@ -209,7 +206,7 @@ export default async function ContactsPage({
             {contacts.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-soft">
-                  No contacts found.
+                  {t.contacts.noContactsFound}
                 </td>
               </tr>
             )}
