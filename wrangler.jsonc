@@ -9,18 +9,19 @@
 		"binding": "ASSETS"
 	},
 	// Cloudflare doesn't host Postgres, so Hyperdrive pools/proxies connections
-	// from the Worker to an external Postgres database (e.g. Neon, Supabase).
-	// Create this in the Cloudflare dashboard under Workers & Pages > Hyperdrive,
-	// then replace <HYPERDRIVE_ID> below with the id it gives you.
-	// See DEPLOY.md for the full walkthrough.
+	// from the Worker to an external Postgres database (Neon). Created via
+	// Workers & Pages > Hyperdrive in the Cloudflare dashboard — see
+	// DEPLOY.md for the full walkthrough.
 	"hyperdrive": [
 		{
 			"binding": "HYPERDRIVE",
-			"id": "<HYPERDRIVE_ID>",
-			// Used only by `wrangler dev` (local preview) — put a real Postgres
-			// connection string here (your Neon one is fine) so local preview
-			// can reach the database without going through Hyperdrive's pooler.
-			"localConnectionString": "postgresql://amo_crm:amo_crm@localhost:5432/amo_crm"
+			"id": "1be5500145ee46f397cc6b885abe3bd8",
+			// Used only by `wrangler dev` (local preview). This file is
+			// committed to git, so don't put a real password here — if you
+			// use `wrangler dev` locally, replace this with your own
+			// connection string on your machine only (don't commit that
+			// change), or override it via `.dev.vars` instead.
+			"localConnectionString": "postgresql://user:password@localhost:5432/postgres"
 		}
 	]
 }
