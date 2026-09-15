@@ -245,6 +245,32 @@ model AutomationWorkflow {
   @@map("automation_workflows")
 }
 
+// systeme.io Booking Calendar bookings. Also account-level rather than
+// per-contact: the API's Booking resource carries only a bare contactName
+// string for one-to-one bookings (never an id, and nothing at all for group
+// bookings), so it can't be reliably linked to a Contact row.
+model Booking {
+  id          String   @id @default(cuid())
+  systemeIoId Int      @unique
+
+  eventName       String?
+  eventType       String?
+  eventDuration   Int?
+  maxParticipants Int?
+  bookedSlots     Int?
+  contactName     String?
+  status          String?
+  paymentStatus   String?
+  scheduledFor    DateTime?
+  bookedAt        DateTime?
+  raw             Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bookings")
+}
+
 // Tag definitions, mirroring systeme.io tags (each has a systeme.io id/name).
 model Tag {
   id          String  @id @default(cuid())

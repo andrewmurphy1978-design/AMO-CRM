@@ -100,6 +100,25 @@ export interface SystemeIoAutomationWorkflow {
   raw: Record<string, unknown>;
 }
 
+// Booking-api_booking_calendar_bookings_get: also account-level — the
+// resource carries only a bare contactName string for one-to-one bookings
+// (never an id) and nothing at all for group bookings, so it can't be
+// reliably linked to a Contact row.
+export interface SystemeIoBooking {
+  id: number;
+  eventName: string | null;
+  eventType: string | null;
+  eventDuration: number | null;
+  maxParticipants: number | null;
+  bookedSlots: number | null;
+  contactName: string | null;
+  status: string | null;
+  paymentStatus: string | null;
+  scheduledFor: string | null;
+  bookedAt: string | null;
+  raw: Record<string, unknown>;
+}
+
 export class SystemeIoApiError extends Error {
   status: number;
   /** Full, untruncated response body — `message` is truncated for display. */
@@ -312,6 +331,10 @@ export class SystemeIoClient {
   async *iterateAutomationWorkflows(pageSize = 100): AsyncGenerator<SystemeIoAutomationWorkflow[]> {
     yield* this.paginate("/automation/rules", mapAutomationWorkflow, pageSize);
   }
+
+  async *iterateBookings(pageSize = 100): AsyncGenerator<SystemeIoBooking[]> {
+    yield* this.paginate("/booking-calendar/bookings", mapBooking, pageSize);
+  }
 }
 
 // --- Response parsing helpers -----------------------------------------------
@@ -473,6 +496,23 @@ function mapAutomationWorkflow(raw: Record<string, unknown>): SystemeIoAutomatio
     name,
     status: typeof state?.isActive === "boolean" ? (state.isActive ? "active" : "inactive") : null,
     triggerType,
+    raw,
+  };
+}
+
+function mapBooking(raw: Record<string, unknown>): SystemeIoBooking {
+  return {
+    id: Number(raw.id),
+    eventName: pickString(raw, ["eventName"]),
+    eventType: pickString(raw, ["eventType"]),
+    eventDuration: pickNumber(raw, ["eventDuration"]),
+    maxParticipants: pickNumber(raw, ["maxParticipants"]),
+    bookedSlots: pickNumber(raw, ["bookedSlots"]),
+    contactName: pickString(raw, ["contactName"]),
+    status: pickString(raw, ["status"]),
+    paymentStatus: pickString(raw, ["paymentStatus"]),
+    scheduledFor: pickString(raw, ["date"]),
+    bookedAt: pickString(raw, ["createdAt"]),
     raw,
   };
 }

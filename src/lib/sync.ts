@@ -9,6 +9,7 @@ import {
   type SystemeIoCommunityMembership,
   type SystemeIoEmailCampaign,
   type SystemeIoAutomationWorkflow,
+  type SystemeIoBooking,
 } from "@/lib/systemeio";
 
 export interface SyncResult {
@@ -19,6 +20,7 @@ export interface SyncResult {
   membershipsSynced: number;
   campaignsSynced: number;
   automationsSynced: number;
+  bookingsSynced: number;
 }
 
 export async function getSystemeIoClient(): Promise<SystemeIoClient | null> {
@@ -47,6 +49,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
   let membershipsSynced = 0;
   let campaignsSynced = 0;
   let automationsSynced = 0;
+  let bookingsSynced = 0;
 
   try {
     // 1. Tags
@@ -86,18 +89,37 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     const contactIdBySystemeIoId = await buildContactIdLookup();
 
     // GET /payment/subscriptions requires a "contact" query param — there's
-    // no global collection, so this runs once per known contact. A single
-    // contact's request failing (e.g. it has none) doesn't stop the rest.
-    for (const contactSystemeIoId of contactIdBySystemeIoId.keys()) {
-      try {
-        for await (const subscriptions of client.iterateSubscriptionsForContact(contactSystemeIoId)) {
-          for (const sub of subscriptions) {
-            await upsertSubscription(sub, contactIdBySystemeIoId);
-            subscriptionsSynced += 1;
+    // no global collection, so this runs once per known contact. Running
+    // these one at a time (await-in-a-loop) turns N contacts into N
+    // sequential network round-trips inside a single Worker invocation,
+    // which is what tripped a Cloudflare resource-limit error (1102) once
+    // there were enough contacts — so a handful run concurrently at a time
+    // instead. A single contact's request failing (e.g. it has none)
+    // doesn't stop the rest.
+    const contactIds = [...contactIdBySystemeIoId.keys()];
+    const SUBSCRIPTION_FETCH_CONCURRENCY = 5;
+    for (let i = 0; i < contactIds.length; i += SUBSCRIPTION_FETCH_CONCURRENCY) {
+      const batch = contactIds.slice(i, i + SUBSCRIPTION_FETCH_CONCURRENCY);
+      const results = await Promise.all(
+        batch.map(async (contactSystemeIoId) => {
+          const subs: SystemeIoSubscription[] = [];
+          try {
+            for await (const subscriptions of client.iterateSubscriptionsForContact(contactSystemeIoId)) {
+              subs.push(...subscriptions);
+            }
+          } catch (error) {
+            console.warn(`systeme.io subscriptions sync skipped for contact ${contactSystemeIoId}:`, error);
           }
+          return subs;
+        })
+      );
+      // Upserts stay sequential (see src/lib/prisma.ts on why), only the
+      // network fetches above run concurrently.
+      for (const subs of results) {
+        for (const sub of subs) {
+          await upsertSubscription(sub, contactIdBySystemeIoId);
+          subscriptionsSynced += 1;
         }
-      } catch (error) {
-        console.warn(`systeme.io subscriptions sync skipped for contact ${contactSystemeIoId}:`, error);
       }
     }
 
@@ -147,6 +169,17 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       console.warn("systeme.io automation workflows sync skipped:", error);
     }
 
+    try {
+      for await (const bookings of client.iterateBookings()) {
+        for (const booking of bookings) {
+          await upsertBooking(booking);
+          bookingsSynced += 1;
+        }
+      }
+    } catch (error) {
+      console.warn("systeme.io bookings sync skipped:", error);
+    }
+
     await prisma.integrationSetting.update({
       where: { provider: "systeme_io" },
       data: {
@@ -174,6 +207,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       membershipsSynced,
       campaignsSynced,
       automationsSynced,
+      bookingsSynced,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown sync error";
@@ -325,6 +359,39 @@ async function upsertAutomationWorkflow(automation: SystemeIoAutomationWorkflow)
       status: automation.status,
       triggerType: automation.triggerType,
       raw: automation.raw as never,
+    },
+  });
+}
+
+async function upsertBooking(booking: SystemeIoBooking) {
+  await prisma.booking.upsert({
+    where: { systemeIoId: booking.id },
+    update: {
+      eventName: booking.eventName,
+      eventType: booking.eventType,
+      eventDuration: booking.eventDuration,
+      maxParticipants: booking.maxParticipants,
+      bookedSlots: booking.bookedSlots,
+      contactName: booking.contactName,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      scheduledFor: booking.scheduledFor ? new Date(booking.scheduledFor) : null,
+      bookedAt: booking.bookedAt ? new Date(booking.bookedAt) : null,
+      raw: booking.raw as never,
+    },
+    create: {
+      systemeIoId: booking.id,
+      eventName: booking.eventName,
+      eventType: booking.eventType,
+      eventDuration: booking.eventDuration,
+      maxParticipants: booking.maxParticipants,
+      bookedSlots: booking.bookedSlots,
+      contactName: booking.contactName,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      scheduledFor: booking.scheduledFor ? new Date(booking.scheduledFor) : null,
+      bookedAt: booking.bookedAt ? new Date(booking.bookedAt) : null,
+      raw: booking.raw as never,
     },
   });
 }
