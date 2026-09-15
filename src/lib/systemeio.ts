@@ -37,13 +37,12 @@ export interface SystemeIoCustomFieldDefinition {
   type?: string | null;
 }
 
-// The three interfaces below (Subscription, CourseEnrollment,
-// CommunityMembership) cover systeme.io resource categories the public API
-// docs list by name only — no documented response field names, unlike
-// Contacts/Tags above. Each keeps the full `raw` payload alongside a few
-// defensively extracted common fields (tried under several likely key
-// names/casings); if a field comes back wrong or missing for this account's
-// real data, `raw` still has everything needed to fix the extraction below.
+// Confirmed against systeme.io's actual OpenAPI schemas (shared by the user
+// 2026-09-16), not guessed. Some columns this app's schema has no
+// counterpart for in the real API response — e.g. Enrollment has no
+// enrolledAt and CommunityMembership has no status/joinedAt at all — those
+// are left null rather than invented. Each keeps the full `raw` payload so
+// nothing is lost if a future systeme.io API change adds more.
 export interface SystemeIoSubscription {
   id: number;
   contactSystemeIoId: number | null;
@@ -74,11 +73,13 @@ export interface SystemeIoCommunityMembership {
   raw: Record<string, unknown>;
 }
 
-// Account-level marketing resources — not tied to a single contact. Same
-// defensive-extraction caveat as above: the public API docs list "Mailing"
-// (newsletters/campaigns/campaign steps) and "Automation Rules" by name only,
-// with no documented field shapes, so the endpoint paths and field names
-// here are a best-effort guess pending live verification.
+// Account-level marketing resources — not tied to a single contact.
+// "Email campaign" here maps to systeme.io's Newsletter resource
+// (GET /mailing/newsletters); its list schema has no stats fields
+// (recipients/opens/clicks) or a send date, only subject/sender/isSent, so
+// those columns stay null. "Automation" maps to AutomationRule
+// (GET /automation/rules), which has no name field at all — `name` below is
+// synthesized from its trigger/action types for display.
 export interface SystemeIoEmailCampaign {
   id: number;
   name: string | null;
@@ -254,11 +255,12 @@ export class SystemeIoClient {
   private async *paginate<T>(
     path: string,
     mapper: (raw: Record<string, unknown>) => T,
-    pageSize: number
+    pageSize: number,
+    extraParams: Record<string, string | number> = {}
   ): AsyncGenerator<T[]> {
     let startingAfter: string | number | undefined;
     for (;;) {
-      const params: Record<string, string | number> = { limit: pageSize, order: "asc" };
+      const params: Record<string, string | number> = { ...extraParams, limit: pageSize, order: "asc" };
       if (startingAfter !== undefined) params.startingAfter = startingAfter;
 
       const data = await this.request<unknown>(path, params);
@@ -279,31 +281,36 @@ export class SystemeIoClient {
     return extractItems(data).map(mapCustomFieldDefinition);
   }
 
-  async *iterateSubscriptions(pageSize = 100): AsyncGenerator<SystemeIoSubscription[]> {
-    yield* this.paginate("/subscriptions", mapSubscription, pageSize);
+  // GET /payment/subscriptions requires a "contact" query param — there is
+  // no global subscriptions collection, so this must be called once per
+  // contact (see sync.ts). The response items don't carry the contact's id
+  // back (they're already scoped to it by the query), so the caller's known
+  // contactSystemeIoId is stamped onto each mapped result here.
+  async *iterateSubscriptionsForContact(
+    contactSystemeIoId: number,
+    pageSize = 100
+  ): AsyncGenerator<SystemeIoSubscription[]> {
+    for await (const batch of this.paginate("/payment/subscriptions", mapSubscription, pageSize, {
+      contact: contactSystemeIoId,
+    })) {
+      yield batch.map((s) => ({ ...s, contactSystemeIoId }));
+    }
   }
 
   async *iterateEnrollments(pageSize = 100): AsyncGenerator<SystemeIoEnrollment[]> {
-    yield* this.paginate("/enrollments", mapEnrollment, pageSize);
+    yield* this.paginate("/school/enrollments", mapEnrollment, pageSize);
   }
 
   async *iterateCommunityMemberships(pageSize = 100): AsyncGenerator<SystemeIoCommunityMembership[]> {
-    yield* this.paginate("/community_memberships", mapCommunityMembership, pageSize);
+    yield* this.paginate("/community/memberships", mapCommunityMembership, pageSize);
   }
 
-  // Best-effort endpoint guesses — the public docs list these resource
-  // groups by name only ("Mailing": newsletters/campaigns/campaign steps;
-  // "Automation Rules": automationrules) without documented paths for
-  // fetching sent-campaign history, so "/newsletters" is this account's
-  // most likely home for what the CRM calls "Email Campaigns". Wrapped in
-  // its own try/catch by the caller (see sync.ts) so a wrong guess here
-  // just skips this one resource type instead of failing the whole sync.
   async *iterateEmailCampaigns(pageSize = 100): AsyncGenerator<SystemeIoEmailCampaign[]> {
-    yield* this.paginate("/newsletters", mapEmailCampaign, pageSize);
+    yield* this.paginate("/mailing/newsletters", mapEmailCampaign, pageSize);
   }
 
   async *iterateAutomationWorkflows(pageSize = 100): AsyncGenerator<SystemeIoAutomationWorkflow[]> {
-    yield* this.paginate("/automationrules", mapAutomationWorkflow, pageSize);
+    yield* this.paginate("/automation/rules", mapAutomationWorkflow, pageSize);
   }
 }
 
@@ -376,97 +383,96 @@ function pickNumber(raw: Record<string, unknown>, keys: string[]): number | null
   return Number.isNaN(num) ? null : num;
 }
 
-// The related contact typically comes back either as a bare id
-// (`contactId`/`contact_id`), or a nested object (`contact: { id }` /
-// `customer: { id }`).
-function pickContactId(raw: Record<string, unknown>): number | null {
-  const direct = pickNumber(raw, ["contactId", "contact_id", "customerId", "customer_id"]);
-  if (direct !== null) return direct;
-  for (const key of ["contact", "customer"]) {
-    const nested = raw[key];
-    if (nested && typeof nested === "object") {
-      const id = (nested as Record<string, unknown>).id;
-      if (id !== undefined && id !== null) {
-        const num = Number(id);
-        if (!Number.isNaN(num)) return num;
-      }
-    }
-  }
-  return null;
-}
 
+// Subscription-full_subscription: { id, createdAt, status, completedAt,
+// cancelledAt, pricePlan: { id, name, innerName, amount, currency, type } }.
+// No contact reference in the payload — the caller (iterateSubscriptionsForContact)
+// stamps contactSystemeIoId on afterward, since it's already known from the
+// required "contact" query param this endpoint takes.
 function mapSubscription(raw: Record<string, unknown>): SystemeIoSubscription {
-  const plan = raw.plan ?? raw.pricePlan ?? raw.price_plan;
-  const planName =
-    pickString(raw, ["planName", "plan_name"]) ??
-    (plan && typeof plan === "object" ? pickString(plan as Record<string, unknown>, ["name", "title"]) : null);
-  const planAmount = plan && typeof plan === "object" ? pickNumber(plan as Record<string, unknown>, ["amount", "price"]) : null;
-
+  const pricePlan = raw.pricePlan as Record<string, unknown> | null | undefined;
   return {
     id: Number(raw.id),
-    contactSystemeIoId: pickContactId(raw),
-    status: pickString(raw, ["status", "state"]),
-    planName,
-    amount: pickNumber(raw, ["amount", "price"]) ?? planAmount,
-    currency: pickString(raw, ["currency", "currencyCode", "currency_code"]),
-    startedAt: pickString(raw, ["startedAt", "started_at", "createdAt", "created_at"]),
-    canceledAt: pickString(raw, ["canceledAt", "canceled_at", "cancelledAt", "cancelled_at"]),
+    contactSystemeIoId: null,
+    status: pickString(raw, ["status"]),
+    planName: pricePlan ? pickString(pricePlan, ["name"]) : null,
+    amount: pricePlan ? pickNumber(pricePlan, ["amount"]) : null,
+    currency: pricePlan ? pickString(pricePlan, ["currency"]) : null,
+    startedAt: pickString(raw, ["createdAt"]),
+    canceledAt: pickString(raw, ["cancelledAt"]),
     raw,
   };
 }
 
+// Enrollment-...: { id, contact: { id, ... }, course: { id, name, ... },
+// accessType, active }. No enrolledAt field exists on this resource.
 function mapEnrollment(raw: Record<string, unknown>): SystemeIoEnrollment {
-  const course = raw.course;
-  const courseName =
-    pickString(raw, ["courseName", "course_name"]) ??
-    (course && typeof course === "object" ? pickString(course as Record<string, unknown>, ["name", "title"]) : null);
-
+  const contact = raw.contact as Record<string, unknown> | undefined;
+  const course = raw.course as Record<string, unknown> | undefined;
   return {
     id: Number(raw.id),
-    contactSystemeIoId: pickContactId(raw),
-    courseName,
-    status: pickString(raw, ["status", "state"]),
-    enrolledAt: pickString(raw, ["enrolledAt", "enrolled_at", "createdAt", "created_at"]),
+    contactSystemeIoId: contact ? pickNumber(contact, ["id"]) : null,
+    courseName: course ? pickString(course, ["name"]) : null,
+    status: typeof raw.active === "boolean" ? (raw.active ? "active" : "inactive") : null,
+    enrolledAt: null,
     raw,
   };
 }
 
+// Community-full_membership_id_contact_full_community: { id,
+// community: { id, name, domainName, path }, contact: { id } }. No status or
+// joinedAt field exists on this resource.
 function mapCommunityMembership(raw: Record<string, unknown>): SystemeIoCommunityMembership {
-  const community = raw.community;
-  const communityName =
-    pickString(raw, ["communityName", "community_name"]) ??
-    (community && typeof community === "object" ? pickString(community as Record<string, unknown>, ["name", "title"]) : null);
-
+  const community = raw.community as Record<string, unknown> | undefined;
+  const contact = raw.contact as Record<string, unknown> | undefined;
   return {
     id: Number(raw.id),
-    contactSystemeIoId: pickContactId(raw),
-    communityName,
-    status: pickString(raw, ["status", "state"]),
-    joinedAt: pickString(raw, ["joinedAt", "joined_at", "createdAt", "created_at"]),
+    contactSystemeIoId: contact ? pickNumber(contact, ["id"]) : null,
+    communityName: community ? pickString(community, ["name"]) : null,
+    status: null,
+    joinedAt: null,
     raw,
   };
 }
 
+// Newsletter-newsletter_list: { id, type: "regular",
+// content: { subject, previewText, editorType, senderEmail, senderName },
+// state: { isSent } }. No stats (recipients/opens/clicks) or send date in
+// this list schema, so those stay null.
 function mapEmailCampaign(raw: Record<string, unknown>): SystemeIoEmailCampaign {
+  const content = raw.content as Record<string, unknown> | undefined;
+  const state = raw.state as Record<string, unknown> | undefined;
+  const subject = content ? pickString(content, ["subject"]) : null;
+  const senderName = content ? pickString(content, ["senderName"]) : null;
   return {
     id: Number(raw.id),
-    name: pickString(raw, ["name", "title"]),
-    subject: pickString(raw, ["subject", "emailSubject", "email_subject"]),
-    status: pickString(raw, ["status", "state"]),
-    sentAt: pickString(raw, ["sentAt", "sent_at", "sendAt", "send_at", "createdAt", "created_at"]),
-    recipientCount: pickNumber(raw, ["recipientCount", "recipient_count", "recipientsCount", "recipients_count"]),
-    openCount: pickNumber(raw, ["openCount", "open_count", "opensCount", "opens_count"]),
-    clickCount: pickNumber(raw, ["clickCount", "click_count", "clicksCount", "clicks_count"]),
+    name: subject ?? senderName,
+    subject,
+    status: typeof state?.isSent === "boolean" ? (state.isSent ? "sent" : "draft") : null,
+    sentAt: null,
+    recipientCount: null,
+    openCount: null,
+    clickCount: null,
     raw,
   };
 }
 
+// AutomationRule-automation_rule_list: { id, triggers: [{type}],
+// actions: [{type}], state: { isActive } }. There is no name field, so one
+// is synthesized here from the trigger/action types for display purposes.
 function mapAutomationWorkflow(raw: Record<string, unknown>): SystemeIoAutomationWorkflow {
+  const triggers = Array.isArray(raw.triggers) ? (raw.triggers as Record<string, unknown>[]) : [];
+  const actions = Array.isArray(raw.actions) ? (raw.actions as Record<string, unknown>[]) : [];
+  const state = raw.state as Record<string, unknown> | undefined;
+  const triggerType = triggers[0] ? (pickString(triggers[0], ["type"]) ?? null) : null;
+  const triggerLabel = triggers.map((t) => pickString(t, ["type"])).filter(Boolean).join(", ");
+  const actionLabel = actions.map((a) => pickString(a, ["type"])).filter(Boolean).join(", ");
+  const name = [triggerLabel, actionLabel].filter(Boolean).join(" → ") || null;
   return {
     id: Number(raw.id),
-    name: pickString(raw, ["name", "title"]),
-    status: pickString(raw, ["status", "state", "active"]),
-    triggerType: pickString(raw, ["triggerType", "trigger_type", "trigger"]),
+    name,
+    status: typeof state?.isActive === "boolean" ? (state.isActive ? "active" : "inactive") : null,
+    triggerType,
     raw,
   };
 }

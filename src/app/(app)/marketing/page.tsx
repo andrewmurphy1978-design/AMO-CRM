@@ -1,17 +1,14 @@
-import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 
 export default async function MarketingPage() {
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
 
   const [campaigns, automations] = await Promise.all([
-    prisma.emailCampaign.findMany({ orderBy: { sentAt: "desc" } }),
-    prisma.automationWorkflow.findMany({ orderBy: { name: "asc" } }),
+    prisma.emailCampaign.findMany({ orderBy: { systemeIoId: "desc" } }),
+    prisma.automationWorkflow.findMany({ orderBy: { systemeIoId: "desc" } }),
   ]);
 
   return (
@@ -31,25 +28,17 @@ export default async function MarketingPage() {
             <table className="min-w-full divide-y divide-card-border text-sm">
               <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
                 <tr>
-                  <th className="py-2 pr-4">{t.marketing.colName}</th>
+                  <th className="py-2 pr-4">{t.marketing.colSubject}</th>
                   <th className="py-2 pr-4">{t.marketing.colStatus}</th>
-                  <th className="py-2 pr-4">{t.marketing.colSent}</th>
-                  <th className="py-2 pr-4">{t.marketing.colRecipients}</th>
-                  <th className="py-2 pr-4">{t.marketing.colOpens}</th>
-                  <th className="py-2 pr-4">{t.marketing.colClicks}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-card-border">
                 {campaigns.map((c) => (
                   <tr key={c.id}>
-                    <td className="py-2 pr-4 font-medium text-ink">{c.name ?? c.subject ?? "—"}</td>
-                    <td className="py-2 pr-4 text-ink/70">{c.status ?? "—"}</td>
+                    <td className="py-2 pr-4 font-medium text-ink">{c.subject ?? c.name ?? "—"}</td>
                     <td className="py-2 pr-4 text-ink/70">
-                      {c.sentAt ? format(c.sentAt, "PP", { locale: dateLocale }) : "—"}
+                      {c.status === "sent" ? t.marketing.statusSent : c.status === "draft" ? t.marketing.statusDraft : "—"}
                     </td>
-                    <td className="py-2 pr-4 text-ink/70">{c.recipientCount ?? "—"}</td>
-                    <td className="py-2 pr-4 text-ink/70">{c.openCount ?? "—"}</td>
-                    <td className="py-2 pr-4 text-ink/70">{c.clickCount ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -77,8 +66,12 @@ export default async function MarketingPage() {
                 {automations.map((a) => (
                   <tr key={a.id}>
                     <td className="py-2 pr-4 font-medium text-ink">{a.name ?? "—"}</td>
-                    <td className="py-2 pr-4 text-ink/70">{a.status ?? "—"}</td>
-                    <td className="py-2 pr-4 text-ink/70">{a.triggerType ?? "—"}</td>
+                    <td className="py-2 pr-4 text-ink/70">
+                      {a.status === "active" ? t.marketing.statusActive : a.status === "inactive" ? t.marketing.statusInactive : "—"}
+                    </td>
+                    <td className="py-2 pr-4 text-ink/70">
+                      {a.triggerType ? (t.marketing.triggerTypes[a.triggerType as keyof typeof t.marketing.triggerTypes] ?? a.triggerType) : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -86,10 +79,6 @@ export default async function MarketingPage() {
           </div>
         )}
       </section>
-
-      {(campaigns.length > 0 || automations.length > 0) && (
-        <p className="text-xs text-soft">{t.marketing.unverifiedNote}</p>
-      )}
     </div>
   );
 }

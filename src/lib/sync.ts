@@ -80,21 +80,25 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
       }
     }
 
-    // 4. Subscriptions, course enrollments, community memberships — best
-    // effort: these resource categories' exact endpoint/response shape isn't
-    // documented, so a missing endpoint or unexpected shape for any one of
-    // them is logged and skipped rather than failing the whole sync.
+    // 4. Subscriptions, course enrollments, community memberships. Each
+    // block is wrapped separately so one failing resource type doesn't stop
+    // the others.
     const contactIdBySystemeIoId = await buildContactIdLookup();
 
-    try {
-      for await (const subscriptions of client.iterateSubscriptions()) {
-        for (const sub of subscriptions) {
-          await upsertSubscription(sub, contactIdBySystemeIoId);
-          subscriptionsSynced += 1;
+    // GET /payment/subscriptions requires a "contact" query param — there's
+    // no global collection, so this runs once per known contact. A single
+    // contact's request failing (e.g. it has none) doesn't stop the rest.
+    for (const contactSystemeIoId of contactIdBySystemeIoId.keys()) {
+      try {
+        for await (const subscriptions of client.iterateSubscriptionsForContact(contactSystemeIoId)) {
+          for (const sub of subscriptions) {
+            await upsertSubscription(sub, contactIdBySystemeIoId);
+            subscriptionsSynced += 1;
+          }
         }
+      } catch (error) {
+        console.warn(`systeme.io subscriptions sync skipped for contact ${contactSystemeIoId}:`, error);
       }
-    } catch (error) {
-      console.warn("systeme.io subscriptions sync skipped:", error);
     }
 
     try {
@@ -120,7 +124,7 @@ export async function runSystemeIoSync(): Promise<SyncResult> {
     }
 
     // 5. Account-level marketing data (not tied to a contact): email
-    // campaigns and automation workflows. Same best-effort handling.
+    // campaigns and automation workflows.
     try {
       for await (const campaigns of client.iterateEmailCampaigns()) {
         for (const campaign of campaigns) {
