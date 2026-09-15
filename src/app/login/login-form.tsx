@@ -39,7 +39,7 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
       }}
     >
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-700">
+        <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">
           Email
         </label>
         <input
@@ -48,11 +48,11 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           type="email"
           required
           autoComplete="email"
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+          className="mt-1.5 w-full rounded-lg border border-amo-border bg-white/5 px-4 py-3 text-sm text-amo-white shadow-sm transition-colors focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
         />
       </div>
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+        <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">
           Password
         </label>
         <input
@@ -61,14 +61,14 @@ export default function LoginForm({ callbackUrl }: { callbackUrl: string }) {
           type="password"
           required
           autoComplete="current-password"
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+          className="mt-1.5 w-full rounded-lg border border-amo-border bg-white/5 px-4 py-3 text-sm text-amo-white shadow-sm transition-colors focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
         />
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+        className="w-full rounded-xl bg-gradient-to-r from-amo-lime to-amo-teal px-4 py-3 text-sm font-semibold text-amo-green shadow-[0_8px_24px_rgba(46,204,113,0.3)] transition-transform hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
       >
         {pending ? "Signing in..." : "Sign in"}
       </button>

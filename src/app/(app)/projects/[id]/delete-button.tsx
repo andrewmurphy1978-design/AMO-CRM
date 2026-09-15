@@ -14,7 +14,7 @@ export default function DeleteProjectButton({ projectId }: { projectId: string }
         if (!confirm("Delete this project and all its tasks? This cannot be undone.")) return;
         startTransition(() => deleteProject(projectId));
       }}
-      className="rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+      className="rounded-md border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 disabled:opacity-60"
     >
       Delete
     </button>

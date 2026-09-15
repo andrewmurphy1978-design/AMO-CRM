@@ -22,12 +22,12 @@ export default function QuickAddTask({ projectId }: { projectId: string }) {
         name="title"
         required
         placeholder="Add a task..."
-        className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+        className="flex-1 rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
       />
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+        className="rounded-lg bg-gradient-to-r from-amo-lime to-amo-teal px-3 py-2 text-sm font-semibold text-amo-green shadow-[0_4px_14px_rgba(46,204,113,0.25)] transition-transform hover:scale-[1.02] disabled:opacity-60"
       >
         Add task
       </button>

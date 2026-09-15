@@ -22,21 +22,28 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
+  const AMO_LOGO_URL =
+    "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
+
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white sm:flex">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <p className="text-sm font-semibold text-slate-900">Andrew Murphy Online</p>
-          <p className="text-xs text-slate-500">CRM</p>
+    <div className="flex min-h-screen">
+      <aside className="hidden w-64 shrink-0 flex-col bg-amo-green sm:flex">
+        <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-10 w-10 shrink-0" />
+          <div>
+            <p className="font-display text-sm font-semibold text-amo-white">Andrew Murphy Online</p>
+            <p className="text-xs text-amo-muted">CRM</p>
+          </div>
         </div>
         <nav className="flex-1 space-y-1 px-3 py-4">
           {NAV_ITEMS.map((item) => (
             <NavLink key={item.href} href={item.href} label={item.label} />
           ))}
         </nav>
-        <div className="border-t border-slate-200 p-4">
-          <p className="truncate text-sm font-medium text-slate-900">{session?.user?.name}</p>
-          <p className="truncate text-xs text-slate-500">{session?.user?.email}</p>
+        <div className="border-t border-white/10 p-4">
+          <p className="truncate text-sm font-medium text-amo-white">{session?.user?.name}</p>
+          <p className="truncate text-xs text-amo-muted">{session?.user?.email}</p>
           <form
             action={async () => {
               "use server";
@@ -45,7 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           >
             <button
               type="submit"
-              className="mt-2 text-xs font-medium text-slate-500 hover:text-slate-900"
+              className="mt-2 text-xs font-medium text-amo-muted transition-colors hover:text-amo-lime"
             >
               Sign out
             </button>
@@ -53,10 +60,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:hidden">
-          <Link href="/" className="text-sm font-semibold text-slate-900">
-            AMO CRM
+      <div className="relative flex flex-1 flex-col">
+        <div className="amo-bg-image" />
+        <div className="amo-bg-overlay" />
+        <header className="relative z-10 flex items-center justify-between bg-amo-green px-4 py-3 sm:hidden">
+          <Link href="/" className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-7 w-7" />
+            <span className="font-display text-sm font-semibold text-amo-white">AMO CRM</span>
           </Link>
           <form
             action={async () => {
@@ -64,12 +75,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               await signOut({ redirectTo: "/login" });
             }}
           >
-            <button type="submit" className="text-xs font-medium text-slate-500">
+            <button type="submit" className="text-xs font-medium text-amo-muted">
               Sign out
             </button>
           </form>
         </header>
-        <main className="flex-1 p-4 sm:p-8">{children}</main>
+        <main className="relative z-10 flex-1 p-4 sm:p-8">{children}</main>
       </div>
     </div>
   );

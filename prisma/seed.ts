@@ -1,7 +1,12 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+// engineType "client" (see schema.prisma) requires a driver adapter even
+// here in Node.js — there's no bundled query engine binary to fall back to.
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const email = process.env.SEED_ADMIN_EMAIL?.toLowerCase().trim();

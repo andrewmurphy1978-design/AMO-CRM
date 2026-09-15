@@ -24,12 +24,12 @@ export default function NoteForm({ contactId }: { contactId: string }) {
         name="note"
         type="text"
         placeholder="Log a note or call..."
-        className="flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+        className="flex-1 rounded-md border border-amo-border bg-white/5 px-3 py-1.5 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
       />
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+        className="rounded-md border border-amo-border px-3 py-1.5 text-sm font-medium text-amo-white hover:bg-white/10"
       >
         {pending ? "Adding..." : "Add"}
       </button>

@@ -3,24 +3,74 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Andrew Murphy Online brand palette — matches the marketing site and
+     funnel pages (andrewmurphy.online / ClickFunnels), kept in sync with
+     .claude/skills/clickfunnels-blueprint. */
+  --amo-green: #0d2b1a; /* page/sidebar background */
+  --amo-card: #122a1c; /* card background */
+  --amo-border: #1e4430; /* card/field borders */
+  --amo-lime: #2ecc71; /* primary accent / CTA */
+  --amo-teal: #0fa38a; /* gradient partner */
+  --amo-blue: #29abe2; /* info / tag accent */
+  --amo-ocean: #0b3d6b; /* ribbon backgrounds */
+  --amo-gold: #f0c040; /* highlight accent */
+  --amo-white: #f4faf6; /* primary text on dark */
+  --amo-muted: #7fa898; /* secondary text on dark */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-amo-green: var(--amo-green);
+  --color-amo-card: var(--amo-card);
+  --color-amo-border: var(--amo-border);
+  --color-amo-lime: var(--amo-lime);
+  --color-amo-teal: var(--amo-teal);
+  --color-amo-blue: var(--amo-blue);
+  --color-amo-ocean: var(--amo-ocean);
+  --color-amo-gold: var(--amo-gold);
+  --color-amo-white: var(--amo-white);
+  --color-amo-muted: var(--amo-muted);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+}
+
+/* Blurred, ambient brand background for the app shell's main content area.
+   A separate ::before (rather than background-* directly on the element)
+   so `filter: blur()` doesn't also blur the content sitting on top of it —
+   scaled up slightly to hide the blur's soft edges. */
+.amo-bg-image {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image: url("https://d1yei2z3i6k35z.cloudfront.net/18410699/6a62cc32379aa9.89171099_MountainbackgroundwithAICircuitry.png");
+  background-size: cover;
+  background-position: center;
+  filter: blur(14px);
+  transform: scale(1.1);
+}
+
+.amo-bg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(13, 43, 26, 0.92) 0%,
+    rgba(13, 43, 26, 0.86) 100%
+  );
+}
+
+/* Card top accent bar, reused across dashboard/detail cards. */
+.amo-card-accent {
+  background: linear-gradient(90deg, var(--amo-lime), var(--amo-teal), var(--amo-blue));
 }

@@ -24,8 +24,8 @@ export default async function EditProjectPage({
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold text-slate-900">Edit project</h1>
-      <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <h1 className="font-display text-2xl font-semibold text-amo-white">Edit project</h1>
+      <div className="mt-6 rounded-lg border border-amo-border bg-amo-card p-6 shadow-sm">
         <ProjectForm
           action={boundUpdate}
           defaultValues={project}

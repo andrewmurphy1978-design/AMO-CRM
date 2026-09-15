@@ -16,13 +16,14 @@ export default async function SettingsPage() {
   return (
     <div className="max-w-3xl space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Settings</h1>
-        <p className="mt-1 text-sm text-slate-500">Manage integrations and your team.</p>
+        <h1 className="font-display text-2xl font-semibold text-amo-white">Settings</h1>
+        <p className="mt-1 text-sm text-amo-muted">Manage integrations and your team.</p>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-900">systeme.io integration</h2>
-        <p className="mt-1 text-sm text-slate-500">
+      <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-6 shadow-sm">
+        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+        <h2 className="font-display text-sm font-semibold text-amo-white">systeme.io integration</h2>
+        <p className="mt-1 text-sm text-amo-muted">
           Connect your systeme.io account to sync contacts, tags, and custom fields into your CRM.
         </p>
         <div className="mt-4">
@@ -35,19 +36,20 @@ export default async function SettingsPage() {
               autoSyncEnabled={integration?.autoSyncEnabled ?? false}
             />
           ) : (
-            <p className="text-sm text-slate-500">Only admins can manage this integration.</p>
+            <p className="text-sm text-amo-muted">Only admins can manage this integration.</p>
           )}
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-900">Team</h2>
+      <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-6 shadow-sm">
+        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+        <h2 className="font-display text-sm font-semibold text-amo-white">Team</h2>
         {isAdmin && session ? (
           <div className="mt-4">
             <UserManagement users={users} currentUserId={session.user.id} />
           </div>
         ) : (
-          <p className="mt-2 text-sm text-slate-500">Only admins can manage team members.</p>
+          <p className="mt-2 text-sm text-amo-muted">Only admins can manage team members.</p>
         )}
       </section>
     </div>

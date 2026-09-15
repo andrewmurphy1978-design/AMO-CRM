@@ -25,21 +25,21 @@ export default function SystemeIoForm({
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-amo-muted">
           Status:{" "}
           {connected ? (
-            <span className="font-medium text-emerald-600">Connected</span>
+            <span className="font-medium text-amo-lime">Connected</span>
           ) : (
-            <span className="font-medium text-slate-500">Not connected</span>
+            <span className="font-medium text-amo-muted">Not connected</span>
           )}
         </p>
         {lastSyncedAt && (
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-amo-muted">
             Last synced {new Date(lastSyncedAt).toLocaleString()} ·{" "}
             {lastSyncStatus === "error" ? (
-              <span className="text-red-600">failed: {lastSyncError}</span>
+              <span className="text-red-400">failed: {lastSyncError}</span>
             ) : (
-              <span className="text-emerald-600">success</span>
+              <span className="text-amo-lime">success</span>
             )}
           </p>
         )}
@@ -47,7 +47,7 @@ export default function SystemeIoForm({
 
       <form action={saveAction} className="flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[220px]">
-          <label htmlFor="apiKey" className="block text-sm font-medium text-slate-700">
+          <label htmlFor="apiKey" className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">
             systeme.io API key
           </label>
           <input
@@ -55,22 +55,22 @@ export default function SystemeIoForm({
             name="apiKey"
             type="password"
             placeholder="Paste your public API key"
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none"
+            className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
           />
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-amo-muted">
             Find this under your systeme.io dashboard → Settings → Public API key.
           </p>
         </div>
         <button
           type="submit"
           disabled={savePending}
-          className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+          className="rounded-md border border-amo-border px-4 py-2 text-sm font-medium text-amo-white hover:bg-white/10 disabled:opacity-60"
         >
           {savePending ? "Saving..." : "Save key"}
         </button>
       </form>
-      {saveState?.error && <p className="text-sm text-red-600">{saveState.error}</p>}
-      {saveState?.success && <p className="text-sm text-emerald-600">{saveState.success}</p>}
+      {saveState?.error && <p className="text-sm text-red-400">{saveState.error}</p>}
+      {saveState?.success && <p className="text-sm text-amo-lime">{saveState.success}</p>}
 
       <div className="flex flex-wrap items-center gap-3">
         <button
@@ -82,12 +82,12 @@ export default function SystemeIoForm({
               setSyncResult(result);
             })
           }
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60"
+          className="rounded-lg bg-gradient-to-r from-amo-lime to-amo-teal px-4 py-2 text-sm font-semibold text-amo-green shadow-[0_4px_14px_rgba(46,204,113,0.25)] transition-transform hover:scale-[1.02] disabled:opacity-60"
         >
           {syncPending ? "Syncing..." : "Sync now"}
         </button>
 
-        <label className="flex items-center gap-2 text-sm text-slate-700">
+        <label className="flex items-center gap-2 text-sm text-amo-white">
           <input
             type="checkbox"
             checked={autoSync}
@@ -97,13 +97,13 @@ export default function SystemeIoForm({
               setAutoSync(value);
               startAutoSyncTransition(() => toggleAutoSync(value));
             }}
-            className="h-4 w-4 rounded border-slate-300"
+            className="h-4 w-4 rounded border-amo-border"
           />
           Enable scheduled auto-sync (requires a cron trigger — see README)
         </label>
       </div>
-      {syncResult?.error && <p className="text-sm text-red-600">{syncResult.error}</p>}
-      {syncResult?.success && <p className="text-sm text-emerald-600">{syncResult.success}</p>}
+      {syncResult?.error && <p className="text-sm text-red-400">{syncResult.error}</p>}
+      {syncResult?.success && <p className="text-sm text-amo-lime">{syncResult.success}</p>}
     </div>
   );
 }

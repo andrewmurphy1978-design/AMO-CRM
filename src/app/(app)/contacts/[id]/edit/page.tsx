@@ -16,8 +16,8 @@ export default async function EditContactPage({
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold text-slate-900">Edit contact</h1>
-      <div className="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+      <h1 className="font-display text-2xl font-semibold text-amo-white">Edit contact</h1>
+      <div className="mt-6 rounded-lg border border-amo-border bg-amo-card p-6 shadow-sm">
         <ContactForm action={boundUpdate} defaultValues={contact} submitLabel="Save changes" />
       </div>
     </div>
