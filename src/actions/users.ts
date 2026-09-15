@@ -1,10 +1,10 @@
 "use server";
 
 import { z } from "zod";
-import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hashPassword, verifyPassword } from "@/lib/password";
 
 async function requireAdmin() {
   const session = await auth();
@@ -47,7 +47,7 @@ export async function createUser(
     return { error: "A user with this email already exists." };
   }
 
-  const passwordHash = await bcrypt.hash(data.password, 12);
+  const passwordHash = await hashPassword(data.password);
   await prisma.user.create({
     data: { name: data.name, email: data.email, passwordHash, role: data.role },
   });
@@ -104,12 +104,12 @@ export async function changePassword(
   }
 
   const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } });
-  const valid = await bcrypt.compare(data.currentPassword, user.passwordHash);
+  const valid = await verifyPassword(data.currentPassword, user.passwordHash);
   if (!valid) {
     return { error: "Current password is incorrect." };
   }
 
-  const passwordHash = await bcrypt.hash(data.newPassword, 12);
+  const passwordHash = await hashPassword(data.newPassword);
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
 
   return { success: "Password updated." };

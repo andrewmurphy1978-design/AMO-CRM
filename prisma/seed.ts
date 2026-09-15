@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../src/lib/password";
 
 // engineType "client" (see schema.prisma) requires a driver adapter even
 // here in Node.js — there's no bundled query engine binary to fall back to.
@@ -26,7 +26,7 @@ async function main() {
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
+  const passwordHash = await hashPassword(password);
   await prisma.user.create({
     data: { email, name, passwordHash, role: "ADMIN" },
   });
