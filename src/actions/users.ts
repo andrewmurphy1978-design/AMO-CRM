@@ -70,3 +70,47 @@ export async function deleteUser(userId: string) {
   await prisma.user.delete({ where: { id: userId } });
   revalidatePath("/settings");
 }
+
+const ChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(8, "New password must be at least 8 characters"),
+    confirmPassword: z.string().min(1, "Please confirm your new password"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New passwords don't match",
+    path: ["confirmPassword"],
+  });
+
+export async function changePassword(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  let data;
+  try {
+    data = ChangePasswordSchema.parse({
+      currentPassword: String(formData.get("currentPassword") ?? ""),
+      newPassword: String(formData.get("newPassword") ?? ""),
+      confirmPassword: String(formData.get("confirmPassword") ?? ""),
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return { error: error.issues[0]?.message ?? "Invalid input" };
+    }
+    throw error;
+  }
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } });
+  const valid = await bcrypt.compare(data.currentPassword, user.passwordHash);
+  if (!valid) {
+    return { error: "Current password is incorrect." };
+  }
+
+  const passwordHash = await bcrypt.hash(data.newPassword, 12);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+  return { success: "Password updated." };
+}

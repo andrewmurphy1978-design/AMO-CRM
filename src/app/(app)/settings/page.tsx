@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SystemeIoForm from "./systeme-io-form";
 import UserManagement from "./user-management";
+import ChangePasswordForm from "./change-password-form";
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -19,6 +20,15 @@ export default async function SettingsPage() {
         <h1 className="font-display text-2xl font-semibold text-amo-white">Settings</h1>
         <p className="mt-1 text-sm text-amo-muted">Manage integrations and your team.</p>
       </div>
+
+      <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-6 shadow-sm">
+        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+        <h2 className="font-display text-sm font-semibold text-amo-white">Your account</h2>
+        <p className="mt-1 text-sm text-amo-muted">Change the password you sign in with.</p>
+        <div className="mt-4">
+          <ChangePasswordForm />
+        </div>
+      </section>
 
       <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-6 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
