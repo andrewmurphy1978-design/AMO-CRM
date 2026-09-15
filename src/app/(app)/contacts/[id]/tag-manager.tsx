@@ -19,21 +19,21 @@ export default function TagManager({
         {tags.map((tag) => (
           <span
             key={tag.id}
-            className="flex items-center gap-1 rounded-full border border-amo-border bg-white/10 px-2 py-1 text-xs text-amo-white"
+            className="flex items-center gap-1 rounded-full border border-card-border bg-black/5 px-2 py-1 text-xs text-ink"
           >
             {tag.name}
             <button
               type="button"
               disabled={pending}
               onClick={() => startTransition(() => removeTagFromContact(contactId, tag.id))}
-              className="text-amo-muted hover:text-red-400"
+              className="text-soft hover:text-red-600"
               aria-label={`Remove ${tag.name}`}
             >
               ×
             </button>
           </span>
         ))}
-        {tags.length === 0 && <p className="text-sm text-amo-muted">No tags yet.</p>}
+        {tags.length === 0 && <p className="text-sm text-soft">No tags yet.</p>}
       </div>
       <form
         className="mt-3 flex gap-2"
@@ -49,12 +49,12 @@ export default function TagManager({
           ref={inputRef}
           type="text"
           placeholder="Add a tag..."
-          className="flex-1 rounded-md border border-amo-border bg-white/5 px-3 py-1.5 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md border border-amo-border px-3 py-1.5 text-sm font-medium text-amo-white hover:bg-white/10"
+          className="rounded-md border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5"
         >
           Add
         </button>

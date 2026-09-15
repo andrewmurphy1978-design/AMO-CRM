@@ -70,8 +70,8 @@ export default async function ContactDetailPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-amo-white">{fullName}</h1>
-          <p className="mt-1 text-sm text-amo-muted">
+          <h1 className="font-display text-2xl font-semibold text-ink">{fullName}</h1>
+          <p className="mt-1 text-sm text-soft">
             {STAGE_LABELS[contact.stage]}
             {contact.systemeIoId && ` · systeme.io #${contact.systemeIoId}`}
           </p>
@@ -79,13 +79,13 @@ export default async function ContactDetailPage({
         <div className="flex gap-2">
           <Link
             href={`/contacts/${contact.id}/edit`}
-            className="rounded-md border border-amo-border px-4 py-2 text-sm font-medium text-amo-white hover:bg-white/10"
+            className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
           >
             Edit
           </Link>
           <Link
             href={`/projects/new?contactId=${contact.id}`}
-            className="rounded-lg bg-gradient-to-r from-amo-lime to-amo-teal px-4 py-2 text-sm font-semibold text-amo-green shadow-[0_4px_14px_rgba(46,204,113,0.25)] transition-transform hover:scale-[1.02]"
+            className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
           >
             New project
           </Link>
@@ -95,32 +95,32 @@ export default async function ContactDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-sm font-semibold text-amo-white">Contact details</h2>
+            <h2 className="font-display text-sm font-semibold text-ink">Contact details</h2>
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               {coreFields
                 .filter((f) => f.value)
                 .map((f) => (
                   <div key={f.label}>
-                    <dt className="text-xs uppercase tracking-wide text-amo-muted">{f.label}</dt>
-                    <dd className="text-amo-white">{f.value}</dd>
+                    <dt className="text-xs uppercase tracking-wide text-soft">{f.label}</dt>
+                    <dd className="text-ink">{f.value}</dd>
                   </div>
                 ))}
             </dl>
 
             {contact.fieldValues.length > 0 && (
               <>
-                <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-amo-muted">
+                <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-soft">
                   Other systeme.io fields
                 </h3>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                   {contact.fieldValues.map((fv) => (
                     <div key={fv.id}>
-                      <dt className="text-xs uppercase tracking-wide text-amo-muted">
+                      <dt className="text-xs uppercase tracking-wide text-soft">
                         {fv.definition?.label ?? fv.fieldSlug}
                       </dt>
-                      <dd className="text-amo-white">{fv.value}</dd>
+                      <dd className="text-ink">{fv.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -129,36 +129,36 @@ export default async function ContactDetailPage({
 
             {contact.notes && (
               <div className="mt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-amo-muted">Notes</h3>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-amo-white">{contact.notes}</p>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">Notes</h3>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{contact.notes}</p>
               </div>
             )}
           </section>
 
-          <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-sm font-semibold text-amo-white">Projects</h2>
+              <h2 className="font-display text-sm font-semibold text-ink">Projects</h2>
             </div>
             {contact.projects.length === 0 ? (
-              <p className="mt-3 text-sm text-amo-muted">No projects yet.</p>
+              <p className="mt-3 text-sm text-soft">No projects yet.</p>
             ) : (
-              <ul className="mt-3 divide-y divide-white/10">
+              <ul className="mt-3 divide-y divide-card-border">
                 {contact.projects.map((project) => (
                   <li key={project.id} className="py-2">
-                    <Link href={`/projects/${project.id}`} className="font-medium text-amo-white hover:underline">
+                    <Link href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
                       {project.name}
                     </Link>
-                    <span className="ml-2 text-xs text-amo-muted">{project.status}</span>
+                    <span className="ml-2 text-xs text-soft">{project.status}</span>
                   </li>
                 ))}
               </ul>
             )}
           </section>
 
-          <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-sm font-semibold text-amo-white">Calls &amp; emails</h2>
+            <h2 className="font-display text-sm font-semibold text-ink">Calls &amp; emails</h2>
             <div className="mt-3">
               <InteractionLog
                 contactId={contact.id}
@@ -175,15 +175,15 @@ export default async function ContactDetailPage({
             </div>
           </section>
 
-          <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-sm font-semibold text-amo-white">System activity</h2>
+            <h2 className="font-display text-sm font-semibold text-ink">System activity</h2>
             <NoteForm contactId={contact.id} />
             <ul className="mt-4 space-y-3">
               {contact.activity.map((entry) => (
                 <li key={entry.id} className="text-sm">
-                  <p className="text-amo-white">{entry.message}</p>
-                  <p className="text-xs text-amo-muted">
+                  <p className="text-ink">{entry.message}</p>
+                  <p className="text-xs text-soft">
                     {formatDistanceToNow(entry.createdAt, { addSuffix: true })}
                   </p>
                 </li>
@@ -193,9 +193,9 @@ export default async function ContactDetailPage({
         </div>
 
         <div className="space-y-6">
-          <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-sm font-semibold text-amo-white">Tags</h2>
+            <h2 className="font-display text-sm font-semibold text-ink">Tags</h2>
             <TagManager
               contactId={contact.id}
               tags={contact.tags.map((ct) => ({ id: ct.tagId, name: ct.tag.name }))}

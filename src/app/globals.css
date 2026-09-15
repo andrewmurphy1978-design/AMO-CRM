@@ -15,8 +15,18 @@
   --amo-blue: #29abe2; /* info / tag accent */
   --amo-ocean: #0b3d6b; /* ribbon backgrounds */
   --amo-gold: #f0c040; /* highlight accent */
-  --amo-white: #f4faf6; /* primary text on dark */
-  --amo-muted: #7fa898; /* secondary text on dark */
+  --amo-white: #f4faf6; /* primary text on dark (sidebar only) */
+  --amo-muted: #7fa898; /* secondary text on dark (sidebar only) */
+
+  /* Light theme for the main content area — cards and forms everywhere
+     except the sidebar, modeled on the light form/card style used on the
+     andrewmurphy.online marketing site (e.g. the Services page). */
+  --card-bg: #ffffff;
+  --card-border: #e7e1d0;
+  --field-bg: #faf9f4;
+  --field-border: #ddd4bd;
+  --ink: #16241c; /* headings / primary text on light cards */
+  --soft: #6b7568; /* secondary text on light cards */
 }
 
 @theme inline {
@@ -36,6 +46,13 @@
   --color-amo-gold: var(--amo-gold);
   --color-amo-white: var(--amo-white);
   --color-amo-muted: var(--amo-muted);
+
+  --color-card-bg: var(--card-bg);
+  --color-card-border: var(--card-border);
+  --color-field-bg: var(--field-bg);
+  --color-field-border: var(--field-border);
+  --color-ink: var(--ink);
+  --color-soft: var(--soft);
 }
 
 body {
@@ -67,11 +84,11 @@ body {
   position: fixed;
   inset: 0;
   z-index: 1;
-  background: linear-gradient(
-    180deg,
-    rgba(13, 43, 26, 0.72) 0%,
-    rgba(13, 43, 26, 0.62) 100%
-  );
+  /* A light cream wash (not the sidebar's dark green tint) so the main
+     content area — and the login page, which uses this same class — reads
+     as bright, per "lighten the bright side". The blurred photo still
+     shows through faintly. */
+  background: linear-gradient(180deg, rgba(250, 249, 244, 0.92) 0%, rgba(250, 249, 244, 0.86) 100%);
 }
 
 @media (min-width: 640px) {
@@ -84,4 +101,29 @@ body {
 /* Card top accent bar, reused across dashboard/detail cards. */
 .amo-card-accent {
   background: linear-gradient(90deg, var(--amo-lime), var(--amo-teal), var(--amo-blue));
+}
+
+/* Primary CTA: gold, turns blue on hover — used on every main action
+   button app-wide (per the andrewmurphy.online Services page form style). */
+.btn-primary {
+  background: var(--amo-gold);
+  color: var(--amo-green);
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--amo-blue);
+  color: #ffffff;
+}
+
+/* Secondary/outline button used on light cards. */
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--ink);
+  transition: background-color 150ms ease;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
 }

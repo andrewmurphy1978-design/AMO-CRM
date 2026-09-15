@@ -22,11 +22,11 @@ export default async function LoginPage({
       <div className="amo-bg-image" />
       <div className="amo-bg-overlay" />
 
-      <div className="relative z-10 w-full max-w-sm rounded-3xl border border-amo-border bg-amo-card p-8 shadow-2xl">
+      <div className="relative z-10 w-full max-w-sm rounded-3xl border border-card-border bg-card-bg p-8 shadow-2xl">
         <div className="mb-6 h-[3px] w-full rounded-full amo-card-accent" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-full" />
-        <p className="mt-2 text-center text-sm text-amo-muted">Sign in to your CRM</p>
+        <p className="mt-2 text-center text-sm text-soft">Sign in to your CRM</p>
         <LoginForm callbackUrl={callbackUrl ?? "/"} />
       </div>
     </div>

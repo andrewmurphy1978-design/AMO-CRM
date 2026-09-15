@@ -20,8 +20,8 @@ export default async function EditTaskPage({
 
   return (
     <div className="max-w-2xl">
-      <h1 className="font-display text-2xl font-semibold text-amo-white">Edit task</h1>
-      <div className="mt-6 rounded-lg border border-amo-border bg-amo-card p-6 shadow-sm">
+      <h1 className="font-display text-2xl font-semibold text-ink">Edit task</h1>
+      <div className="mt-6 rounded-lg border border-card-border bg-card-bg p-6 shadow-sm">
         <TaskForm action={boundUpdate} projectId={id} defaultValues={task} users={users} submitLabel="Save changes" />
       </div>
     </div>

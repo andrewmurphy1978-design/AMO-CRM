@@ -55,22 +55,22 @@ export default function ContactForm({
         <Field label="Country" name="country" defaultValue={defaultValues?.country ?? ""} />
       </div>
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">Notes</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Notes</label>
         <textarea
           name="notes"
           rows={3}
           defaultValue={defaultValues?.notes ?? ""}
-          className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
       </div>
 
-      {state?.error && <p className="text-sm text-red-400">{state.error}</p>}
-      {state?.success && <p className="text-sm text-amo-lime">{state.success}</p>}
+      {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {state?.success && <p className="text-sm text-emerald-700">{state.success}</p>}
 
       <button
         type="submit"
         disabled={pending}
-        className="rounded-lg bg-gradient-to-r from-amo-lime to-amo-teal px-4 py-2 text-sm font-semibold text-amo-green shadow-[0_4px_14px_rgba(46,204,113,0.25)] transition-transform hover:scale-[1.02] disabled:opacity-60"
+        className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
         {pending ? "Saving..." : submitLabel}
       </button>
@@ -97,7 +97,7 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={name} className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">
+      <label htmlFor={name} className="block text-xs font-semibold uppercase tracking-wide text-soft">
         {label}
       </label>
       {as === "select" ? (
@@ -105,7 +105,7 @@ function Field({
           id={name}
           name={name}
           defaultValue={defaultValue ?? ""}
-          className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         >
           {options?.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -120,7 +120,7 @@ function Field({
           type={type}
           required={required}
           defaultValue={defaultValue ?? ""}
-          className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
       )}
     </div>

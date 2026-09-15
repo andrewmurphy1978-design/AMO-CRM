@@ -47,22 +47,22 @@ export default function TaskForm({
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="projectId" value={projectId} />
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">Title</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Title</label>
         <input
           name="title"
           required
           defaultValue={defaultValues?.title}
-          className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">Status</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Status</label>
           <select
             name="status"
             defaultValue={defaultValues?.status ?? "TODO"}
-            className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
             {STATUSES.map((s) => (
               <option key={s.value} value={s.value}>
@@ -72,11 +72,11 @@ export default function TaskForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">Priority</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Priority</label>
           <select
             name="priority"
             defaultValue={defaultValues?.priority ?? "MEDIUM"}
-            className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
             {PRIORITIES.map((p) => (
               <option key={p.value} value={p.value}>
@@ -86,11 +86,11 @@ export default function TaskForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">Assignee</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Assignee</label>
           <select
             name="assigneeId"
             defaultValue={defaultValues?.assigneeId ?? ""}
-            className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
             <option value="">Unassigned</option>
             {users.map((u) => (
@@ -101,33 +101,33 @@ export default function TaskForm({
           </select>
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">Due date</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Due date</label>
           <input
             type="date"
             name="dueDate"
             defaultValue={toDateInput(defaultValues?.dueDate)}
-            className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-amo-muted">Description</label>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">Description</label>
         <textarea
           name="description"
           rows={3}
           defaultValue={defaultValues?.description ?? ""}
-          className="mt-1 w-full rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
       </div>
 
-      {state?.error && <p className="text-sm text-red-400">{state.error}</p>}
-      {state?.success && <p className="text-sm text-amo-lime">{state.success}</p>}
+      {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {state?.success && <p className="text-sm text-emerald-700">{state.success}</p>}
 
       <button
         type="submit"
         disabled={pending}
-        className="rounded-lg bg-gradient-to-r from-amo-lime to-amo-teal px-4 py-2 text-sm font-semibold text-amo-green shadow-[0_4px_14px_rgba(46,204,113,0.25)] transition-transform hover:scale-[1.02] disabled:opacity-60"
+        className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
         {pending ? "Saving..." : submitLabel}
       </button>

@@ -46,14 +46,14 @@ export default async function ProjectDetailPage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-amo-muted">
+          <p className="text-sm text-soft">
             <Link href={`/contacts/${project.contact.id}`} className="hover:underline">
               {[project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") ||
                 project.contact.email}
             </Link>
           </p>
-          <h1 className="font-display text-2xl font-semibold text-amo-white">{project.name}</h1>
-          <p className="mt-1 text-sm text-amo-muted">
+          <h1 className="font-display text-2xl font-semibold text-ink">{project.name}</h1>
+          <p className="mt-1 text-sm text-soft">
             {STATUS_LABELS[project.status]}
             {project.owner && ` · Owner: ${project.owner.name}`}
             {project.dueDate && ` · Due ${new Date(project.dueDate).toLocaleDateString()}`}
@@ -62,7 +62,7 @@ export default async function ProjectDetailPage({
         <div className="flex gap-2">
           <Link
             href={`/projects/${project.id}/edit`}
-            className="rounded-md border border-amo-border px-4 py-2 text-sm font-medium text-amo-white hover:bg-white/10"
+            className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
           >
             Edit
           </Link>
@@ -71,31 +71,31 @@ export default async function ProjectDetailPage({
       </div>
 
       {project.description && (
-        <p className="max-w-3xl whitespace-pre-wrap text-sm text-amo-white">{project.description}</p>
+        <p className="max-w-3xl whitespace-pre-wrap text-sm text-ink">{project.description}</p>
       )}
 
-      <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <h2 className="font-display text-sm font-semibold text-amo-white">Tasks</h2>
+        <h2 className="font-display text-sm font-semibold text-ink">Tasks</h2>
         <div className="mt-3">
           <QuickAddTask projectId={project.id} />
         </div>
 
         {openTasks.length === 0 && doneTasks.length === 0 ? (
-          <p className="mt-4 text-sm text-amo-muted">No tasks yet.</p>
+          <p className="mt-4 text-sm text-soft">No tasks yet.</p>
         ) : (
           <>
-            <ul className="mt-2 divide-y divide-white/10">
+            <ul className="mt-2 divide-y divide-card-border">
               {openTasks.map((task) => (
                 <TaskRow key={task.id} task={task} projectId={project.id} />
               ))}
             </ul>
             {doneTasks.length > 0 && (
               <details className="mt-3">
-                <summary className="cursor-pointer text-xs font-medium text-amo-muted">
+                <summary className="cursor-pointer text-xs font-medium text-soft">
                   {doneTasks.length} completed
                 </summary>
-                <ul className="mt-2 divide-y divide-white/10">
+                <ul className="mt-2 divide-y divide-card-border">
                   {doneTasks.map((task) => (
                     <TaskRow key={task.id} task={task} projectId={project.id} />
                   ))}
@@ -106,9 +106,9 @@ export default async function ProjectDetailPage({
         )}
       </section>
 
-      <section className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <h2 className="font-display text-sm font-semibold text-amo-white">Calls &amp; emails</h2>
+        <h2 className="font-display text-sm font-semibold text-ink">Calls &amp; emails</h2>
         <div className="mt-3">
           <InteractionLog
             contactId={project.contactId}

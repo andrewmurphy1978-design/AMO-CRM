@@ -29,12 +29,21 @@ enum UserRole {
   MEMBER
 }
 
+enum Language {
+  EN
+  FR
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
   email        String   @unique
   passwordHash String
   role         UserRole @default(MEMBER)
+  phone        String?
+  whatsapp     String?
+  country      String   @default("CA")
+  language     Language @default(EN)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

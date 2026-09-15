@@ -11,11 +11,11 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 const STAGE_COLORS: Record<string, string> = {
-  LEAD: "bg-amo-lime/15 text-amo-lime",
-  PROSPECT: "bg-amo-teal/15 text-amo-teal",
-  CLIENT: "bg-amo-blue/15 text-amo-blue",
-  PAST_CLIENT: "bg-red-900/40 text-red-300",
-  UNSUBSCRIBED: "bg-red-500/15 text-red-400",
+  LEAD: "bg-emerald-50 text-emerald-700",
+  PROSPECT: "bg-teal-50 text-teal-700",
+  CLIENT: "bg-sky-50 text-sky-700",
+  PAST_CLIENT: "bg-red-200 text-red-900",
+  UNSUBSCRIBED: "bg-red-50 text-red-600",
 };
 
 type TagKind = "fr" | "en" | "other";
@@ -30,9 +30,9 @@ function tagKind(name: string): TagKind {
 const TAG_KIND_RANK: Record<TagKind, number> = { fr: 0, en: 1, other: 2 };
 
 const TAG_KIND_COLORS: Record<TagKind, string> = {
-  fr: "bg-amo-blue/15 text-amo-blue",
-  en: "bg-red-500/15 text-red-400",
-  other: "bg-white/10 text-amo-muted",
+  fr: "bg-sky-50 text-sky-700",
+  en: "bg-red-50 text-red-600",
+  other: "bg-black/5 text-soft",
 };
 
 function sortTags<T extends { tag: { name: string } }>(tags: T[]): T[] {
@@ -75,12 +75,12 @@ export default async function ContactsPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-amo-white">Contacts</h1>
-          <p className="mt-1 text-sm text-amo-muted">{contacts.length} shown</p>
+          <h1 className="font-display text-2xl font-semibold text-ink">Contacts</h1>
+          <p className="mt-1 text-sm text-soft">{contacts.length} shown</p>
         </div>
         <Link
           href="/contacts/new"
-          className="rounded-lg bg-gradient-to-r from-amo-lime to-amo-teal px-4 py-2 text-sm font-semibold text-amo-green shadow-[0_4px_14px_rgba(46,204,113,0.25)] transition-transform hover:scale-[1.02]"
+          className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
         >
           New contact
         </Link>
@@ -92,12 +92,12 @@ export default async function ContactsPage({
           name="q"
           defaultValue={q}
           placeholder="Search name, email, company..."
-          className="w-64 rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="w-64 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         />
         <select
           name="stage"
           defaultValue={stage ?? ""}
-          className="rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         >
           <option value="">All stages</option>
           {Object.entries(STAGE_LABELS).map(([value, label]) => (
@@ -109,7 +109,7 @@ export default async function ContactsPage({
         <select
           name="tag"
           defaultValue={tag ?? ""}
-          className="rounded-md border border-amo-border bg-white/5 px-3 py-2 text-sm text-amo-white shadow-sm focus:border-amo-lime focus:outline-none focus:ring-2 focus:ring-amo-lime/30"
+          className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
         >
           <option value="">All tags</option>
           {tags.map((t) => (
@@ -120,14 +120,14 @@ export default async function ContactsPage({
         </select>
         <button
           type="submit"
-          className="rounded-md border border-amo-border px-4 py-2 text-sm font-medium text-amo-white hover:bg-white/10"
+          className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
         >
           Filter
         </button>
       </form>
 
       {/* Mobile: stacked cards instead of a cramped multi-column table. */}
-      <div className="divide-y divide-white/10 rounded-lg border border-amo-border bg-amo-card shadow-sm sm:hidden">
+      <div className="divide-y divide-card-border rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
         {contacts.map((contact, i) => (
           <Link
             key={contact.id}
@@ -135,12 +135,12 @@ export default async function ContactsPage({
             className={`block px-4 py-3 ${i % 2 === 0 ? "bg-black/15" : "bg-white/[0.03]"}`}
           >
             <div className="flex items-start justify-between gap-2">
-              <p className="font-medium text-amo-white">
+              <p className="font-medium text-ink">
                 {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
               </p>
-              <span className="shrink-0 text-xs text-amo-muted">{contact.source ?? "—"}</span>
+              <span className="shrink-0 text-xs text-soft">{contact.source ?? "—"}</span>
             </div>
-            <p className="mt-1 truncate text-sm text-amo-muted">{contact.email}</p>
+            <p className="mt-1 truncate text-sm text-soft">{contact.email}</p>
             <div className="mt-2">
               <span className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
                 {STAGE_LABELS[contact.stage]}
@@ -160,13 +160,13 @@ export default async function ContactsPage({
             )}
           </Link>
         ))}
-        {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-amo-muted">No contacts found.</p>}
+        {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-soft">No contacts found.</p>}
       </div>
 
       {/* Desktop/tablet: full table. */}
-      <div className="hidden overflow-x-auto rounded-lg border border-amo-border bg-amo-card shadow-sm sm:block">
-        <table className="min-w-full divide-y divide-white/10 text-sm">
-          <thead className="bg-white/5 text-left text-xs font-medium uppercase tracking-wide text-amo-muted">
+      <div className="hidden overflow-x-auto rounded-lg border border-card-border bg-card-bg shadow-sm sm:block">
+        <table className="min-w-full divide-y divide-card-border text-sm">
+          <thead className="bg-field-bg text-left text-xs font-medium uppercase tracking-wide text-soft">
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Email</th>
@@ -175,15 +175,15 @@ export default async function ContactsPage({
               <th className="px-4 py-3">Source</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/10">
+          <tbody className="divide-y divide-card-border">
             {contacts.map((contact) => (
-              <tr key={contact.id} className="odd:bg-black/15 even:bg-white/[0.03] hover:bg-white/10">
+              <tr key={contact.id} className="odd:bg-black/15 even:bg-white/[0.03] hover:bg-black/5">
                 <td className="px-4 py-3">
-                  <Link href={`/contacts/${contact.id}`} className="font-medium text-amo-white hover:underline">
+                  <Link href={`/contacts/${contact.id}`} className="font-medium text-ink hover:underline">
                     {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-amo-muted">{contact.email}</td>
+                <td className="px-4 py-3 text-soft">{contact.email}</td>
                 <td className="px-4 py-3">
                   <span
                     className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}
@@ -203,12 +203,12 @@ export default async function ContactsPage({
                     ))}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-amo-muted">{contact.source ?? "—"}</td>
+                <td className="px-4 py-3 text-soft">{contact.source ?? "—"}</td>
               </tr>
             ))}
             {contacts.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-amo-muted">
+                <td colSpan={5} className="px-4 py-8 text-center text-soft">
                   No contacts found.
                 </td>
               </tr>

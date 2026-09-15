@@ -75,23 +75,23 @@ export default async function DashboardPage() {
   ] as const;
 
   const colorClasses = {
-    lime: "bg-amo-lime/15 text-amo-lime",
-    teal: "bg-amo-teal/15 text-amo-teal",
-    blue: "bg-amo-blue/15 text-amo-blue",
-    gold: "bg-amo-gold/15 text-amo-gold",
+    lime: "bg-emerald-50 text-emerald-700",
+    teal: "bg-teal-50 text-teal-700",
+    blue: "bg-sky-50 text-sky-700",
+    gold: "bg-amber-100 text-amber-700",
   } as const;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl font-semibold text-amo-white">Dashboard</h1>
-        <p className="mt-1 text-sm text-amo-muted">
+        <h1 className="font-display text-2xl font-semibold text-ink">Dashboard</h1>
+        <p className="mt-1 text-sm text-soft">
           Overview of your contacts, clients, and active work.
         </p>
       </div>
 
       {!integration?.apiKeyEncrypted && (
-        <div className="rounded-xl border border-amo-gold/30 bg-amo-gold/10 px-4 py-3 text-sm text-amo-gold">
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Your systeme.io account isn&apos;t connected yet.{" "}
           <Link href="/settings" className="font-semibold underline">
             Connect it in Settings
@@ -105,7 +105,7 @@ export default async function DashboardPage() {
           <Link
             key={stat.label}
             href={stat.href}
-            className="group relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-amo-lime/40 hover:shadow-[0_12px_28px_rgba(46,204,113,0.15)]"
+            className="group relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-amo-lime/40 hover:shadow-[0_12px_28px_rgba(46,204,113,0.15)]"
           >
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
             <div className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${colorClasses[stat.color]}`}>
@@ -113,18 +113,18 @@ export default async function DashboardPage() {
                 {stat.icon}
               </svg>
             </div>
-            <p className="mt-4 font-display text-2xl font-semibold text-amo-white">{stat.value}</p>
-            <p className="mt-1 text-sm text-amo-muted">{stat.label}</p>
+            <p className="mt-4 font-display text-2xl font-semibold text-ink">{stat.value}</p>
+            <p className="mt-1 text-sm text-soft">{stat.label}</p>
           </Link>
         ))}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-          <h2 className="font-display text-sm font-semibold text-amo-white">Upcoming tasks</h2>
+          <h2 className="font-display text-sm font-semibold text-ink">Upcoming tasks</h2>
           {dueSoonTasks.length === 0 ? (
-            <p className="mt-3 text-sm text-amo-muted">No upcoming tasks with a due date.</p>
+            <p className="mt-3 text-sm text-soft">No upcoming tasks with a due date.</p>
           ) : (
             <ul className="mt-3 space-y-3">
               {dueSoonTasks.map((task) => (
@@ -133,11 +133,11 @@ export default async function DashboardPage() {
                   <div>
                     <Link
                       href={`/projects/${task.projectId}`}
-                      className="font-medium text-amo-white hover:text-amo-lime hover:underline"
+                      className="font-medium text-ink hover:text-emerald-700 hover:underline"
                     >
                       {task.title}
                     </Link>
-                    <p className="text-xs text-amo-muted">
+                    <p className="text-xs text-soft">
                       {task.project.name} · {task.project.contact.firstName ?? task.project.contact.email}
                       {task.dueDate && ` · due ${formatDistanceToNow(task.dueDate, { addSuffix: true })}`}
                     </p>
@@ -148,19 +148,19 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-amo-border bg-amo-card p-5 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-          <h2 className="font-display text-sm font-semibold text-amo-white">Recent activity</h2>
+          <h2 className="font-display text-sm font-semibold text-ink">Recent activity</h2>
           {recentActivity.length === 0 ? (
-            <p className="mt-3 text-sm text-amo-muted">No activity yet.</p>
+            <p className="mt-3 text-sm text-soft">No activity yet.</p>
           ) : (
             <ul className="mt-3 space-y-3">
               {recentActivity.map((entry) => (
                 <li key={entry.id} className="flex items-start gap-3 text-sm">
                   <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-blue" />
                   <div>
-                    <p className="text-amo-white">{entry.message}</p>
-                    <p className="text-xs text-amo-muted">
+                    <p className="text-ink">{entry.message}</p>
+                    <p className="text-xs text-soft">
                       {formatDistanceToNow(entry.createdAt, { addSuffix: true })}
                     </p>
                   </div>
