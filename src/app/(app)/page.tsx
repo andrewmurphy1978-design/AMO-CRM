@@ -7,7 +7,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import WorldClocks from "./world-clocks";
-import DateTimeCard from "./date-time-card";
+import PageHeader from "./page-header";
 import CardSkeleton from "./card-skeleton";
 import WeatherCardServer from "./weather-card-server";
 import NewsCardServer from "./news-card-server";
@@ -17,11 +17,8 @@ import CalendarCardServer from "./calendar-card-server";
 import SocialCard from "./social-card";
 import { getValidAccessToken } from "@/lib/google";
 import { getLatestSocialSnapshots } from "@/lib/social";
+import { getHour12 } from "@/lib/time-format";
 import type { AutomationRun } from "@prisma/client";
-
-// Same full lockup used in the sidebar when expanded (src/app/(app)/sidebar.tsx).
-const AMO_LOGO_URL =
-  "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
 
 // "about 8 hours ago" is vague for something you'd want to check against a
 // posting schedule — this gives "Today at 3:15 PM" / "Yesterday at 9:00 AM" /
@@ -166,12 +163,7 @@ export default async function DashboardPage() {
     });
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const socialSnapshots = await getLatestSocialSnapshots(db);
-    // Read fresh from the DB rather than session.user.timeFormat — the JWT
-    // session is only reissued at login, so it would keep showing the old
-    // value right after saving the setting in Settings.
-    const currentUser = session
-      ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true } })
-      : null;
+    const hour12 = await getHour12(session, db);
 
     return {
       contactCount,
@@ -187,7 +179,7 @@ export default async function DashboardPage() {
       recentRuns,
       googleAccessToken,
       socialSnapshots,
-      hour12: currentUser?.timeFormat === "HOUR12",
+      hour12,
     };
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
@@ -320,16 +312,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="sticky top-0 z-20 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-2 sm:-mx-8 sm:-mt-8 sm:px-8">
-        <div className="flex items-center gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-36 shrink-0 object-contain sm:w-56" />
-          <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
-        </div>
-        <h1 className="absolute left-1/2 -translate-x-1/2 font-display text-lg font-semibold text-amo-white sm:text-xl">
-          {t.dashboard.title}
-        </h1>
-      </header>
+      <PageHeader title={t.dashboard.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
 
       {!integration?.apiKeyEncrypted && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">

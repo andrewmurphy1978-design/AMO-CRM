@@ -51,8 +51,17 @@ function formatClockTime(date: Date, hour12: boolean, intlLocale: string): strin
   return new Intl.DateTimeFormat(intlLocale, { hour: "numeric", minute: "2-digit", hour12 }).format(date);
 }
 
+// Whole-hour gutter labels for the 3-day grid: "09:00"/"17:00" on 24h,
+// "9AM"/"5PM" (no space, correctly wrapping past noon) on 12h.
 function formatHourMark(hour: number, hour12: boolean, intlLocale: string): string {
-  return new Intl.DateTimeFormat(intlLocale, { hour: "numeric", hour12 }).format(new Date(2000, 0, 1, hour));
+  const date = new Date(2000, 0, 1, hour, 0);
+  if (!hour12) {
+    return new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  }
+  const parts = new Intl.DateTimeFormat(intlLocale, { hour: "numeric", hour12: true }).formatToParts(date);
+  const hourPart = parts.find((p) => p.type === "hour")?.value ?? String(hour);
+  const dayPeriod = parts.find((p) => p.type === "dayPeriod")?.value ?? "";
+  return `${hourPart}${dayPeriod}`;
 }
 
 const GRID_START_HOUR = 6; // grid content starts at 6 AM...
@@ -166,12 +175,10 @@ function DayColumn({
         const top = (startMin / 60) * ROW_HEIGHT;
         const height = Math.max(MIN_BLOCK_HEIGHT, ((endMin - startMin) / 60) * ROW_HEIGHT - 1);
         return (
-          <a
+          <Link
             key={event.id}
-            href={event.htmlLink ?? undefined}
-            target={event.htmlLink ? "_blank" : undefined}
-            rel={event.htmlLink ? "noopener noreferrer" : undefined}
-            className="absolute block overflow-hidden rounded px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
+            href="/calendar"
+            className="absolute block cursor-pointer overflow-hidden rounded px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
             style={{
               top,
               height,
@@ -179,12 +186,11 @@ function DayColumn({
               width: `${100 / cols}%`,
               backgroundColor: color.bg,
               color: color.fg,
-              cursor: event.htmlLink ? "pointer" : "default",
             }}
             title={event.title}
           >
             {event.title}
-          </a>
+          </Link>
         );
       })}
       {events.length === 0 && (
@@ -303,7 +309,7 @@ function UpcomingTable({
   labels: CalendarLabels;
 }) {
   return (
-    <div className="mt-3 overflow-hidden rounded-xl border border-card-border">
+    <div className="mt-3 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-card-border">
       <table className="w-full border-collapse text-xs">
         <tbody>
           {days.map((day, i) => (
@@ -319,21 +325,17 @@ function UpcomingTable({
                     {eventsByDay[i].map((event) => {
                       const color = eventColor(event.colorId);
                       return (
-                        <a
+                        <Link
                           key={event.id}
-                          href={event.htmlLink ?? undefined}
-                          target={event.htmlLink ? "_blank" : undefined}
-                          rel={event.htmlLink ? "noopener noreferrer" : undefined}
-                          className="flex items-center gap-1.5 rounded px-1.5 py-1 transition-opacity hover:opacity-90"
-                          style={{ backgroundColor: color.bg, color: color.fg, cursor: event.htmlLink ? "pointer" : "default" }}
+                          href="/calendar"
+                          className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 transition-opacity hover:opacity-90"
+                          style={{ backgroundColor: color.bg, color: color.fg }}
                         >
-                          {!event.allDay && event.start && (
-                            <span className="shrink-0 font-medium">
-                              {formatClockTime(new Date(event.start), hour12, intlLocale)}
-                            </span>
-                          )}
+                          <span className="w-16 shrink-0 font-bold">
+                            {!event.allDay && event.start ? formatClockTime(new Date(event.start), hour12, intlLocale) : ""}
+                          </span>
                           <span className="truncate">{event.title}</span>
-                        </a>
+                        </Link>
                       );
                     })}
                   </div>
@@ -378,11 +380,11 @@ export default function CalendarCard({
   }
 
   const today = startOfDay(new Date());
-  const week = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const eventsByDay = week.map((day) => (events ?? []).filter((e) => e.start && isSameDay(new Date(e.start), day)));
-  const gridDays = week.slice(0, 3);
+  const days = Array.from({ length: 11 }, (_, i) => addDays(today, i));
+  const eventsByDay = days.map((day) => (events ?? []).filter((e) => e.start && isSameDay(new Date(e.start), day)));
+  const gridDays = days.slice(0, 3);
   const gridEvents = eventsByDay.slice(0, 3);
-  const tableDays = week.slice(3);
+  const tableDays = days.slice(3);
   const tableEvents = eventsByDay.slice(3);
 
   return (

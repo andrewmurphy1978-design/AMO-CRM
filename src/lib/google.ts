@@ -193,19 +193,19 @@ export interface CalendarEventSummary {
 // Same reasoning as getRecentEmails above — takes the token directly so no
 // Prisma read happens from inside a concurrently-rendered Suspense branch.
 //
-// Fetches a full week (today through +8 days, a little wider than a week
-// to absorb the UTC-vs-America/Montreal offset — the server has no local
-// timezone, so "today" here is computed in UTC; the dashboard buckets
-// events into days client-side, where the browser's real Montreal time
-// takes over). The Dashboard shows the next 3 days as a visual day-grid
-// and the remaining 4 as a table.
+// Fetches today through +12 days — a little wider than the 11 days the
+// Dashboard displays, to absorb the UTC-vs-America/Montreal offset (the
+// server has no local timezone, so "today" here is computed in UTC; the
+// dashboard buckets events into days client-side, where the browser's
+// real Montreal time takes over). The Dashboard shows the next 3 days as
+// a visual day-grid and the remaining 8 as a scrollable table.
 export async function getUpcomingEvents(accessToken: string): Promise<CalendarEventSummary[] | null> {
   try {
     const now = new Date();
     const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
     url.searchParams.set("timeMin", startOfToday.toISOString());
-    url.searchParams.set("timeMax", new Date(startOfToday.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString());
+    url.searchParams.set("timeMax", new Date(startOfToday.getTime() + 12 * 24 * 60 * 60 * 1000).toISOString());
     url.searchParams.set("singleEvents", "true");
     url.searchParams.set("orderBy", "startTime");
     url.searchParams.set("maxResults", "100");

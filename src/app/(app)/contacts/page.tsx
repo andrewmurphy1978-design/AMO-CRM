@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
+import { getHour12 } from "@/lib/time-format";
+import PageHeader from "../page-header";
 import { tagKind, TAG_KIND_COLORS, sortTags, isLanguageTag } from "@/lib/tag-colors";
 import { countryFullName } from "@/lib/country-flag";
 import CountryFlag from "@/components/country-flag";
@@ -45,8 +49,10 @@ export default async function ContactsPage({
   const { q, stage, tag } = await searchParams;
   const stages = toArray(stage);
   const selectedTags = toArray(tag);
+  const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
+  const dateLocale = getDateLocale(lang);
   const STAGE_LABELS = t.stages;
 
   const where: Prisma.ContactWhereInput = {};
@@ -69,17 +75,16 @@ export default async function ContactsPage({
     include: { tags: { include: { tag: true } } },
   });
   const tags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
+  const hour12 = await getHour12(session);
 
   const stageOptions = Object.entries(STAGE_LABELS).map(([value, label]) => ({ value, label }));
   const tagOptions = tags.map((tg) => ({ value: tg.name, label: tg.name }));
 
   return (
     <div className="space-y-6">
+      <PageHeader title={t.contacts.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">{t.contacts.title}</h1>
-          <p className="mt-1 text-sm text-soft">{t.contacts.shown(contacts.length)}</p>
-        </div>
+        <p className="text-sm text-soft">{t.contacts.shown(contacts.length)}</p>
         <Link
           href="/contacts/new"
           className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"

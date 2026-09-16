@@ -10,6 +10,8 @@ import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
+import PageHeader from "../page-header";
 
 interface MakeMetadata {
   zone?: string;
@@ -26,6 +28,7 @@ export default async function SettingsPage({
   const isAdmin = session?.user.role === "ADMIN";
   const lang = await getLang();
   const t = getDict(lang);
+  const dateLocale = getDateLocale(lang);
 
   // One shared client for every read below — see the comment on the
   // equivalent block in src/app/(app)/page.tsx for why (each `prisma.x`
@@ -49,6 +52,7 @@ export default async function SettingsPage({
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
       return { currentUser, integration, makeIntegration, bufferSettings, googleConnection, users };
     });
+  const hour12 = currentUser?.timeFormat === "HOUR12";
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
   const bufferLabels: Record<BufferProvider, string> = {
     buffer_en: t.settings.bufferEnLabel,
@@ -70,10 +74,8 @@ export default async function SettingsPage({
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-ink">{t.settings.title}</h1>
-        <p className="mt-1 text-sm text-soft">{t.settings.subtitle}</p>
-      </div>
+      <PageHeader title={t.settings.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <p className="text-sm text-soft">{t.settings.subtitle}</p>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left column: settings available to everyone. */}

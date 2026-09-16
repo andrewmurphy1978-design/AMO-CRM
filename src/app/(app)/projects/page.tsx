@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
+import { getHour12 } from "@/lib/time-format";
+import PageHeader from "../page-header";
 
 const STATUS_COLORS: Record<string, string> = {
   PLANNING: "bg-black/5 text-soft",
@@ -18,8 +22,10 @@ export default async function ProjectsPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { status } = await searchParams;
+  const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
+  const dateLocale = getDateLocale(lang);
   const STATUS_LABELS = t.projectStatuses;
 
   const where: Prisma.ProjectWhereInput = {};
@@ -34,14 +40,13 @@ export default async function ProjectsPage({
       tasks: { select: { status: true } },
     },
   });
+  const hour12 = await getHour12(session);
 
   return (
     <div className="space-y-6">
+      <PageHeader title={t.projects.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">{t.projects.title}</h1>
-          <p className="mt-1 text-sm text-soft">{t.projects.shown(projects.length)}</p>
-        </div>
+        <p className="text-sm text-soft">{t.projects.shown(projects.length)}</p>
         <Link
           href="/projects/new"
           className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"

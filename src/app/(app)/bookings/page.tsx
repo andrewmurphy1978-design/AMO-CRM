@@ -1,8 +1,11 @@
 import { format } from "date-fns";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
+import { getHour12 } from "@/lib/time-format";
+import PageHeader from "../page-header";
 
 const STATUS_COLORS: Record<string, string> = {
   SCHEDULED: "bg-sky-50 text-sky-700",
@@ -13,18 +16,18 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default async function BookingsPage() {
+  const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
   const bookings = await prisma.booking.findMany({ orderBy: { scheduledFor: "desc" } });
+  const hour12 = await getHour12(session);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-ink">{t.bookings.title}</h1>
-        <p className="mt-1 text-sm text-soft">{t.bookings.subtitle}</p>
-      </div>
+      <PageHeader title={t.bookings.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <p className="text-sm text-soft">{t.bookings.subtitle}</p>
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
