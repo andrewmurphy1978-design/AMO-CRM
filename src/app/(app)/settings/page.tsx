@@ -14,7 +14,12 @@ interface MakeMetadata {
   teamId?: string;
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ google?: string; reason?: string }>;
+}) {
+  const { google: googleStatus, reason: googleErrorReason } = await searchParams;
   const session = await auth();
   const isAdmin = session?.user.role === "ADMIN";
   const lang = await getLang();
@@ -123,6 +128,16 @@ export default async function SettingsPage() {
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
             <h2 className="font-display text-lg font-semibold text-ink">{t.settings.googleTitle}</h2>
             <p className="mt-1 text-sm text-soft">{t.settings.googleDesc}</p>
+            {googleStatus === "error" && (
+              <p className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+                {googleErrorReason || "Connection failed."}
+              </p>
+            )}
+            {googleStatus === "connected" && !googleConnection && (
+              <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Google said the connection succeeded, but nothing was saved — please try again.
+              </p>
+            )}
             <div className="mt-4">
               {isAdmin ? (
                 googleConnection ? (

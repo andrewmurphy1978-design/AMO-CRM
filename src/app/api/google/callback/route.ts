@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { saveGoogleTokens } from "@/lib/google";
 
+function errorRedirect(base: string, reason: string) {
+  const url = new URL("/settings", base);
+  url.searchParams.set("google", "error");
+  url.searchParams.set("reason", reason.slice(0, 300));
+  return NextResponse.redirect(url);
+}
+
 export async function GET(request: NextRequest) {
   const session = await auth();
   const base = process.env.NEXTAUTH_URL ?? request.nextUrl.origin;
@@ -11,13 +18,14 @@ export async function GET(request: NextRequest) {
 
   const code = request.nextUrl.searchParams.get("code");
   if (!code) {
-    return NextResponse.redirect(new URL("/settings?google=error", base));
+    const oauthError = request.nextUrl.searchParams.get("error");
+    return errorRedirect(base, oauthError ? `Google returned: ${oauthError}` : "No authorization code in callback");
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL("/settings?google=missing_config", base));
+    return errorRedirect(base, "GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is not set");
   }
 
   try {
@@ -33,7 +41,9 @@ export async function GET(request: NextRequest) {
       }),
     });
     if (!tokenRes.ok) {
-      return NextResponse.redirect(new URL("/settings?google=error", base));
+      const body = await tokenRes.text().catch(() => "");
+      console.error(`Google token exchange failed: HTTP ${tokenRes.status} ${body}`);
+      return errorRedirect(base, `Token exchange failed: HTTP ${tokenRes.status} ${body}`);
     }
     const tokenData = (await tokenRes.json()) as {
       access_token: string;
@@ -61,7 +71,9 @@ export async function GET(request: NextRequest) {
     );
 
     return NextResponse.redirect(new URL("/settings?google=connected", base));
-  } catch {
-    return NextResponse.redirect(new URL("/settings?google=error", base));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Google OAuth callback failed: ${message}`);
+    return errorRedirect(base, message);
   }
 }
