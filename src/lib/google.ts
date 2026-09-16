@@ -118,6 +118,8 @@ export interface EmailSummary {
   from: string;
   subject: string;
   snippet: string;
+  date: string; // ISO datetime the message was received
+  link: string; // opens this message's thread directly in Gmail's web UI
 }
 
 function extractHeader(headers: { name?: string; value?: string }[] | undefined, name: string): string {
@@ -162,7 +164,9 @@ export async function getRecentEmails(accessToken: string, maxResults = 8): Prom
         if (!res.ok) return null;
         const data = (await res.json()) as {
           id: string;
+          threadId?: string;
           snippet?: string;
+          internalDate?: string;
           payload?: { headers?: { name?: string; value?: string }[] };
         };
         const headers = data.payload?.headers;
@@ -171,6 +175,8 @@ export async function getRecentEmails(accessToken: string, maxResults = 8): Prom
           from: formatFrom(extractHeader(headers, "From")),
           subject: extractHeader(headers, "Subject") || "(no subject)",
           snippet: data.snippet ?? "",
+          date: data.internalDate ? new Date(Number(data.internalDate)).toISOString() : new Date().toISOString(),
+          link: `https://mail.google.com/mail/u/0/#inbox/${data.threadId ?? data.id}`,
         };
       })
     );

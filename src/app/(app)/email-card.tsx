@@ -18,17 +18,33 @@ export interface EmailLabels {
   openIonosWebmail: string;
 }
 
+// "3:15 PM" for something received today, "Sep 12, 3:15 PM" otherwise —
+// matches the user's own 24h/12h preference (see the Date/Time card and
+// Calendar) rather than a locale default.
+function formatEmailDate(iso: string, hour12: boolean, intlLocale: string): string {
+  const date = new Date(iso);
+  const time = new Intl.DateTimeFormat(intlLocale, { hour: "numeric", minute: "2-digit", hour12 }).format(date);
+  if (date.toDateString() === new Date().toDateString()) return time;
+  const day = new Intl.DateTimeFormat(intlLocale, { month: "short", day: "numeric" }).format(date);
+  return `${day}, ${time}`;
+}
+
 export default function EmailCard({
   initial,
   connected,
+  hour12,
+  lang,
   labels,
 }: {
   initial: EmailSummary[] | null;
   connected: boolean;
+  hour12: boolean;
+  lang: "en" | "fr";
   labels: EmailLabels;
 }) {
   const [emails, setEmails] = useState(initial);
   const [loading, setLoading] = useState(false);
+  const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
 
   async function refresh() {
     setLoading(true);
@@ -67,11 +83,25 @@ export default function EmailCard({
               <p className="text-xs font-medium text-soft">
                 {emails.length === 1 ? labels.unreadOne : labels.unreadOtherTemplate.replace("{count}", String(emails.length))}
               </p>
-              <ul className="mt-2 space-y-2.5">
-                {emails.map((email) => (
-                  <li key={email.id} className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink">{email.from}</p>
-                    <p className="truncate text-xs text-soft">{email.subject}</p>
+              <ul className="mt-2 -mx-2 overflow-hidden rounded-lg">
+                {emails.map((email, i) => (
+                  <li key={email.id}>
+                    <a
+                      href={email.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex min-w-0 items-start gap-2 px-2 py-1.5 transition-colors hover:bg-amo-lime/10 ${
+                        i % 2 === 1 ? "bg-black/[0.03]" : ""
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-ink">{email.from}</p>
+                        <p className="truncate text-xs text-soft">{email.subject}</p>
+                      </div>
+                      <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
+                        {formatEmailDate(email.date, hour12, intlLocale)}
+                      </span>
+                    </a>
                   </li>
                 ))}
               </ul>

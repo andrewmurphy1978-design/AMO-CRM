@@ -360,7 +360,7 @@ export default async function DashboardPage() {
         {/* Left column: email, projects, tasks, activity. */}
         <div className="space-y-6">
           <Suspense fallback={<CardSkeleton title={t.dashboard.emailTitle} />}>
-            <EmailCardServer accessToken={googleAccessToken} labels={emailLabels} />
+            <EmailCardServer accessToken={googleAccessToken} hour12={hour12} lang={lang} labels={emailLabels} />
           </Suspense>
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">

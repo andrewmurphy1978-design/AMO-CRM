@@ -18,9 +18,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Same badge asset used throughout the sidebar/headers.
+const AMO_BADGE_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596c0abdbde8.23945126_AMOBadgeTransparent.png";
+
 export const metadata: Metadata = {
   title: "Andrew Murphy Online CRM",
   description: "Contacts, projects, and tasks for Andrew Murphy Online.",
+  icons: {
+    icon: AMO_BADGE_URL,
+    shortcut: AMO_BADGE_URL,
+    apple: AMO_BADGE_URL,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
