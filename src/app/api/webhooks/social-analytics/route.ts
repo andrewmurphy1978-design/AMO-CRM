@@ -83,7 +83,10 @@ function extractSnapshots(body: unknown): ParsedSnapshot[] {
     out.push({
       platform: platform as SocialPlatform,
       dateKey: typeof data.dateKey === "string" && data.dateKey ? data.dateKey : todayDateKey(),
-      followers: toIntOrNull(data.followers) ?? sumLinkedInFollowerBreakdown(data.followerCountsByAssociationType),
+      followers:
+        toIntOrNull(data.followers) ??
+        sumLinkedInFollowerBreakdown(data.followerBreakdown) ??
+        sumLinkedInFollowerBreakdown(data.followerCountsByAssociationType),
       engagement: toIntOrNull(data.engagement),
       views: toIntOrNull(data.views),
       raw: data,
@@ -98,11 +101,13 @@ function toIntOrNull(value: unknown): number | null {
 }
 
 // LinkedIn's follower-statistics API has no single "total followers" field —
-// it only reports counts broken down by association type (e.g. company
-// employees vs. everyone else), so the Make scenario forwards that raw
-// array untouched and the actual total is summed here instead of in a
-// fragile Make mapper expression that would have to guess the array's
-// exact length and order.
+// it only reports counts broken down by a dimension (industry, geography,
+// seniority, etc. — whichever breakdown Make forwards as
+// "followerBreakdown"), so the Make scenario sends that raw array
+// untouched and the actual total is summed here instead of in a fragile
+// Make mapper expression that would have to guess the array's exact
+// length and order. Any one dimension's breakdown sums to the same total,
+// since every follower falls into exactly one bucket per dimension.
 function sumLinkedInFollowerBreakdown(value: unknown): number | null {
   if (!Array.isArray(value) || value.length === 0) return null;
   let total = 0;
