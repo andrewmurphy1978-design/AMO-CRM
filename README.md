@@ -174,23 +174,37 @@ insights API and posts the results to a webhook here once a day.
 3. That's it — no code changes or redeploys needed to add or adjust
    platforms; the webhook accepts whichever platforms are in the payload.
 
-### 9. Connect Buffer (Instagram/TikTok/X analytics)
+### 9. Connect Buffer (Facebook/Instagram/LinkedIn/TikTok/X analytics)
 
 Buffer's 2026 GraphQL API exposes experimental post-engagement metrics
-(reactions, comments, reach) for free-tier accounts — this is a direct
+(postCount, reactions, comments, reach/impressions, and — network
+depending — likes/shares/saves) for free-tier accounts. This is a direct
 integration (no Make involved), since Buffer's Make connector only
-supports posting, not analytics. Andrew runs two Buffer accounts, one per
-posting language; this sums both into one snapshot per platform.
+supports posting, not analytics. Andrew runs four Buffer accounts:
 
-1. In Settings → Buffer integration, paste each account's personal Buffer
-   API key (from your Buffer account's Developer settings) into its
-   English/French field and save.
+- **English** and **French** — each with that language's Instagram/TikTok/X
+  channels (language is fixed per account).
+- **Facebook** and **LinkedIn** — each holding *both* languages' channels
+  for that one platform, split by channel name (a channel named with an
+  `.en`/`.fr` marker, e.g. `andrewmurphyonline.en`, is detected as that
+  language — the same convention already used for the Instagram posting
+  channels).
+
+Every platform's stats are tracked per language (EN/FR), shown as
+separate columns in the Dashboard's Social card.
+
+1. In Settings → Buffer integration, paste each of the four accounts'
+   personal Buffer API key (from that Buffer account's Developer settings)
+   into its field and save.
 2. Click "Sync now" to pull immediately, or wait for the daily automatic
    sync (08:00 America/Montreal, via the same GitHub Actions workflow that
    runs the systeme.io sync — see `.github/workflows/nightly-systeme-io-sync.yml`).
 3. Buffer's post-metrics API is explicitly labeled experimental by Buffer
    itself — if a sync fails, the exact GraphQL error (plus a schema
-   introspection dump) is saved to that account's status in Settings.
+   introspection dump) is saved to that account's status in Settings. If a
+   Facebook/LinkedIn channel's name doesn't contain a recognizable
+   `en`/`fr` marker, the sync defaults it to English and reports it as a
+   warning after "Sync now" rather than guessing silently.
 
 ## Data model
 

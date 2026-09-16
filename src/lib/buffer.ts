@@ -1,6 +1,6 @@
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
-import { todaySocialDateKey, type SocialPlatform } from "@/lib/social";
+import { EXTRA_STAT_KEYS, todaySocialDateKey, type ExtraStatKey, type SocialLanguage, type SocialPlatform } from "@/lib/social";
 
 // Buffer's GraphQL API (launched 2026, replacing their old REST API) —
 // see https://developers.buffer.com/. Its post-metrics support is
@@ -22,7 +22,7 @@ export class BufferApiError extends Error {
 interface BufferChannel {
   id: string;
   name: string;
-  service: string; // e.g. "instagram" | "tiktok" | "twitter"
+  service: string; // e.g. "instagram" | "tiktok" | "twitter" | "facebook" | "linkedin"
 }
 
 interface BufferMetric {
@@ -84,10 +84,10 @@ export class BufferClient {
 
   // Buffer normalizes engagement across networks into a flat list of typed
   // metrics for a set of channels (postCount/reactions/comments always
-  // present; reach/impressions/engagementRate only when every channel in
-  // the set supports them) rather than a fixed set of named fields. Free
-  // plans only keep 30 days of analytics history, so that's the window
-  // queried here.
+  // present; reach/impressions/engagementRate — and, on some networks,
+  // likes/shares/saves — only when every channel in the set supports them)
+  // rather than a fixed set of named fields. Free plans only keep 30 days
+  // of analytics history, so that's the window queried here.
   async getAggregatedMetrics(organizationId: string, channelIds: string[]): Promise<BufferMetric[]> {
     if (channelIds.length === 0) return [];
     const endDateTime = new Date();
@@ -108,62 +108,108 @@ const SERVICE_TO_PLATFORM: Record<string, SocialPlatform> = {
   instagram: "instagram",
   tiktok: "tiktok",
   twitter: "x",
+  facebook: "facebook",
+  linkedin: "linkedin",
 };
+
+// Andrew names his channels with an ".en"/".fr" (or "(EN)"/"(FR)") marker
+// (confirmed convention — see the existing Instagram channels
+// "andrewmurphyonline.en" / "andrewmurphyonline.fr" from the posting
+// scenario), which is how the two mixed-language accounts (Facebook,
+// LinkedIn — each holding both an EN and FR channel) get split.
+// Returns null when a name doesn't match either, so the caller can log it
+// as a warning instead of silently guessing.
+function detectLanguageFromChannelName(name: string): SocialLanguage | null {
+  const lower = name.toLowerCase();
+  if (/\bfr(ench|ançais)?\b/.test(lower) || lower.includes(".fr") || /\(fr\)/.test(lower)) return "FR";
+  if (/\ben(glish)?\b/.test(lower) || lower.includes(".en") || /\(en\)/.test(lower)) return "EN";
+  return null;
+}
+
+interface BufferAccountConfig {
+  provider: string;
+  languageMode: "fixed" | "detect";
+  fixedLanguage: SocialLanguage | null;
+}
+
+// buffer_en/buffer_fr each hold one language's Instagram/TikTok/X
+// channels; buffer_fb/buffer_li each hold BOTH languages' channels for
+// that one platform, split by channel name (see detectLanguageFromChannelName).
+const BUFFER_ACCOUNTS: BufferAccountConfig[] = [
+  { provider: "buffer_en", languageMode: "fixed", fixedLanguage: "EN" },
+  { provider: "buffer_fr", languageMode: "fixed", fixedLanguage: "FR" },
+  { provider: "buffer_fb", languageMode: "detect", fixedLanguage: null },
+  { provider: "buffer_li", languageMode: "detect", fixedLanguage: null },
+];
+
+type MetricTotals = Partial<Record<ExtraStatKey, number>>;
 
 export interface BufferSyncResult {
   platformsSynced: number;
   accountErrors: { provider: string; message: string }[];
+  warnings: string[];
 }
 
-// Andrew runs two Buffer accounts (English + French), each posting to
-// Instagram/TikTok/X for that language — this sums both languages'
-// metrics into one snapshot per platform, since the Dashboard tracks
-// overall reach per platform rather than per language.
 export async function runBufferSync(): Promise<BufferSyncResult> {
   return withScopedPrismaClient((db) => runBufferSyncWith(db));
 }
 
-const BUFFER_PROVIDERS = ["buffer_en", "buffer_fr"] as const;
-
 async function runBufferSyncWith(db: PrismaClient): Promise<BufferSyncResult> {
   const accounts = await db.integrationSetting.findMany({
-    where: { provider: { in: [...BUFFER_PROVIDERS] } },
+    where: { provider: { in: BUFFER_ACCOUNTS.map((a) => a.provider) } },
   });
 
-  const totals = new Map<SocialPlatform, { reactions: number; comments: number; postCount: number; reach: number | null }>();
+  // Keyed by "platform|language".
+  const totals = new Map<string, MetricTotals>();
   const accountErrors: { provider: string; message: string }[] = [];
+  const warnings: string[] = [];
 
   for (const account of accounts) {
     if (!account.apiKeyEncrypted) continue;
+    const config = BUFFER_ACCOUNTS.find((a) => a.provider === account.provider);
+    if (!config) continue;
+
     try {
       const apiKey = await decryptSecret(account.apiKeyEncrypted);
       const client = new BufferClient(apiKey);
       const orgId = await client.getOrganizationId();
       const channels = await client.listChannels(orgId);
 
-      const channelIdsByPlatform = new Map<SocialPlatform, string[]>();
+      // Group this account's channels by platform+language so each group
+      // becomes one aggregatedPostMetrics call.
+      const channelIdsByKey = new Map<string, string[]>();
       for (const channel of channels) {
         const platform = SERVICE_TO_PLATFORM[channel.service];
         if (!platform) continue;
-        const list = channelIdsByPlatform.get(platform) ?? [];
+
+        let language: SocialLanguage;
+        if (config.languageMode === "fixed" && config.fixedLanguage) {
+          language = config.fixedLanguage;
+        } else {
+          const detected = detectLanguageFromChannelName(channel.name);
+          if (!detected) {
+            warnings.push(
+              `${account.provider}: couldn't tell EN/FR from channel name "${channel.name}" (service ${channel.service}) — defaulted to EN`
+            );
+          }
+          language = detected ?? "EN";
+        }
+
+        const key = `${platform}|${language}`;
+        const list = channelIdsByKey.get(key) ?? [];
         list.push(channel.id);
-        channelIdsByPlatform.set(platform, list);
+        channelIdsByKey.set(key, list);
       }
 
-      for (const [platform, channelIds] of channelIdsByPlatform) {
+      for (const [key, channelIds] of channelIdsByKey) {
         const metrics = await client.getAggregatedMetrics(orgId, channelIds);
-        const reactions = metrics.find((m) => m.type === "reactions")?.value ?? 0;
-        const comments = metrics.find((m) => m.type === "comments")?.value ?? 0;
-        const postCount = metrics.find((m) => m.type === "postCount")?.value ?? 0;
-        const reach = metrics.find((m) => m.type === "reach" || m.type === "impressions")?.value ?? null;
-
-        const existing = totals.get(platform) ?? { reactions: 0, comments: 0, postCount: 0, reach: null };
-        totals.set(platform, {
-          reactions: existing.reactions + reactions,
-          comments: existing.comments + comments,
-          postCount: existing.postCount + postCount,
-          reach: reach === null ? existing.reach : (existing.reach ?? 0) + reach,
-        });
+        const existing = totals.get(key) ?? {};
+        for (const metric of metrics) {
+          if (!(EXTRA_STAT_KEYS as readonly string[]).includes(metric.type)) continue;
+          const statKey = metric.type as ExtraStatKey;
+          existing[statKey] = (existing[statKey] ?? 0) + metric.value;
+        }
+        totals.set(key, existing);
       }
 
       await db.integrationSetting.update({
@@ -182,20 +228,25 @@ async function runBufferSyncWith(db: PrismaClient): Promise<BufferSyncResult> {
 
   const dateKey = todaySocialDateKey();
   let platformsSynced = 0;
-  for (const [platform, { reactions, comments, postCount, reach }] of totals) {
+  for (const [key, stats] of totals) {
+    const [platform, language] = key.split("|") as [SocialPlatform, SocialLanguage];
+    const reactions = stats.reactions ?? 0;
+    const comments = stats.comments ?? 0;
+    const likes = stats.likes ?? 0;
+    const shares = stats.shares ?? 0;
     const data = {
-      engagement: reactions + comments,
-      views: reach,
-      raw: { postCount, reactions, comments, reach } as never,
+      engagement: reactions + comments + likes + shares,
+      views: stats.reach ?? stats.impressions ?? null,
+      raw: stats as never,
       capturedAt: new Date(),
     };
     await db.socialAnalyticsSnapshot.upsert({
-      where: { platform_dateKey: { platform, dateKey } },
+      where: { platform_language_dateKey: { platform, language, dateKey } },
       update: data,
-      create: { platform, dateKey, ...data },
+      create: { platform, language, dateKey, ...data },
     });
     platformsSynced += 1;
   }
 
-  return { platformsSynced, accountErrors };
+  return { platformsSynced, accountErrors, warnings };
 }

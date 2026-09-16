@@ -22,7 +22,7 @@ export async function saveBufferApiKey(
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const provider = String(formData.get("provider") ?? "");
-  if (provider !== "buffer_en" && provider !== "buffer_fr") {
+  if (!["buffer_en", "buffer_fr", "buffer_fb", "buffer_li"].includes(provider)) {
     return { error: "Invalid Buffer account" };
   }
   const apiKey = String(formData.get("apiKey") ?? "").trim();
@@ -51,5 +51,6 @@ export async function triggerBufferSync(): Promise<{ error?: string; success?: s
   if (result.accountErrors.length > 0) {
     return { error: result.accountErrors.map((e) => `${e.provider}: ${e.message}`).join(" | ") };
   }
-  return { success: t.settings.bufferSynced(result.platformsSynced) };
+  const warningSuffix = result.warnings.length > 0 ? ` (${result.warnings.join(" | ")})` : "";
+  return { success: t.settings.bufferSynced(result.platformsSynced) + warningSuffix };
 }

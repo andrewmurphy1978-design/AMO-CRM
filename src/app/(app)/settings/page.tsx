@@ -4,7 +4,7 @@ import { getGoogleConnection } from "@/lib/google";
 import { disconnectGoogleAccount } from "@/actions/integrations";
 import SystemeIoForm from "./systeme-io-form";
 import MakeForm from "./make-form";
-import BufferForm from "./buffer-form";
+import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buffer-form";
 import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -34,8 +34,26 @@ export default async function SettingsPage({
     where: { provider: "make" },
   });
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
-  const bufferEn = await prisma.integrationSetting.findUnique({ where: { provider: "buffer_en" } });
-  const bufferFr = await prisma.integrationSetting.findUnique({ where: { provider: "buffer_fr" } });
+  const bufferSettings = await prisma.integrationSetting.findMany({
+    where: { provider: { in: ["buffer_en", "buffer_fr", "buffer_fb", "buffer_li"] } },
+  });
+  const bufferLabels: Record<BufferProvider, string> = {
+    buffer_en: t.settings.bufferEnLabel,
+    buffer_fr: t.settings.bufferFrLabel,
+    buffer_fb: t.settings.bufferFbLabel,
+    buffer_li: t.settings.bufferLiLabel,
+  };
+  const bufferAccounts: BufferAccountStatus[] = (Object.keys(bufferLabels) as BufferProvider[]).map((provider) => {
+    const setting = bufferSettings.find((s) => s.provider === provider);
+    return {
+      provider,
+      label: bufferLabels[provider],
+      connected: Boolean(setting?.apiKeyEncrypted),
+      lastSyncedAt: setting?.lastSyncedAt?.toISOString() ?? null,
+      lastSyncStatus: setting?.lastSyncStatus ?? null,
+      lastSyncError: setting?.lastSyncError ?? null,
+    };
+  });
   const googleConnection = session ? await getGoogleConnection(session.user.id) : null;
   const users = isAdmin ? await prisma.user.findMany({ orderBy: { name: "asc" } }) : [];
 
@@ -191,21 +209,7 @@ export default async function SettingsPage({
               <h2 className="font-display text-lg font-semibold text-ink">{t.settings.bufferTitle}</h2>
               <p className="mt-1 text-sm text-soft">{t.settings.bufferDesc}</p>
               <div className="mt-4">
-                <BufferForm
-                  enStatus={{
-                    connected: Boolean(bufferEn?.apiKeyEncrypted),
-                    lastSyncedAt: bufferEn?.lastSyncedAt?.toISOString() ?? null,
-                    lastSyncStatus: bufferEn?.lastSyncStatus ?? null,
-                    lastSyncError: bufferEn?.lastSyncError ?? null,
-                  }}
-                  frStatus={{
-                    connected: Boolean(bufferFr?.apiKeyEncrypted),
-                    lastSyncedAt: bufferFr?.lastSyncedAt?.toISOString() ?? null,
-                    lastSyncStatus: bufferFr?.lastSyncStatus ?? null,
-                    lastSyncError: bufferFr?.lastSyncError ?? null,
-                  }}
-                  lang={lang}
-                />
+                <BufferForm accounts={bufferAccounts} lang={lang} />
               </div>
             </section>
           )}

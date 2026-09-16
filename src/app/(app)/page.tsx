@@ -201,6 +201,18 @@ export default async function DashboardPage() {
     followers: t.dashboard.socialFollowers,
     engagement: t.dashboard.socialEngagement,
     views: t.dashboard.socialViews,
+    languageEn: t.dashboard.socialLanguageEn,
+    languageFr: t.dashboard.socialLanguageFr,
+    statLabels: {
+      postCount: t.dashboard.socialStatPostCount,
+      reactions: t.dashboard.socialStatReactions,
+      comments: t.dashboard.socialStatComments,
+      reach: t.dashboard.socialStatReach,
+      impressions: t.dashboard.socialStatImpressions,
+      likes: t.dashboard.socialStatLikes,
+      shares: t.dashboard.socialStatShares,
+      saves: t.dashboard.socialStatSaves,
+    },
     platformNames: {
       facebook: t.dashboard.socialFacebook,
       instagram: t.dashboard.socialInstagram,

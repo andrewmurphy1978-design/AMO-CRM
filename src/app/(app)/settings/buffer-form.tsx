@@ -7,49 +7,43 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 
-interface BufferAccountStatus {
+export type BufferProvider = "buffer_en" | "buffer_fr" | "buffer_fb" | "buffer_li";
+
+export interface BufferAccountStatus {
+  provider: BufferProvider;
+  label: string;
   connected: boolean;
   lastSyncedAt: string | null;
   lastSyncStatus: string | null;
   lastSyncError: string | null;
 }
 
-function AccountForm({
-  provider,
-  label,
-  status,
-  lang,
-}: {
-  provider: "buffer_en" | "buffer_fr";
-  label: string;
-  status: BufferAccountStatus;
-  lang: Lang;
-}) {
+function AccountForm({ account, lang }: { account: BufferAccountStatus; lang: Lang }) {
   const [saveState, saveAction, savePending] = useActionState(saveBufferApiKey, undefined);
   const t = getDict(lang);
 
   return (
     <div>
-      <p className="text-sm font-medium text-ink">{label}</p>
+      <p className="text-sm font-medium text-ink">{account.label}</p>
       <p className="mt-0.5 text-xs text-soft">
         {t.automations.statusLabel}{" "}
-        {status.connected ? (
+        {account.connected ? (
           <span className="font-medium text-emerald-700">{t.automations.connected}</span>
         ) : (
           <span className="font-medium text-soft">{t.automations.notConnected}</span>
         )}
-        {status.lastSyncedAt && (
+        {account.lastSyncedAt && (
           <>
             {" · "}
-            {t.automations.lastSynced(new Date(status.lastSyncedAt).toLocaleString())}
-            {status.lastSyncStatus === "error" && (
-              <span className="text-red-600"> — {t.automations.failed(status.lastSyncError ?? "")}</span>
+            {t.automations.lastSynced(new Date(account.lastSyncedAt).toLocaleString())}
+            {account.lastSyncStatus === "error" && (
+              <span className="text-red-600"> — {t.automations.failed(account.lastSyncError ?? "")}</span>
             )}
           </>
         )}
       </p>
       <form action={saveAction} className="mt-2 flex gap-2">
-        <input type="hidden" name="provider" value={provider} />
+        <input type="hidden" name="provider" value={account.provider} />
         <input name="apiKey" type="password" placeholder={t.automations.apiKeyPlaceholder} className={FIELD_CLASS} />
         <button
           type="submit"
@@ -65,27 +59,20 @@ function AccountForm({
   );
 }
 
-export default function BufferForm({
-  enStatus,
-  frStatus,
-  lang,
-}: {
-  enStatus: BufferAccountStatus;
-  frStatus: BufferAccountStatus;
-  lang: Lang;
-}) {
+export default function BufferForm({ accounts, lang }: { accounts: BufferAccountStatus[]; lang: Lang }) {
   const t = getDict(lang);
   const [syncResult, setSyncResult] = useState<{ error?: string; success?: string } | null>(null);
   const [syncPending, startSync] = useTransition();
 
   return (
     <div className="space-y-4">
-      <AccountForm provider="buffer_en" label={t.settings.bufferEnLabel} status={enStatus} lang={lang} />
-      <AccountForm provider="buffer_fr" label={t.settings.bufferFrLabel} status={frStatus} lang={lang} />
+      {accounts.map((account) => (
+        <AccountForm key={account.provider} account={account} lang={lang} />
+      ))}
 
       <button
         type="button"
-        disabled={(!enStatus.connected && !frStatus.connected) || syncPending}
+        disabled={!accounts.some((a) => a.connected) || syncPending}
         onClick={() =>
           startSync(async () => {
             const result = await triggerBufferSync();

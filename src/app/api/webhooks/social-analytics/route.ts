@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { SOCIAL_PLATFORMS, todaySocialDateKey, type SocialPlatform } from "@/lib/social";
+import { SOCIAL_PLATFORMS, SOCIAL_LANGUAGES, todaySocialDateKey, type SocialPlatform, type SocialLanguage } from "@/lib/social";
 
 // Fed by the Make.com "Social Analytics Sync" scenario, which calls each
 // platform's own insights API (Facebook Pages, Instagram Business,
@@ -18,7 +18,8 @@ import { SOCIAL_PLATFORMS, todaySocialDateKey, type SocialPlatform } from "@/lib
 // { "platform": "linkedin", "organicFollowers": 5, "paidFollowers": 0,
 // "iterationIndex": 1 } (a delta to add to the day's running total;
 // iterationIndex 1 resets it instead, so a same-day re-run of the whole
-// scenario doesn't double-count). "dateKey" defaults to today
+// scenario doesn't double-count). "language" ("EN"/"FR", case-insensitive)
+// defaults to "EN" when omitted; "dateKey" defaults to today
 // (America/Montreal) when omitted.
 export async function POST(request: Request) {
   const secret = process.env.SOCIAL_ANALYTICS_WEBHOOK_SECRET;
@@ -55,23 +56,41 @@ export async function POST(request: Request) {
       // it, so a same-day re-run doesn't double-count.
       if (snapshot.iterationIndex === null || snapshot.iterationIndex <= 1) {
         await prisma.socialAnalyticsSnapshot.upsert({
-          where: { platform_dateKey: { platform: snapshot.platform, dateKey: snapshot.dateKey } },
+          where: {
+            platform_language_dateKey: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey },
+          },
           update: { followers: snapshot.followersDelta, ...base },
-          create: { platform: snapshot.platform, dateKey: snapshot.dateKey, followers: snapshot.followersDelta, ...base },
+          create: {
+            platform: snapshot.platform,
+            language: snapshot.language,
+            dateKey: snapshot.dateKey,
+            followers: snapshot.followersDelta,
+            ...base,
+          },
         });
       } else {
         await prisma.socialAnalyticsSnapshot.upsert({
-          where: { platform_dateKey: { platform: snapshot.platform, dateKey: snapshot.dateKey } },
+          where: {
+            platform_language_dateKey: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey },
+          },
           update: { followers: { increment: snapshot.followersDelta }, ...base },
-          create: { platform: snapshot.platform, dateKey: snapshot.dateKey, followers: snapshot.followersDelta, ...base },
+          create: {
+            platform: snapshot.platform,
+            language: snapshot.language,
+            dateKey: snapshot.dateKey,
+            followers: snapshot.followersDelta,
+            ...base,
+          },
         });
       }
     } else {
       const data = { followers: snapshot.followers, ...base };
       await prisma.socialAnalyticsSnapshot.upsert({
-        where: { platform_dateKey: { platform: snapshot.platform, dateKey: snapshot.dateKey } },
+        where: {
+          platform_language_dateKey: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey },
+        },
         update: data,
-        create: { platform: snapshot.platform, dateKey: snapshot.dateKey, ...data },
+        create: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey, ...data },
       });
     }
     saved += 1;
@@ -82,6 +101,7 @@ export async function POST(request: Request) {
 
 interface ParsedSnapshot {
   platform: SocialPlatform;
+  language: SocialLanguage;
   dateKey: string;
   followers: number | null;
   followersDelta: number | null;
@@ -107,8 +127,14 @@ function extractSnapshots(body: unknown): ParsedSnapshot[] {
     const paid = toIntOrNull(data.paidFollowers);
     const followersDelta = organic === null && paid === null ? null : (organic ?? 0) + (paid ?? 0);
 
+    const languageRaw = typeof data.language === "string" ? data.language.toUpperCase() : "EN";
+    const language = (SOCIAL_LANGUAGES as readonly string[]).includes(languageRaw)
+      ? (languageRaw as SocialLanguage)
+      : "EN";
+
     out.push({
       platform: platform as SocialPlatform,
+      language,
       dateKey: typeof data.dateKey === "string" && data.dateKey ? data.dateKey : todaySocialDateKey(),
       followers: toIntOrNull(data.followers),
       followersDelta,
