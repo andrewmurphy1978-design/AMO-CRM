@@ -4,6 +4,7 @@ import { getGoogleConnection } from "@/lib/google";
 import { disconnectGoogleAccount } from "@/actions/integrations";
 import SystemeIoForm from "./systeme-io-form";
 import MakeForm from "./make-form";
+import BufferForm from "./buffer-form";
 import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -33,6 +34,8 @@ export default async function SettingsPage({
     where: { provider: "make" },
   });
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
+  const bufferEn = await prisma.integrationSetting.findUnique({ where: { provider: "buffer_en" } });
+  const bufferFr = await prisma.integrationSetting.findUnique({ where: { provider: "buffer_fr" } });
   const googleConnection = session ? await getGoogleConnection(session.user.id) : null;
   const users = isAdmin ? await prisma.user.findMany({ orderBy: { name: "asc" } }) : [];
 
@@ -178,6 +181,31 @@ export default async function SettingsPage({
                 <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
                   https://crm.andrewmurphy.online/api/webhooks/zapier
                 </code>
+              </div>
+            </section>
+          )}
+
+          {isAdmin && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.settings.bufferTitle}</h2>
+              <p className="mt-1 text-sm text-soft">{t.settings.bufferDesc}</p>
+              <div className="mt-4">
+                <BufferForm
+                  enStatus={{
+                    connected: Boolean(bufferEn?.apiKeyEncrypted),
+                    lastSyncedAt: bufferEn?.lastSyncedAt?.toISOString() ?? null,
+                    lastSyncStatus: bufferEn?.lastSyncStatus ?? null,
+                    lastSyncError: bufferEn?.lastSyncError ?? null,
+                  }}
+                  frStatus={{
+                    connected: Boolean(bufferFr?.apiKeyEncrypted),
+                    lastSyncedAt: bufferFr?.lastSyncedAt?.toISOString() ?? null,
+                    lastSyncStatus: bufferFr?.lastSyncStatus ?? null,
+                    lastSyncError: bufferFr?.lastSyncError ?? null,
+                  }}
+                  lang={lang}
+                />
               </div>
             </section>
           )}

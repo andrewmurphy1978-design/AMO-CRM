@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social";
+import { SOCIAL_PLATFORMS, todaySocialDateKey, type SocialPlatform } from "@/lib/social";
 
 // Fed by the Make.com "Social Analytics Sync" scenario, which calls each
 // platform's own insights API (Facebook Pages, Instagram Business,
@@ -91,12 +91,6 @@ interface ParsedSnapshot {
   raw: Record<string, unknown>;
 }
 
-function todayDateKey(): string {
-  // America/Montreal, not UTC — a run just after midnight UTC shouldn't
-  // get tagged with the previous Montreal day.
-  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Montreal" });
-}
-
 function extractSnapshots(body: unknown): ParsedSnapshot[] {
   if (!body || typeof body !== "object") return [];
   const obj = body as Record<string, unknown>;
@@ -115,7 +109,7 @@ function extractSnapshots(body: unknown): ParsedSnapshot[] {
 
     out.push({
       platform: platform as SocialPlatform,
-      dateKey: typeof data.dateKey === "string" && data.dateKey ? data.dateKey : todayDateKey(),
+      dateKey: typeof data.dateKey === "string" && data.dateKey ? data.dateKey : todaySocialDateKey(),
       followers: toIntOrNull(data.followers),
       followersDelta,
       iterationIndex: toIntOrNull(data.iterationIndex),

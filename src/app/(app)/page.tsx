@@ -206,6 +206,8 @@ export default async function DashboardPage() {
       instagram: t.dashboard.socialInstagram,
       linkedin: t.dashboard.socialLinkedin,
       youtube: t.dashboard.socialYoutube,
+      tiktok: t.dashboard.socialTiktok,
+      x: t.dashboard.socialX,
     },
   };
   const calendarLabels = {

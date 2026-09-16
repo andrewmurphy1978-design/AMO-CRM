@@ -174,6 +174,24 @@ insights API and posts the results to a webhook here once a day.
 3. That's it — no code changes or redeploys needed to add or adjust
    platforms; the webhook accepts whichever platforms are in the payload.
 
+### 9. Connect Buffer (Instagram/TikTok/X analytics)
+
+Buffer's 2026 GraphQL API exposes experimental post-engagement metrics
+(reactions, comments, reach) for free-tier accounts — this is a direct
+integration (no Make involved), since Buffer's Make connector only
+supports posting, not analytics. Andrew runs two Buffer accounts, one per
+posting language; this sums both into one snapshot per platform.
+
+1. In Settings → Buffer integration, paste each account's personal Buffer
+   API key (from your Buffer account's Developer settings) into its
+   English/French field and save.
+2. Click "Sync now" to pull immediately, or wait for the daily automatic
+   sync (08:00 America/Montreal, via the same GitHub Actions workflow that
+   runs the systeme.io sync — see `.github/workflows/nightly-systeme-io-sync.yml`).
+3. Buffer's post-metrics API is explicitly labeled experimental by Buffer
+   itself — if a sync fails, the exact GraphQL error (plus a schema
+   introspection dump) is saved to that account's status in Settings.
+
 ## Data model
 
 - `Contact` — the client/contact record. `systemeIoId` is the sync key;

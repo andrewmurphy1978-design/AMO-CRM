@@ -15,6 +15,8 @@ const PLATFORM_COLOR: Record<string, string> = {
   instagram: "bg-gradient-to-br from-[#F58529] via-[#DD2A7B] to-[#8134AF]",
   linkedin: "bg-[#0A66C2]",
   youtube: "bg-[#FF0000]",
+  tiktok: "bg-[#010101]",
+  x: "bg-[#000000]",
 };
 
 function PlatformDot({ platform }: { platform: string }) {

@@ -1,7 +1,15 @@
 import { prisma } from "@/lib/prisma";
 
-export const SOCIAL_PLATFORMS = ["facebook", "instagram", "linkedin", "youtube"] as const;
+export const SOCIAL_PLATFORMS = ["facebook", "instagram", "linkedin", "youtube", "tiktok", "x"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+
+// America/Montreal, not UTC — a sync run just after midnight UTC shouldn't
+// get tagged with the previous Montreal day. Shared by every social
+// analytics source (the Make webhook, the Buffer sync) so same-day runs
+// land on the same row.
+export function todaySocialDateKey(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Montreal" });
+}
 
 export interface SocialSnapshotView {
   platform: SocialPlatform;
