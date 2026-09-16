@@ -19,6 +19,26 @@ export class BufferApiError extends Error {
   }
 }
 
+// Detects an expired/invalid API key rather than a schema problem: an
+// HTTP 401/403, or a GraphQL error whose message/code names
+// auth/token/expiry directly (exact wording isn't confirmed against a
+// real expired key from this sandbox, so this deliberately casts a wide
+// net on keywords rather than matching one exact phrase).
+function isAuthError(status: number, body: Record<string, unknown>): boolean {
+  if (status === 401 || status === 403) return true;
+  const errors = Array.isArray(body.errors) ? body.errors : [];
+  return errors.some((e: unknown) => {
+    if (!e || typeof e !== "object") return false;
+    const err = e as Record<string, unknown>;
+    const message = typeof err.message === "string" ? err.message.toLowerCase() : "";
+    const code =
+      typeof (err.extensions as Record<string, unknown> | undefined)?.code === "string"
+        ? String((err.extensions as Record<string, unknown>).code).toLowerCase()
+        : "";
+    return /unauthenticated|unauthorized|invalid.*token|expired|invalid.*key/.test(message + " " + code);
+  });
+}
+
 interface BufferChannel {
   id: string;
   name: string;
@@ -34,33 +54,42 @@ interface BufferMetric {
 export class BufferClient {
   constructor(private apiKey: string) {}
 
-  private async raw(query: string, variables?: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async raw(query: string, variables?: Record<string, unknown>): Promise<{ status: number; body: Record<string, unknown> }> {
     const res = await fetch(BUFFER_GRAPHQL_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({ query, variables }),
     });
-    return (await res.json()) as Record<string, unknown>;
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
   }
 
   private async request<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
-    const json = await this.raw(query, variables);
-    if (json.errors) {
-      const schema = await this.introspectQueryFields().catch((e) => `(introspection failed: ${e})`);
+    const { status, body } = await this.raw(query, variables);
+    if (isAuthError(status, body)) {
+      // Buffer API keys expire (Andrew's are set to 30 days) — this is by
+      // far the most likely real-world failure once the integration is
+      // otherwise working, so it gets its own clear message instead of a
+      // raw GraphQL error dump.
       throw new BufferApiError(
-        `Buffer GraphQL error: ${JSON.stringify(json.errors)} | available Query fields: ${JSON.stringify(schema)}`
+        "This Buffer API key is invalid or has expired. Buffer API keys expire after the period you chose when creating them — generate a new key in Buffer (Settings → Developer) and paste it in here."
       );
     }
-    if (!json.data) throw new BufferApiError("Buffer API returned no data");
-    return json.data as T;
+    if (body.errors) {
+      const schema = await this.introspectQueryFields().catch((e) => `(introspection failed: ${e})`);
+      throw new BufferApiError(
+        `Buffer GraphQL error: ${JSON.stringify(body.errors)} | available Query fields: ${JSON.stringify(schema)}`
+      );
+    }
+    if (!body.data) throw new BufferApiError("Buffer API returned no data");
+    return body.data as T;
   }
 
   private async introspectQueryFields(): Promise<unknown> {
-    const json = await this.raw(
+    const { body } = await this.raw(
       `query { __type(name: "Query") { fields { name args { name type { name kind ofType { name } } } } } }`
     );
-    const data = json.data as { __type?: { fields?: { name: string }[] } } | undefined;
-    return data?.__type?.fields?.map((f) => f.name) ?? json;
+    const data = body.data as { __type?: { fields?: { name: string }[] } } | undefined;
+    return data?.__type?.fields?.map((f) => f.name) ?? body;
   }
 
   async getOrganizationId(): Promise<string> {

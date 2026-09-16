@@ -178,30 +178,49 @@ export interface CalendarEventSummary {
   id: string;
   title: string;
   start: string | null; // ISO datetime, or an ISO date for all-day events
+  end: string | null; // ISO datetime, or an ISO date for all-day events
   allDay: boolean;
+  colorId: string | null; // Google Calendar's per-event colorId ("1".."11"), null = calendar's default color
 }
 
 // Same reasoning as getRecentEmails above — takes the token directly so no
 // Prisma read happens from inside a concurrently-rendered Suspense branch.
+//
+// Fetches a full week (today through +8 days, a little wider than a week
+// to absorb the UTC-vs-America/Montreal offset — the server has no local
+// timezone, so "today" here is computed in UTC; the dashboard buckets
+// events into days client-side, where the browser's real Montreal time
+// takes over). The Dashboard shows the next 3 days as a visual day-grid
+// and the remaining 4 as a table.
 export async function getUpcomingEvents(accessToken: string): Promise<CalendarEventSummary[] | null> {
   try {
+    const now = new Date();
+    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
-    url.searchParams.set("timeMin", new Date().toISOString());
-    url.searchParams.set("timeMax", new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString());
+    url.searchParams.set("timeMin", startOfToday.toISOString());
+    url.searchParams.set("timeMax", new Date(startOfToday.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString());
     url.searchParams.set("singleEvents", "true");
     url.searchParams.set("orderBy", "startTime");
-    url.searchParams.set("maxResults", "10");
+    url.searchParams.set("maxResults", "100");
 
     const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!res.ok) return null;
     const data = (await res.json()) as {
-      items?: { id: string; summary?: string; start?: { dateTime?: string; date?: string } }[];
+      items?: {
+        id: string;
+        summary?: string;
+        start?: { dateTime?: string; date?: string };
+        end?: { dateTime?: string; date?: string };
+        colorId?: string;
+      }[];
     };
     return (data.items ?? []).map((item) => ({
       id: item.id,
       title: item.summary || "(untitled)",
       start: item.start?.dateTime ?? item.start?.date ?? null,
+      end: item.end?.dateTime ?? item.end?.date ?? null,
       allDay: !item.start?.dateTime,
+      colorId: item.colorId ?? null,
     }));
   } catch {
     return null;

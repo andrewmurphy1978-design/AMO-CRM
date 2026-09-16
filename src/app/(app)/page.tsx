@@ -203,6 +203,9 @@ export default async function DashboardPage() {
     views: t.dashboard.socialViews,
     languageEn: t.dashboard.socialLanguageEn,
     languageFr: t.dashboard.socialLanguageFr,
+    updatedPrefix: t.dashboard.updatedPrefix,
+    syncNow: t.automations.syncNow,
+    syncing: t.automations.syncing,
     statLabels: {
       postCount: t.dashboard.socialStatPostCount,
       reactions: t.dashboard.socialStatReactions,
@@ -441,7 +444,12 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <SocialCard snapshots={socialSnapshots} labels={socialLabels} />
+          <SocialCard
+            snapshots={socialSnapshots}
+            labels={socialLabels}
+            isAdmin={session?.user.role === "ADMIN"}
+            dateLocale={dateLocale}
+          />
         </div>
 
         {/* Right column: general info. Each card fetches real, sometimes

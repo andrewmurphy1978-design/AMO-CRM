@@ -1,5 +1,8 @@
+import { formatDistanceToNow } from "date-fns";
+import type { Locale } from "date-fns";
 import clsx from "@/lib/clsx";
 import { SOCIAL_PLATFORMS, type ExtraStatKey, type SocialPlatform, type SocialSnapshotView } from "@/lib/social";
+import SocialSyncButton from "./social-sync-button";
 
 export interface SocialLabels {
   title: string;
@@ -11,6 +14,9 @@ export interface SocialLabels {
   languageEn: string;
   languageFr: string;
   platformNames: Record<string, string>;
+  updatedPrefix: string;
+  syncNow: string;
+  syncing: string;
 }
 
 interface RowStyle {
@@ -88,23 +94,50 @@ function StatCell({ snapshot, labels, soft }: { snapshot: SocialSnapshotView | u
   return (
     <div className="space-y-0.5 text-xs leading-tight">
       {lines.map((line) => (
-        <div key={line.key} className="flex items-baseline gap-2">
+        <div key={line.key} className="flex items-baseline">
           <span className={clsx(LABEL_WIDTH, "shrink-0", soft)}>{line.label}</span>
-          <span className="font-medium tabular-nums">{fmt(line.value)}</span>
+          {/* Fixed width + right-align so every value's last digit lands
+              at the same x-position down the whole table, with a
+              consistent gap (not just squeezed against the label). */}
+          <span className="ml-5 w-10 shrink-0 text-right font-medium tabular-nums">{fmt(line.value)}</span>
         </div>
       ))}
     </div>
   );
 }
 
-export default function SocialCard({ snapshots, labels }: { snapshots: SocialSnapshotView[]; labels: SocialLabels }) {
+export default function SocialCard({
+  snapshots,
+  labels,
+  isAdmin,
+  dateLocale,
+}: {
+  snapshots: SocialSnapshotView[];
+  labels: SocialLabels;
+  isAdmin: boolean;
+  dateLocale: Locale | undefined;
+}) {
   const byKey = new Map(snapshots.map((s) => [`${s.platform}|${s.language}`, s]));
   const hasAnyData = snapshots.length > 0;
+  const lastSyncedAt = snapshots.reduce<Date | null>(
+    (latest, s) => (!latest || s.capturedAt > latest ? s.capturedAt : latest),
+    null
+  );
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
+          {lastSyncedAt && (
+            <p className="mt-0.5 text-xs text-soft">
+              {labels.updatedPrefix} {formatDistanceToNow(lastSyncedAt, { addSuffix: true, locale: dateLocale })}
+            </p>
+          )}
+        </div>
+        {isAdmin && <SocialSyncButton label={labels.syncNow} loadingLabel={labels.syncing} />}
+      </div>
       {!hasAnyData ? (
         <p className="mt-3 text-sm text-soft">{labels.empty}</p>
       ) : (
