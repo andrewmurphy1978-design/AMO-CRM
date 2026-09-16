@@ -1,9 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import Sidebar from "./sidebar";
+import AppShell from "./app-shell";
 
 async function handleSignOut() {
   "use server";
@@ -33,36 +32,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/settings", label: t.nav.settings },
   ];
 
-  const AMO_LOGO_URL =
-    "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
-
   return (
-    <div className="flex min-h-screen">
-      <Sidebar
-        navItems={NAV_ITEMS}
-        userName={session?.user?.name}
-        userEmail={session?.user?.email}
-        signOutLabel={t.nav.signOut}
-        signOutAction={handleSignOut}
-      />
-
-      <div className="relative flex flex-1 flex-col">
-        <div className="amo-bg-image amo-bg-image--app" />
-        <div className="amo-bg-overlay amo-bg-overlay--app" />
-        <header className="relative z-10 flex items-center justify-between bg-amo-green px-4 py-3 sm:hidden">
-          <Link href="/" className="flex items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-7 w-7" />
-            <span className="font-display text-sm font-semibold text-amo-white">CRM</span>
-          </Link>
-          <form action={handleSignOut}>
-            <button type="submit" className="text-xs font-medium text-amo-muted">
-              {t.nav.signOut}
-            </button>
-          </form>
-        </header>
-        <main className="relative z-10 flex-1 p-4 sm:p-8">{children}</main>
-      </div>
-    </div>
+    <AppShell
+      navItems={NAV_ITEMS}
+      userName={session?.user?.name}
+      userEmail={session?.user?.email}
+      signOutLabel={t.nav.signOut}
+      signOutAction={handleSignOut}
+    >
+      {children}
+    </AppShell>
   );
 }

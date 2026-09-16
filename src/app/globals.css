@@ -64,8 +64,8 @@ body {
 /* Blurred, ambient brand background. `position: fixed` so it stays put as
    the page scrolls, pinned to the viewport rather than the (possibly much
    taller than one screen) scrolling content. The `--app` variant, used only
-   in the signed-in app shell, is offset past the sidebar's width on sm+
-   screens (where the sidebar is visible) via a later, same-specificity
+   in the signed-in app shell, is offset past the sidebar's current width on
+   sm+ screens (where the sidebar is visible) via a later, same-specificity
    rule that wins by source order — this must never use `left: 0` (plain
    `inset: 0`) there, or it paints over the sidebar again like it did
    before this was scoped. Scaled up slightly to hide the blur's edges. */
@@ -101,7 +101,11 @@ body {
 @media (min-width: 640px) {
   .amo-bg-image--app,
   .amo-bg-overlay--app {
-    left: 16rem; /* matches the sidebar's w-64 */
+    /* `--sidebar-w` is set on the app shell's root by app-shell.tsx and
+       tracks the sidebar's actual current width (16rem expanded, 4rem
+       collapsed), so the background always starts exactly where the
+       sidebar ends instead of leaving (or hiding under) a gap. */
+    left: var(--sidebar-w, 16rem);
   }
 }
 
