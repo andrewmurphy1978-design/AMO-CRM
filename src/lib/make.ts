@@ -54,6 +54,16 @@ export class MakeClient {
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
+      // Make returns 403 "IM002 Insufficient rights" when the API token
+      // itself is valid but wasn't created with the scope a given endpoint
+      // needs (e.g. "Scenarios: Read") — a 401 would mean the key is wrong,
+      // this means the key is right but under-scoped.
+      if (response.status === 403 && text.includes("IM002")) {
+        throw new MakeApiError(
+          "Make rejected this API key for insufficient permissions (IM002). Edit or recreate the key in Make under Profile → API and make sure \"Scenarios: Read\" is checked, then save it here again.",
+          response.status
+        );
+      }
       throw new MakeApiError(`Make API request to ${path} failed with ${response.status}: ${text.slice(0, 300)}`, response.status);
     }
 
