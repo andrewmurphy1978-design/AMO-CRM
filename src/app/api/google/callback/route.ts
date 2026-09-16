@@ -12,7 +12,7 @@ function errorRedirect(base: string, reason: string) {
 export async function GET(request: NextRequest) {
   const session = await auth();
   const base = process.env.NEXTAUTH_URL ?? request.nextUrl.origin;
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session) {
     return NextResponse.redirect(new URL("/settings", base));
   }
 
@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
     }
 
     await saveGoogleTokens(
+      session.user.id,
       {
         accessToken: tokenData.access_token,
         refreshToken: tokenData.refresh_token,

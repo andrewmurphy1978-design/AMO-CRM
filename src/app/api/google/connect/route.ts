@@ -8,7 +8,7 @@ import { auth } from "@/lib/auth";
 export async function GET(request: NextRequest) {
   const session = await auth();
   const base = process.env.NEXTAUTH_URL ?? request.nextUrl.origin;
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session) {
     return NextResponse.redirect(new URL("/settings", base));
   }
 

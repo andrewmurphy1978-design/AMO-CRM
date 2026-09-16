@@ -103,9 +103,13 @@ export async function saveAutoSyncTime(
   return { success: t.actions.scheduleSaved };
 }
 
+// Google is a personal, per-user connection (unlike the org-wide
+// integrations above), so any signed-in user can disconnect their own —
+// no admin check.
 export async function disconnectGoogleAccount(): Promise<void> {
-  await requireAdmin();
-  await disconnectGoogle();
+  const session = await auth();
+  if (!session) throw new Error("Not signed in");
+  await disconnectGoogle(session.user.id);
   revalidatePath("/settings");
   revalidatePath("/");
 }

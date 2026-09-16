@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDistanceToNow, format, isToday, isYesterday, type Locale } from "date-fns";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -84,6 +85,7 @@ function daysFromNow(days: number): Date {
 }
 
 export default async function DashboardPage() {
+  const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
@@ -139,7 +141,7 @@ export default async function DashboardPage() {
   // CalendarCardServer themselves — those render concurrently as sibling
   // Suspense boundaries, and each doing its own fresh-connection Prisma
   // read at the same time is what was tripping Cloudflare's Error 1102.
-  const googleAccessToken = await getValidAccessToken();
+  const googleAccessToken = session ? await getValidAccessToken(session.user.id) : null;
 
   const weatherLabels = {
     title: t.dashboard.weatherTitle,

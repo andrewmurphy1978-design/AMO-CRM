@@ -8,7 +8,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const accessToken = await getValidAccessToken();
+  const accessToken = await getValidAccessToken(session.user.id);
   if (!accessToken) {
     return NextResponse.json({ error: "not_connected" }, { status: 502 });
   }

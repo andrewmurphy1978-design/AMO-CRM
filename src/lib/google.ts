@@ -1,12 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
-// One connected Google account (andrewmurphy1978@gmail.com), used for both
-// Gmail and Google Calendar via a single OAuth grant (gmail.readonly +
-// calendar.readonly). Tokens are stored the same way the systeme.io/Make
-// API keys are: encrypted as one JSON blob in IntegrationSetting's
-// apiKeyEncrypted column, keeping this on the same established pattern
-// instead of adding new columns/tables for one more provider.
+// One personal Google connection per CRM user (Gmail + Calendar,
+// read-only) — every team member connects their own account (their real
+// Gmail, or a Gmail address their IONOS mailbox forwards to), so this is
+// keyed to User.id via the GoogleAccount model rather than the shared,
+// provider-keyed IntegrationSetting table the org-wide integrations
+// (systeme.io, Make) use.
 interface GoogleTokens {
   accessToken: string;
   refreshToken: string;
@@ -18,13 +18,12 @@ interface StoredGoogleData {
   email: string | null;
 }
 
-async function loadStored(): Promise<StoredGoogleData | null> {
-  const row = await prisma.integrationSetting.findUnique({ where: { provider: "google" } });
-  if (!row?.apiKeyEncrypted) return null;
+async function loadStored(userId: string): Promise<StoredGoogleData | null> {
+  const row = await prisma.googleAccount.findUnique({ where: { userId } });
+  if (!row) return null;
   try {
-    const tokens = JSON.parse(await decryptSecret(row.apiKeyEncrypted)) as GoogleTokens;
-    const email = (row.metadata as { email?: string } | null)?.email ?? null;
-    return { tokens, email };
+    const tokens = JSON.parse(await decryptSecret(row.tokensEncrypted)) as GoogleTokens;
+    return { tokens, email: row.email };
   } catch {
     return null;
   }
@@ -35,42 +34,44 @@ async function loadStored(): Promise<StoredGoogleData | null> {
 // routine access-token refresh) won't have one, so the existing one is
 // carried forward instead of being wiped out.
 export async function saveGoogleTokens(
+  userId: string,
   next: { accessToken: string; refreshToken?: string; expiresAt: string },
   email?: string | null
 ): Promise<void> {
-  const existing = await loadStored();
+  const existing = await loadStored(userId);
   const refreshToken = next.refreshToken ?? existing?.tokens.refreshToken;
   if (!refreshToken) {
     throw new Error("Google didn't return a refresh token — disconnect and reconnect to grant access again.");
   }
 
-  const encrypted = await encryptSecret(
+  const tokensEncrypted = await encryptSecret(
     JSON.stringify({ accessToken: next.accessToken, refreshToken, expiresAt: next.expiresAt })
   );
-  const metadata = { email: email ?? existing?.email ?? null };
+  const finalEmail = email ?? existing?.email ?? null;
 
-  await prisma.integrationSetting.upsert({
-    where: { provider: "google" },
-    update: { apiKeyEncrypted: encrypted, metadata },
-    create: { provider: "google", apiKeyEncrypted: encrypted, metadata },
+  await prisma.googleAccount.upsert({
+    where: { userId },
+    update: { tokensEncrypted, email: finalEmail },
+    create: { userId, tokensEncrypted, email: finalEmail },
   });
 }
 
-export async function disconnectGoogle(): Promise<void> {
-  await prisma.integrationSetting.deleteMany({ where: { provider: "google" } });
+export async function disconnectGoogle(userId: string): Promise<void> {
+  await prisma.googleAccount.deleteMany({ where: { userId } });
 }
 
-export async function getGoogleConnection(): Promise<{ email: string | null } | null> {
-  const row = await prisma.integrationSetting.findUnique({ where: { provider: "google" } });
-  if (!row?.apiKeyEncrypted) return null;
-  return { email: (row.metadata as { email?: string } | null)?.email ?? null };
+export async function getGoogleConnection(userId: string): Promise<{ email: string | null } | null> {
+  const row = await prisma.googleAccount.findUnique({ where: { userId } });
+  if (!row) return null;
+  return { email: row.email };
 }
 
-// Returns a valid access token, refreshing it first if it's expired (or
-// expiring within a minute). Returns null when Google isn't connected, or
-// the refresh itself fails (e.g. the grant was revoked).
-export async function getValidAccessToken(): Promise<string | null> {
-  const stored = await loadStored();
+// Returns a valid access token for this user, refreshing it first if it's
+// expired (or expiring within a minute). Returns null when this user
+// hasn't connected Google, or the refresh itself fails (e.g. the grant
+// was revoked).
+export async function getValidAccessToken(userId: string): Promise<string | null> {
+  const stored = await loadStored(userId);
   if (!stored) return null;
 
   if (new Date(stored.tokens.expiresAt).getTime() - Date.now() > 60_000) {
@@ -96,7 +97,7 @@ export async function getValidAccessToken(): Promise<string | null> {
     const data = (await res.json()) as { access_token?: string; expires_in?: number };
     if (!data.access_token) return null;
 
-    await saveGoogleTokens({
+    await saveGoogleTokens(userId, {
       accessToken: data.access_token,
       expiresAt: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString(),
     });

@@ -52,8 +52,25 @@ model User {
   assignedTasks   Task[]             @relation("TaskAssignee")
   activityEntries ActivityLogEntry[]
   interactions    Interaction[]
+  googleAccount   GoogleAccount?
 
   @@map("users")
+}
+
+// One personal Google connection per CRM user (Gmail + Calendar,
+// read-only) — unlike IntegrationSetting below, this is never shared
+// across the team, so it's its own model keyed to User rather than a
+// provider-keyed singleton row.
+model GoogleAccount {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email           String?
+  tokensEncrypted String   @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("google_accounts")
 }
 
 // ---------------------------------------------------------------------------

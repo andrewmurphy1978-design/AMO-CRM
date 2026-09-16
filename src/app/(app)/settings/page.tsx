@@ -33,7 +33,7 @@ export default async function SettingsPage({
     where: { provider: "make" },
   });
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
-  const googleConnection = await getGoogleConnection();
+  const googleConnection = session ? await getGoogleConnection(session.user.id) : null;
   const users = isAdmin ? await prisma.user.findMany({ orderBy: { name: "asc" } }) : [];
 
   return (
@@ -64,6 +64,47 @@ export default async function SettingsPage({
             <p className="mt-1 text-sm text-soft">{t.settings.accountDesc}</p>
             <div className="mt-4">
               <ChangePasswordForm lang={lang} />
+            </div>
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.googleTitle}</h2>
+            <p className="mt-1 text-sm text-soft">{t.settings.googleDesc}</p>
+            {googleStatus === "error" && (
+              <p className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+                {googleErrorReason || "Connection failed."}
+              </p>
+            )}
+            {googleStatus === "connected" && !googleConnection && (
+              <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Google said the connection succeeded, but nothing was saved — please try again.
+              </p>
+            )}
+            <div className="mt-4">
+              {googleConnection ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-ink">
+                    {t.settings.googleConnectedAs}{" "}
+                    <span className="font-medium">{googleConnection.email ?? "—"}</span>
+                  </p>
+                  <form action={disconnectGoogleAccount}>
+                    <button
+                      type="submit"
+                      className="rounded-lg border border-card-border px-3 py-1.5 text-sm text-soft hover:bg-black/5"
+                    >
+                      {t.settings.googleDisconnect}
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                <a
+                  href="/api/google/connect"
+                  className="btn-primary inline-block rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
+                >
+                  {t.settings.googleConnect}
+                </a>
+              )}
             </div>
           </section>
         </div>
@@ -118,48 +159,6 @@ export default async function SettingsPage({
                   lastSyncError={makeIntegration?.lastSyncError ?? null}
                   lang={lang}
                 />
-              ) : (
-                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
-              )}
-            </div>
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.googleTitle}</h2>
-            <p className="mt-1 text-sm text-soft">{t.settings.googleDesc}</p>
-            {googleStatus === "error" && (
-              <p className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
-                {googleErrorReason || "Connection failed."}
-              </p>
-            )}
-            {googleStatus === "connected" && !googleConnection && (
-              <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Google said the connection succeeded, but nothing was saved — please try again.
-              </p>
-            )}
-            <div className="mt-4">
-              {isAdmin ? (
-                googleConnection ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-ink">
-                      {t.settings.googleConnectedAs}{" "}
-                      <span className="font-medium">{googleConnection.email ?? "—"}</span>
-                    </p>
-                    <form action={disconnectGoogleAccount}>
-                      <button
-                        type="submit"
-                        className="rounded-lg border border-card-border px-3 py-1.5 text-sm text-soft hover:bg-black/5"
-                      >
-                        {t.settings.googleDisconnect}
-                      </button>
-                    </form>
-                  </div>
-                ) : (
-                  <a href="/api/google/connect" className="btn-primary inline-block rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
-                    {t.settings.googleConnect}
-                  </a>
-                )
               ) : (
                 <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
               )}
