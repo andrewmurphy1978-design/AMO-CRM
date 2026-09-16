@@ -153,9 +153,12 @@ function DayColumn({
         const top = (startMin / 60) * ROW_HEIGHT;
         const height = Math.max(MIN_BLOCK_HEIGHT, ((endMin - startMin) / 60) * ROW_HEIGHT - 1);
         return (
-          <div
+          <a
             key={event.id}
-            className="absolute overflow-hidden rounded px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm"
+            href={event.htmlLink ?? undefined}
+            target={event.htmlLink ? "_blank" : undefined}
+            rel={event.htmlLink ? "noopener noreferrer" : undefined}
+            className="absolute block overflow-hidden rounded px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
             style={{
               top,
               height,
@@ -163,11 +166,12 @@ function DayColumn({
               width: `${100 / cols}%`,
               backgroundColor: color.bg,
               color: color.fg,
+              cursor: event.htmlLink ? "pointer" : "default",
             }}
             title={event.title}
           >
             {event.title}
-          </div>
+          </a>
         );
       })}
       {events.length === 0 && (
@@ -294,13 +298,21 @@ function UpcomingTable({
                     {eventsByDay[i].map((event) => {
                       const color = eventColor(event.colorId);
                       return (
-                        <div key={event.id} className="flex items-center gap-1.5">
-                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color.bg }} />
-                          <span className="text-ink">{event.title}</span>
+                        <a
+                          key={event.id}
+                          href={event.htmlLink ?? undefined}
+                          target={event.htmlLink ? "_blank" : undefined}
+                          rel={event.htmlLink ? "noopener noreferrer" : undefined}
+                          className="flex items-center gap-1.5 rounded px-1.5 py-1 transition-opacity hover:opacity-90"
+                          style={{ backgroundColor: color.bg, color: color.fg, cursor: event.htmlLink ? "pointer" : "default" }}
+                        >
                           {!event.allDay && event.start && (
-                            <span className="text-soft">{format(new Date(event.start), "p", { locale: dateLocale })}</span>
+                            <span className="shrink-0 font-medium">
+                              {format(new Date(event.start), "p", { locale: dateLocale })}
+                            </span>
                           )}
-                        </div>
+                          <span className="truncate">{event.title}</span>
+                        </a>
                       );
                     })}
                   </div>

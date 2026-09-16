@@ -181,6 +181,7 @@ export interface CalendarEventSummary {
   end: string | null; // ISO datetime, or an ISO date for all-day events
   allDay: boolean;
   colorId: string | null; // Google Calendar's per-event colorId ("1".."11"), null = calendar's default color
+  htmlLink: string | null; // opens this event directly in Google Calendar's own UI
 }
 
 // Same reasoning as getRecentEmails above — takes the token directly so no
@@ -212,6 +213,7 @@ export async function getUpcomingEvents(accessToken: string): Promise<CalendarEv
         start?: { dateTime?: string; date?: string };
         end?: { dateTime?: string; date?: string };
         colorId?: string;
+        htmlLink?: string;
       }[];
     };
     return (data.items ?? []).map((item) => ({
@@ -221,6 +223,7 @@ export async function getUpcomingEvents(accessToken: string): Promise<CalendarEv
       end: item.end?.dateTime ?? item.end?.date ?? null,
       allDay: !item.start?.dateTime,
       colorId: item.colorId ?? null,
+      htmlLink: item.htmlLink ?? null,
     }));
   } catch {
     return null;

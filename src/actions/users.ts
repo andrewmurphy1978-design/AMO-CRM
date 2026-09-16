@@ -213,3 +213,23 @@ export async function changePassword(
 
   return { success: t.actions.passwordUpdated };
 }
+
+export async function saveTimeFormat(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const timeFormat = String(formData.get("timeFormat") ?? "");
+  if (timeFormat !== "HOUR24" && timeFormat !== "HOUR12") {
+    return { error: t.actions.invalidInput };
+  }
+
+  await prisma.user.update({ where: { id: session.user.id }, data: { timeFormat } });
+  revalidatePath("/settings");
+  revalidatePath("/");
+
+  return { success: t.actions.timeFormatSaved };
+}

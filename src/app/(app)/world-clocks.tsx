@@ -13,7 +13,7 @@ const CLOCKS = [
   { label: "New Zealand", timeZone: "Pacific/Auckland" },
 ] as const;
 
-export default function WorldClocks({ title }: { title: string }) {
+export default function WorldClocks({ title, hour12 = false }: { title: string; hour12?: boolean }) {
   const [now, setNow] = useState<Date | null>(() => new Date());
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function WorldClocks({ title }: { title: string }) {
                     timeZone: clock.timeZone,
                     hour: "2-digit",
                     minute: "2-digit",
-                    hour12: false,
+                    hour12,
                   }).format(now)
                 : "--:--"}
             </p>

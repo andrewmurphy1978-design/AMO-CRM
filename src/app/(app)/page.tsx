@@ -7,6 +7,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import WorldClocks from "./world-clocks";
+import DateTimeCard from "./date-time-card";
 import CardSkeleton from "./card-skeleton";
 import WeatherCardServer from "./weather-card-server";
 import NewsCardServer from "./news-card-server";
@@ -17,6 +18,10 @@ import SocialCard from "./social-card";
 import { getValidAccessToken } from "@/lib/google";
 import { getLatestSocialSnapshots } from "@/lib/social";
 import type { AutomationRun } from "@prisma/client";
+
+// Same full lockup used in the sidebar when expanded (src/app/(app)/sidebar.tsx).
+const AMO_LOGO_URL =
+  "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
 
 // "about 8 hours ago" is vague for something you'd want to check against a
 // posting schedule — this gives "Today at 3:15 PM" / "Yesterday at 9:00 AM" /
@@ -144,6 +149,7 @@ export default async function DashboardPage() {
   // read at the same time is what was tripping Cloudflare's Error 1102.
   const googleAccessToken = session ? await getValidAccessToken(session.user.id) : null;
   const socialSnapshots = await getLatestSocialSnapshots();
+  const hour12 = session?.user.timeFormat === "HOUR12";
 
   const weatherLabels = {
     title: t.dashboard.weatherTitle,
@@ -273,10 +279,14 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-ink">{t.dashboard.title}</h1>
-        <p className="mt-1 text-sm text-soft">{t.dashboard.subtitle}</p>
-      </div>
+      <header className="sticky top-0 z-20 -mx-4 -mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-8 w-auto object-contain sm:h-9" />
+        <h1 className="justify-self-center font-display text-lg font-semibold text-amo-white sm:text-xl">
+          {t.dashboard.title}
+        </h1>
+        <span aria-hidden />
+      </header>
 
       {!integration?.apiKeyEncrypted && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -400,6 +410,13 @@ export default async function DashboardPage() {
             <CalendarCardServer accessToken={googleAccessToken} lang={lang} labels={calendarLabels} />
           </Suspense>
 
+          <SocialCard
+            snapshots={socialSnapshots}
+            labels={socialLabels}
+            isAdmin={session?.user.role === "ADMIN"}
+            dateLocale={dateLocale}
+          />
+
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
             <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.automationsTitle}</h2>
@@ -443,13 +460,6 @@ export default async function DashboardPage() {
               </ul>
             )}
           </div>
-
-          <SocialCard
-            snapshots={socialSnapshots}
-            labels={socialLabels}
-            isAdmin={session?.user.role === "ADMIN"}
-            dateLocale={dateLocale}
-          />
         </div>
 
         {/* Right column: general info. Each card fetches real, sometimes
@@ -457,10 +467,11 @@ export default async function DashboardPage() {
             (and the nav switch to get here) render immediately instead of
             waiting on all three. */}
         <div className="space-y-6">
+          <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
           <Suspense fallback={<CardSkeleton title={t.dashboard.weatherTitle} />}>
             <WeatherCardServer lang={lang} labels={weatherLabels} />
           </Suspense>
-          <WorldClocks title="World clocks" />
+          <WorldClocks title="World clocks" hour12={hour12} />
           <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
             <NewsCardServer labels={newsLabels} />
           </Suspense>

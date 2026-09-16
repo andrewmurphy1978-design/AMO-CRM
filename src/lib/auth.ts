@@ -42,6 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           role: user.role,
           language: user.language,
+          timeFormat: user.timeFormat,
         };
       },
     }),
@@ -52,6 +53,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role;
         token.id = user.id;
         token.language = user.language;
+        token.timeFormat = user.timeFormat;
       }
       return token;
     },
@@ -60,6 +62,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as "ADMIN" | "MEMBER";
         session.user.language = (token.language as "EN" | "FR") ?? "EN";
+        session.user.timeFormat = (token.timeFormat as "HOUR24" | "HOUR12") ?? "HOUR24";
       }
       return session;
     },

@@ -1,10 +1,11 @@
-import type { UserRole, Language } from "@prisma/client";
+import type { UserRole, Language, TimeFormat } from "@prisma/client";
 import "next-auth";
 
 declare module "next-auth" {
   interface User {
     role?: UserRole;
     language?: Language;
+    timeFormat?: TimeFormat;
   }
 
   interface Session {
@@ -12,6 +13,7 @@ declare module "next-auth" {
       id: string;
       role: UserRole;
       language: Language;
+      timeFormat: TimeFormat;
     } & DefaultSessionUser;
   }
 }

@@ -7,6 +7,7 @@ import MakeForm from "./make-form";
 import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buffer-form";
 import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
+import TimeFormatForm from "./time-format-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 
@@ -86,6 +87,7 @@ export default async function SettingsPage({
             <div className="mt-4">
               <ChangePasswordForm lang={lang} />
             </div>
+            {session && <TimeFormatForm lang={lang} timeFormat={session.user.timeFormat} />}
           </section>
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
