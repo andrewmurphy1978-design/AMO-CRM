@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { saveGoogleTokens } from "@/lib/google";
+import { withScopedPrismaClient } from "@/lib/prisma";
 
 function errorRedirect(base: string, reason: string) {
   const url = new URL("/settings", base);
@@ -61,14 +62,20 @@ export async function GET(request: NextRequest) {
       // Non-critical — the connection still works without a display email.
     }
 
-    await saveGoogleTokens(
-      session.user.id,
-      {
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        expiresAt: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
-      },
-      email
+    // saveGoogleTokens reads the existing row and then writes the new one —
+    // one shared client for both instead of two fresh connections (see
+    // src/lib/prisma.ts on why that matters for Cloudflare's Error 1102).
+    await withScopedPrismaClient((db) =>
+      saveGoogleTokens(
+        session.user.id,
+        {
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token,
+          expiresAt: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+        },
+        email,
+        db
+      )
     );
 
     return NextResponse.redirect(new URL("/settings?google=connected", base));
