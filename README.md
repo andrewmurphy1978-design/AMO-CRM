@@ -60,6 +60,7 @@ Fill in:
 | `ENCRYPTION_KEY` | Random secret used to encrypt your systeme.io API key at rest — generate with `openssl rand -base64 32` |
 | `CRON_SECRET` | (Optional) protects the scheduled sync endpoint |
 | `ZAPIER_WEBHOOK_SECRET` | Protects `/api/webhooks/zapier` — each Zap's "Webhooks by Zapier" step sends `Authorization: Bearer <this value>` |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth credentials for the Dashboard's Gmail/Calendar integration — see below |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADMIN_NAME` | Creates your first admin login when you run the seed script |
 
 ### 4. Set up the database
@@ -119,6 +120,35 @@ Deploying somewhere other than Cloudflare Pages/Workers? On Vercel, use
 > slightly different field names, adjust `mapContact` in
 > `src/lib/systemeio.ts` — everything downstream (the sync job, the UI)
 > consumes its normalized output, so that's the only place to change.
+
+### 7. Connect Google (Gmail + Calendar)
+
+The Dashboard's Email and Calendar cards need their own Google OAuth app —
+they read your Gmail inbox and Calendar, which is separate from (and can't
+reuse) the Credentials-based login this app uses for its own sign-in.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/): create a
+   project (or reuse one), then **APIs & Services → Library** and enable the
+   **Gmail API** and **Google Calendar API**.
+2. **APIs & Services → OAuth consent screen**: User type **External**, fill
+   in the app name/support email, add scopes
+   `https://www.googleapis.com/auth/gmail.readonly` and
+   `https://www.googleapis.com/auth/calendar.readonly`, and add your own
+   Google account under **Test users**. Leave the app in "Testing" — that
+   avoids Google's app verification review entirely for personal use.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**,
+   application type **Web application**, and add this exact **Authorized
+   redirect URI**: `<your NEXTAUTH_URL>/api/google/callback` (e.g.
+   `https://crm.andrewmurphy.online/api/google/callback` in production).
+4. Set the resulting Client ID/Secret as `GOOGLE_CLIENT_ID` /
+   `GOOGLE_CLIENT_SECRET` (as Cloudflare secrets in production —
+   `npx wrangler secret put GOOGLE_CLIENT_ID`, same for the secret — or in
+   `.env` locally).
+5. In the CRM: **Settings → Google integration → Connect Google Account**.
+
+Only Gmail is supported this way — a separately hosted mailbox like an
+IONOS-forwarded address has no equivalent OAuth API, so the Email card just
+links out to its webmail instead.
 
 ## Data model
 

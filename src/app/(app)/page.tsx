@@ -11,6 +11,8 @@ import CardSkeleton from "./card-skeleton";
 import WeatherCardServer from "./weather-card-server";
 import NewsCardServer from "./news-card-server";
 import MarketsCardServer from "./markets-card-server";
+import EmailCardServer from "./email-card-server";
+import CalendarCardServer from "./calendar-card-server";
 import type { AutomationRun } from "@prisma/client";
 
 // "about 8 hours ago" is vague for something you'd want to check against a
@@ -171,6 +173,30 @@ export default async function DashboardPage() {
     crypto: t.dashboard.marketsCrypto,
   };
 
+  const emailLabels = {
+    title: t.dashboard.emailTitle,
+    refresh: t.dashboard.refresh,
+    refreshing: t.dashboard.refreshing,
+    notConnected: t.dashboard.emailNotConnected,
+    connectInSettings: t.dashboard.emailConnectInSettings,
+    noUnread: t.dashboard.emailNoUnread,
+    unreadOne: t.dashboard.emailUnreadOne,
+    unreadOtherTemplate: t.dashboard.emailUnreadOtherTemplate,
+    openInGmail: t.dashboard.openInGmail,
+    openIonosWebmail: t.dashboard.openIonosWebmail,
+  };
+  const calendarLabels = {
+    title: t.dashboard.calendarTitle,
+    refresh: t.dashboard.refresh,
+    refreshing: t.dashboard.refreshing,
+    notConnected: t.dashboard.calendarNotConnected,
+    connectInSettings: t.dashboard.emailConnectInSettings,
+    noEvents: t.dashboard.calendarNoEvents,
+    today: t.dashboard.calendarToday,
+    tomorrow: t.dashboard.calendarTomorrow,
+    openInCalendar: t.dashboard.openInCalendar,
+  };
+
   const stats = [
     {
       label: t.dashboard.statTotalContacts,
@@ -245,7 +271,9 @@ export default async function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left column: email, projects, tasks, activity. */}
         <div className="space-y-6">
-          <ComingSoonCard title={t.dashboard.emailTitle} description={t.dashboard.emailComingSoon} />
+          <Suspense fallback={<CardSkeleton title={t.dashboard.emailTitle} />}>
+            <EmailCardServer labels={emailLabels} />
+          </Suspense>
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
@@ -328,7 +356,9 @@ export default async function DashboardPage() {
 
         {/* Middle column: calendar, automations, social analytics. */}
         <div className="space-y-6">
-          <ComingSoonCard title={t.dashboard.calendarTitle} description={t.dashboard.calendarComingSoon} />
+          <Suspense fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}>
+            <CalendarCardServer lang={lang} labels={calendarLabels} />
+          </Suspense>
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />

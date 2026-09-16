@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
 import { runSystemeIoSync } from "@/lib/sync";
+import { disconnectGoogle } from "@/lib/google";
 import { getDict } from "@/lib/i18n/dictionaries";
 
 async function requireAdmin() {
@@ -100,4 +101,11 @@ export async function saveAutoSyncTime(
 
   revalidatePath("/settings");
   return { success: t.actions.scheduleSaved };
+}
+
+export async function disconnectGoogleAccount(): Promise<void> {
+  await requireAdmin();
+  await disconnectGoogle();
+  revalidatePath("/settings");
+  revalidatePath("/");
 }
