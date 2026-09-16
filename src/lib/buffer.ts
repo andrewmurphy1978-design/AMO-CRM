@@ -104,6 +104,11 @@ export class BufferClient {
   }
 }
 
+// "andrewlmurphy" is Andrew's personal LinkedIn profile, connected to
+// Buffer alongside the two company pages — it isn't a language variant of
+// anything and shouldn't be folded into either EN or FR company stats.
+const EXCLUDED_CHANNEL_NAMES = new Set(["andrewlmurphy"]);
+
 const SERVICE_TO_PLATFORM: Record<string, SocialPlatform> = {
   instagram: "instagram",
   tiktok: "tiktok",
@@ -184,6 +189,7 @@ async function runBufferSyncWith(db: PrismaClient): Promise<BufferSyncResult> {
       // becomes one aggregatedPostMetrics call.
       const channelIdsByKey = new Map<string, string[]>();
       for (const channel of channels) {
+        if (EXCLUDED_CHANNEL_NAMES.has(channel.name.toLowerCase())) continue;
         const platform = SERVICE_TO_PLATFORM[channel.service];
         if (!platform) continue;
 

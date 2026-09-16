@@ -60,24 +60,38 @@ function fmt(n: number): string {
   return n.toLocaleString();
 }
 
+interface StatLine {
+  key: string;
+  label: string;
+  value: number;
+}
+
+// Fixed label width (not %-based) so a number's left edge lands at the
+// same x-position in every cell across the whole table — not just within
+// one platform's row — regardless of how long that row's own labels are.
+const LABEL_WIDTH = "w-[4.5rem]";
+
 function StatCell({ snapshot, labels, soft }: { snapshot: SocialSnapshotView | undefined; labels: SocialLabels; soft: string }) {
   if (!snapshot) return <span className={soft}>—</span>;
 
-  const lines: string[] = [];
-  if (snapshot.followers !== null) lines.push(`${labels.followers}: ${fmt(snapshot.followers)}`);
-  if (snapshot.engagement !== null) lines.push(`${labels.engagement}: ${fmt(snapshot.engagement)}`);
-  if (snapshot.views !== null) lines.push(`${labels.views}: ${fmt(snapshot.views)}`);
+  const lines: StatLine[] = [];
+  if (snapshot.followers !== null) lines.push({ key: "followers", label: labels.followers, value: snapshot.followers });
+  if (snapshot.engagement !== null) lines.push({ key: "engagement", label: labels.engagement, value: snapshot.engagement });
+  if (snapshot.views !== null) lines.push({ key: "views", label: labels.views, value: snapshot.views });
   for (const stat of snapshot.extraStats) {
     // Already surfaced as "views" above — don't show them twice.
     if (stat.key === "reach" || stat.key === "impressions") continue;
-    lines.push(`${labels.statLabels[stat.key]}: ${fmt(stat.value)}`);
+    lines.push({ key: stat.key, label: labels.statLabels[stat.key], value: stat.value });
   }
 
   if (lines.length === 0) return <span className={soft}>—</span>;
   return (
     <div className="space-y-0.5 text-xs leading-tight">
       {lines.map((line) => (
-        <div key={line}>{line}</div>
+        <div key={line.key} className="flex items-baseline gap-2">
+          <span className={clsx(LABEL_WIDTH, "shrink-0", soft)}>{line.label}</span>
+          <span className="font-medium tabular-nums">{fmt(line.value)}</span>
+        </div>
       ))}
     </div>
   );
