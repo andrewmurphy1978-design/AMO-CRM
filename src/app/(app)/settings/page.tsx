@@ -1,10 +1,16 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import SystemeIoForm from "./systeme-io-form";
+import MakeForm from "./make-form";
 import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+
+interface MakeMetadata {
+  zone?: string;
+  teamId?: string;
+}
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -16,6 +22,10 @@ export default async function SettingsPage() {
   const integration = await prisma.integrationSetting.findUnique({
     where: { provider: "systeme_io" },
   });
+  const makeIntegration = await prisma.integrationSetting.findUnique({
+    where: { provider: "make" },
+  });
+  const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
   const users = isAdmin ? await prisma.user.findMany({ orderBy: { name: "asc" } }) : [];
 
   return (
@@ -84,6 +94,44 @@ export default async function SettingsPage() {
               )}
             </div>
           </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.makeTitle}</h2>
+            <p className="mt-1 text-sm text-soft">{t.settings.makeDesc}</p>
+            <div className="mt-4">
+              {isAdmin ? (
+                <MakeForm
+                  connected={Boolean(makeIntegration?.apiKeyEncrypted)}
+                  zone={makeMetadata.zone ?? "us2.make.com"}
+                  teamId={makeMetadata.teamId ?? ""}
+                  lastSyncedAt={makeIntegration?.lastSyncedAt?.toISOString() ?? null}
+                  lastSyncStatus={makeIntegration?.lastSyncStatus ?? null}
+                  lastSyncError={makeIntegration?.lastSyncError ?? null}
+                  lang={lang}
+                />
+              ) : (
+                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
+              )}
+            </div>
+          </section>
+
+          {isAdmin && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.settings.zapierTitle}</h2>
+              <p className="mt-1 text-sm text-soft">{t.settings.zapierDesc}</p>
+              <p className="mt-3 text-sm text-ink">{t.automations.zapierSetupNote}</p>
+              <div className="mt-2">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
+                  {t.automations.webhookUrlLabel}
+                </label>
+                <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
+                  https://crm.andrewmurphy.online/api/webhooks/zapier
+                </code>
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>

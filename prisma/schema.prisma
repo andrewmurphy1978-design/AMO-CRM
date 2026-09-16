@@ -535,18 +535,42 @@ model Interaction {
 
 model IntegrationSetting {
   id              String    @id @default(cuid())
-  provider        String    @unique // "systeme_io"
+  provider        String    @unique // "systeme_io" | "make"
   apiKeyEncrypted String?
   lastSyncedAt    DateTime?
   lastSyncStatus  String?
   lastSyncError   String?   @db.Text
   autoSyncEnabled Boolean   @default(false)
   autoSyncTime    String    @default("03:00") // "HH:MM", America/Montreal time
+  // Provider-specific extra config that doesn't need its own columns/table —
+  // e.g. Make's zone + teamId.
+  metadata        Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("integration_settings")
+}
+
+// Automation run history shown on the Dashboard's Automations section.
+// "make" rows come from polling the Make API; "zapier" rows arrive via a
+// webhook step added to each Zap (there's no usable "list my recent Zap
+// runs" API for a personal Zapier account).
+model AutomationRun {
+  id         String   @id @default(cuid())
+  source     String // "make" | "zapier"
+  externalId String? // Make execution id / Zapier-provided id
+  name       String? // scenario/zap name
+  status     String // "success" | "error"
+  message    String? @db.Text
+  occurredAt DateTime
+  raw        Json?
+
+  createdAt DateTime @default(now())
+
+  @@unique([source, externalId])
+  @@index([source, occurredAt])
+  @@map("automation_runs")
 }
 
 model SyncLog {
