@@ -112,17 +112,22 @@ const SERVICE_TO_PLATFORM: Record<string, SocialPlatform> = {
   linkedin: "linkedin",
 };
 
-// Andrew names his channels with an ".en"/".fr" (or "(EN)"/"(FR)") marker
-// (confirmed convention — see the existing Instagram channels
-// "andrewmurphyonline.en" / "andrewmurphyonline.fr" from the posting
-// scenario), which is how the two mixed-language accounts (Facebook,
-// LinkedIn — each holding both an EN and FR channel) get split.
-// Returns null when a name doesn't match either, so the caller can log it
-// as a warning instead of silently guessing.
+// Andrew's channel names don't follow one single convention across
+// platforms — confirmed real examples: "andrewmurphyonline.en" (dot),
+// "andrew-murphy-online-francais" (spelled out, no accent), "AMurphyOnlineEN"
+// (bare suffix, no separator at all) — so this checks, in order: a
+// spelled-out language word, a ".en"/".fr" or "(en)"/"(fr)" marker, then
+// finally a bare "en"/"fr" suffix at the very end of the name. Returns
+// null when nothing matches, so the caller can log it as a warning
+// instead of silently guessing.
 function detectLanguageFromChannelName(name: string): SocialLanguage | null {
   const lower = name.toLowerCase();
-  if (/\bfr(ench|ançais)?\b/.test(lower) || lower.includes(".fr") || /\(fr\)/.test(lower)) return "FR";
-  if (/\ben(glish)?\b/.test(lower) || lower.includes(".en") || /\(en\)/.test(lower)) return "EN";
+  if (/fran[cç]ais|french/.test(lower)) return "FR";
+  if (/english|anglais/.test(lower)) return "EN";
+  if (lower.includes(".fr") || /\(fr\)/.test(lower)) return "FR";
+  if (lower.includes(".en") || /\(en\)/.test(lower)) return "EN";
+  if (/fr$/.test(lower)) return "FR";
+  if (/en$/.test(lower)) return "EN";
   return null;
 }
 
