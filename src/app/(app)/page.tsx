@@ -1,17 +1,16 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { formatDistanceToNow, format, isToday, isYesterday, type Locale } from "date-fns";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
-import { getWeather, DEFAULT_WEATHER_COORDS } from "@/lib/weather";
-import { getNewsDigest } from "@/lib/news";
-import { getMarketsSnapshot } from "@/lib/markets";
 import WorldClocks from "./world-clocks";
 import ComingSoonCard from "./coming-soon-card";
-import WeatherCard from "./weather-card";
-import NewsCard from "./news-card";
-import MarketsCard from "./markets-card";
+import CardSkeleton from "./card-skeleton";
+import WeatherCardServer from "./weather-card-server";
+import NewsCardServer from "./news-card-server";
+import MarketsCardServer from "./markets-card-server";
 import type { AutomationRun } from "@prisma/client";
 
 // "about 8 hours ago" is vague for something you'd want to check against a
@@ -133,14 +132,6 @@ export default async function DashboardPage() {
     take: 30,
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
-
-  // Plain external HTTP fetches, not Prisma/Hyperdrive calls, so unlike the
-  // queries above these are safe to run concurrently.
-  const [initialWeather, initialNews, initialMarkets] = await Promise.all([
-    getWeather(DEFAULT_WEATHER_COORDS.lat, DEFAULT_WEATHER_COORDS.lon),
-    getNewsDigest(lang),
-    getMarketsSnapshot(),
-  ]);
 
   const weatherLabels = {
     title: t.dashboard.weatherTitle,
@@ -386,12 +377,21 @@ export default async function DashboardPage() {
           <ComingSoonCard title={t.dashboard.socialTitle} description={t.dashboard.socialComingSoon} />
         </div>
 
-        {/* Right column: general info. */}
+        {/* Right column: general info. Each card fetches real, sometimes
+            slow, external data — Suspense lets the rest of the dashboard
+            (and the nav switch to get here) render immediately instead of
+            waiting on all three. */}
         <div className="space-y-6">
-          <WeatherCard initial={initialWeather} lang={lang} labels={weatherLabels} />
+          <Suspense fallback={<CardSkeleton title={t.dashboard.weatherTitle} />}>
+            <WeatherCardServer lang={lang} labels={weatherLabels} />
+          </Suspense>
           <WorldClocks title="World clocks" />
-          <NewsCard initial={initialNews} lang={lang} labels={newsLabels} />
-          <MarketsCard initial={initialMarkets} labels={marketsLabels} />
+          <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
+            <NewsCardServer lang={lang} labels={newsLabels} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton title={t.dashboard.marketsTitle} />}>
+            <MarketsCardServer labels={marketsLabels} />
+          </Suspense>
         </div>
       </div>
     </div>

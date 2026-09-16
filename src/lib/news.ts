@@ -18,6 +18,7 @@ export interface NewsCategory {
 export interface NewsDigest {
   categories: NewsCategory[];
   fetchedAt: string;
+  errors: string[];
 }
 
 interface CategoryQuery {
@@ -76,19 +77,26 @@ function extractItems(xml: string, limit: number): NewsItem[] {
 
 export async function getNewsDigest(lang: "en" | "fr"): Promise<NewsDigest> {
   const cats = categoriesFor(lang);
+  const errors: string[] = [];
   const categories = await Promise.all(
     cats.map(async (cat): Promise<NewsCategory> => {
       try {
         const res = await fetch(buildUrl(cat, lang), {
           headers: { "User-Agent": "Mozilla/5.0 (compatible; AMOCRM/1.0)" },
         });
-        if (!res.ok) return { key: cat.key, items: [] };
+        if (!res.ok) {
+          errors.push(`${cat.key}: HTTP ${res.status}`);
+          return { key: cat.key, items: [] };
+        }
         const xml = await res.text();
-        return { key: cat.key, items: extractItems(xml, cat.limit) };
-      } catch {
+        const items = extractItems(xml, cat.limit);
+        if (items.length === 0) errors.push(`${cat.key}: 0 items parsed from a ${xml.length}-byte response`);
+        return { key: cat.key, items };
+      } catch (error) {
+        errors.push(`${cat.key}: ${error instanceof Error ? error.message : String(error)}`);
         return { key: cat.key, items: [] };
       }
     })
   );
-  return { categories, fetchedAt: new Date().toISOString() };
+  return { categories, fetchedAt: new Date().toISOString(), errors };
 }
