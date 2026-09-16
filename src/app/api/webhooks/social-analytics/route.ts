@@ -83,7 +83,7 @@ function extractSnapshots(body: unknown): ParsedSnapshot[] {
     out.push({
       platform: platform as SocialPlatform,
       dateKey: typeof data.dateKey === "string" && data.dateKey ? data.dateKey : todayDateKey(),
-      followers: toIntOrNull(data.followers),
+      followers: toIntOrNull(data.followers) ?? sumLinkedInFollowerBreakdown(data.followerCountsByAssociationType),
       engagement: toIntOrNull(data.engagement),
       views: toIntOrNull(data.views),
       raw: data,
@@ -95,4 +95,26 @@ function extractSnapshots(body: unknown): ParsedSnapshot[] {
 function toIntOrNull(value: unknown): number | null {
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(n) ? Math.round(n) : null;
+}
+
+// LinkedIn's follower-statistics API has no single "total followers" field —
+// it only reports counts broken down by association type (e.g. company
+// employees vs. everyone else), so the Make scenario forwards that raw
+// array untouched and the actual total is summed here instead of in a
+// fragile Make mapper expression that would have to guess the array's
+// exact length and order.
+function sumLinkedInFollowerBreakdown(value: unknown): number | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  let total = 0;
+  let any = false;
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const counts = (entry as Record<string, unknown>).followerCounts;
+    if (!counts || typeof counts !== "object") continue;
+    const organic = toIntOrNull((counts as Record<string, unknown>).organicFollowerCount) ?? 0;
+    const paid = toIntOrNull((counts as Record<string, unknown>).paidFollowerCount) ?? 0;
+    total += organic + paid;
+    any = true;
+  }
+  return any ? total : null;
 }
