@@ -46,7 +46,9 @@ const CURRENCY_CODES: { code: string; flag: string }[] = [
   { code: "GBP", flag: "🇬🇧" },
 ];
 
-const CRYPTO_IDS: { id: string; label: string; icon: string }[] = [
+// Exported so the client component can also hit CoinGecko directly — see
+// the note on getCrypto below for why.
+export const CRYPTO_IDS: { id: string; label: string; icon: string }[] = [
   { id: "bitcoin", label: "Bitcoin", icon: "₿" },
   { id: "ethereum", label: "Ethereum", icon: "Ξ" },
 ];
@@ -83,9 +85,12 @@ async function getCurrencies(base: string, errors: string[]): Promise<CurrencyPa
 
     let past: Record<string, number> = {};
     try {
-      const yesterday = new Date();
-      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      const dateStr = yesterday.toISOString().slice(0, 10);
+      // 4 days back, not 1 — the ECB doesn't publish rates on weekends, so
+      // "yesterday" on a Monday would just echo Friday's already-latest
+      // rate and show a flat 0.00% for every currency.
+      const lookback = new Date();
+      lookback.setUTCDate(lookback.getUTCDate() - 4);
+      const dateStr = lookback.toISOString().slice(0, 10);
       const pastRes = await fetch(`https://api.frankfurter.dev/v1/${dateStr}?base=${base}&symbols=${symbols}`);
       if (pastRes.ok) {
         const pastData = (await pastRes.json()) as { rates?: Record<string, number> };
@@ -113,7 +118,12 @@ async function getCurrencies(base: string, errors: string[]): Promise<CurrencyPa
   }
 }
 
-// CoinGecko's public "simple price" endpoint — free, no key.
+// CoinGecko's public "simple price" endpoint — free, no key. A live deploy
+// showed this returning HTTP 403 from Cloudflare Workers (CoinGecko is
+// known to block cloud/proxy IP ranges, Cloudflare's shared edge among
+// them), so this server-side call is now just a fallback — the card's
+// client component also calls CoinGecko directly from the visitor's own
+// browser, which isn't behind that block.
 async function getCrypto(errors: string[]): Promise<CryptoPrice[]> {
   const empty = CRYPTO_IDS.map((c) => ({ ...c, usd: null, changePct24h: null }));
   try {

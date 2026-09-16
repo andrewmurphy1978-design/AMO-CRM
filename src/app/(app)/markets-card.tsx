@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import RefreshButton from "./refresh-button";
-import type { MarketsSnapshot } from "@/lib/markets";
+import { CRYPTO_IDS, type CryptoPrice, type MarketsSnapshot } from "@/lib/markets";
 
 export interface MarketsLabels {
   title: string;
@@ -25,6 +25,30 @@ function ChangeBadge({ changePct }: { changePct: number | null }) {
   );
 }
 
+// CoinGecko blocks Cloudflare Workers' shared IP range (confirmed via a
+// live HTTP 403), so crypto prices are fetched directly from the visitor's
+// own browser instead of proxied through the server — CoinGecko's public
+// API is designed for direct client-side use and allows CORS.
+async function fetchCryptoDirect(): Promise<CryptoPrice[] | null> {
+  try {
+    const ids = CRYPTO_IDS.map((c) => c.id).join(",");
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as Record<string, { usd?: number; usd_24h_change?: number }>;
+    return CRYPTO_IDS.map((c) => ({
+      id: c.id,
+      label: c.label,
+      icon: c.icon,
+      usd: data[c.id]?.usd ?? null,
+      changePct24h: data[c.id]?.usd_24h_change ?? null,
+    }));
+  } catch {
+    return null;
+  }
+}
+
 export default function MarketsCard({
   initial,
   labels,
@@ -34,12 +58,29 @@ export default function MarketsCard({
 }) {
   const [snapshot, setSnapshot] = useState(initial);
   const [loading, setLoading] = useState(false);
+  const triedClientCrypto = useRef(false);
+
+  async function refreshCrypto() {
+    const crypto = await fetchCryptoDirect();
+    if (crypto) setSnapshot((prev) => (prev ? { ...prev, crypto } : prev));
+  }
+
+  useEffect(() => {
+    if (triedClientCrypto.current) return;
+    triedClientCrypto.current = true;
+    refreshCrypto();
+    // Only ever runs once, right after the SSR-rendered snapshot shows up,
+    // to upgrade crypto with a value the server-side fetch can't get.
+  }, []);
 
   async function refresh() {
     setLoading(true);
     try {
-      const res = await fetch("/api/dashboard/markets");
-      if (res.ok) setSnapshot(await res.json());
+      const [res] = await Promise.all([fetch("/api/dashboard/markets"), refreshCrypto()]);
+      if (res.ok) {
+        const next = (await res.json()) as MarketsSnapshot;
+        setSnapshot((prev) => (prev ? { ...next, crypto: prev.crypto } : next));
+      }
     } catch {
       // Keep showing the last known snapshot rather than clearing it.
     } finally {
