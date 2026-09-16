@@ -90,7 +90,7 @@ export class BufferClient {
     if (channelIds.length === 0) return [];
     const data = await this.request<{ aggregatedPostMetrics: { metrics: BufferMetric[] } }>(
       `query GetMetrics($channelIds: [ChannelId!]!) {
-        aggregatedPostMetrics(channelIds: $channelIds) {
+        aggregatedPostMetrics(input: { channelIds: $channelIds }) {
           metrics { type name value }
         }
       }`,
