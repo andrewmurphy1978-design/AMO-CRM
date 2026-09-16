@@ -53,6 +53,7 @@ export default function AppShell({
         signOutAction={signOutAction}
         collapsed={collapsed}
         onToggle={setCollapsed}
+        hideLogo={pathname === "/"}
       />
 
       <div className="relative flex flex-1 flex-col">

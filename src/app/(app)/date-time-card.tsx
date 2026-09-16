@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { Locale } from "date-fns";
 import { format } from "date-fns";
 
-// Lives on the right side of the shared page header (small, left-aligned).
+// Lives on the right side of the shared page header (small, right-aligned).
 export default function DateTimeCard({
   hour12,
   dateLocale,
@@ -22,7 +22,7 @@ export default function DateTimeCard({
   }, []);
 
   return (
-    <div className="hidden text-left leading-tight text-amo-white sm:block">
+    <div className="hidden text-right leading-tight text-amo-white sm:block">
       <p className="text-xs font-medium opacity-90">
         {now ? format(now, "EEEE, MMMM d yyyy", { locale: dateLocale }) : " "}
       </p>

@@ -20,6 +20,12 @@ import { getLatestSocialSnapshots } from "@/lib/social";
 import { getHour12 } from "@/lib/time-format";
 import type { AutomationRun } from "@prisma/client";
 
+// Same full lockup used in the sidebar's expanded state elsewhere — the
+// Dashboard's own sidebar entry hides it (see Sidebar's hideLogo prop) and
+// shows it here in the header instead.
+const AMO_LOGO_URL =
+  "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
+
 // "about 8 hours ago" is vague for something you'd want to check against a
 // posting schedule — this gives "Today at 3:15 PM" / "Yesterday at 9:00 AM" /
 // "Sep 12 at 9:00 AM" instead.
@@ -312,7 +318,13 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title={t.dashboard.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <PageHeader
+        title={t.dashboard.title}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        location={t.dashboard.myLocation}
+        logoUrl={AMO_LOGO_URL}
+      />
 
       {!integration?.apiKeyEncrypted && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">

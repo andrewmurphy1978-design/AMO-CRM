@@ -10,6 +10,13 @@ const AMO_LOGO_URL =
 // Icon-only badge — used wherever space is too narrow for the full lockup.
 const AMO_BADGE_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596c0abdbde8.23945126_AMOBadgeTransparent.png";
 
+// Fixed height for the logo/CRM block at the top of the sidebar, in every
+// state (full lockup, badge-only when collapsed, or hidden entirely on the
+// Dashboard, which shows the lockup in its own header instead) — so nav
+// links below it always start at the same Y position instead of jumping
+// up when the logo shrinks or disappears.
+const LOGO_AREA_HEIGHT = "h-32";
+
 export default function Sidebar({
   navItems,
   userName,
@@ -18,6 +25,7 @@ export default function Sidebar({
   signOutAction,
   collapsed,
   onToggle,
+  hideLogo = false,
 }: {
   navItems: { href: string; label: string }[];
   userName?: string | null;
@@ -26,11 +34,12 @@ export default function Sidebar({
   signOutAction: () => Promise<void>;
   collapsed: boolean;
   onToggle: (collapsed: boolean) => void;
+  hideLogo?: boolean;
 }) {
   if (collapsed) {
     return (
       <aside className="hidden w-16 shrink-0 flex-col bg-amo-green sm:sticky sm:top-0 sm:z-10 sm:flex sm:h-screen">
-        <div className="relative flex flex-col items-center border-b border-white/10 px-2 py-6">
+        <div className={`relative flex ${LOGO_AREA_HEIGHT} shrink-0 flex-col items-center justify-center border-b border-white/10 px-2`}>
           <button
             type="button"
             onClick={() => onToggle(false)}
@@ -41,8 +50,11 @@ export default function Sidebar({
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-9 w-9 object-contain" />
+          {!hideLogo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-9 w-9 object-contain" />
+          )}
+          <p className="mt-1 font-display text-[10px] font-semibold tracking-wide text-amo-white">CRM</p>
         </div>
         <nav className="flex-1 space-y-1 px-2 py-4">
           {navItems.map((item) => (
@@ -55,7 +67,7 @@ export default function Sidebar({
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto bg-amo-green sm:sticky sm:top-0 sm:z-10 sm:flex sm:h-screen">
-      <div className="relative flex flex-col items-center gap-2 border-b border-white/10 px-4 py-6">
+      <div className={`relative flex ${LOGO_AREA_HEIGHT} shrink-0 flex-col items-center justify-center gap-1 border-b border-white/10 px-4`}>
         <button
           type="button"
           onClick={() => onToggle(true)}
@@ -66,8 +78,10 @@ export default function Sidebar({
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
           </svg>
         </button>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-full" />
+        {!hideLogo && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto max-h-20 w-full object-contain" />
+        )}
         <p className="font-display text-lg font-semibold tracking-wide text-amo-white">CRM</p>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
