@@ -61,6 +61,7 @@ Fill in:
 | `CRON_SECRET` | (Optional) protects the scheduled sync endpoint |
 | `ZAPIER_WEBHOOK_SECRET` | Protects `/api/webhooks/zapier` — each Zap's "Webhooks by Zapier" step sends `Authorization: Bearer <this value>` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | OAuth credentials for the Dashboard's Gmail/Calendar integration — see below |
+| `SOCIAL_ANALYTICS_WEBHOOK_SECRET` | Protects `/api/webhooks/social-analytics` — the Make.com "Social Analytics Sync" scenario's final HTTP step sends `Authorization: Bearer <this value>` |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADMIN_NAME` | Creates your first admin login when you run the seed script |
 
 ### 4. Set up the database
@@ -149,6 +150,29 @@ reuse) the Credentials-based login this app uses for its own sign-in.
 Only Gmail is supported this way — a separately hosted mailbox like an
 IONOS-forwarded address has no equivalent OAuth API, so the Email card just
 links out to its webmail instead.
+
+### 8. Connect Social Media Analytics (Make.com)
+
+The Dashboard's Social Media card is fed by a Make.com scenario, not a
+direct connection from this app — Facebook/Instagram/LinkedIn/YouTube all
+require their own OAuth app or developer approval, so this CRM never talks
+to them directly. Instead, a Make scenario reads each platform's own
+insights API and posts the results to a webhook here once a day.
+
+1. Set `SOCIAL_ANALYTICS_WEBHOOK_SECRET` (as a Cloudflare secret in
+   production — `npx wrangler secret put SOCIAL_ANALYTICS_WEBHOOK_SECRET` —
+   or in `.env` locally).
+2. In Make: build a scenario (e.g. "Social Analytics Sync") on a daily
+   schedule that reads follower/engagement stats from Facebook Pages,
+   Instagram Business, LinkedIn, and/or YouTube, then ends with an HTTP
+   module that POSTs to `https://crm.andrewmurphy.online/api/webhooks/social-analytics`
+   with header `Authorization: Bearer <SOCIAL_ANALYTICS_WEBHOOK_SECRET>` and
+   a JSON body `{ "results": [{ "platform": "instagram", "followers": 1234,
+   "engagement": 56, "views": 789 }, ...] }` (one object per platform;
+   `platform` must be one of `facebook` / `instagram` / `linkedin` /
+   `youtube`).
+3. That's it — no code changes or redeploys needed to add or adjust
+   platforms; the webhook accepts whichever platforms are in the payload.
 
 ## Data model
 

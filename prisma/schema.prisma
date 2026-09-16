@@ -590,6 +590,27 @@ model AutomationRun {
   @@map("automation_runs")
 }
 
+// Daily per-platform social media metrics, pushed in by a Make.com scenario
+// ("Social Analytics Sync") that calls each platform's own insights API and
+// POSTs the results to /api/webhooks/social-analytics — this CRM has no
+// direct OAuth connections to these platforms itself. One row per
+// platform per day (dateKey), upserted so a re-run of the same day's sync
+// updates the existing row instead of piling up duplicates.
+model SocialAnalyticsSnapshot {
+  id         String   @id @default(cuid())
+  platform   String // "facebook" | "instagram" | "linkedin" | "youtube"
+  dateKey    String // "YYYY-MM-DD", America/Montreal
+  followers  Int?
+  engagement Int? // likes + comments + shares over the platform's reporting window
+  views      Int? // post/video views or impressions, when the platform reports it
+  raw        Json?
+  capturedAt DateTime @default(now())
+
+  @@unique([platform, dateKey])
+  @@index([platform, capturedAt])
+  @@map("social_analytics_snapshots")
+}
+
 model SyncLog {
   id             String    @id @default(cuid())
   provider       String

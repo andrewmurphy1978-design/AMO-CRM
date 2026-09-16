@@ -181,6 +181,22 @@ export default async function SettingsPage({
               </div>
             </section>
           )}
+
+          {isAdmin && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.settings.socialAnalyticsTitle}</h2>
+              <p className="mt-1 text-sm text-soft">{t.settings.socialAnalyticsDesc}</p>
+              <div className="mt-2">
+                <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
+                  {t.automations.webhookUrlLabel}
+                </label>
+                <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
+                  https://crm.andrewmurphy.online/api/webhooks/social-analytics
+                </code>
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>

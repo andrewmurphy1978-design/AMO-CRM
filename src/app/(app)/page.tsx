@@ -7,14 +7,15 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import WorldClocks from "./world-clocks";
-import ComingSoonCard from "./coming-soon-card";
 import CardSkeleton from "./card-skeleton";
 import WeatherCardServer from "./weather-card-server";
 import NewsCardServer from "./news-card-server";
 import MarketsCardServer from "./markets-card-server";
 import EmailCardServer from "./email-card-server";
 import CalendarCardServer from "./calendar-card-server";
+import SocialCard from "./social-card";
 import { getValidAccessToken } from "@/lib/google";
+import { getLatestSocialSnapshots } from "@/lib/social";
 import type { AutomationRun } from "@prisma/client";
 
 // "about 8 hours ago" is vague for something you'd want to check against a
@@ -142,6 +143,7 @@ export default async function DashboardPage() {
   // Suspense boundaries, and each doing its own fresh-connection Prisma
   // read at the same time is what was tripping Cloudflare's Error 1102.
   const googleAccessToken = session ? await getValidAccessToken(session.user.id) : null;
+  const socialSnapshots = await getLatestSocialSnapshots();
 
   const weatherLabels = {
     title: t.dashboard.weatherTitle,
@@ -192,6 +194,19 @@ export default async function DashboardPage() {
     unreadOtherTemplate: t.dashboard.emailUnreadOtherTemplate,
     openInGmail: t.dashboard.openInGmail,
     openIonosWebmail: t.dashboard.openIonosWebmail,
+  };
+  const socialLabels = {
+    title: t.dashboard.socialTitle,
+    empty: t.dashboard.socialEmpty,
+    followers: t.dashboard.socialFollowers,
+    engagement: t.dashboard.socialEngagement,
+    views: t.dashboard.socialViews,
+    platformNames: {
+      facebook: t.dashboard.socialFacebook,
+      instagram: t.dashboard.socialInstagram,
+      linkedin: t.dashboard.socialLinkedin,
+      youtube: t.dashboard.socialYoutube,
+    },
   };
   const calendarLabels = {
     title: t.dashboard.calendarTitle,
@@ -412,7 +427,7 @@ export default async function DashboardPage() {
             )}
           </div>
 
-          <ComingSoonCard title={t.dashboard.socialTitle} description={t.dashboard.socialComingSoon} />
+          <SocialCard snapshots={socialSnapshots} labels={socialLabels} />
         </div>
 
         {/* Right column: general info. Each card fetches real, sometimes
