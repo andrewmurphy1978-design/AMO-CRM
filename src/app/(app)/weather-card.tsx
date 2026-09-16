@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { useEffect, useRef, useState } from "react";
+import { format, formatDistanceToNow } from "date-fns";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { weatherCodeEmoji, weatherCodeLabel, DEFAULT_WEATHER_COORDS, type WeatherSnapshot } from "@/lib/weather";
 import RefreshButton from "./refresh-button";
@@ -31,6 +31,9 @@ export default function WeatherCard({
   const [weather, setWeather] = useState(initial);
   const [loading, setLoading] = useState(false);
   const dateLocale = getDateLocale(lang);
+  // Only try the browser's real location once automatically (on mount); the
+  // Refresh button can always retry it after that.
+  const triedAutoLocate = useRef(false);
 
   async function refresh(coords?: { lat: number; lon: number }) {
     setLoading(true);
@@ -45,7 +48,7 @@ export default function WeatherCard({
     }
   }
 
-  function handleRefreshClick() {
+  function locateAndRefresh() {
     if (typeof navigator !== "undefined" && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => refresh({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
@@ -57,51 +60,92 @@ export default function WeatherCard({
     }
   }
 
+  useEffect(() => {
+    if (triedAutoLocate.current) return;
+    triedAutoLocate.current = true;
+    locateAndRefresh();
+    // Only ever runs once, right after the SSR-rendered default-location
+    // snapshot shows up, to swap in the real one silently.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const degree = weather?.unit === "fahrenheit" ? "°F" : "°C";
+  const windUnitLabel = weather?.windUnit === "mph" ? "mph" : "km/h";
+
   return (
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
-        <RefreshButton
-          onClick={handleRefreshClick}
-          loading={loading}
-          label={labels.refresh}
-          loadingLabel={labels.refreshing}
-        />
+        <RefreshButton onClick={locateAndRefresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
       </div>
       {!weather ? (
         <p className="mt-3 text-sm text-soft">{labels.unavailable}</p>
       ) : (
         <div className="mt-3">
-          <div className="flex items-center gap-3">
-            <span className="text-4xl">{weatherCodeEmoji(weather.weatherCode)}</span>
-            <div>
-              <p className="font-display text-3xl font-semibold text-ink">{weather.temperatureC}°C</p>
-              <p className="text-sm text-soft">{weatherCodeLabel(weather.weatherCode, lang)}</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-4xl">{weatherCodeEmoji(weather.weatherCode)}</span>
+              <div>
+                <p className="font-display text-3xl font-semibold text-ink">
+                  {weather.temperature}
+                  {degree}
+                </p>
+                <p className="text-sm text-soft">{weatherCodeLabel(weather.weatherCode, lang)}</p>
+              </div>
             </div>
+            <dl className="space-y-1 text-xs">
+              <div className="flex justify-between gap-3">
+                <dt className="text-soft">{labels.feelsLike}</dt>
+                <dd className="text-ink">
+                  {weather.apparentTemperature}
+                  {degree}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-soft">{labels.humidity}</dt>
+                <dd className="text-ink">{weather.humidity}%</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-soft">{labels.high}</dt>
+                <dd className="text-ink">
+                  {weather.highTemp}
+                  {degree}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-soft">{labels.low}</dt>
+                <dd className="text-ink">
+                  {weather.lowTemp}
+                  {degree}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-soft">{labels.wind}</dt>
+                <dd className="text-ink">
+                  {weather.windSpeed} {windUnitLabel}
+                </dd>
+              </div>
+            </dl>
           </div>
-          <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-            <div className="flex justify-between">
-              <dt className="text-soft">{labels.feelsLike}</dt>
-              <dd className="text-ink">{weather.apparentTemperatureC}°C</dd>
+
+          {weather.cityLabel && <p className="mt-2 text-xs font-medium text-soft">{weather.cityLabel}</p>}
+
+          {weather.daily.length > 0 && (
+            <div className="mt-4 grid grid-cols-5 gap-1 border-t border-card-border pt-3">
+              {weather.daily.map((day) => (
+                <div key={day.date} className="flex flex-col items-center gap-0.5 text-center">
+                  <span className="text-[11px] font-medium uppercase text-soft">
+                    {format(new Date(day.date), "EEE", { locale: dateLocale })}
+                  </span>
+                  <span className="text-lg">{weatherCodeEmoji(day.weatherCode)}</span>
+                  <span className="text-xs text-ink">{day.highTemp}°</span>
+                  <span className="text-xs text-soft">{day.lowTemp}°</span>
+                </div>
+              ))}
             </div>
-            <div className="flex justify-between">
-              <dt className="text-soft">{labels.humidity}</dt>
-              <dd className="text-ink">{weather.humidity}%</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-soft">{labels.high}</dt>
-              <dd className="text-ink">{weather.highC}°C</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-soft">{labels.low}</dt>
-              <dd className="text-ink">{weather.lowC}°C</dd>
-            </div>
-            <div className="col-span-2 flex justify-between">
-              <dt className="text-soft">{labels.wind}</dt>
-              <dd className="text-ink">{weather.windKph} km/h</dd>
-            </div>
-          </dl>
+          )}
+
           <p className="mt-3 text-xs text-soft">
             {labels.updatedPrefix}{" "}
             {formatDistanceToNow(new Date(weather.fetchedAt), { addSuffix: true, locale: dateLocale })}

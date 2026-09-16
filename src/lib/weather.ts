@@ -1,16 +1,29 @@
 // Open-Meteo: free, no API key, well-documented JSON weather API —
 // https://open-meteo.com/en/docs. This session's network egress can't reach
 // it to confirm the response shape live, but the field names below
-// (current.temperature_2m, current.weather_code, etc.) match Open-Meteo's
-// public documentation, which has been stable for years.
-export interface WeatherSnapshot {
-  temperatureC: number;
-  apparentTemperatureC: number;
+// (current.temperature_2m, current.weather_code, daily.time, etc.) match
+// Open-Meteo's public documentation, which has been stable for years.
+export interface DailyForecast {
+  date: string;
   weatherCode: number;
-  windKph: number;
+  highTemp: number;
+  lowTemp: number;
+}
+
+export type TemperatureUnit = "celsius" | "fahrenheit";
+
+export interface WeatherSnapshot {
+  temperature: number;
+  apparentTemperature: number;
+  weatherCode: number;
+  windSpeed: number;
   humidity: number;
-  highC: number;
-  lowC: number;
+  highTemp: number;
+  lowTemp: number;
+  unit: TemperatureUnit;
+  windUnit: "kmh" | "mph";
+  cityLabel: string | null;
+  daily: DailyForecast[];
   fetchedAt: string;
 }
 
@@ -57,7 +70,11 @@ export function weatherCodeEmoji(code: number): string {
 // supplies a real one via geolocation.
 export const DEFAULT_WEATHER_COORDS = { lat: 46.0492, lon: -74.2827 };
 
-export async function getWeather(lat: number, lon: number): Promise<WeatherSnapshot | null> {
+export async function getWeather(
+  lat: number,
+  lon: number,
+  unit: TemperatureUnit = "celsius"
+): Promise<WeatherSnapshot | null> {
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(lat));
   url.searchParams.set("longitude", String(lon));
@@ -65,9 +82,11 @@ export async function getWeather(lat: number, lon: number): Promise<WeatherSnaps
     "current",
     "temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m"
   );
-  url.searchParams.set("daily", "temperature_2m_max,temperature_2m_min");
+  url.searchParams.set("daily", "weather_code,temperature_2m_max,temperature_2m_min");
   url.searchParams.set("timezone", "auto");
-  url.searchParams.set("forecast_days", "1");
+  url.searchParams.set("forecast_days", "6");
+  url.searchParams.set("temperature_unit", unit);
+  if (unit === "fahrenheit") url.searchParams.set("wind_speed_unit", "mph");
 
   try {
     const res = await fetch(url.toString());
@@ -80,19 +99,67 @@ export async function getWeather(lat: number, lon: number): Promise<WeatherSnaps
         weather_code?: number;
         wind_speed_10m?: number;
       };
-      daily?: { temperature_2m_max?: number[]; temperature_2m_min?: number[] };
+      daily?: {
+        time?: string[];
+        weather_code?: number[];
+        temperature_2m_max?: number[];
+        temperature_2m_min?: number[];
+      };
     };
-    if (!data.current) return null;
+    if (!data.current || !data.daily) return null;
+
+    const dates = data.daily.time ?? [];
+    const codes = data.daily.weather_code ?? [];
+    const highs = data.daily.temperature_2m_max ?? [];
+    const lows = data.daily.temperature_2m_min ?? [];
+    // Index 0 is today (used for the "current day" high/low above); the
+    // 5-day forecast row shows the 5 days after today.
+    const daily: DailyForecast[] = dates.slice(1, 6).map((date, i) => ({
+      date,
+      weatherCode: codes[i + 1] ?? 0,
+      highTemp: Math.round(highs[i + 1] ?? 0),
+      lowTemp: Math.round(lows[i + 1] ?? 0),
+    }));
+
     return {
-      temperatureC: Math.round(data.current.temperature_2m ?? 0),
-      apparentTemperatureC: Math.round(data.current.apparent_temperature ?? 0),
+      temperature: Math.round(data.current.temperature_2m ?? 0),
+      apparentTemperature: Math.round(data.current.apparent_temperature ?? 0),
       weatherCode: data.current.weather_code ?? 0,
-      windKph: Math.round(data.current.wind_speed_10m ?? 0),
+      windSpeed: Math.round(data.current.wind_speed_10m ?? 0),
       humidity: Math.round(data.current.relative_humidity_2m ?? 0),
-      highC: Math.round(data.daily?.temperature_2m_max?.[0] ?? 0),
-      lowC: Math.round(data.daily?.temperature_2m_min?.[0] ?? 0),
+      highTemp: Math.round(highs[0] ?? 0),
+      lowTemp: Math.round(lows[0] ?? 0),
+      unit,
+      windUnit: unit === "fahrenheit" ? "mph" : "kmh",
+      cityLabel: null,
+      daily,
       fetchedAt: new Date().toISOString(),
     };
+  } catch {
+    return null;
+  }
+}
+
+export interface GeoLabel {
+  city: string;
+  countryCode: string;
+}
+
+// BigDataCloud's free reverse-geocode endpoint — no API key, designed for
+// client-side use but works fine from a server too. This session's network
+// egress can't reach it to confirm the field names live (same as the rest
+// of this file), so `city`/`locality`/`countryCode` are taken from its
+// documented response shape.
+export async function reverseGeocode(lat: number, lon: number): Promise<GeoLabel | null> {
+  try {
+    const res = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { city?: string; locality?: string; countryCode?: string };
+    const city = data.city || data.locality || null;
+    if (!city || !data.countryCode) return null;
+    return { city, countryCode: data.countryCode };
   } catch {
     return null;
   }

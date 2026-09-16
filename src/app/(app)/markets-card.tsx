@@ -15,6 +15,16 @@ export interface MarketsLabels {
   crypto: string;
 }
 
+function ChangeBadge({ changePct }: { changePct: number | null }) {
+  if (changePct === null) return <span className="text-soft">—</span>;
+  return (
+    <span className={changePct >= 0 ? "text-emerald-600" : "text-red-600"}>
+      {changePct >= 0 ? "+" : ""}
+      {changePct.toFixed(2)}%
+    </span>
+  );
+}
+
 export default function MarketsCard({
   initial,
   labels,
@@ -54,57 +64,67 @@ export default function MarketsCard({
       {!hasData || !snapshot ? (
         <p className="mt-3 text-sm text-soft">{labels.unavailable}</p>
       ) : (
-        <div className="mt-3 space-y-4 text-sm">
+        <div className="mt-3 space-y-4 text-xs">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.currencies}</p>
-            <ul className="mt-1 space-y-1">
+            <ul className="mt-1.5 space-y-1.5">
               {snapshot.currencies.map((c) => (
-                <li key={c.code} className="flex justify-between">
-                  <span className="text-soft">1 {snapshot.base}</span>
+                <li key={c.code} className="grid grid-cols-[1fr_auto_auto_1fr] items-center gap-x-1.5">
                   <span className="text-ink">
-                    {c.rate.toFixed(4)} {c.code}
+                    1 {snapshot.base} = {c.rateFromBase.toFixed(4)} {c.code}
+                  </span>
+                  <span className="text-sm">
+                    {snapshot.baseFlag}/{c.flag}
+                  </span>
+                  <ChangeBadge changePct={c.changePct} />
+                  <span className="text-right text-ink">
+                    1 {c.code} = {c.rateToBase.toFixed(4)} {snapshot.base}
                   </span>
                 </li>
               ))}
             </ul>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.crypto}</p>
-            <ul className="mt-1 space-y-1">
-              {snapshot.crypto.map((c) => (
-                <li key={c.id} className="flex items-center justify-between">
-                  <span className="text-soft">{c.label}</span>
-                  <span className="text-ink">
-                    {c.usd !== null ? `$${c.usd.toLocaleString()}` : "—"}
-                    {c.changePct24h !== null && (
-                      <span className={c.changePct24h >= 0 ? "ml-1.5 text-emerald-600" : "ml-1.5 text-red-600"}>
-                        {c.changePct24h >= 0 ? "+" : ""}
-                        {c.changePct24h.toFixed(1)}%
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.indices}</p>
-            <ul className="mt-1 space-y-1">
+            <ul className="mt-1.5 space-y-1.5">
               {snapshot.indices.map((i) => (
-                <li key={i.symbol} className="flex justify-between">
-                  <span className="text-soft">{i.label}</span>
-                  <span className="text-ink">{i.price !== null ? i.price.toLocaleString() : "—"}</span>
+                <li key={i.symbol} className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-soft">
+                    <span>{i.icon}</span> {i.label}
+                  </span>
+                  <ChangeBadge changePct={i.changePct} />
+                  <span className="text-ink">{i.price !== null ? `${i.price.toLocaleString()} ${i.currency}` : "—"}</span>
                 </li>
               ))}
             </ul>
           </div>
+
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.commodities}</p>
-            <ul className="mt-1 space-y-1">
+            <ul className="mt-1.5 space-y-1.5">
               {snapshot.commodities.map((c) => (
-                <li key={c.symbol} className="flex justify-between">
-                  <span className="text-soft">{c.label}</span>
-                  <span className="text-ink">{c.price !== null ? c.price.toLocaleString() : "—"}</span>
+                <li key={c.symbol} className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-soft">
+                    <span>{c.icon}</span> {c.label}
+                  </span>
+                  <ChangeBadge changePct={c.changePct} />
+                  <span className="text-ink">{c.price !== null ? `${c.price.toLocaleString()} ${c.currency}` : "—"}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.crypto}</p>
+            <ul className="mt-1.5 space-y-1.5">
+              {snapshot.crypto.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-soft">
+                    <span>{c.icon}</span> {c.label}
+                  </span>
+                  <ChangeBadge changePct={c.changePct24h} />
+                  <span className="text-ink">{c.usd !== null ? `${c.usd.toLocaleString()} USD` : "—"}</span>
                 </li>
               ))}
             </ul>
