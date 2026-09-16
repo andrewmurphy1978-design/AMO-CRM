@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import clsx from "@/lib/clsx";
 import RefreshButton from "./refresh-button";
+import { countryFlagUrl } from "@/lib/flags";
 import { CRYPTO_IDS, type CryptoPrice, type MarketsSnapshot } from "@/lib/markets";
 
 export interface MarketsLabels {
@@ -15,14 +17,30 @@ export interface MarketsLabels {
   crypto: string;
 }
 
+// Every row across every group shares this exact column template — value,
+// icon/flag, % change, value — so both the icon and the % change land in
+// the same visual column no matter which section it's in.
+const ROW_GRID = "grid grid-cols-[1fr_40px_48px_1fr] items-center gap-x-1.5";
+
 function ChangeBadge({ changePct }: { changePct: number | null }) {
-  if (changePct === null) return <span className="text-soft">—</span>;
+  if (changePct === null) return <span className="text-center text-soft">—</span>;
   return (
-    <span className={changePct >= 0 ? "text-emerald-600" : "text-red-600"}>
+    <span
+      className={clsx(
+        "text-center",
+        changePct >= 0 ? "text-emerald-600" : "text-red-600",
+        Math.abs(changePct) > 1 && "font-bold"
+      )}
+    >
       {changePct >= 0 ? "+" : ""}
       {changePct.toFixed(2)}%
     </span>
   );
+}
+
+function FlagImg({ countryCode }: { countryCode: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={countryFlagUrl(countryCode)} alt="" className="h-3 w-4 shrink-0 rounded-[1px] object-cover" />;
 }
 
 // CoinGecko blocks Cloudflare Workers' shared IP range (confirmed via a
@@ -40,7 +58,7 @@ async function fetchCryptoDirect(): Promise<CryptoPrice[] | null> {
     return CRYPTO_IDS.map((c) => ({
       id: c.id,
       label: c.label,
-      icon: c.icon,
+      logo: c.logo,
       usd: data[c.id]?.usd ?? null,
       changePct24h: data[c.id]?.usd_24h_change ?? null,
     }));
@@ -110,12 +128,13 @@ export default function MarketsCard({
             <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.currencies}</p>
             <ul className="mt-1.5 space-y-1.5">
               {snapshot.currencies.map((c) => (
-                <li key={c.code} className="grid grid-cols-[1fr_auto_auto_1fr] items-center gap-x-1.5">
+                <li key={c.code} className={ROW_GRID}>
                   <span className="text-ink">
                     1 {snapshot.base} = {c.rateFromBase.toFixed(4)} {c.code}
                   </span>
-                  <span className="text-sm">
-                    {snapshot.baseFlag}/{c.flag}
+                  <span className="flex items-center justify-center gap-0.5">
+                    <FlagImg countryCode={snapshot.baseCountryCode} />
+                    <FlagImg countryCode={c.countryCode} />
                   </span>
                   <ChangeBadge changePct={c.changePct} />
                   <span className="text-right text-ink">
@@ -130,12 +149,15 @@ export default function MarketsCard({
             <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.indices}</p>
             <ul className="mt-1.5 space-y-1.5">
               {snapshot.indices.map((i) => (
-                <li key={i.symbol} className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-soft">
-                    <span>{i.icon}</span> {i.label}
+                <li key={i.symbol} className={ROW_GRID}>
+                  <span className="text-soft">{i.label}</span>
+                  <span className="flex items-center justify-center">
+                    {i.countryCode && <FlagImg countryCode={i.countryCode} />}
                   </span>
                   <ChangeBadge changePct={i.changePct} />
-                  <span className="text-ink">{i.price !== null ? `${i.price.toLocaleString()} ${i.currency}` : "—"}</span>
+                  <span className="text-right text-ink">
+                    {i.price !== null ? `${i.price.toLocaleString()} ${i.currency}` : "—"}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -145,12 +167,13 @@ export default function MarketsCard({
             <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.commodities}</p>
             <ul className="mt-1.5 space-y-1.5">
               {snapshot.commodities.map((c) => (
-                <li key={c.symbol} className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-soft">
-                    <span>{c.icon}</span> {c.label}
-                  </span>
+                <li key={c.symbol} className={ROW_GRID}>
+                  <span className="text-soft">{c.label}</span>
+                  <span className="flex items-center justify-center text-base">{c.icon}</span>
                   <ChangeBadge changePct={c.changePct} />
-                  <span className="text-ink">{c.price !== null ? `${c.price.toLocaleString()} ${c.currency}` : "—"}</span>
+                  <span className="text-right text-ink">
+                    {c.price !== null ? `${c.price.toLocaleString()} ${c.currency}` : "—"}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -160,12 +183,14 @@ export default function MarketsCard({
             <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.crypto}</p>
             <ul className="mt-1.5 space-y-1.5">
               {snapshot.crypto.map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-soft">
-                    <span>{c.icon}</span> {c.label}
+                <li key={c.id} className={ROW_GRID}>
+                  <span className="text-soft">{c.label}</span>
+                  <span className="flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={c.logo} alt="" className="h-4 w-4 shrink-0" />
                   </span>
                   <ChangeBadge changePct={c.changePct24h} />
-                  <span className="text-ink">{c.usd !== null ? `${c.usd.toLocaleString()} USD` : "—"}</span>
+                  <span className="text-right text-ink">{c.usd !== null ? `${c.usd.toLocaleString()} USD` : "—"}</span>
                 </li>
               ))}
             </ul>

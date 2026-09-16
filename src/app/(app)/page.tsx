@@ -387,7 +387,7 @@ export default async function DashboardPage() {
           </Suspense>
           <WorldClocks title="World clocks" />
           <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
-            <NewsCardServer lang={lang} labels={newsLabels} />
+            <NewsCardServer labels={newsLabels} />
           </Suspense>
           <Suspense fallback={<CardSkeleton title={t.dashboard.marketsTitle} />}>
             <MarketsCardServer labels={marketsLabels} />

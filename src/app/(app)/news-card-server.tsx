@@ -1,7 +1,7 @@
 import { getNewsDigest } from "@/lib/news";
 import NewsCard, { type NewsLabels } from "./news-card";
 
-export default async function NewsCardServer({ lang, labels }: { lang: "en" | "fr"; labels: NewsLabels }) {
-  const digest = await getNewsDigest(lang);
-  return <NewsCard initial={digest} lang={lang} labels={labels} />;
+export default async function NewsCardServer({ labels }: { labels: NewsLabels }) {
+  const digest = await getNewsDigest();
+  return <NewsCard initial={digest} labels={labels} />;
 }

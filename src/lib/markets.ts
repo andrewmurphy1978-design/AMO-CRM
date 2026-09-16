@@ -4,14 +4,13 @@
 // defensive (empty/null on failure, never a thrown error) and records what
 // went wrong in `errors` — not shown in the UI, but visible by hitting
 // /api/dashboard/markets directly while logged in. Frankfurter (currencies)
-// is confirmed working from a live deploy; CoinGecko (crypto) is confirmed
-// blocked from Cloudflare Workers specifically (worked around via a
-// client-side fetch in markets-card.tsx); Yahoo Finance (indices,
-// commodities) replaced Stooq after Stooq's free endpoint started requiring
-// an API key and hasn't been checked live yet.
+// and Yahoo Finance (indices, commodities) are confirmed working from a
+// live deploy; CoinGecko (crypto) is confirmed blocked from Cloudflare
+// Workers specifically (worked around via a client-side fetch in
+// markets-card.tsx).
 export interface CurrencyPair {
   code: string;
-  flag: string;
+  countryCode: string;
   rateFromBase: number;
   rateToBase: number;
   changePct: number | null;
@@ -20,7 +19,7 @@ export interface CurrencyPair {
 export interface CryptoPrice {
   id: string;
   label: string;
-  icon: string;
+  logo: string;
   usd: number | null;
   changePct24h: number | null;
 }
@@ -28,7 +27,8 @@ export interface CryptoPrice {
 export interface QuoteItem {
   symbol: string;
   label: string;
-  icon: string;
+  countryCode?: string;
+  icon?: string;
   currency: string;
   price: number | null;
   changePct: number | null;
@@ -36,7 +36,7 @@ export interface QuoteItem {
 
 export interface MarketsSnapshot {
   base: string;
-  baseFlag: string;
+  baseCountryCode: string;
   currencies: CurrencyPair[];
   indices: QuoteItem[];
   commodities: QuoteItem[];
@@ -45,29 +45,39 @@ export interface MarketsSnapshot {
   errors: string[];
 }
 
-const CURRENCY_CODES: { code: string; flag: string }[] = [
-  { code: "USD", flag: "🇺🇸" },
-  { code: "EUR", flag: "🇪🇺" },
-  { code: "GBP", flag: "🇬🇧" },
+const CURRENCY_CODES: { code: string; countryCode: string }[] = [
+  { code: "USD", countryCode: "us" },
+  { code: "EUR", countryCode: "eu" },
+  { code: "GBP", countryCode: "gb" },
 ];
+
+// jsDelivr-hosted CDN build of the widely used spothq/cryptocurrency-icons
+// set — free, no key, keyed by lowercase ticker.
+function cryptoLogoUrl(ticker: string): string {
+  return `https://cdn.jsdelivr.net/npm/cryptocurrency-icons/128/color/${ticker}.png`;
+}
 
 // Exported so the client component can also hit CoinGecko directly — see
 // the note on getCrypto below for why.
-export const CRYPTO_IDS: { id: string; label: string; icon: string }[] = [
-  { id: "bitcoin", label: "Bitcoin", icon: "₿" },
-  { id: "ethereum", label: "Ethereum", icon: "Ξ" },
+export const CRYPTO_IDS: { id: string; label: string; logo: string }[] = [
+  { id: "bitcoin", label: "Bitcoin", logo: cryptoLogoUrl("btc") },
+  { id: "ethereum", label: "Ethereum", logo: cryptoLogoUrl("eth") },
 ];
 
 // Yahoo Finance's ticker conventions — well documented and stable, unlike
 // the Stooq symbols this replaced (Stooq quietly started requiring an
 // emailed-for, CAPTCHA-gated API key in ~April 2026, which is why its free
 // endpoint started 404ing).
-const INDEX_SYMBOLS: { symbol: string; label: string; icon: string; currency: string }[] = [
-  { symbol: "^FTSE", label: "FTSE 100", icon: "🇬🇧", currency: "GBP" },
-  { symbol: "^GDAXI", label: "DAX", icon: "🇩🇪", currency: "EUR" },
-  { symbol: "^FCHI", label: "CAC 40", icon: "🇫🇷", currency: "EUR" },
-  { symbol: "^N225", label: "Nikkei 225", icon: "🇯🇵", currency: "JPY" },
-  { symbol: "^HSI", label: "Hang Seng", icon: "🇭🇰", currency: "HKD" },
+const INDEX_SYMBOLS: { symbol: string; label: string; countryCode: string; currency: string }[] = [
+  { symbol: "^GSPC", label: "S&P 500", countryCode: "us", currency: "USD" },
+  { symbol: "^DJI", label: "Dow Jones", countryCode: "us", currency: "USD" },
+  { symbol: "^IXIC", label: "Nasdaq", countryCode: "us", currency: "USD" },
+  { symbol: "^GSPTSE", label: "TSX", countryCode: "ca", currency: "CAD" },
+  { symbol: "^FTSE", label: "FTSE 100", countryCode: "gb", currency: "GBP" },
+  { symbol: "^GDAXI", label: "DAX", countryCode: "de", currency: "EUR" },
+  { symbol: "^FCHI", label: "CAC 40", countryCode: "fr", currency: "EUR" },
+  { symbol: "^N225", label: "Nikkei 225", countryCode: "jp", currency: "JPY" },
+  { symbol: "^HSI", label: "Hang Seng", countryCode: "hk", currency: "HKD" },
 ];
 
 const COMMODITY_SYMBOLS: { symbol: string; label: string; icon: string; currency: string }[] = [
@@ -77,9 +87,9 @@ const COMMODITY_SYMBOLS: { symbol: string; label: string; icon: string; currency
 ];
 
 // Frankfurter (ECB daily reference rates) — https://frankfurter.dev, free,
-// no key. Fetches yesterday's rates too, just to compute a day-over-day
-// % change; a miss there just means no change figure, not no rates.
-async function getCurrencies(base: string, errors: string[]): Promise<CurrencyPair[]> {
+// no key. Fetches a few days back too, just to compute a day-over-day %
+// change; a miss there just means no change figure, not no rates.
+async function getCurrencies(base: string, baseCountryCode: string, errors: string[]): Promise<CurrencyPair[]> {
   const symbols = CURRENCY_CODES.map((c) => c.code).join(",");
   try {
     const latestRes = await fetch(`https://api.frankfurter.dev/v1/latest?base=${base}&symbols=${symbols}`);
@@ -106,13 +116,13 @@ async function getCurrencies(base: string, errors: string[]): Promise<CurrencyPa
       // % change is a nice-to-have; missing history shouldn't hide the rates.
     }
 
-    return CURRENCY_CODES.map(({ code, flag }) => {
+    return CURRENCY_CODES.map(({ code, countryCode }) => {
       const rateFromBase = latest.rates?.[code] ?? 0;
       const pastRate = past[code];
       const changePct = pastRate ? ((rateFromBase - pastRate) / pastRate) * 100 : null;
       return {
         code,
-        flag,
+        countryCode,
         rateFromBase,
         rateToBase: rateFromBase ? 1 / rateFromBase : 0,
         changePct,
@@ -145,7 +155,7 @@ async function getCrypto(errors: string[]): Promise<CryptoPrice[]> {
     return CRYPTO_IDS.map((c) => ({
       id: c.id,
       label: c.label,
-      icon: c.icon,
+      logo: c.logo,
       usd: data[c.id]?.usd ?? null,
       changePct24h: data[c.id]?.usd_24h_change ?? null,
     }));
@@ -160,10 +170,7 @@ async function getCrypto(errors: string[]): Promise<CryptoPrice[]> {
 // notice, but confirmed working keyless as of mid-2026, unlike Stooq's now
 // key-gated one. One request per symbol; `meta.regularMarketPrice` and
 // `meta.previousClose` give both the quote and a same-request % change.
-async function getYahooQuote(
-  item: { symbol: string; label: string; icon: string; currency: string },
-  errors: string[]
-): Promise<QuoteItem> {
+async function getYahooQuote<T extends { symbol: string; currency: string }>(item: T, errors: string[]): Promise<T & { price: number | null; changePct: number | null }> {
   try {
     const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.symbol)}`, {
       headers: {
@@ -192,24 +199,24 @@ async function getYahooQuote(
   }
 }
 
-async function getYahooQuotes(
-  items: { symbol: string; label: string; icon: string; currency: string }[],
+async function getYahooQuotes<T extends { symbol: string; currency: string }>(
+  items: T[],
   errors: string[]
-): Promise<QuoteItem[]> {
+): Promise<(T & { price: number | null; changePct: number | null })[]> {
   return Promise.all(items.map((item) => getYahooQuote(item, errors)));
 }
 
 export async function getMarketsSnapshot(): Promise<MarketsSnapshot> {
   const errors: string[] = [];
   const [currencies, indices, commodities, crypto] = await Promise.all([
-    getCurrencies("CAD", errors),
+    getCurrencies("CAD", "ca", errors),
     getYahooQuotes(INDEX_SYMBOLS, errors),
     getYahooQuotes(COMMODITY_SYMBOLS, errors),
     getCrypto(errors),
   ]);
   return {
     base: "CAD",
-    baseFlag: "🇨🇦",
+    baseCountryCode: "ca",
     currencies,
     indices,
     commodities,
