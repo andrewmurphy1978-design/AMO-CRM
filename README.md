@@ -59,6 +59,7 @@ Fill in:
 | `NEXTAUTH_URL` | Your app's base URL (`http://localhost:3000` in dev) |
 | `ENCRYPTION_KEY` | Random secret used to encrypt your systeme.io API key at rest — generate with `openssl rand -base64 32` |
 | `CRON_SECRET` | (Optional) protects the scheduled sync endpoint |
+| `ZAPIER_WEBHOOK_SECRET` | Protects `/api/webhooks/zapier` — each Zap's "Webhooks by Zapier" step sends `Authorization: Bearer <this value>` |
 | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` / `SEED_ADMIN_NAME` | Creates your first admin login when you run the seed script |
 
 ### 4. Set up the database
