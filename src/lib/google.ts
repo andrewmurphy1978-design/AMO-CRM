@@ -115,6 +115,7 @@ export async function getValidAccessToken(userId: string, db: PrismaClient = pri
 
 export interface EmailSummary {
   id: string;
+  threadId: string; // the CRM's own EmailLink rows are keyed off this
   from: string;
   subject: string;
   snippet: string;
@@ -143,11 +144,17 @@ function formatFrom(raw: string): string {
 // sequentially, before any concurrent rendering starts.
 //
 // null return means "not connected / fetch failed"; [] means connected
-// but genuinely zero unread messages.
-export async function getRecentEmails(accessToken: string, maxResults = 8): Promise<EmailSummary[] | null> {
+// but genuinely zero matching messages. `unreadOnly` is the Dashboard
+// card's default (a quick glance at what needs attention); the full Email
+// page passes false to browse the regular inbox instead.
+export async function getRecentEmails(
+  accessToken: string,
+  { maxResults = 8, unreadOnly = true }: { maxResults?: number; unreadOnly?: boolean } = {}
+): Promise<EmailSummary[] | null> {
   try {
+    const query = unreadOnly ? "is:unread in:inbox" : "in:inbox";
     const listRes = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent("is:unread in:inbox")}`,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     if (!listRes.ok) return null;
@@ -170,13 +177,15 @@ export async function getRecentEmails(accessToken: string, maxResults = 8): Prom
           payload?: { headers?: { name?: string; value?: string }[] };
         };
         const headers = data.payload?.headers;
+        const threadId = data.threadId ?? data.id;
         return {
           id: data.id,
+          threadId,
           from: formatFrom(extractHeader(headers, "From")),
           subject: extractHeader(headers, "Subject") || "(no subject)",
           snippet: data.snippet ?? "",
           date: data.internalDate ? new Date(Number(data.internalDate)).toISOString() : new Date().toISOString(),
-          link: `https://mail.google.com/mail/u/0/#inbox/${data.threadId ?? data.id}`,
+          link: `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
         };
       })
     );

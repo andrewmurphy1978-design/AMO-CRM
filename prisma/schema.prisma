@@ -160,6 +160,8 @@ model Contact {
   subscriptions        Subscription[]
   courseEnrollments    CourseEnrollment[]
   communityMemberships CommunityMembership[]
+  emailLinks           EmailLink[]
+  calendarEventLinks   CalendarEventLink[]
 
   @@index([stage])
   @@index([lastName, firstName])
@@ -291,6 +293,8 @@ model Booking {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  calendarEventLinks CalendarEventLink[]
+
   @@map("bookings")
 }
 
@@ -386,11 +390,13 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tasks        Task[]
-  activity     ActivityLogEntry[]
-  interactions Interaction[]
-  proposals    Proposal[]
-  invoices     Invoice[]
+  tasks              Task[]
+  activity           ActivityLogEntry[]
+  interactions       Interaction[]
+  proposals          Proposal[]
+  invoices           Invoice[]
+  emailLinks         EmailLink[]
+  calendarEventLinks CalendarEventLink[]
 
   @@index([status])
   @@index([contactId])
@@ -490,6 +496,9 @@ model Task {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  emailLinks         EmailLink[]
+  calendarEventLinks CalendarEventLink[]
+
   @@index([projectId])
   @@index([status])
   @@map("tasks")
@@ -514,6 +523,62 @@ model ActivityLogEntry {
   @@index([contactId])
   @@index([projectId])
   @@map("activity_log_entries")
+}
+
+// Ties a Gmail thread to a client/project/task in this CRM. Gmail itself
+// stays the source of truth for the message content — this is just a
+// pointer keyed off the thread id (one CRM link per thread), so the Email
+// page can show "linked to X" and the client/project/task page can show
+// its related emails.
+model EmailLink {
+  id            String @id @default(cuid())
+  gmailThreadId String @unique
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+  @@index([projectId])
+  @@index([taskId])
+  @@map("email_links")
+}
+
+// Same idea as EmailLink, but for a Google Calendar event (keyed off its
+// event id) — links an appointment to a client, project, task, and/or a
+// systeme.io booking.
+model CalendarEventLink {
+  id            String @id @default(cuid())
+  googleEventId String @unique
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  bookingId String?
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([bookingId])
+  @@map("calendar_event_links")
 }
 
 // A logged call, email, meeting, or note against a client and/or a project —
