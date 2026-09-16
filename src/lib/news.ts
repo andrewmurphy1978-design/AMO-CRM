@@ -48,6 +48,19 @@ const US_SITES = [
   "nytimes.com",
 ];
 const EUROPE_SITES = ["bbc.com", "euronews.com", "lemonde.fr"];
+// Middle East, Asia, Oceania — real outlets from those regions rather than
+// a bare keyword search, same reasoning as every other category.
+const WORLD_SITES = [
+  "aljazeera.com",
+  "timesofisrael.com",
+  "arabnews.com",
+  "scmp.com",
+  "japantimes.co.jp",
+  "straitstimes.com",
+  "timesofindia.indiatimes.com",
+  "abc.net.au",
+  "nzherald.co.nz",
+];
 
 function categoriesFor(): CategoryQuery[] {
   return [
@@ -57,10 +70,7 @@ function categoriesFor(): CategoryQuery[] {
     { key: "canada", query: "Canada", sites: CANADA_SITES, setmkt: "en-CA", limit: 2 },
     { key: "us", query: "United States", sites: US_SITES, setmkt: "en-US", limit: 2 },
     { key: "europe", query: "Europe", sites: EUROPE_SITES, setmkt: "en-GB", limit: 2 },
-    // No site filter: deliberately outside Canada/US/Europe, so this is
-    // the closest a keyword can get to "the rest of the world" without a
-    // paid, region-scoped news API.
-    { key: "world", query: "international news Asia Africa Latin America Oceania", sites: [], setmkt: "en-US", limit: 2 },
+    { key: "world", query: "news", sites: WORLD_SITES, setmkt: "en-US", limit: 2 },
   ];
 }
 

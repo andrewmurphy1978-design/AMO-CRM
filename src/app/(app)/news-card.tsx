@@ -50,13 +50,13 @@ export default function NewsCard({ initial, labels }: { initial: NewsDigest | nu
       {!hasAnyItems ? (
         <p className="mt-3 text-sm text-soft">{labels.unavailable}</p>
       ) : (
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 divide-y divide-card-border">
           {CATEGORY_ORDER.map((key) => {
             const category = digest?.categories.find((c) => c.key === key);
             if (!category || category.items.length === 0) return null;
             const flag = CATEGORY_FLAGS[key];
             return (
-              <div key={key}>
+              <div key={key} className="py-2 first:pt-0 last:pb-0">
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-soft">
                   {labels.categories[key]}
                   {key === "world" ? (
