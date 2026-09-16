@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { Locale } from "date-fns";
 import { format } from "date-fns";
 
+// Lives inside the Dashboard header now (small, left-aligned, next to the
+// logo) rather than as its own card in the right column.
 export default function DateTimeCard({
   hour12,
   dateLocale,
@@ -21,19 +23,14 @@ export default function DateTimeCard({
   }, []);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <p className="font-display text-lg font-semibold text-ink">
-        {now ? format(now, "EEEE, MMMM d, yyyy", { locale: dateLocale }) : " "}
+    <div className="hidden text-left leading-tight text-amo-white sm:block">
+      <p className="text-[11px] font-medium opacity-90">
+        {now ? format(now, "EEE, MMM d", { locale: dateLocale }) : " "}
       </p>
-      <p className="mt-1 font-display text-3xl font-bold tabular-nums text-ink">
-        {now
-          ? new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12 }).format(
-              now
-            )
-          : "--:--:--"}
+      <p className="font-display text-sm font-bold tabular-nums">
+        {now ? new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit", hour12 }).format(now) : "--:--"}
       </p>
-      <p className="mt-1 text-sm text-soft">{location}</p>
-    </section>
+      <p className="text-[10px] opacity-75">{location}</p>
+    </div>
   );
 }

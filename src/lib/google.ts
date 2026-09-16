@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaClient } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
 // One personal Google connection per CRM user (Gmail + Calendar,
@@ -18,8 +18,8 @@ interface StoredGoogleData {
   email: string | null;
 }
 
-async function loadStored(userId: string): Promise<StoredGoogleData | null> {
-  const row = await prisma.googleAccount.findUnique({ where: { userId } });
+async function loadStored(userId: string, db: PrismaClient = prisma): Promise<StoredGoogleData | null> {
+  const row = await db.googleAccount.findUnique({ where: { userId } });
   if (!row) return null;
   try {
     const tokens = JSON.parse(await decryptSecret(row.tokensEncrypted)) as GoogleTokens;
@@ -36,9 +36,10 @@ async function loadStored(userId: string): Promise<StoredGoogleData | null> {
 export async function saveGoogleTokens(
   userId: string,
   next: { accessToken: string; refreshToken?: string; expiresAt: string },
-  email?: string | null
+  email?: string | null,
+  db: PrismaClient = prisma
 ): Promise<void> {
-  const existing = await loadStored(userId);
+  const existing = await loadStored(userId, db);
   const refreshToken = next.refreshToken ?? existing?.tokens.refreshToken;
   if (!refreshToken) {
     throw new Error("Google didn't return a refresh token — disconnect and reconnect to grant access again.");
@@ -49,7 +50,7 @@ export async function saveGoogleTokens(
   );
   const finalEmail = email ?? existing?.email ?? null;
 
-  await prisma.googleAccount.upsert({
+  await db.googleAccount.upsert({
     where: { userId },
     update: { tokensEncrypted, email: finalEmail },
     create: { userId, tokensEncrypted, email: finalEmail },
@@ -60,8 +61,11 @@ export async function disconnectGoogle(userId: string): Promise<void> {
   await prisma.googleAccount.deleteMany({ where: { userId } });
 }
 
-export async function getGoogleConnection(userId: string): Promise<{ email: string | null } | null> {
-  const row = await prisma.googleAccount.findUnique({ where: { userId } });
+export async function getGoogleConnection(
+  userId: string,
+  db: PrismaClient = prisma
+): Promise<{ email: string | null } | null> {
+  const row = await db.googleAccount.findUnique({ where: { userId } });
   if (!row) return null;
   return { email: row.email };
 }
@@ -70,8 +74,8 @@ export async function getGoogleConnection(userId: string): Promise<{ email: stri
 // expired (or expiring within a minute). Returns null when this user
 // hasn't connected Google, or the refresh itself fails (e.g. the grant
 // was revoked).
-export async function getValidAccessToken(userId: string): Promise<string | null> {
-  const stored = await loadStored(userId);
+export async function getValidAccessToken(userId: string, db: PrismaClient = prisma): Promise<string | null> {
+  const stored = await loadStored(userId, db);
   if (!stored) return null;
 
   if (new Date(stored.tokens.expiresAt).getTime() - Date.now() > 60_000) {
@@ -97,10 +101,12 @@ export async function getValidAccessToken(userId: string): Promise<string | null
     const data = (await res.json()) as { access_token?: string; expires_in?: number };
     if (!data.access_token) return null;
 
-    await saveGoogleTokens(userId, {
-      accessToken: data.access_token,
-      expiresAt: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString(),
-    });
+    await saveGoogleTokens(
+      userId,
+      { accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString() },
+      undefined,
+      db
+    );
     return data.access_token;
   } catch {
     return null;

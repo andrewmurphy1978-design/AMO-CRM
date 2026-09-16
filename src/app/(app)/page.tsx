@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { formatDistanceToNow, format, isToday, isYesterday, type Locale } from "date-fns";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -99,57 +99,98 @@ export default async function DashboardPage() {
   const sevenDaysAgo = daysFromNow(-7);
   const sevenDaysFromNow = daysFromNow(7);
 
-  // Sequential, not Promise.all: Cloudflare Hyperdrive hangs rather than
-  // queues when a single cold request tries to open several new database
-  // connections at once. See src/lib/prisma.ts.
-  const contactCount = await prisma.contact.count();
-  const clientCount = await prisma.contact.count({ where: { stage: "CLIENT" } });
-  const newContactCount = await prisma.contact.count({ where: { createdAt: { gte: sevenDaysAgo } } });
-  const activeProjectCount = await prisma.project.count({ where: { status: "ACTIVE" } });
-  const openTaskCount = await prisma.task.count({
-    where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
-  });
-  const dueSoonTaskCount = await prisma.task.count({
-    where: {
-      status: { in: ["TODO", "IN_PROGRESS"] },
-      dueDate: { not: null, lte: sevenDaysFromNow },
-    },
-  });
-  const dueSoonTasks = await prisma.task.findMany({
-    where: {
-      status: { in: ["TODO", "IN_PROGRESS"] },
-      dueDate: { not: null },
-    },
-    orderBy: { dueDate: "asc" },
-    take: 5,
-    include: { project: { include: { contact: true } } },
-  });
-  const activeProjects = await prisma.project.findMany({
-    where: { status: "ACTIVE" },
-    orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
-    take: 5,
-    include: { contact: true },
-  });
-  const recentActivity = await prisma.activityLogEntry.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 8,
-    include: { contact: true, project: true },
-  });
-  const integration = await prisma.integrationSetting.findUnique({
-    where: { provider: "systeme_io" },
-  });
-  const recentRuns = await prisma.automationRun.findMany({
-    orderBy: { occurredAt: "desc" },
-    take: 30,
+  // One shared client for every dashboard read below (counts, lists,
+  // Google's token, the social snapshots loop, the user's time format) —
+  // the `prisma` proxy in src/lib/prisma.ts opens a brand-new client (and,
+  // under Cloudflare Workers, a brand-new pooled connection) on every
+  // single property access, so calling it 20+ times in one page render
+  // piles up enough fresh-connection overhead in one Worker invocation to
+  // trip Cloudflare's Error 1102 resource-limit page. withScopedPrismaClient
+  // builds exactly one client and reuses it for the whole render instead —
+  // same fix already used for the systeme.io/Buffer/Make bulk syncs.
+  const {
+    contactCount,
+    clientCount,
+    newContactCount,
+    activeProjectCount,
+    openTaskCount,
+    dueSoonTaskCount,
+    dueSoonTasks,
+    activeProjects,
+    recentActivity,
+    integration,
+    recentRuns,
+    googleAccessToken,
+    socialSnapshots,
+    hour12,
+  } = await withScopedPrismaClient(async (db) => {
+    const contactCount = await db.contact.count();
+    const clientCount = await db.contact.count({ where: { stage: "CLIENT" } });
+    const newContactCount = await db.contact.count({ where: { createdAt: { gte: sevenDaysAgo } } });
+    const activeProjectCount = await db.project.count({ where: { status: "ACTIVE" } });
+    const openTaskCount = await db.task.count({
+      where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
+    });
+    const dueSoonTaskCount = await db.task.count({
+      where: {
+        status: { in: ["TODO", "IN_PROGRESS"] },
+        dueDate: { not: null, lte: sevenDaysFromNow },
+      },
+    });
+    const dueSoonTasks = await db.task.findMany({
+      where: {
+        status: { in: ["TODO", "IN_PROGRESS"] },
+        dueDate: { not: null },
+      },
+      orderBy: { dueDate: "asc" },
+      take: 5,
+      include: { project: { include: { contact: true } } },
+    });
+    const activeProjects = await db.project.findMany({
+      where: { status: "ACTIVE" },
+      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
+      take: 5,
+      include: { contact: true },
+    });
+    const recentActivity = await db.activityLogEntry.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      include: { contact: true, project: true },
+    });
+    const integration = await db.integrationSetting.findUnique({
+      where: { provider: "systeme_io" },
+    });
+    const recentRuns = await db.automationRun.findMany({
+      orderBy: { occurredAt: "desc" },
+      take: 30,
+    });
+    const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
+    const socialSnapshots = await getLatestSocialSnapshots(db);
+    // Read fresh from the DB rather than session.user.timeFormat — the JWT
+    // session is only reissued at login, so it would keep showing the old
+    // value right after saving the setting in Settings.
+    const currentUser = session
+      ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true } })
+      : null;
+
+    return {
+      contactCount,
+      clientCount,
+      newContactCount,
+      activeProjectCount,
+      openTaskCount,
+      dueSoonTaskCount,
+      dueSoonTasks,
+      activeProjects,
+      recentActivity,
+      integration,
+      recentRuns,
+      googleAccessToken,
+      socialSnapshots,
+      hour12: currentUser?.timeFormat === "HOUR12",
+    };
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
-  // Resolved once, sequentially, here rather than inside EmailCardServer/
-  // CalendarCardServer themselves — those render concurrently as sibling
-  // Suspense boundaries, and each doing its own fresh-connection Prisma
-  // read at the same time is what was tripping Cloudflare's Error 1102.
-  const googleAccessToken = session ? await getValidAccessToken(session.user.id) : null;
-  const socialSnapshots = await getLatestSocialSnapshots();
-  const hour12 = session?.user.timeFormat === "HOUR12";
 
   const weatherLabels = {
     title: t.dashboard.weatherTitle,
@@ -279,13 +320,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header className="sticky top-0 z-20 -mx-4 -mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-8 w-auto object-contain sm:h-9" />
-        <h1 className="justify-self-center font-display text-lg font-semibold text-amo-white sm:text-xl">
+      <header className="sticky top-0 z-20 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-2 sm:-mx-8 sm:-mt-8 sm:px-8">
+        <div className="flex items-center gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-36 shrink-0 object-contain sm:w-56" />
+          <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+        </div>
+        <h1 className="absolute left-1/2 -translate-x-1/2 font-display text-lg font-semibold text-amo-white sm:text-xl">
           {t.dashboard.title}
         </h1>
-        <span aria-hidden />
       </header>
 
       {!integration?.apiKeyEncrypted && (
@@ -407,7 +450,7 @@ export default async function DashboardPage() {
         {/* Middle column: calendar, automations, social analytics. */}
         <div className="space-y-6">
           <Suspense fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}>
-            <CalendarCardServer accessToken={googleAccessToken} lang={lang} labels={calendarLabels} />
+            <CalendarCardServer accessToken={googleAccessToken} lang={lang} hour12={hour12} labels={calendarLabels} />
           </Suspense>
 
           <SocialCard
@@ -467,7 +510,6 @@ export default async function DashboardPage() {
             (and the nav switch to get here) render immediately instead of
             waiting on all three. */}
         <div className="space-y-6">
-          <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
           <Suspense fallback={<CardSkeleton title={t.dashboard.weatherTitle} />}>
             <WeatherCardServer lang={lang} labels={weatherLabels} />
           </Suspense>

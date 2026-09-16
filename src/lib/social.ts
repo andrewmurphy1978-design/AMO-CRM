@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaClient } from "@/lib/prisma";
 
 export const SOCIAL_PLATFORMS = ["facebook", "instagram", "linkedin", "tiktok", "x", "youtube"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
@@ -64,11 +64,11 @@ function extractExtraStats(raw: unknown): ExtraStat[] {
 // Cloudflare Hyperdrive can't handle several fresh Prisma connections
 // landing at once. Called once there, ahead of the concurrently-rendered
 // Suspense cards, not from inside a card component itself.
-export async function getLatestSocialSnapshots(): Promise<SocialSnapshotView[]> {
+export async function getLatestSocialSnapshots(db: PrismaClient = prisma): Promise<SocialSnapshotView[]> {
   const results: SocialSnapshotView[] = [];
   for (const platform of SOCIAL_PLATFORMS) {
     for (const language of SOCIAL_LANGUAGES) {
-      const rows = await prisma.socialAnalyticsSnapshot.findMany({
+      const rows = await db.socialAnalyticsSnapshot.findMany({
         where: { platform, language },
         orderBy: { capturedAt: "desc" },
         take: 2,

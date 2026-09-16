@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getGoogleConnection } from "@/lib/google";
 import { disconnectGoogleAccount } from "@/actions/integrations";
 import SystemeIoForm from "./systeme-io-form";
@@ -27,17 +27,29 @@ export default async function SettingsPage({
   const lang = await getLang();
   const t = getDict(lang);
 
-  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
-  const integration = await prisma.integrationSetting.findUnique({
-    where: { provider: "systeme_io" },
-  });
-  const makeIntegration = await prisma.integrationSetting.findUnique({
-    where: { provider: "make" },
-  });
+  // One shared client for every read below — see the comment on the
+  // equivalent block in src/app/(app)/page.tsx for why (each `prisma.x`
+  // property access opens a brand-new client/connection, and enough of
+  // those in one request risks Cloudflare's Error 1102).
+  const { currentUser, integration, makeIntegration, bufferSettings, googleConnection, users } =
+    await withScopedPrismaClient(async (db) => {
+      const currentUser = session
+        ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true } })
+        : null;
+      const integration = await db.integrationSetting.findUnique({
+        where: { provider: "systeme_io" },
+      });
+      const makeIntegration = await db.integrationSetting.findUnique({
+        where: { provider: "make" },
+      });
+      const bufferSettings = await db.integrationSetting.findMany({
+        where: { provider: { in: ["buffer_en", "buffer_fr", "buffer_fb", "buffer_li"] } },
+      });
+      const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
+      const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
+      return { currentUser, integration, makeIntegration, bufferSettings, googleConnection, users };
+    });
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
-  const bufferSettings = await prisma.integrationSetting.findMany({
-    where: { provider: { in: ["buffer_en", "buffer_fr", "buffer_fb", "buffer_li"] } },
-  });
   const bufferLabels: Record<BufferProvider, string> = {
     buffer_en: t.settings.bufferEnLabel,
     buffer_fr: t.settings.bufferFrLabel,
@@ -55,8 +67,6 @@ export default async function SettingsPage({
       lastSyncError: setting?.lastSyncError ?? null,
     };
   });
-  const googleConnection = session ? await getGoogleConnection(session.user.id) : null;
-  const users = isAdmin ? await prisma.user.findMany({ orderBy: { name: "asc" } }) : [];
 
   return (
     <div className="space-y-8">
@@ -87,7 +97,7 @@ export default async function SettingsPage({
             <div className="mt-4">
               <ChangePasswordForm lang={lang} />
             </div>
-            {session && <TimeFormatForm lang={lang} timeFormat={session.user.timeFormat} />}
+            {currentUser && <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />}
           </section>
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">

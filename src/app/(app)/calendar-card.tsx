@@ -42,6 +42,19 @@ function eventColor(colorId: string | null): { bg: string; fg: string } {
   return (colorId && GOOGLE_EVENT_COLORS[colorId]) || DEFAULT_EVENT_COLOR;
 }
 
+// date-fns' locale-default time formatting ignores the user's own 12h/24h
+// preference (it's tied to the UI language instead — French defaults to
+// 24h, English to 12h), so event/hour-mark times use Intl.DateTimeFormat
+// directly with an explicit hour12, the same approach as World Clocks and
+// the Date/Time card.
+function formatClockTime(date: Date, hour12: boolean, intlLocale: string): string {
+  return new Intl.DateTimeFormat(intlLocale, { hour: "numeric", minute: "2-digit", hour12 }).format(date);
+}
+
+function formatHourMark(hour: number, hour12: boolean, intlLocale: string): string {
+  return new Intl.DateTimeFormat(intlLocale, { hour: "numeric", hour12 }).format(new Date(2000, 0, 1, hour));
+}
+
 const GRID_START_HOUR = 6; // grid content starts at 6 AM...
 const GRID_END_HOUR = 22; // ...through 10 PM, scrollable
 const VISIBLE_HOURS = 8; // ...but only ~9 AM-5 PM is visible without scrolling
@@ -185,11 +198,15 @@ function ThreeDayGrid({
   days,
   eventsByDay,
   dateLocale,
+  hour12,
+  intlLocale,
   labels,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
   dateLocale: Locale | undefined;
+  hour12: boolean;
+  intlLocale: string;
   labels: CalendarLabels;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -257,7 +274,7 @@ function ThreeDayGrid({
                 className="absolute right-1 -translate-y-1/2 text-[10px] text-soft"
                 style={{ top: (h - GRID_START_HOUR) * ROW_HEIGHT }}
               >
-                {format(new Date(2000, 0, 1, h), "h a", { locale: dateLocale })}
+                {formatHourMark(h, hour12, intlLocale)}
               </span>
             ))}
           </div>
@@ -274,11 +291,15 @@ function UpcomingTable({
   days,
   eventsByDay,
   dateLocale,
+  hour12,
+  intlLocale,
   labels,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
   dateLocale: Locale | undefined;
+  hour12: boolean;
+  intlLocale: string;
   labels: CalendarLabels;
 }) {
   return (
@@ -308,7 +329,7 @@ function UpcomingTable({
                         >
                           {!event.allDay && event.start && (
                             <span className="shrink-0 font-medium">
-                              {format(new Date(event.start), "p", { locale: dateLocale })}
+                              {formatClockTime(new Date(event.start), hour12, intlLocale)}
                             </span>
                           )}
                           <span className="truncate">{event.title}</span>
@@ -330,16 +351,19 @@ export default function CalendarCard({
   initial,
   connected,
   lang,
+  hour12,
   labels,
 }: {
   initial: CalendarEventSummary[] | null;
   connected: boolean;
   lang: "en" | "fr";
+  hour12: boolean;
   labels: CalendarLabels;
 }) {
   const [events, setEvents] = useState(initial);
   const [loading, setLoading] = useState(false);
   const dateLocale = getDateLocale(lang);
+  const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
 
   async function refresh() {
     setLoading(true);
@@ -379,8 +403,22 @@ export default function CalendarCard({
         </p>
       ) : (
         <div>
-          <ThreeDayGrid days={gridDays} eventsByDay={gridEvents} dateLocale={dateLocale} labels={labels} />
-          <UpcomingTable days={tableDays} eventsByDay={tableEvents} dateLocale={dateLocale} labels={labels} />
+          <ThreeDayGrid
+            days={gridDays}
+            eventsByDay={gridEvents}
+            dateLocale={dateLocale}
+            hour12={hour12}
+            intlLocale={intlLocale}
+            labels={labels}
+          />
+          <UpcomingTable
+            days={tableDays}
+            eventsByDay={tableEvents}
+            dateLocale={dateLocale}
+            hour12={hour12}
+            intlLocale={intlLocale}
+            labels={labels}
+          />
           <div className="mt-3 border-t border-card-border pt-3 text-xs">
             <a
               href="https://calendar.google.com/"
