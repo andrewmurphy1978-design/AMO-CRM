@@ -3,7 +3,12 @@
 // any of these hosts to confirm live behavior, so every fetch here is
 // defensive (empty/null on failure, never a thrown error) and records what
 // went wrong in `errors` — not shown in the UI, but visible by hitting
-// /api/dashboard/markets directly while logged in.
+// /api/dashboard/markets directly while logged in. Frankfurter (currencies)
+// is confirmed working from a live deploy; CoinGecko (crypto) is confirmed
+// blocked from Cloudflare Workers specifically (worked around via a
+// client-side fetch in markets-card.tsx); Yahoo Finance (indices,
+// commodities) replaced Stooq after Stooq's free endpoint started requiring
+// an API key and hasn't been checked live yet.
 export interface CurrencyPair {
   code: string;
   flag: string;
@@ -53,21 +58,22 @@ export const CRYPTO_IDS: { id: string; label: string; icon: string }[] = [
   { id: "ethereum", label: "Ethereum", icon: "Ξ" },
 ];
 
-// Stooq symbols recalled from memory, not confirmed live — this session's
-// network egress can't reach stooq.com to check them. Most likely spot to
-// need a fix once someone can see a real response from it.
+// Yahoo Finance's ticker conventions — well documented and stable, unlike
+// the Stooq symbols this replaced (Stooq quietly started requiring an
+// emailed-for, CAPTCHA-gated API key in ~April 2026, which is why its free
+// endpoint started 404ing).
 const INDEX_SYMBOLS: { symbol: string; label: string; icon: string; currency: string }[] = [
-  { symbol: "^ftse", label: "FTSE 100", icon: "🇬🇧", currency: "GBP" },
-  { symbol: "^dax", label: "DAX", icon: "🇩🇪", currency: "EUR" },
-  { symbol: "^cac", label: "CAC 40", icon: "🇫🇷", currency: "EUR" },
-  { symbol: "^nkx", label: "Nikkei 225", icon: "🇯🇵", currency: "JPY" },
-  { symbol: "^hsi", label: "Hang Seng", icon: "🇭🇰", currency: "HKD" },
+  { symbol: "^FTSE", label: "FTSE 100", icon: "🇬🇧", currency: "GBP" },
+  { symbol: "^GDAXI", label: "DAX", icon: "🇩🇪", currency: "EUR" },
+  { symbol: "^FCHI", label: "CAC 40", icon: "🇫🇷", currency: "EUR" },
+  { symbol: "^N225", label: "Nikkei 225", icon: "🇯🇵", currency: "JPY" },
+  { symbol: "^HSI", label: "Hang Seng", icon: "🇭🇰", currency: "HKD" },
 ];
 
 const COMMODITY_SYMBOLS: { symbol: string; label: string; icon: string; currency: string }[] = [
-  { symbol: "gc.f", label: "Gold", icon: "🥇", currency: "USD" },
-  { symbol: "cb.f", label: "Brent crude", icon: "🛢️", currency: "USD" },
-  { symbol: "cl.f", label: "WTI crude", icon: "🛢️", currency: "USD" },
+  { symbol: "GC=F", label: "Gold", icon: "🥇", currency: "USD" },
+  { symbol: "BZ=F", label: "Brent crude", icon: "🛢️", currency: "USD" },
+  { symbol: "CL=F", label: "WTI crude", icon: "🛢️", currency: "USD" },
 ];
 
 // Frankfurter (ECB daily reference rates) — https://frankfurter.dev, free,
@@ -149,52 +155,56 @@ async function getCrypto(errors: string[]): Promise<CryptoPrice[]> {
   }
 }
 
-// Stooq's free CSV quote endpoint (no key) — this is the one piece of the
-// Markets card built from documentation recalled rather than a live check,
-// since this session can't reach stooq.com to confirm the CSV column order.
-async function getStooqQuotes(
+// Yahoo Finance's unofficial (but widely used — it's what the `yfinance`
+// Python library wraps) chart endpoint. Undocumented and can change without
+// notice, but confirmed working keyless as of mid-2026, unlike Stooq's now
+// key-gated one. One request per symbol; `meta.regularMarketPrice` and
+// `meta.previousClose` give both the quote and a same-request % change.
+async function getYahooQuote(
+  item: { symbol: string; label: string; icon: string; currency: string },
+  errors: string[]
+): Promise<QuoteItem> {
+  try {
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.symbol)}`, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+    if (!res.ok) {
+      errors.push(`yahoo (${item.symbol}): HTTP ${res.status}`);
+      return { ...item, price: null, changePct: null };
+    }
+    const data = (await res.json()) as {
+      chart?: {
+        result?: { meta?: { regularMarketPrice?: number; previousClose?: number; chartPreviousClose?: number } }[];
+      };
+    };
+    const meta = data.chart?.result?.[0]?.meta;
+    const price = meta?.regularMarketPrice ?? null;
+    const prevClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null;
+    if (price === null) errors.push(`yahoo (${item.symbol}): no regularMarketPrice in response`);
+    const changePct = price !== null && prevClose ? ((price - prevClose) / prevClose) * 100 : null;
+    return { ...item, price, changePct };
+  } catch (error) {
+    errors.push(`yahoo (${item.symbol}): ${error instanceof Error ? error.message : String(error)}`);
+    return { ...item, price: null, changePct: null };
+  }
+}
+
+async function getYahooQuotes(
   items: { symbol: string; label: string; icon: string; currency: string }[],
   errors: string[]
 ): Promise<QuoteItem[]> {
-  const empty = items.map((i) => ({ ...i, price: null, changePct: null }));
-  try {
-    const symbols = items.map((i) => i.symbol).join(",");
-    const res = await fetch(`https://stooq.com/q/l/?s=${symbols}&f=sd2t2c2p2&h&e=csv`);
-    if (!res.ok) {
-      errors.push(`stooq (${symbols}): HTTP ${res.status}`);
-      return empty;
-    }
-    const text = await res.text();
-    const lines = text.trim().split("\n").slice(1);
-    const bySymbol = new Map<string, { price: number | null; changePct: number | null }>();
-    for (const line of lines) {
-      const cols = line.split(",");
-      const symbol = cols[0]?.toLowerCase();
-      const price = Number(cols[3]);
-      const changePct = Number(cols[4]);
-      if (symbol) {
-        bySymbol.set(symbol, {
-          price: Number.isFinite(price) ? price : null,
-          changePct: Number.isFinite(changePct) ? changePct : null,
-        });
-      }
-    }
-    return items.map((i) => {
-      const found = bySymbol.get(i.symbol.toLowerCase());
-      return { ...i, price: found?.price ?? null, changePct: found?.changePct ?? null };
-    });
-  } catch (error) {
-    errors.push(`stooq (${items.map((i) => i.symbol).join(",")}): ${error instanceof Error ? error.message : String(error)}`);
-    return empty;
-  }
+  return Promise.all(items.map((item) => getYahooQuote(item, errors)));
 }
 
 export async function getMarketsSnapshot(): Promise<MarketsSnapshot> {
   const errors: string[] = [];
   const [currencies, indices, commodities, crypto] = await Promise.all([
     getCurrencies("CAD", errors),
-    getStooqQuotes(INDEX_SYMBOLS, errors),
-    getStooqQuotes(COMMODITY_SYMBOLS, errors),
+    getYahooQuotes(INDEX_SYMBOLS, errors),
+    getYahooQuotes(COMMODITY_SYMBOLS, errors),
     getCrypto(errors),
   ]);
   return {
