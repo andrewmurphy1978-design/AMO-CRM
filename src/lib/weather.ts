@@ -145,21 +145,36 @@ export interface GeoLabel {
   countryCode: string;
 }
 
-// BigDataCloud's free reverse-geocode endpoint — no API key, designed for
-// client-side use but works fine from a server too. This session's network
-// egress can't reach it to confirm the field names live (same as the rest
-// of this file), so `city`/`locality`/`countryCode` are taken from its
-// documented response shape.
+// OpenStreetMap's Nominatim — free, no key, but its usage policy asks for a
+// real identifying User-Agent and no more than ~1 request/sec, both easy
+// for one lookup per dashboard load. Switched from BigDataCloud's "client"
+// endpoint after a live deploy returned "Laurentides" (the surrounding
+// region) instead of the actual town — that endpoint is meant for rough
+// client-side use and trades precision for speed; Nominatim's `address`
+// breakdown has dedicated city/town/village fields that don't have that
+// problem.
 export async function reverseGeocode(lat: number, lon: number): Promise<GeoLabel | null> {
   try {
     const res = await fetch(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&addressdetails=1`,
+      { headers: { "User-Agent": "AMO-CRM/1.0 (contact: andrewmurphy1978@gmail.com)" } }
     );
     if (!res.ok) return null;
-    const data = (await res.json()) as { city?: string; locality?: string; countryCode?: string };
-    const city = data.city || data.locality || null;
-    if (!city || !data.countryCode) return null;
-    return { city, countryCode: data.countryCode };
+    const data = (await res.json()) as {
+      address?: {
+        city?: string;
+        town?: string;
+        village?: string;
+        hamlet?: string;
+        municipality?: string;
+        country_code?: string;
+      };
+    };
+    const addr = data.address;
+    const city = addr?.city || addr?.town || addr?.village || addr?.hamlet || addr?.municipality || null;
+    const countryCode = addr?.country_code?.toUpperCase();
+    if (!city || !countryCode) return null;
+    return { city, countryCode };
   } catch {
     return null;
   }

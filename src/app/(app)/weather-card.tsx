@@ -79,11 +79,12 @@ export default function WeatherCard({
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
         <RefreshButton onClick={locateAndRefresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
       </div>
+      {weather?.cityLabel && <p className="text-xs font-medium text-soft">{weather.cityLabel}</p>}
       {!weather ? (
         <p className="mt-3 text-sm text-soft">{labels.unavailable}</p>
       ) : (
         <div className="mt-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-3">
               <span className="text-4xl">{weatherCodeEmoji(weather.weatherCode)}</span>
               <div>
@@ -94,6 +95,21 @@ export default function WeatherCard({
                 <p className="text-sm text-soft">{weatherCodeLabel(weather.weatherCode, lang)}</p>
               </div>
             </div>
+
+            <div className="text-center">
+              <p className="font-display text-2xl font-semibold text-ink">
+                {weather.highTemp}
+                {degree}
+              </p>
+              <p className="text-base text-soft">
+                {weather.lowTemp}
+                {degree}
+              </p>
+              <p className="text-[10px] uppercase tracking-wide text-soft">
+                {labels.high} / {labels.low}
+              </p>
+            </div>
+
             <dl className="space-y-1 text-xs">
               <div className="flex justify-between gap-3">
                 <dt className="text-soft">{labels.feelsLike}</dt>
@@ -107,20 +123,6 @@ export default function WeatherCard({
                 <dd className="text-ink">{weather.humidity}%</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt className="text-soft">{labels.high}</dt>
-                <dd className="text-ink">
-                  {weather.highTemp}
-                  {degree}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-soft">{labels.low}</dt>
-                <dd className="text-ink">
-                  {weather.lowTemp}
-                  {degree}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
                 <dt className="text-soft">{labels.wind}</dt>
                 <dd className="text-ink">
                   {weather.windSpeed} {windUnitLabel}
@@ -128,8 +130,6 @@ export default function WeatherCard({
               </div>
             </dl>
           </div>
-
-          {weather.cityLabel && <p className="mt-2 text-xs font-medium text-soft">{weather.cityLabel}</p>}
 
           {weather.daily.length > 0 && (
             <div className="mt-4 grid grid-cols-5 gap-1 border-t border-card-border pt-3">
@@ -139,8 +139,8 @@ export default function WeatherCard({
                     {format(new Date(day.date), "EEE", { locale: dateLocale })}
                   </span>
                   <span className="text-lg">{weatherCodeEmoji(day.weatherCode)}</span>
-                  <span className="text-xs text-ink">{day.highTemp}°</span>
-                  <span className="text-xs text-soft">{day.lowTemp}°</span>
+                  <span className="text-base font-medium text-ink">{day.highTemp}°</span>
+                  <span className="text-sm text-soft">{day.lowTemp}°</span>
                 </div>
               ))}
             </div>
