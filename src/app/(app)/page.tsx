@@ -13,6 +13,7 @@ import NewsCardServer from "./news-card-server";
 import MarketsCardServer from "./markets-card-server";
 import EmailCardServer from "./email-card-server";
 import CalendarCardServer from "./calendar-card-server";
+import { getValidAccessToken } from "@/lib/google";
 import type { AutomationRun } from "@prisma/client";
 
 // "about 8 hours ago" is vague for something you'd want to check against a
@@ -134,6 +135,11 @@ export default async function DashboardPage() {
     take: 30,
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
+  // Resolved once, sequentially, here rather than inside EmailCardServer/
+  // CalendarCardServer themselves — those render concurrently as sibling
+  // Suspense boundaries, and each doing its own fresh-connection Prisma
+  // read at the same time is what was tripping Cloudflare's Error 1102.
+  const googleAccessToken = await getValidAccessToken();
 
   const weatherLabels = {
     title: t.dashboard.weatherTitle,
@@ -272,7 +278,7 @@ export default async function DashboardPage() {
         {/* Left column: email, projects, tasks, activity. */}
         <div className="space-y-6">
           <Suspense fallback={<CardSkeleton title={t.dashboard.emailTitle} />}>
-            <EmailCardServer labels={emailLabels} />
+            <EmailCardServer accessToken={googleAccessToken} labels={emailLabels} />
           </Suspense>
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
@@ -357,7 +363,7 @@ export default async function DashboardPage() {
         {/* Middle column: calendar, automations, social analytics. */}
         <div className="space-y-6">
           <Suspense fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}>
-            <CalendarCardServer lang={lang} labels={calendarLabels} />
+            <CalendarCardServer accessToken={googleAccessToken} lang={lang} labels={calendarLabels} />
           </Suspense>
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">

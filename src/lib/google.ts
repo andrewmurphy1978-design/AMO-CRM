@@ -125,12 +125,17 @@ function formatFrom(raw: string): string {
   return name || raw;
 }
 
-// null return means "not connected / fetch failed"; [] means connected but
-// genuinely zero unread messages.
-export async function getRecentEmails(maxResults = 8): Promise<EmailSummary[] | null> {
-  const accessToken = await getValidAccessToken();
-  if (!accessToken) return null;
-
+// Takes the access token directly rather than fetching it internally —
+// this (and getUpcomingEvents below) runs inside a <Suspense> boundary
+// alongside other independent boundaries that Next.js renders
+// concurrently, and Cloudflare Hyperdrive can't handle two of this app's
+// fresh-connection-per-call Prisma reads (see src/lib/prisma.ts) landing
+// at the same time; getValidAccessToken's DB read has to happen once,
+// sequentially, before any concurrent rendering starts.
+//
+// null return means "not connected / fetch failed"; [] means connected
+// but genuinely zero unread messages.
+export async function getRecentEmails(accessToken: string, maxResults = 8): Promise<EmailSummary[] | null> {
   try {
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent("is:unread in:inbox")}`,
@@ -175,10 +180,9 @@ export interface CalendarEventSummary {
   allDay: boolean;
 }
 
-export async function getUpcomingEvents(): Promise<CalendarEventSummary[] | null> {
-  const accessToken = await getValidAccessToken();
-  if (!accessToken) return null;
-
+// Same reasoning as getRecentEmails above — takes the token directly so no
+// Prisma read happens from inside a concurrently-rendered Suspense branch.
+export async function getUpcomingEvents(accessToken: string): Promise<CalendarEventSummary[] | null> {
   try {
     const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
     url.searchParams.set("timeMin", new Date().toISOString());
