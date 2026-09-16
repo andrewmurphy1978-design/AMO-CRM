@@ -4,8 +4,14 @@ import { formatDistanceToNow, format, isToday, isYesterday, type Locale } from "
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
+import { getWeather, DEFAULT_WEATHER_COORDS } from "@/lib/weather";
+import { getNewsDigest } from "@/lib/news";
+import { getMarketsSnapshot } from "@/lib/markets";
 import WorldClocks from "./world-clocks";
 import ComingSoonCard from "./coming-soon-card";
+import WeatherCard from "./weather-card";
+import NewsCard from "./news-card";
+import MarketsCard from "./markets-card";
 import type { AutomationRun } from "@prisma/client";
 
 // "about 8 hours ago" is vague for something you'd want to check against a
@@ -127,6 +133,52 @@ export default async function DashboardPage() {
     take: 30,
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
+
+  // Plain external HTTP fetches, not Prisma/Hyperdrive calls, so unlike the
+  // queries above these are safe to run concurrently.
+  const [initialWeather, initialNews, initialMarkets] = await Promise.all([
+    getWeather(DEFAULT_WEATHER_COORDS.lat, DEFAULT_WEATHER_COORDS.lon),
+    getNewsDigest(lang),
+    getMarketsSnapshot(),
+  ]);
+
+  const weatherLabels = {
+    title: t.dashboard.weatherTitle,
+    refresh: t.dashboard.refresh,
+    refreshing: t.dashboard.refreshing,
+    updatedPrefix: t.dashboard.updatedPrefix,
+    humidity: t.dashboard.weatherHumidity,
+    wind: t.dashboard.weatherWind,
+    high: t.dashboard.weatherHigh,
+    low: t.dashboard.weatherLow,
+    feelsLike: t.dashboard.weatherFeelsLike,
+    unavailable: t.dashboard.weatherUnavailable,
+  };
+  const newsLabels = {
+    title: t.dashboard.newsTitle,
+    refresh: t.dashboard.refresh,
+    refreshing: t.dashboard.refreshing,
+    unavailable: t.dashboard.newsUnavailable,
+    categories: {
+      local: t.dashboard.newsCategoryLocal,
+      montreal: t.dashboard.newsCategoryMontreal,
+      quebec: t.dashboard.newsCategoryQuebec,
+      canada: t.dashboard.newsCategoryCanada,
+      us: t.dashboard.newsCategoryUs,
+      europe: t.dashboard.newsCategoryEurope,
+      world: t.dashboard.newsCategoryWorld,
+    },
+  };
+  const marketsLabels = {
+    title: t.dashboard.marketsTitle,
+    refresh: t.dashboard.refresh,
+    refreshing: t.dashboard.refreshing,
+    unavailable: t.dashboard.marketsUnavailable,
+    currencies: t.dashboard.marketsCurrencies,
+    indices: t.dashboard.marketsIndices,
+    commodities: t.dashboard.marketsCommodities,
+    crypto: t.dashboard.marketsCrypto,
+  };
 
   const stats = [
     {
@@ -336,10 +388,10 @@ export default async function DashboardPage() {
 
         {/* Right column: general info. */}
         <div className="space-y-6">
-          <ComingSoonCard title={t.dashboard.weatherTitle} description={t.dashboard.weatherComingSoon} />
+          <WeatherCard initial={initialWeather} lang={lang} labels={weatherLabels} />
           <WorldClocks title="World clocks" />
-          <ComingSoonCard title={t.dashboard.newsTitle} description={t.dashboard.newsComingSoon} />
-          <ComingSoonCard title={t.dashboard.marketsTitle} description={t.dashboard.marketsComingSoon} />
+          <NewsCard initial={initialNews} lang={lang} labels={newsLabels} />
+          <MarketsCard initial={initialMarkets} labels={marketsLabels} />
         </div>
       </div>
     </div>
