@@ -6,8 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Sidebar from "./sidebar";
 
-const AMO_LOGO_URL =
-  "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
+const AMO_BADGE_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596c0abdbde8.23945126_AMOBadgeTransparent.png";
 
 export default function AppShell({
   navItems,
@@ -62,7 +61,7 @@ export default function AppShell({
         <header className="relative z-10 flex items-center justify-between bg-amo-green px-4 py-3 sm:hidden">
           <Link href="/" className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-7 w-7 rounded-full" />
+            <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-7 w-7 object-contain" />
             <span className="font-display text-sm font-semibold text-amo-white">CRM</span>
           </Link>
           <form action={signOutAction}>

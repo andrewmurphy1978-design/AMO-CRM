@@ -2,8 +2,13 @@
 
 import NavLink from "./nav-link";
 
+// Full lockup (icon + "Andrew Murphy Online" wordmark) — wide, meant to run
+// the width of the expanded sidebar. Forcing it into a small square (as a
+// prior version of this file did) squished the wordmark into it.
 const AMO_LOGO_URL =
   "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
+// Icon-only badge — used wherever space is too narrow for the full lockup.
+const AMO_BADGE_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596c0abdbde8.23945126_AMOBadgeTransparent.png";
 
 export default function Sidebar({
   navItems,
@@ -37,7 +42,7 @@ export default function Sidebar({
             </svg>
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-9 w-9 rounded-full" />
+          <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-9 w-9 object-contain" />
         </div>
         <nav className="flex-1 space-y-1 px-2 py-4">
           {navItems.map((item) => (
@@ -62,7 +67,7 @@ export default function Sidebar({
           </svg>
         </button>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-9 w-9 rounded-full" />
+        <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-full" />
         <p className="font-display text-lg font-semibold tracking-wide text-amo-white">CRM</p>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
