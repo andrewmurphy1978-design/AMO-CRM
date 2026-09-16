@@ -85,16 +85,20 @@ export class BufferClient {
   // Buffer normalizes engagement across networks into a flat list of typed
   // metrics for a set of channels (postCount/reactions/comments always
   // present; reach/impressions/engagementRate only when every channel in
-  // the set supports them) rather than a fixed set of named fields.
-  async getAggregatedMetrics(channelIds: string[]): Promise<BufferMetric[]> {
+  // the set supports them) rather than a fixed set of named fields. Free
+  // plans only keep 30 days of analytics history, so that's the window
+  // queried here.
+  async getAggregatedMetrics(organizationId: string, channelIds: string[]): Promise<BufferMetric[]> {
     if (channelIds.length === 0) return [];
+    const endDateTime = new Date();
+    const startDateTime = new Date(endDateTime.getTime() - 30 * 24 * 60 * 60 * 1000);
     const data = await this.request<{ aggregatedPostMetrics: { metrics: BufferMetric[] } }>(
-      `query GetMetrics($channelIds: [ChannelId!]!) {
-        aggregatedPostMetrics(input: { channelIds: $channelIds }) {
+      `query GetMetrics($organizationId: OrganizationId!, $channelIds: [ChannelId!]!, $startDateTime: DateTime!, $endDateTime: DateTime!) {
+        aggregatedPostMetrics(input: { organizationId: $organizationId, channelIds: $channelIds, startDateTime: $startDateTime, endDateTime: $endDateTime }) {
           metrics { type name value }
         }
       }`,
-      { channelIds }
+      { organizationId, channelIds, startDateTime: startDateTime.toISOString(), endDateTime: endDateTime.toISOString() }
     );
     return data.aggregatedPostMetrics.metrics;
   }
@@ -147,7 +151,7 @@ async function runBufferSyncWith(db: PrismaClient): Promise<BufferSyncResult> {
       }
 
       for (const [platform, channelIds] of channelIdsByPlatform) {
-        const metrics = await client.getAggregatedMetrics(channelIds);
+        const metrics = await client.getAggregatedMetrics(orgId, channelIds);
         const reactions = metrics.find((m) => m.type === "reactions")?.value ?? 0;
         const comments = metrics.find((m) => m.type === "comments")?.value ?? 0;
         const postCount = metrics.find((m) => m.type === "postCount")?.value ?? 0;
