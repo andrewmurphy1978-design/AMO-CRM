@@ -75,7 +75,7 @@ export class BufferClient {
   async listChannels(organizationId: string): Promise<BufferChannel[]> {
     const data = await this.request<{ channels: BufferChannel[] }>(
       `query GetChannels($organizationId: OrganizationId!) {
-        channels(organizationId: $organizationId) { id name service }
+        channels(input: { organizationId: $organizationId }) { id name service }
       }`,
       { organizationId }
     );
