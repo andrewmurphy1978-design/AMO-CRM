@@ -108,6 +108,12 @@ export default async function DashboardPage() {
     take: 5,
     include: { project: { include: { contact: true } } },
   });
+  const activeProjects = await prisma.project.findMany({
+    where: { status: "ACTIVE" },
+    orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
+    take: 5,
+    include: { contact: true },
+  });
   const recentActivity = await prisma.activityLogEntry.findMany({
     orderBy: { createdAt: "desc" },
     take: 8,
@@ -193,10 +199,38 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        {/* Main column: personal + professional feed, top to bottom. */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left column: email, projects, tasks, activity. */}
         <div className="space-y-6">
           <ComingSoonCard title={t.dashboard.emailTitle} description={t.dashboard.emailComingSoon} />
+
+          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.dashboardProjectsTitle}</h2>
+            {activeProjects.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.dashboard.noActiveProjects}</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {activeProjects.map((project) => (
+                  <li key={project.id} className="flex items-start gap-3 text-sm">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-lime" />
+                    <div>
+                      <Link
+                        href={`/projects/${project.id}`}
+                        className="font-medium text-ink hover:text-emerald-700 hover:underline"
+                      >
+                        {project.name}
+                      </Link>
+                      <p className="text-xs text-soft">
+                        {project.contact.firstName ?? project.contact.email}
+                        {project.dueDate && ` · ${t.dashboard.due} ${formatDistanceToNow(project.dueDate, { addSuffix: true, locale: dateLocale })}`}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
@@ -247,7 +281,10 @@ export default async function DashboardPage() {
               </ul>
             )}
           </div>
+        </div>
 
+        {/* Middle column: calendar, automations, social analytics. */}
+        <div className="space-y-6">
           <ComingSoonCard title={t.dashboard.calendarTitle} description={t.dashboard.calendarComingSoon} />
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">

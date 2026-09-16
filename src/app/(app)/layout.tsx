@@ -3,7 +3,12 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import NavLink from "./nav-link";
+import Sidebar from "./sidebar";
+
+async function handleSignOut() {
+  "use server";
+  await signOut({ redirectTo: "/login" });
+}
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -33,35 +38,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen">
-      <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto bg-amo-green sm:sticky sm:top-0 sm:z-10 sm:flex sm:h-screen">
-        <div className="flex flex-col items-center gap-2 border-b border-white/10 px-4 py-6">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-auto w-full" />
-          <p className="font-display text-lg font-semibold tracking-wide text-amo-white">CRM</p>
-        </div>
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {NAV_ITEMS.map((item) => (
-            <NavLink key={item.href} href={item.href} label={item.label} />
-          ))}
-        </nav>
-        <div className="border-t border-white/10 p-4">
-          <p className="truncate text-sm font-medium text-amo-white">{session?.user?.name}</p>
-          <p className="truncate text-xs text-amo-muted">{session?.user?.email}</p>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
-            }}
-          >
-            <button
-              type="submit"
-              className="mt-2 text-xs font-medium text-amo-muted transition-colors hover:text-amo-lime"
-            >
-              {t.nav.signOut}
-            </button>
-          </form>
-        </div>
-      </aside>
+      <Sidebar
+        navItems={NAV_ITEMS}
+        userName={session?.user?.name}
+        userEmail={session?.user?.email}
+        signOutLabel={t.nav.signOut}
+        signOutAction={handleSignOut}
+      />
 
       <div className="relative flex flex-1 flex-col">
         <div className="amo-bg-image amo-bg-image--app" />
@@ -72,12 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <img src={AMO_LOGO_URL} alt="Andrew Murphy Online" className="h-7 w-7" />
             <span className="font-display text-sm font-semibold text-amo-white">CRM</span>
           </Link>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
-            }}
-          >
+          <form action={handleSignOut}>
             <button type="submit" className="text-xs font-medium text-amo-muted">
               {t.nav.signOut}
             </button>
