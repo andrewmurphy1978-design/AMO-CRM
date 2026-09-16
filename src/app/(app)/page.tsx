@@ -1,11 +1,51 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format, isToday, isYesterday, type Locale } from "date-fns";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import WorldClocks from "./world-clocks";
 import ComingSoonCard from "./coming-soon-card";
+import type { AutomationRun } from "@prisma/client";
+
+// "about 8 hours ago" is vague for something you'd want to check against a
+// posting schedule — this gives "Today at 3:15 PM" / "Yesterday at 9:00 AM" /
+// "Sep 12 at 9:00 AM" instead.
+function formatSmartDateTime(date: Date, dateLocale: Locale | undefined, t: ReturnType<typeof getDict>): string {
+  const time = format(date, "p", { locale: dateLocale });
+  if (isToday(date)) return t.dashboard.todayAt(time);
+  if (isYesterday(date)) return t.dashboard.yesterdayAt(time);
+  return t.dashboard.dateAt(format(date, "MMM d", { locale: dateLocale }), time);
+}
+
+type AutomationEntry =
+  | { kind: "run"; run: AutomationRun }
+  | { kind: "successGroup"; source: string; name: string | null; count: number; latest: Date };
+
+// Make's execution history can't tell us which specific post/platform ran
+// (the scenario doesn't log that anywhere once a queue item is processed —
+// see chat), so every successful run currently looks identical: the same
+// scenario name over and over. Rather than list "Social Media Poster —
+// Success" a dozen times, consecutive successful runs of the same
+// automation collapse into one line; failures always stay individual since
+// each one is actually worth looking at.
+function groupAutomationRuns(runs: AutomationRun[]): AutomationEntry[] {
+  const entries: AutomationEntry[] = [];
+  for (const run of runs) {
+    if (run.status === "error") {
+      entries.push({ kind: "run", run });
+      continue;
+    }
+    const last = entries[entries.length - 1];
+    if (last?.kind === "successGroup" && last.source === run.source && last.name === run.name) {
+      last.count += 1;
+      if (run.occurredAt > last.latest) last.latest = run.occurredAt;
+      continue;
+    }
+    entries.push({ kind: "successGroup", source: run.source, name: run.name, count: 1, latest: run.occurredAt });
+  }
+  return entries;
+}
 
 const STAT_ICONS = {
   contacts: (
@@ -78,8 +118,9 @@ export default async function DashboardPage() {
   });
   const recentRuns = await prisma.automationRun.findMany({
     orderBy: { occurredAt: "desc" },
-    take: 8,
+    take: 30,
   });
+  const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
 
   const stats = [
     {
@@ -212,34 +253,43 @@ export default async function DashboardPage() {
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
             <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.automationsTitle}</h2>
-            {recentRuns.length === 0 ? (
+            {automationEntries.length === 0 ? (
               <p className="mt-3 text-sm text-soft">{t.dashboard.noAutomationRuns}</p>
             ) : (
               <ul className="mt-3 space-y-2">
-                {recentRuns.map((run) => (
-                  <li key={run.id} className="flex items-start gap-3 text-sm">
-                    <span
-                      className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${run.status === "error" ? "bg-red-500" : "bg-emerald-500"}`}
-                    />
-                    <div className="flex-1">
-                      <p className="text-ink">
-                        <span className="font-medium">{run.source === "make" ? "Make" : "Zapier"}</span>
-                        {run.name ? ` · ${run.name}` : ""}
-                      </p>
-                      {run.message && <p className="text-xs text-soft">{run.message}</p>}
-                    </div>
-                    <div className="text-right">
-                      <span
-                        className={`text-xs font-medium ${run.status === "error" ? "text-red-600" : "text-emerald-700"}`}
-                      >
-                        {run.status === "error" ? t.dashboard.automationError : t.dashboard.automationSuccess}
-                      </span>
-                      <p className="text-xs text-soft">
-                        {formatDistanceToNow(run.occurredAt, { addSuffix: true, locale: dateLocale })}
-                      </p>
-                    </div>
-                  </li>
-                ))}
+                {automationEntries.map((entry) =>
+                  entry.kind === "run" ? (
+                    <li key={entry.run.id} className="flex items-start gap-3 text-sm">
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      <div className="flex-1">
+                        <p className="text-ink">
+                          <span className="font-medium">{entry.run.source === "make" ? "Make" : "Zapier"}</span>
+                          {entry.run.name ? ` · ${entry.run.name}` : ""}
+                        </p>
+                        {entry.run.message && <p className="text-xs text-soft">{entry.run.message}</p>}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-medium text-red-600">{t.dashboard.automationError}</span>
+                        <p className="text-xs text-soft">{formatSmartDateTime(entry.run.occurredAt, dateLocale, t)}</p>
+                      </div>
+                    </li>
+                  ) : (
+                    <li key={`${entry.source}-${entry.name}-${entry.latest.getTime()}`} className="flex items-start gap-3 text-sm">
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <div className="flex-1">
+                        <p className="text-ink">
+                          <span className="font-medium">{entry.source === "make" ? "Make" : "Zapier"}</span>
+                          {entry.name ? ` · ${entry.name}` : ""}
+                        </p>
+                        <p className="text-xs text-soft">{t.dashboard.automationSuccessCount(entry.count)}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-medium text-emerald-700">{t.dashboard.automationSuccess}</span>
+                        <p className="text-xs text-soft">{formatSmartDateTime(entry.latest, dateLocale, t)}</p>
+                      </div>
+                    </li>
+                  )
+                )}
               </ul>
             )}
           </div>

@@ -97,6 +97,10 @@ export const dictionaries = {
       noAutomationRuns: "No automation runs yet. Sync Make or wire up your Zapier webhooks in Settings.",
       automationSuccess: "Success",
       automationError: "Failed",
+      automationSuccessCount: (count: number) => (count === 1 ? "1 successful run" : `${count} successful runs`),
+      todayAt: (time: string) => `Today at ${time}`,
+      yesterdayAt: (time: string) => `Yesterday at ${time}`,
+      dateAt: (date: string, time: string) => `${date} at ${time}`,
     },
     stages: {
       LEAD: "Lead",
@@ -533,6 +537,10 @@ export const dictionaries = {
       noAutomationRuns: "Aucune exécution d'automatisation pour l'instant. Synchronisez Make ou configurez vos webhooks Zapier dans Paramètres.",
       automationSuccess: "Succès",
       automationError: "Échec",
+      automationSuccessCount: (count: number) => (count === 1 ? "1 exécution réussie" : `${count} exécutions réussies`),
+      todayAt: (time: string) => `Aujourd'hui à ${time}`,
+      yesterdayAt: (time: string) => `Hier à ${time}`,
+      dateAt: (date: string, time: string) => `${date} à ${time}`,
     },
     stages: {
       LEAD: "Prospect",
