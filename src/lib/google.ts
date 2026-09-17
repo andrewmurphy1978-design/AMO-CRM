@@ -274,12 +274,15 @@ export async function getSentAwaitingReplies(
   { maxResults = 20 }: { maxResults?: number } = {}
 ): Promise<SentEmailSummary[] | null> {
   try {
-    const query = "in:sent newer_than:45d";
+    const query = "in:sent newer_than:180d";
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
-    if (!listRes.ok) return null;
+    if (!listRes.ok) {
+      console.error("getSentAwaitingReplies: messages.list returned", listRes.status, await listRes.text());
+      return null;
+    }
     const listData = (await listRes.json()) as { messages?: { id: string }[] };
     const ids = listData.messages?.map((m) => m.id) ?? [];
     if (ids.length === 0) return [];
@@ -290,7 +293,10 @@ export async function getSentAwaitingReplies(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
-        if (!res.ok) return null;
+        if (!res.ok) {
+          console.error("getSentAwaitingReplies: message fetch returned", res.status, await res.text());
+          return null;
+        }
         const data = (await res.json()) as {
           id: string;
           threadId?: string;
@@ -342,16 +348,29 @@ export async function getSentAwaitingReplies(
         const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${m.threadId}?format=minimal`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+          console.error("getSentAwaitingReplies: thread fetch returned", res.status, await res.text());
+          return null;
+        }
         const thread = (await res.json()) as { messages?: { labelIds?: string[] }[] };
         const lastMessage = thread.messages?.[thread.messages.length - 1];
         const stillAwaiting = Boolean(lastMessage?.labelIds?.includes("SENT")) && !lastMessage?.labelIds?.includes("INBOX");
+        if (!stillAwaiting) {
+          console.error(
+            "getSentAwaitingReplies: thread excluded, last message labels:",
+            lastMessage?.labelIds,
+            "for",
+            m.toEmail,
+            m.subject
+          );
+        }
         return stillAwaiting ? m : null;
       })
     );
 
     return results.filter((m): m is SentEmailSummary => m !== null);
-  } catch {
+  } catch (err) {
+    console.error("getSentAwaitingReplies: request failed:", err);
     return null;
   }
 }
