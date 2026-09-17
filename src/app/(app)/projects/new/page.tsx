@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { createProject } from "@/actions/projects";
 import ProjectForm from "../project-form";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -13,12 +13,15 @@ export default async function NewProjectPage({
   const lang = await getLang();
   const t = getDict(lang);
 
-  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
-  const contacts = await prisma.contact.findMany({
-    orderBy: { createdAt: "desc" },
-    select: { id: true, email: true, firstName: true, lastName: true },
+  // One shared client — see src/lib/prisma.ts for why.
+  const { contacts, users } = await withScopedPrismaClient(async (db) => {
+    const contacts = await db.contact.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+    const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+    return { contacts, users };
   });
-  const users = await prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 
   return (
     <div className="max-w-2xl">

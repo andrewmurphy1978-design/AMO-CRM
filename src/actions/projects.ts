@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 
 const ProjectSchema = z.object({
@@ -48,25 +48,29 @@ export async function createProject(
     throw error;
   }
 
-  const project = await prisma.project.create({
-    data: {
-      name: data.name,
-      contactId: data.contactId,
-      description: data.description,
-      status: data.status,
-      ownerId: data.ownerId || session.user.id,
-      startDate: data.startDate ? new Date(data.startDate) : undefined,
-      dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-    },
-  });
+  const project = await withScopedPrismaClient(async (db) => {
+    const project = await db.project.create({
+      data: {
+        name: data.name,
+        contactId: data.contactId,
+        description: data.description,
+        status: data.status,
+        ownerId: data.ownerId || session.user.id,
+        startDate: data.startDate ? new Date(data.startDate) : undefined,
+        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      },
+    });
 
-  await prisma.activityLogEntry.create({
-    data: {
-      projectId: project.id,
-      contactId: data.contactId,
-      userId: session.user.id,
-      message: t.actions.createdProject(session.user.name ?? "", project.name),
-    },
+    await db.activityLogEntry.create({
+      data: {
+        projectId: project.id,
+        contactId: data.contactId,
+        userId: session.user.id,
+        message: t.actions.createdProject(session.user.name ?? "", project.name),
+      },
+    });
+
+    return project;
   });
 
   revalidatePath("/projects");

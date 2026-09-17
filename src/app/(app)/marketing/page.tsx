@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -12,11 +12,16 @@ export default async function MarketingPage() {
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
-  const [campaigns, automations] = await Promise.all([
-    prisma.emailCampaign.findMany({ orderBy: { systemeIoId: "desc" } }),
-    prisma.automationWorkflow.findMany({ orderBy: { systemeIoId: "desc" } }),
-  ]);
-  const hour12 = await getHour12(session);
+  // One shared client — see src/lib/prisma.ts for why (each `prisma.x`
+  // property access on the raw proxy opens a brand-new connection, and
+  // the previous Promise.all opened two of them at once, which is worse
+  // than sequential for Cloudflare's Error 1102 resource limit).
+  const { campaigns, automations, hour12 } = await withScopedPrismaClient(async (db) => {
+    const campaigns = await db.emailCampaign.findMany({ orderBy: { systemeIoId: "desc" } });
+    const automations = await db.automationWorkflow.findMany({ orderBy: { systemeIoId: "desc" } });
+    const hour12 = await getHour12(session, db);
+    return { campaigns, automations, hour12 };
+  });
 
   return (
     <div className="space-y-6">

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { updateContact } from "@/actions/contacts";
 import ContactForm from "../../contact-form";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -11,15 +11,20 @@ export default async function EditContactPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const contact = await prisma.contact.findUnique({
-    where: { id },
-    include: { tags: { include: { tag: true } } },
+
+  // One shared client — see src/lib/prisma.ts for why.
+  const { contact, allTags } = await withScopedPrismaClient(async (db) => {
+    const contact = await db.contact.findUnique({
+      where: { id },
+      include: { tags: { include: { tag: true } } },
+    });
+    const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
+    return { contact, allTags };
   });
   if (!contact) notFound();
 
   const lang = await getLang();
   const t = getDict(lang);
-  const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
   const boundUpdate = updateContact.bind(null, contact.id);
 
   return (

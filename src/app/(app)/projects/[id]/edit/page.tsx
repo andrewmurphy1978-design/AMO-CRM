@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { updateProject } from "@/actions/projects";
 import ProjectForm from "../../project-form";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -12,13 +12,16 @@ export default async function EditProjectPage({
 }) {
   const { id } = await params;
 
-  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
-  const project = await prisma.project.findUnique({ where: { id } });
-  const contacts = await prisma.contact.findMany({
-    orderBy: { createdAt: "desc" },
-    select: { id: true, email: true, firstName: true, lastName: true },
+  // One shared client — see src/lib/prisma.ts for why.
+  const { project, contacts, users } = await withScopedPrismaClient(async (db) => {
+    const project = await db.project.findUnique({ where: { id } });
+    const contacts = await db.contact.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, email: true, firstName: true, lastName: true },
+    });
+    const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+    return { project, contacts, users };
   });
-  const users = await prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 
   if (!project) notFound();
 

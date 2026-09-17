@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, withScopedPrismaClient } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { getDict } from "@/lib/i18n/dictionaries";
 
@@ -71,24 +71,25 @@ export async function createUser(
     throw error;
   }
 
-  const existing = await prisma.user.findUnique({ where: { email: data.email } });
-  if (existing) {
-    return { error: t.actions.userEmailExists };
-  }
-
   const passwordHash = await hashPassword(data.password);
-  await prisma.user.create({
-    data: {
-      name: data.name,
-      email: data.email,
-      passwordHash,
-      role: data.role,
-      phone: data.phone,
-      whatsapp: data.whatsapp,
-      country: data.country,
-      language: data.language,
-    },
+  const result = await withScopedPrismaClient(async (db) => {
+    const existing = await db.user.findUnique({ where: { email: data.email } });
+    if (existing) return { error: t.actions.userEmailExists };
+    await db.user.create({
+      data: {
+        name: data.name,
+        email: data.email,
+        passwordHash,
+        role: data.role,
+        phone: data.phone,
+        whatsapp: data.whatsapp,
+        country: data.country,
+        language: data.language,
+      },
+    });
+    return {};
   });
+  if (result.error) return { error: result.error };
 
   revalidatePath("/settings");
   return { success: t.actions.userAdded(data.name) };
@@ -114,28 +115,29 @@ export async function updateUser(
     throw error;
   }
 
-  const existing = await prisma.user.findFirst({
-    where: { email: data.email, NOT: { id: userId } },
-  });
-  if (existing) {
-    return { error: t.actions.userEmailExistsOther };
-  }
-
   // Admins can't change their own role away from Admin (would lock them out).
   const role = userId === session.user.id ? "ADMIN" : data.role;
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      whatsapp: data.whatsapp,
-      country: data.country,
-      language: data.language,
-      role,
-    },
+  const result = await withScopedPrismaClient(async (db) => {
+    const existing = await db.user.findFirst({
+      where: { email: data.email, NOT: { id: userId } },
+    });
+    if (existing) return { error: t.actions.userEmailExistsOther };
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        whatsapp: data.whatsapp,
+        country: data.country,
+        language: data.language,
+        role,
+      },
+    });
+    return {};
   });
+  if (result.error) return { error: result.error };
 
   revalidatePath("/settings");
   return { success: t.actions.userSaved };
@@ -202,14 +204,15 @@ export async function changePassword(
     throw error;
   }
 
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } });
-  const valid = await verifyPassword(data.currentPassword, user.passwordHash);
-  if (!valid) {
-    return { error: t.actions.passwordIncorrect };
-  }
-
-  const passwordHash = await hashPassword(data.newPassword);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  const result = await withScopedPrismaClient(async (db) => {
+    const user = await db.user.findUniqueOrThrow({ where: { id: session.user.id } });
+    const valid = await verifyPassword(data.currentPassword, user.passwordHash);
+    if (!valid) return { error: t.actions.passwordIncorrect };
+    const passwordHash = await hashPassword(data.newPassword);
+    await db.user.update({ where: { id: user.id }, data: { passwordHash } });
+    return {};
+  });
+  if (result.error) return { error: result.error };
 
   return { success: t.actions.passwordUpdated };
 }

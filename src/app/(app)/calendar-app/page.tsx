@@ -22,49 +22,54 @@ export default async function CalendarAppPage() {
   const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
 
-  // One shared client for the reads below — see the comment on the
-  // equivalent block in src/app/(app)/page.tsx for why.
-  const { googleAccessToken, hour12, contacts, projects, tasks, bookings } = await withScopedPrismaClient(async (db) => {
-    const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
-    const hour12 = await getHour12(session, db);
-    const contacts = await db.contact.findMany({
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      take: 300,
-      select: { id: true, firstName: true, lastName: true, email: true },
-    });
-    const projects = await db.project.findMany({
-      orderBy: { name: "asc" },
-      take: 300,
-      select: { id: true, name: true, contactId: true },
-    });
-    const tasks = await db.task.findMany({
-      where: { status: { not: "DONE" } },
-      orderBy: { title: "asc" },
-      take: 300,
-      select: { id: true, title: true, projectId: true },
-    });
-    const bookings = await db.booking.findMany({
-      orderBy: { scheduledFor: "desc" },
-      take: 100,
-      select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
-    });
-    return { googleAccessToken, hour12, contacts, projects, tasks, bookings };
-  });
+  // One shared client for every read below, including the one after the
+  // Google Calendar fetch — see the comment on the equivalent block in
+  // src/app/(app)/page.tsx for why; this page previously opened a second
+  // scoped client just for the event-links lookup, which is the same
+  // "two connections in one request" pattern that trips Cloudflare's
+  // Error 1102, just sequential instead of concurrent.
+  const { googleAccessToken, hour12, contacts, projects, tasks, bookings, events, eventLinks } = await withScopedPrismaClient(
+    async (db) => {
+      const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
+      const hour12 = await getHour12(session, db);
+      const contacts = await db.contact.findMany({
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+        take: 300,
+        select: { id: true, firstName: true, lastName: true, email: true },
+      });
+      const projects = await db.project.findMany({
+        orderBy: { name: "asc" },
+        take: 300,
+        select: { id: true, name: true, contactId: true },
+      });
+      const tasks = await db.task.findMany({
+        where: { status: { not: "DONE" } },
+        orderBy: { title: "asc" },
+        take: 300,
+        select: { id: true, title: true, projectId: true },
+      });
+      const bookings = await db.booking.findMany({
+        orderBy: { scheduledFor: "desc" },
+        take: 100,
+        select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
+      });
 
-  // Matches CalendarShell's default view ("week", Sunday-start) so the
-  // first paint doesn't need an extra client-side fetch.
-  const today = startOfDay(new Date());
-  const weekStart = startOfWeek(today, { weekStartsOn: 0 });
-  const weekEnd = addDays(weekStart, 7);
-  const events = googleAccessToken
-    ? await getCalendarEventsInRange(googleAccessToken, weekStart.toISOString(), weekEnd.toISOString())
-    : null;
+      // Matches CalendarShell's default view ("week", Sunday-start) so the
+      // first paint doesn't need an extra client-side fetch.
+      const today = startOfDay(new Date());
+      const weekStart = startOfWeek(today, { weekStartsOn: 0 });
+      const weekEnd = addDays(weekStart, 7);
+      const events = googleAccessToken
+        ? await getCalendarEventsInRange(googleAccessToken, weekStart.toISOString(), weekEnd.toISOString())
+        : null;
 
-  const eventIds = (events ?? []).map((e) => e.id);
-  const eventLinks =
-    eventIds.length > 0
-      ? await withScopedPrismaClient((db) => db.calendarEventLink.findMany({ where: { googleEventId: { in: eventIds } } }))
-      : [];
+      const eventIds = (events ?? []).map((e) => e.id);
+      const eventLinks =
+        eventIds.length > 0 ? await db.calendarEventLink.findMany({ where: { googleEventId: { in: eventIds } } }) : [];
+
+      return { googleAccessToken, hour12, contacts, projects, tasks, bookings, events, eventLinks };
+    }
+  );
   const initialLinks = Object.fromEntries(
     eventLinks.map((l) => [
       l.googleEventId,

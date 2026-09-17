@@ -12,8 +12,9 @@ import CardSkeleton from "./card-skeleton";
 import WeatherCardServer from "./weather-card-server";
 import NewsCardServer from "./news-card-server";
 import MarketsCardServer from "./markets-card-server";
-import EmailCardServer from "./email-card-server";
+import EmailCard from "./email-card";
 import CalendarCardServer from "./calendar-card-server";
+import { getCachedInbox, getScreeningExtras, type EmailScreeningPayload } from "@/lib/email-inbox";
 import SocialCard from "./social-card";
 import { getValidAccessToken } from "@/lib/google";
 import { getLatestSocialSnapshots } from "@/lib/social";
@@ -126,6 +127,7 @@ export default async function DashboardPage() {
     googleAccessToken,
     socialSnapshots,
     hour12,
+    emailInitialData,
   } = await withScopedPrismaClient(async (db) => {
     const contactCount = await db.contact.count();
     const clientCount = await db.contact.count({ where: { stage: "CLIENT" } });
@@ -171,6 +173,22 @@ export default async function DashboardPage() {
     const socialSnapshots = await getLatestSocialSnapshots(db);
     const hour12 = await getHour12(session, db);
 
+    // Reads the same cached inbox snapshot the Email page maintains — no
+    // live Gmail/Claude call here, just a DB read, so this can share this
+    // block's one connection instead of the email card doing its own
+    // scoped read from inside a concurrently-rendered Suspense boundary
+    // (which is exactly the pattern that trips Cloudflare's Error 1102:
+    // two Suspense children each opening their own connection at once).
+    const emailInitialData: EmailScreeningPayload | null =
+      googleAccessToken && session
+        ? await (async () => {
+            const snapshot = await getCachedInbox(db, session.user.id);
+            if (!snapshot) return null;
+            const extras = await getScreeningExtras(db, snapshot, session.user.id);
+            return { ...snapshot, ...extras };
+          })()
+        : null;
+
     return {
       contactCount,
       clientCount,
@@ -186,6 +204,7 @@ export default async function DashboardPage() {
       googleAccessToken,
       socialSnapshots,
       hour12,
+      emailInitialData,
     };
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
@@ -364,9 +383,7 @@ export default async function DashboardPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left column: email, projects, tasks, activity. */}
         <div className="space-y-6">
-          <Suspense fallback={<CardSkeleton title={t.dashboard.emailTitle} />}>
-            <EmailCardServer accessToken={googleAccessToken} userId={session?.user.id ?? ""} hour12={hour12} lang={lang} labels={emailLabels} />
-          </Suspense>
+          <EmailCard initialData={emailInitialData} connected={googleAccessToken !== null} hour12={hour12} lang={lang} labels={emailLabels} />
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />

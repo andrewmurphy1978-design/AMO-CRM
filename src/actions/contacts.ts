@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getSystemeIoClient } from "@/lib/sync";
 import { DEFAULT_PUSH_FIELD_SLUGS } from "@/lib/systemeio";
 import { countryToCode } from "@/lib/country-flag";
@@ -81,6 +81,88 @@ function readContactForm(formData: FormData) {
   return ContactSchema.parse(raw);
 }
 
+// Core tag-add logic, taking a shared scoped client — callers that already
+// have one open (createContact's tag loop, syncContactTags) pass it in
+// directly instead of each opening their own fresh connection. The
+// exported `addTagToContact` below is the entry point for callers that
+// don't have one yet (e.g. a standalone "add tag" button).
+async function addTagToContactWith(db: PrismaClient, contactId: string, tagName: string) {
+  const name = tagName.trim();
+  if (!name) return;
+
+  const tag = await db.tag.upsert({
+    where: { name },
+    update: {},
+    create: { name },
+  });
+
+  await db.contactTag.upsert({
+    where: { contactId_tagId: { contactId, tagId: tag.id } },
+    update: {},
+    create: { contactId, tagId: tag.id },
+  });
+
+  // Best-effort push back to systeme.io — never fails the CRM save itself.
+  try {
+    const contact = await db.contact.findUnique({ where: { id: contactId } });
+    if (contact?.systemeIoId) {
+      const client = await getSystemeIoClient(db);
+      if (client) {
+        let systemeIoTagId = tag.systemeIoId;
+        if (!systemeIoTagId) {
+          const created = await client.createTag(tag.name);
+          systemeIoTagId = created.id;
+          await db.tag.update({ where: { id: tag.id }, data: { systemeIoId: created.id } });
+        }
+        await client.addTagToContact(contact.systemeIoId, systemeIoTagId);
+      }
+    }
+  } catch {
+    // Tag is still saved locally even if the systeme.io push fails.
+  }
+
+  revalidatePath(`/contacts/${contactId}`);
+}
+
+async function removeTagFromContactWith(db: PrismaClient, contactId: string, tagId: string) {
+  await db.contactTag.delete({
+    where: { contactId_tagId: { contactId, tagId } },
+  });
+
+  // Best-effort push back to systeme.io — never fails the CRM save itself.
+  try {
+    const contact = await db.contact.findUnique({ where: { id: contactId } });
+    const tag = await db.tag.findUnique({ where: { id: tagId } });
+    if (contact?.systemeIoId && tag?.systemeIoId) {
+      const client = await getSystemeIoClient(db);
+      if (client) {
+        await client.removeTagFromContact(contact.systemeIoId, tag.systemeIoId);
+      }
+    }
+  } catch {
+    // Non-fatal — the tag is still removed locally either way.
+  }
+
+  revalidatePath(`/contacts/${contactId}`);
+}
+
+async function syncContactTagsWith(db: PrismaClient, contactId: string, desiredNames: string[]) {
+  const current = await db.contactTag.findMany({ where: { contactId }, include: { tag: true } });
+  const currentNames = new Set(current.map((ct) => ct.tag.name));
+  const desiredSet = new Set(desiredNames);
+
+  for (const name of desiredNames) {
+    if (!currentNames.has(name)) {
+      await addTagToContactWith(db, contactId, name);
+    }
+  }
+  for (const ct of current) {
+    if (!desiredSet.has(ct.tag.name)) {
+      await removeTagFromContactWith(db, contactId, ct.tagId);
+    }
+  }
+}
+
 export async function createContact(
   _prevState: { error?: string } | undefined,
   formData: FormData
@@ -99,30 +181,43 @@ export async function createContact(
     throw error;
   }
 
-  const existing = await prisma.contact.findUnique({ where: { email: data.email } });
-  if (existing) {
-    return { error: t.actions.contactEmailExists };
-  }
+  // One shared client for the whole action — the duplicate-email check,
+  // the create, every tag upsert, and the activity log entry all reuse it
+  // instead of each opening its own fresh Hyperdrive connection (the
+  // regular `prisma` proxy opens a new one per property access, and this
+  // action alone used to make double digits of them with a few tags).
+  const result = await withScopedPrismaClient(async (db) => {
+    const existing = await db.contact.findUnique({ where: { email: data.email } });
+    if (existing) {
+      return { error: t.actions.contactEmailExists };
+    }
 
-  const contact = await prisma.contact.create({
-    data: { ...data, source: "manual", ownerId: session.user.id },
+    const contact = await db.contact.create({
+      data: { ...data, source: "manual", ownerId: session.user.id },
+    });
+
+    const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
+    for (const name of desiredTags) {
+      await addTagToContactWith(db, contact.id, name);
+    }
+
+    await db.activityLogEntry.create({
+      data: {
+        contactId: contact.id,
+        userId: session.user.id,
+        message: t.actions.createdContact(session.user.name ?? ""),
+      },
+    });
+
+    return { contactId: contact.id };
   });
 
-  const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
-  for (const name of desiredTags) {
-    await addTagToContact(contact.id, name);
+  if ("error" in result) {
+    return { error: result.error };
   }
-
-  await prisma.activityLogEntry.create({
-    data: {
-      contactId: contact.id,
-      userId: session.user.id,
-      message: t.actions.createdContact(session.user.name ?? ""),
-    },
-  });
 
   revalidatePath("/contacts");
-  redirect(`/contacts/${contact.id}`);
+  redirect(`/contacts/${result.contactId}`);
 }
 
 export async function updateContact(
@@ -144,53 +239,66 @@ export async function updateContact(
     throw error;
   }
 
-  const existing = await prisma.contact.findFirst({
-    where: { email: data.email, NOT: { id: contactId } },
-  });
-  if (existing) {
-    return { error: t.actions.contactEmailExistsOther };
-  }
-
-  const updated = await prisma.contact.update({ where: { id: contactId }, data });
-
-  const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
-  await syncContactTags(contactId, desiredTags);
-
-  // Best-effort push back to systeme.io — never fails the CRM save itself.
-  let warning = "";
-  if (updated.systemeIoId) {
-    try {
-      const client = await getSystemeIoClient();
-      if (client) {
-        const fields: Record<string, string> = {};
-        for (const [column, slug] of Object.entries(DEFAULT_PUSH_FIELD_SLUGS)) {
-          const value = (data as Record<string, string | undefined>)[column];
-          if (!value) continue;
-          // systeme.io's "country" field expects a 2-letter ISO 3166 code
-          // (per its API docs), not the full country name the CRM stores.
-          fields[slug] = column === "country" ? (countryToCode(value) ?? value) : value;
-        }
-        const { skipped } = await client.updateContactFields(updated.systemeIoId, fields);
-        if (skipped.length > 0) {
-          warning = t.actions.contactUpdatedPartialWarning(skipped);
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown error";
-      warning = t.actions.contactUpdatedWarning(message);
+  // One shared client for the whole action — see the comment on
+  // createContact above for why. This one used to open a connection for
+  // the duplicate-email check, the update, syncContactTags's own queries
+  // (findMany plus one upsert pair per changed tag), and the systeme.io
+  // push's own lookups — 15+ for a save with a couple of tag changes.
+  const result = await withScopedPrismaClient(async (db) => {
+    const existing = await db.contact.findFirst({
+      where: { email: data.email, NOT: { id: contactId } },
+    });
+    if (existing) {
+      return { error: t.actions.contactEmailExistsOther };
     }
+
+    const updated = await db.contact.update({ where: { id: contactId }, data });
+
+    const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
+    await syncContactTagsWith(db, contactId, desiredTags);
+
+    // Best-effort push back to systeme.io — never fails the CRM save itself.
+    let warning = "";
+    if (updated.systemeIoId) {
+      try {
+        const client = await getSystemeIoClient(db);
+        if (client) {
+          const fields: Record<string, string> = {};
+          for (const [column, slug] of Object.entries(DEFAULT_PUSH_FIELD_SLUGS)) {
+            const value = (data as Record<string, string | undefined>)[column];
+            if (!value) continue;
+            // systeme.io's "country" field expects a 2-letter ISO 3166 code
+            // (per its API docs), not the full country name the CRM stores.
+            fields[slug] = column === "country" ? (countryToCode(value) ?? value) : value;
+          }
+          const { skipped } = await client.updateContactFields(updated.systemeIoId, fields);
+          if (skipped.length > 0) {
+            warning = t.actions.contactUpdatedPartialWarning(skipped);
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "unknown error";
+        warning = t.actions.contactUpdatedWarning(message);
+      }
+    }
+
+    return { warning };
+  });
+
+  if ("error" in result) {
+    return { error: result.error };
   }
 
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${contactId}`);
-  return { success: `${t.actions.contactUpdated}${warning}` };
+  return { success: `${t.actions.contactUpdated}${result.warning}` };
 }
 
 export async function deleteContact(contactId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await prisma.contact.delete({ where: { id: contactId } });
+  await withScopedPrismaClient((db) => db.contact.delete({ where: { id: contactId } }));
   revalidatePath("/contacts");
   redirect("/contacts");
 }
@@ -198,84 +306,13 @@ export async function deleteContact(contactId: string) {
 export async function addTagToContact(contactId: string, tagName: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
-
-  const name = tagName.trim();
-  if (!name) return;
-
-  const tag = await prisma.tag.upsert({
-    where: { name },
-    update: {},
-    create: { name },
-  });
-
-  await prisma.contactTag.upsert({
-    where: { contactId_tagId: { contactId, tagId: tag.id } },
-    update: {},
-    create: { contactId, tagId: tag.id },
-  });
-
-  // Best-effort push back to systeme.io — never fails the CRM save itself.
-  try {
-    const contact = await prisma.contact.findUnique({ where: { id: contactId } });
-    if (contact?.systemeIoId) {
-      const client = await getSystemeIoClient();
-      if (client) {
-        let systemeIoTagId = tag.systemeIoId;
-        if (!systemeIoTagId) {
-          const created = await client.createTag(tag.name);
-          systemeIoTagId = created.id;
-          await prisma.tag.update({ where: { id: tag.id }, data: { systemeIoId: created.id } });
-        }
-        await client.addTagToContact(contact.systemeIoId, systemeIoTagId);
-      }
-    }
-  } catch {
-    // Tag is still saved locally even if the systeme.io push fails.
-  }
-
-  revalidatePath(`/contacts/${contactId}`);
-}
-
-async function syncContactTags(contactId: string, desiredNames: string[]) {
-  const current = await prisma.contactTag.findMany({ where: { contactId }, include: { tag: true } });
-  const currentNames = new Set(current.map((ct) => ct.tag.name));
-  const desiredSet = new Set(desiredNames);
-
-  for (const name of desiredNames) {
-    if (!currentNames.has(name)) {
-      await addTagToContact(contactId, name);
-    }
-  }
-  for (const ct of current) {
-    if (!desiredSet.has(ct.tag.name)) {
-      await removeTagFromContact(contactId, ct.tagId);
-    }
-  }
+  await withScopedPrismaClient((db) => addTagToContactWith(db, contactId, tagName));
 }
 
 export async function removeTagFromContact(contactId: string, tagId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
-
-  await prisma.contactTag.delete({
-    where: { contactId_tagId: { contactId, tagId } },
-  });
-
-  // Best-effort push back to systeme.io — never fails the CRM save itself.
-  try {
-    const contact = await prisma.contact.findUnique({ where: { id: contactId } });
-    const tag = await prisma.tag.findUnique({ where: { id: tagId } });
-    if (contact?.systemeIoId && tag?.systemeIoId) {
-      const client = await getSystemeIoClient();
-      if (client) {
-        await client.removeTagFromContact(contact.systemeIoId, tag.systemeIoId);
-      }
-    }
-  } catch {
-    // Non-fatal — the tag is still removed locally either way.
-  }
-
-  revalidatePath(`/contacts/${contactId}`);
+  await withScopedPrismaClient((db) => removeTagFromContactWith(db, contactId, tagId));
 }
 
 export async function addContactNote(contactId: string, formData: FormData) {
@@ -286,13 +323,15 @@ export async function addContactNote(contactId: string, formData: FormData) {
   const message = String(formData.get("note") ?? "").trim();
   if (!message) return;
 
-  await prisma.activityLogEntry.create({
-    data: {
-      contactId,
-      userId: session.user.id,
-      message: t.actions.addedNote(session.user.name ?? "", message),
-    },
-  });
+  await withScopedPrismaClient((db) =>
+    db.activityLogEntry.create({
+      data: {
+        contactId,
+        userId: session.user.id,
+        message: t.actions.addedNote(session.user.name ?? "", message),
+      },
+    })
+  );
 
   revalidatePath(`/contacts/${contactId}`);
 }

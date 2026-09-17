@@ -24,10 +24,13 @@ export interface SyncResult {
 }
 
 // Used outside the bulk sync (e.g. pushing a single contact edit back to
-// systeme.io) — a one-off query, so the regular auto-reconnecting `prisma`
-// proxy is fine here.
-export async function getSystemeIoClient(): Promise<SystemeIoClient | null> {
-  const setting = await prisma.integrationSetting.findUnique({
+// systeme.io). Pass a `db` from a caller's own withScopedPrismaClient block
+// when this is one of several Prisma calls in the same request (e.g.
+// contacts.ts's tag/update actions) — falls back to the regular
+// auto-reconnecting `prisma` proxy for genuinely one-off callers (cron
+// jobs) that have no scoped client of their own.
+export async function getSystemeIoClient(db: PrismaClient = prisma): Promise<SystemeIoClient | null> {
+  const setting = await db.integrationSetting.findUnique({
     where: { provider: "systeme_io" },
   });
   if (!setting?.apiKeyEncrypted) return null;

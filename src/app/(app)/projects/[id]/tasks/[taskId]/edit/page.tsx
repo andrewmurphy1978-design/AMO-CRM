@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { updateTask } from "@/actions/tasks";
 import TaskForm from "../../../task-form";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -12,9 +12,12 @@ export default async function EditTaskPage({
 }) {
   const { id, taskId } = await params;
 
-  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
-  const users = await prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  // One shared client — see src/lib/prisma.ts for why.
+  const { task, users } = await withScopedPrismaClient(async (db) => {
+    const task = await db.task.findUnique({ where: { id: taskId } });
+    const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+    return { task, users };
+  });
 
   if (!task || task.projectId !== id) notFound();
 

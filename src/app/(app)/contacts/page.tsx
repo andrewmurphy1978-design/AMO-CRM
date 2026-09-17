@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -67,15 +67,21 @@ export default async function ContactsPage({
     ];
   }
 
-  // Sequential, not Promise.all — see src/lib/prisma.ts for why.
-  const contacts = await prisma.contact.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    include: { tags: { include: { tag: true } } },
+  // One shared client for all three reads below — see src/lib/prisma.ts
+  // for why (each `prisma.x` property access on the raw proxy opens a
+  // brand-new connection; three of those on this frequently-visited page
+  // was a real contributor to Cloudflare's Error 1102).
+  const { contacts, tags, hour12 } = await withScopedPrismaClient(async (db) => {
+    const contacts = await db.contact.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      include: { tags: { include: { tag: true } } },
+    });
+    const tags = await db.tag.findMany({ orderBy: { name: "asc" } });
+    const hour12 = await getHour12(session, db);
+    return { contacts, tags, hour12 };
   });
-  const tags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
-  const hour12 = await getHour12(session);
 
   const stageOptions = Object.entries(STAGE_LABELS).map(([value, label]) => ({ value, label }));
   const tagOptions = tags.map((tg) => ({ value: tg.name, label: tg.name }));
