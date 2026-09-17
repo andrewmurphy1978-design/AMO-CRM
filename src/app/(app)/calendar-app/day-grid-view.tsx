@@ -190,7 +190,7 @@ function DayColumn({
   const hourMarks = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => GRID_START_HOUR + i);
 
   return (
-    <div className={`relative flex-1 border-l border-card-border first:border-l-0 ${dayColumnBg(day, index)}`}>
+    <div className={`relative min-w-0 flex-1 border-l border-card-border first:border-l-0 ${dayColumnBg(day, index)}`}>
       {hourMarks.map((h) => (
         <div
           key={h}
@@ -269,8 +269,8 @@ export default function DayGridView({
       <div className="flex shrink-0 border-b border-card-border">
         <div className="w-14 shrink-0 bg-field-bg" />
         {days.map((day, i) => (
-          <div key={i} className={`flex-1 border-l border-card-border py-1.5 text-center first:border-l-0 ${dayColumnBg(day, i)}`}>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">
+          <div key={i} className={`min-w-0 flex-1 border-l border-card-border py-1.5 text-center first:border-l-0 ${dayColumnBg(day, i)}`}>
+            <p className="truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft">
               {isToday(day) ? todayLabel : isTomorrow(day) ? tomorrowLabel : format(day, "EEE", { locale: dateLocale })}
             </p>
             <p className={isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}>
@@ -284,7 +284,7 @@ export default function DayGridView({
         <div className="flex shrink-0 border-b border-card-border">
           <div className="w-14 shrink-0 bg-field-bg" />
           {allDayByDay.map((list, i) => (
-            <div key={i} className={`flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(days[i], i)}`}>
+            <div key={i} className={`min-w-0 flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(days[i], i)}`}>
               {list.map((event) => {
                 const color = eventColor(event.colorId);
                 return (
