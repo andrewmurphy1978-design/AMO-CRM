@@ -4,13 +4,22 @@ import { useEffect, useRef } from "react";
 import { format, isToday, isTomorrow, type Locale } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
-import { formatHourMark } from "@/lib/calendar-time";
+import { formatHourMark, formatTimeRange } from "@/lib/calendar-time";
+import LinkedSummaryLine, { type LinkedSummaryLabels, type LinkedSummaryValues } from "./linked-summary";
 
 const GRID_START_HOUR = 0;
 const GRID_END_HOUR = 24;
 const ROW_HEIGHT = 48; // px per hour
-const MIN_BLOCK_HEIGHT = 18;
+const MIN_BLOCK_HEIGHT = 36;
 const DEFAULT_SCROLL_HOUR = 7; // scroll to ~7 AM on open, like Google Calendar
+
+// Alternating column backgrounds so days are easy to tell apart at a
+// glance (plain thin borders were barely visible) — today gets its own
+// stronger tint that overrides the zebra stripe entirely.
+function dayColumnBg(day: Date, index: number): string {
+  if (isToday(day)) return "bg-amo-lime/25";
+  return index % 2 === 0 ? "bg-card-bg" : "bg-black/[0.045]";
+}
 
 function minutesSinceGridStart(date: Date): number {
   return (date.getHours() + date.getMinutes() / 60 - GRID_START_HOUR) * 60;
@@ -72,10 +81,24 @@ function layoutDayEvents(events: TimedEvent[]): PositionedEvent[] {
 function EventBlock({
   event,
   style,
+  hour12,
+  intlLocale,
+  linkValues,
+  contactById,
+  projectById,
+  taskById,
+  linkedSummaryLabels,
   onRequestLink,
 }: {
   event: CalendarEventSummary;
   style: React.CSSProperties;
+  hour12: boolean;
+  intlLocale: string;
+  linkValues: LinkedSummaryValues | undefined;
+  contactById: Record<string, string>;
+  projectById: Record<string, string>;
+  taskById: Record<string, string>;
+  linkedSummaryLabels: LinkedSummaryLabels;
   onRequestLink: (event: CalendarEventSummary) => void;
 }) {
   const color = eventColor(event.colorId);
@@ -85,35 +108,66 @@ function EventBlock({
       tabIndex={0}
       onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
       style={{ ...style, backgroundColor: color.bg, color: color.fg }}
-      className="absolute flex cursor-pointer items-start gap-1 overflow-hidden rounded px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
+      className="absolute flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
       title={event.title}
     >
-      <span className="min-w-0 flex-1 truncate">{event.title}</span>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRequestLink(event);
-        }}
-        className="shrink-0 opacity-80 hover:opacity-100"
-        title="Link"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-2.5 w-2.5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-        </svg>
-      </button>
+      <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
+      {!event.allDay && event.start && (
+        <p className="text-[10px] font-normal opacity-90">
+          {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
+        </p>
+      )}
+      <LinkedSummaryLine
+        values={linkValues}
+        contactById={contactById}
+        projectById={projectById}
+        taskById={taskById}
+        labels={linkedSummaryLabels}
+        className="mt-0.5 truncate text-[10px] font-normal opacity-90"
+      />
+      <div className="mt-auto flex justify-end pt-0.5">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestLink(event);
+          }}
+          className="shrink-0 rounded p-1 opacity-80 hover:bg-black/10 hover:opacity-100"
+          title="Link"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
 
 function DayColumn({
   day,
+  index,
   events,
+  hour12,
+  intlLocale,
+  links,
+  contactById,
+  projectById,
+  taskById,
+  linkedSummaryLabels,
   noEventsLabel,
   onRequestLink,
 }: {
   day: Date;
+  index: number;
   events: CalendarEventSummary[];
+  hour12: boolean;
+  intlLocale: string;
+  links: Record<string, LinkedSummaryValues>;
+  contactById: Record<string, string>;
+  projectById: Record<string, string>;
+  taskById: Record<string, string>;
+  linkedSummaryLabels: LinkedSummaryLabels;
   noEventsLabel: string;
   onRequestLink: (event: CalendarEventSummary) => void;
 }) {
@@ -135,7 +189,7 @@ function DayColumn({
   const hourMarks = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => GRID_START_HOUR + i);
 
   return (
-    <div className="relative flex-1 border-l border-card-border first:border-l-0">
+    <div className={`relative flex-1 border-l border-card-border first:border-l-0 ${dayColumnBg(day, index)}`}>
       {hourMarks.map((h) => (
         <div
           key={h}
@@ -143,12 +197,6 @@ function DayColumn({
           style={{ top: (h - GRID_START_HOUR) * ROW_HEIGHT }}
         />
       ))}
-      {isToday(day) && (
-        <div
-          className="absolute inset-x-0 top-0 bg-amo-lime/[0.04]"
-          style={{ height: (GRID_END_HOUR - GRID_START_HOUR) * ROW_HEIGHT }}
-        />
-      )}
       {positioned.map(({ event, startMin, endMin, col, cols }) => {
         const top = (startMin / 60) * ROW_HEIGHT;
         const height = Math.max(MIN_BLOCK_HEIGHT, ((endMin - startMin) / 60) * ROW_HEIGHT - 1);
@@ -157,6 +205,13 @@ function DayColumn({
             key={event.id}
             event={event}
             onRequestLink={onRequestLink}
+            hour12={hour12}
+            intlLocale={intlLocale}
+            linkValues={links[event.id]}
+            contactById={contactById}
+            projectById={projectById}
+            taskById={taskById}
+            linkedSummaryLabels={linkedSummaryLabels}
             style={{ top, height, left: `${(col / cols) * 100}%`, width: `${100 / cols}%` }}
           />
         );
@@ -171,6 +226,11 @@ function DayColumn({
 export default function DayGridView({
   days,
   eventsByDay,
+  links,
+  contactById,
+  projectById,
+  taskById,
+  linkedSummaryLabels,
   dateLocale,
   hour12,
   intlLocale,
@@ -181,6 +241,11 @@ export default function DayGridView({
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
+  links: Record<string, LinkedSummaryValues>;
+  contactById: Record<string, string>;
+  projectById: Record<string, string>;
+  taskById: Record<string, string>;
+  linkedSummaryLabels: LinkedSummaryLabels;
   dateLocale: Locale | undefined;
   hour12: boolean;
   intlLocale: string;
@@ -203,10 +268,10 @@ export default function DayGridView({
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-card-border">
-      <div className="flex shrink-0 border-b border-card-border bg-field-bg">
-        <div className="w-12 shrink-0" />
+      <div className="flex shrink-0 border-b border-card-border">
+        <div className="w-14 shrink-0 bg-field-bg" />
         {days.map((day, i) => (
-          <div key={i} className="flex-1 border-l border-card-border py-1.5 text-center first:border-l-0">
+          <div key={i} className={`flex-1 border-l border-card-border py-1.5 text-center first:border-l-0 ${dayColumnBg(day, i)}`}>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">
               {isToday(day) ? todayLabel : isTomorrow(day) ? tomorrowLabel : format(day, "EEE", { locale: dateLocale })}
             </p>
@@ -219,9 +284,9 @@ export default function DayGridView({
 
       {hasAllDay && (
         <div className="flex shrink-0 border-b border-card-border">
-          <div className="w-12 shrink-0" />
+          <div className="w-14 shrink-0 bg-field-bg" />
           {allDayByDay.map((list, i) => (
-            <div key={i} className="flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0">
+            <div key={i} className={`flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(days[i], i)}`}>
               {list.map((event) => {
                 const color = eventColor(event.colorId);
                 return (
@@ -230,11 +295,11 @@ export default function DayGridView({
                     role="button"
                     tabIndex={0}
                     onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
-                    className="flex cursor-pointer items-center gap-1 truncate rounded px-1 py-0.5 text-[10px] font-medium"
+                    className="flex cursor-pointer items-start gap-1 overflow-hidden rounded px-1 py-0.5 text-xs font-medium"
                     style={{ backgroundColor: color.bg, color: color.fg }}
                     title={event.title}
                   >
-                    <span className="min-w-0 flex-1 truncate">{event.title}</span>
+                    <span className="min-w-0 flex-1 whitespace-normal break-words">{event.title}</span>
                   </div>
                 );
               })}
@@ -245,11 +310,11 @@ export default function DayGridView({
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div className="relative flex" style={{ height: (GRID_END_HOUR - GRID_START_HOUR) * ROW_HEIGHT }}>
-          <div className="relative w-12 shrink-0">
+          <div className="relative w-14 shrink-0 bg-field-bg">
             {hourMarks.map((h) => (
               <span
                 key={h}
-                className="absolute right-1 -translate-y-1/2 text-[10px] text-soft"
+                className="absolute right-1 -translate-y-1/2 text-xs font-medium text-soft"
                 style={{ top: (h - GRID_START_HOUR) * ROW_HEIGHT }}
               >
                 {formatHourMark(h, hour12, intlLocale)}
@@ -257,7 +322,21 @@ export default function DayGridView({
             ))}
           </div>
           {days.map((day, i) => (
-            <DayColumn key={i} day={day} events={eventsByDay[i]} noEventsLabel={noEventsLabel} onRequestLink={onRequestLink} />
+            <DayColumn
+              key={i}
+              day={day}
+              index={i}
+              events={eventsByDay[i]}
+              hour12={hour12}
+              intlLocale={intlLocale}
+              links={links}
+              contactById={contactById}
+              projectById={projectById}
+              taskById={taskById}
+              linkedSummaryLabels={linkedSummaryLabels}
+              noEventsLabel={noEventsLabel}
+              onRequestLink={onRequestLink}
+            />
           ))}
         </div>
       </div>

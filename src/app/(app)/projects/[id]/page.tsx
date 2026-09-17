@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import TaskRow from "./task-row";
 import QuickAddTask from "./quick-add-task";
 import DeleteProjectButton from "./delete-button";
@@ -9,8 +9,14 @@ import ProposalRow from "./proposal-row";
 import QuickAddInvoice from "./quick-add-invoice";
 import InvoiceRow from "./invoice-row";
 import InteractionLog from "../../interaction-log";
+import CalendarEventsCard from "../../calendar-events-card";
+import { auth } from "@/lib/auth";
+import { getValidAccessToken } from "@/lib/google";
+import { getLinkedCalendarEvents } from "@/lib/calendar-links";
+import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 
 export default async function ProjectDetailPage({
   params,
@@ -20,24 +26,38 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const lang = await getLang();
   const t = getDict(lang);
+  const dateLocale = getDateLocale(lang);
+  const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
   const STATUS_LABELS = t.projectStatuses;
 
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      contact: true,
-      owner: true,
-      tasks: {
-        orderBy: [{ status: "asc" }, { dueDate: "asc" }],
-        include: { assignee: true },
+  const session = await auth();
+
+  // One shared client for the reads below — see the comment on the
+  // equivalent block in contacts/[id]/page.tsx for why (Cloudflare Error
+  // 1102 risk from the plain `prisma` proxy's fresh-connection-per-call
+  // behavior across several sequential reads).
+  const { project, hour12, calendarEvents } = await withScopedPrismaClient(async (db) => {
+    const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
+    const hour12 = await getHour12(session, db);
+    const project = await db.project.findUnique({
+      where: { id },
+      include: {
+        contact: true,
+        owner: true,
+        tasks: {
+          orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+          include: { assignee: true },
+        },
+        interactions: {
+          orderBy: { occurredAt: "desc" },
+          include: { loggedBy: true },
+        },
+        proposals: { orderBy: { createdAt: "desc" } },
+        invoices: { orderBy: { createdAt: "desc" } },
       },
-      interactions: {
-        orderBy: { occurredAt: "desc" },
-        include: { loggedBy: true },
-      },
-      proposals: { orderBy: { createdAt: "desc" } },
-      invoices: { orderBy: { createdAt: "desc" } },
-    },
+    });
+    const calendarEvents = project ? await getLinkedCalendarEvents(db, { projectId: project.id }, googleAccessToken) : [];
+    return { project, hour12, calendarEvents };
   });
 
   if (!project) notFound();
@@ -76,6 +96,15 @@ export default async function ProjectDetailPage({
       {project.description && (
         <p className="max-w-3xl whitespace-pre-wrap text-sm text-ink">{project.description}</p>
       )}
+
+      <CalendarEventsCard
+        title={t.calendarApp.title}
+        events={calendarEvents}
+        noEventsLabel={t.calendarApp.noLinkedEvents}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+      />
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />

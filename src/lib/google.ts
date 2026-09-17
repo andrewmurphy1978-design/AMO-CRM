@@ -224,6 +224,27 @@ export async function getUpcomingEvents(accessToken: string): Promise<CalendarEv
   );
 }
 
+interface RawGoogleEvent {
+  id: string;
+  summary?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+  colorId?: string;
+  htmlLink?: string;
+}
+
+function mapGoogleEvent(item: RawGoogleEvent): CalendarEventSummary {
+  return {
+    id: item.id,
+    title: item.summary || "(untitled)",
+    start: item.start?.dateTime ?? item.start?.date ?? null,
+    end: item.end?.dateTime ?? item.end?.date ?? null,
+    allDay: !item.start?.dateTime,
+    colorId: item.colorId ?? null,
+    htmlLink: item.htmlLink ?? null,
+  };
+}
+
 // Same fetch as above, but for an explicit [timeMin, timeMax) window
 // instead of the fixed "today + 12 days" one — used by the multi-view
 // Calendar page, which needs whatever range the current view/navigation
@@ -243,26 +264,33 @@ export async function getCalendarEventsInRange(
 
     const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
-      items?: {
-        id: string;
-        summary?: string;
-        start?: { dateTime?: string; date?: string };
-        end?: { dateTime?: string; date?: string };
-        colorId?: string;
-        htmlLink?: string;
-      }[];
-    };
-    return (data.items ?? []).map((item) => ({
-      id: item.id,
-      title: item.summary || "(untitled)",
-      start: item.start?.dateTime ?? item.start?.date ?? null,
-      end: item.end?.dateTime ?? item.end?.date ?? null,
-      allDay: !item.start?.dateTime,
-      colorId: item.colorId ?? null,
-      htmlLink: item.htmlLink ?? null,
-    }));
+    const data = (await res.json()) as { items?: RawGoogleEvent[] };
+    return (data.items ?? []).map(mapGoogleEvent);
   } catch {
     return null;
   }
+}
+
+// Fetches specific events by id — there's no bulk "get by ids" endpoint in
+// the Calendar API, so this is one request per id (fine for the handful of
+// events a single contact/project ever has linked). Used by the Calendar
+// card on Contact/Project detail pages. Events that 404 (deleted on the
+// Google side since being linked) are silently dropped rather than failing
+// the whole list.
+export async function getCalendarEventsByIds(accessToken: string, eventIds: string[]): Promise<CalendarEventSummary[]> {
+  if (eventIds.length === 0) return [];
+  const results = await Promise.all(
+    eventIds.map(async (id): Promise<CalendarEventSummary | null> => {
+      try {
+        const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) return null;
+        return mapGoogleEvent((await res.json()) as RawGoogleEvent);
+      } catch {
+        return null;
+      }
+    })
+  );
+  return results.filter((e): e is CalendarEventSummary => e !== null);
 }

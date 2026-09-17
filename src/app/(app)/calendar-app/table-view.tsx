@@ -3,11 +3,17 @@
 import { format, type Locale } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
-import { formatClockTime } from "@/lib/calendar-time";
+import { formatTimeRange } from "@/lib/calendar-time";
+import LinkedSummaryLine, { type LinkedSummaryLabels, type LinkedSummaryValues } from "./linked-summary";
 
 export default function TableView({
   days,
   eventsByDay,
+  links,
+  contactById,
+  projectById,
+  taskById,
+  linkedSummaryLabels,
   dateLocale,
   hour12,
   intlLocale,
@@ -16,6 +22,11 @@ export default function TableView({
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
+  links: Record<string, LinkedSummaryValues>;
+  contactById: Record<string, string>;
+  projectById: Record<string, string>;
+  taskById: Record<string, string>;
+  linkedSummaryLabels: LinkedSummaryLabels;
   dateLocale: Locale | undefined;
   hour12: boolean;
   intlLocale: string;
@@ -24,7 +35,7 @@ export default function TableView({
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-card-border">
-      <table className="w-full border-collapse text-xs">
+      <table className="w-full border-collapse text-sm">
         <tbody>
           {days.map((day, i) => (
             <tr key={i} className="border-b border-card-border last:border-b-0">
@@ -44,30 +55,44 @@ export default function TableView({
                           role="button"
                           tabIndex={0}
                           onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
-                          className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-0.5 transition-opacity hover:opacity-90"
+                          className="flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 transition-opacity hover:opacity-90"
                           style={{ backgroundColor: color.bg, color: color.fg }}
                         >
-                          <span className="w-14 shrink-0 font-bold">
-                            {!event.allDay && event.start ? formatClockTime(new Date(event.start), hour12, intlLocale) : ""}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRequestLink(event);
-                            }}
-                            className="shrink-0 opacity-80 hover:opacity-100"
-                            title="Link"
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3 w-3">
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"
-                              />
-                            </svg>
-                          </button>
+                          <div className="flex items-start gap-1.5">
+                            <span className="w-28 shrink-0 font-bold">
+                              {!event.allDay && event.start
+                                ? formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)
+                                : ""}
+                            </span>
+                            <span className="min-w-0 flex-1 whitespace-normal break-words">{event.title}</span>
+                          </div>
+                          <LinkedSummaryLine
+                            values={links[event.id]}
+                            contactById={contactById}
+                            projectById={projectById}
+                            taskById={taskById}
+                            labels={linkedSummaryLabels}
+                            className="ml-[7.375rem] truncate text-xs font-normal opacity-90"
+                          />
+                          <div className="flex justify-end pt-0.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRequestLink(event);
+                              }}
+                              className="shrink-0 rounded p-1 opacity-80 hover:bg-black/10 hover:opacity-100"
+                              title="Link"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"
+                                />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       );
                     })}

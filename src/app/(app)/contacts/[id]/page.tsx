@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { formatDistanceToNow, format } from "date-fns";
 import TagManager from "./tag-manager";
 import NoteForm from "./note-form";
 import DeleteContactButton from "./delete-button";
 import InteractionLog from "../../interaction-log";
+import CalendarEventsCard from "../../calendar-events-card";
+import { auth } from "@/lib/auth";
+import { getValidAccessToken } from "@/lib/google";
+import { getLinkedCalendarEvents } from "@/lib/calendar-links";
+import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -102,35 +107,48 @@ export default async function ContactDetailPage({
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
+  const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
   const STAGE_LABELS = t.stages;
 
-  const contact = await prisma.contact.findUnique({
-    where: { id },
-    include: {
-      tags: { include: { tag: true } },
-      fieldValues: { include: { definition: true } },
-      projects: {
-        orderBy: { createdAt: "desc" },
-        include: {
-          proposals: { orderBy: { createdAt: "desc" } },
-          invoices: { orderBy: { createdAt: "desc" } },
+  const session = await auth();
+
+  // One shared client for all the reads below — the plain `prisma` proxy
+  // opens a brand-new connection on every property access, and this page
+  // does several sequential reads (Google token, hour format, the contact
+  // itself, all tags, linked calendar events), which is exactly the
+  // pattern that risks Cloudflare Error 1102 without scoping.
+  const { contact, allTags, hour12, calendarEvents } = await withScopedPrismaClient(async (db) => {
+    const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
+    const hour12 = await getHour12(session, db);
+    const contact = await db.contact.findUnique({
+      where: { id },
+      include: {
+        tags: { include: { tag: true } },
+        fieldValues: { include: { definition: true } },
+        projects: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            proposals: { orderBy: { createdAt: "desc" } },
+            invoices: { orderBy: { createdAt: "desc" } },
+          },
         },
+        activity: { orderBy: { createdAt: "desc" }, take: 20, include: { user: true } },
+        interactions: {
+          orderBy: { occurredAt: "desc" },
+          include: { loggedBy: true, project: true },
+        },
+        owner: true,
+        subscriptions: { orderBy: { startedAt: "desc" } },
+        courseEnrollments: { orderBy: { enrolledAt: "desc" } },
+        communityMemberships: { orderBy: { joinedAt: "desc" } },
       },
-      activity: { orderBy: { createdAt: "desc" }, take: 20, include: { user: true } },
-      interactions: {
-        orderBy: { occurredAt: "desc" },
-        include: { loggedBy: true, project: true },
-      },
-      owner: true,
-      subscriptions: { orderBy: { startedAt: "desc" } },
-      courseEnrollments: { orderBy: { enrolledAt: "desc" } },
-      communityMemberships: { orderBy: { joinedAt: "desc" } },
-    },
+    });
+    const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
+    const calendarEvents = contact ? await getLinkedCalendarEvents(db, { contactId: contact.id }, googleAccessToken) : [];
+    return { contact, allTags, hour12, calendarEvents };
   });
 
   if (!contact) notFound();
-
-  const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
 
   const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email;
 
@@ -505,6 +523,15 @@ export default async function ContactDetailPage({
               allTags={allTags}
             />
           </section>
+
+          <CalendarEventsCard
+            title={t.calendarApp.title}
+            events={calendarEvents}
+            noEventsLabel={t.calendarApp.noLinkedEvents}
+            hour12={hour12}
+            dateLocale={dateLocale}
+            intlLocale={intlLocale}
+          />
         </div>
       </div>
     </div>

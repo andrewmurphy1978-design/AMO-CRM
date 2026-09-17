@@ -132,6 +132,7 @@ export default async function CalendarAppPage() {
           intlLocale={intlLocale}
           labels={{
             today: t.calendarApp.today,
+            addEvent: t.calendarApp.addEvent,
             viewMonth: t.calendarApp.viewMonth,
             viewWeek: t.calendarApp.viewWeek,
             view5Day: t.calendarApp.view5Day,
@@ -142,6 +143,11 @@ export default async function CalendarAppPage() {
             tomorrowColumn: t.dashboard.calendarTomorrow,
             noEvents: t.calendarApp.noEvents,
             linkDialog: linkDialogLabels,
+            linkedSummary: {
+              linkedToPrefix: t.calendarApp.linkedToPrefix,
+              project: t.linkPicker.project,
+              task: t.linkPicker.task,
+            },
           }}
         />
       )}

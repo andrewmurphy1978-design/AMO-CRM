@@ -523,6 +523,9 @@ export const dictionaries = {
       view3Day: "3 Day",
       viewDay: "Day",
       viewTable: "Table",
+      addEvent: "Add",
+      linkedToPrefix: "Linked to:",
+      noLinkedEvents: "No linked calendar events.",
     },
     linkPicker: {
       link: "Link",
@@ -1086,6 +1089,9 @@ export const dictionaries = {
       view3Day: "3 jours",
       viewDay: "Jour",
       viewTable: "Tableau",
+      addEvent: "Ajouter",
+      linkedToPrefix: "Lié à :",
+      noLinkedEvents: "Aucun événement de calendrier lié.",
     },
     linkPicker: {
       link: "Lier",

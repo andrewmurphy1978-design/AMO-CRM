@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   addMonths,
@@ -17,6 +17,12 @@ import { saveCalendarEventLink } from "@/actions/links";
 import DayGridView from "./day-grid-view";
 import MonthView from "./month-view";
 import TableView from "./table-view";
+import type { LinkedSummaryLabels } from "./linked-summary";
+
+// Opens Google Calendar's own "create event" screen in a new tab — there's
+// no in-app event editor (yet), so adding an event still happens on
+// Google's side; this just saves the trip of finding that button yourself.
+const GOOGLE_CALENDAR_NEW_EVENT_URL = "https://calendar.google.com/calendar/u/0/r/eventedit";
 
 type ViewMode = "month" | "week" | "5day" | "3day" | "day" | "table";
 
@@ -76,6 +82,7 @@ function stepAnchor(view: ViewMode, anchor: Date, dir: 1 | -1): Date {
 
 export interface CalendarShellLabels {
   today: string;
+  addEvent: string;
   viewMonth: string;
   viewWeek: string;
   view5Day: string;
@@ -86,6 +93,7 @@ export interface CalendarShellLabels {
   tomorrowColumn: string;
   noEvents: string;
   linkDialog: LinkDialogLabels;
+  linkedSummary: LinkedSummaryLabels;
 }
 
 export default function CalendarShell({
@@ -119,7 +127,35 @@ export default function CalendarShell({
   const [linkTarget, setLinkTarget] = useState<CalendarEventSummary | null>(null);
   const isFirstRender = useRef(true);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Starts from a rough calc() estimate (header + page padding) so there's
+  // no flash of an unstyled/collapsed box before the first measurement, then
+  // refines to the container's *actual* distance from the bottom of the
+  // viewport — robust to whatever the surrounding page layout does, instead
+  // of a magic number that silently drifts (that's what previously left a
+  // gap under the grid: the estimate wasn't ever recomputed against reality).
+  const [height, setHeight] = useState("calc(100vh - 180px)");
+
+  useEffect(() => {
+    function measure() {
+      if (!containerRef.current) return;
+      const top = containerRef.current.getBoundingClientRect().top;
+      // <main> carries the same top/bottom padding (p-4 / sm:p-8), so the
+      // gap this container should leave at the bottom matches its own
+      // distance from the top of the viewport's visible content area.
+      const bottomPadding = window.innerWidth >= 640 ? 32 : 16;
+      setHeight(`${Math.max(320, window.innerHeight - top - bottomPadding)}px`);
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
   const { days, rangeStart, rangeEnd } = rangeForView(view, anchor);
+
+  const contactById = useMemo(() => Object.fromEntries(contacts.map((c) => [c.id, c.label])), [contacts]);
+  const projectById = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p.label])), [projects]);
+  const taskById = useMemo(() => Object.fromEntries(tasks.map((t) => [t.id, t.label])), [tasks]);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -179,17 +215,16 @@ export default function CalendarShell({
     : { contactId: "", projectId: "", taskId: "", bookingId: "" };
 
   return (
-    // A fixed height via calc() instead of relying on a percentage/flex-grow
-    // chain through every ancestor up to <main> — that chain breaks the
-    // moment any link in it lacks min-height:0 (flex items default to
-    // min-height:auto, so they refuse to shrink below their content's
-    // natural size), and the calendar grid's own content is exactly the
-    // kind of tall, unclamped content that trips that. This is an
-    // approximation (page header + padding), not pixel-perfect, but it's
-    // robust regardless of what the rest of the page's flex layout does.
-    <div className="flex flex-col" style={{ height: "calc(100vh - 180px)" }}>
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 pb-3">
-        <div className="flex items-center gap-2">
+    // Height is measured against the container's real position (see the
+    // effect above) rather than assumed — a hardcoded calc() silently drifts
+    // whenever the surrounding page chrome changes and leaves a gap under
+    // the grid. min-h-0 stays load-bearing on every flex link below: flex
+    // items default to min-height:auto, refusing to shrink below their
+    // content's natural size, which is what caused the grid to grow the
+    // whole page instead of scrolling internally before this was added.
+    <div ref={containerRef} className="flex flex-col" style={{ height }}>
+      <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 pb-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setAnchor(startOfDay(new Date()))}
@@ -220,7 +255,16 @@ export default function CalendarShell({
           <p className="font-display text-sm font-semibold text-ink sm:text-base">{rangeLabel}</p>
           {loading && <span className="text-xs text-soft">…</span>}
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => window.open(GOOGLE_CALENDAR_NEW_EVENT_URL, "_blank", "noopener,noreferrer")}
+            className="btn-primary rounded-lg px-4 py-1.5 text-sm font-semibold shadow-sm"
+          >
+            {labels.addEvent}
+          </button>
+        </div>
+        <div className="flex flex-wrap justify-end gap-1">
           {viewButtons.map((b) => (
             <button
               key={b.key}
@@ -228,8 +272,8 @@ export default function CalendarShell({
               onClick={() => setView(b.key)}
               className={
                 view === b.key
-                  ? "btn-primary rounded-lg px-2.5 py-1 text-xs font-semibold shadow-sm"
-                  : "rounded-lg border border-card-border px-2.5 py-1 text-xs font-medium text-ink hover:bg-black/5"
+                  ? "btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold shadow-sm"
+                  : "rounded-lg border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5"
               }
             >
               {b.label}
@@ -242,6 +286,11 @@ export default function CalendarShell({
         <TableView
           days={days}
           eventsByDay={eventsByDay}
+          links={links}
+          contactById={contactById}
+          projectById={projectById}
+          taskById={taskById}
+          linkedSummaryLabels={labels.linkedSummary}
           dateLocale={dateLocale}
           hour12={hour12}
           intlLocale={intlLocale}
@@ -255,6 +304,11 @@ export default function CalendarShell({
               <MonthView
                 weeks={Array.from({ length: 6 }, (_, w) => days.slice(w * 7, w * 7 + 7))}
                 eventsByDay={Array.from({ length: 6 }, (_, w) => eventsByDay.slice(w * 7, w * 7 + 7))}
+                links={links}
+                contactById={contactById}
+                projectById={projectById}
+                taskById={taskById}
+                linkedSummaryLabels={labels.linkedSummary}
                 monthAnchor={anchor}
                 dateLocale={dateLocale}
                 hour12={hour12}
@@ -266,6 +320,11 @@ export default function CalendarShell({
               <DayGridView
                 days={days}
                 eventsByDay={eventsByDay}
+                links={links}
+                contactById={contactById}
+                projectById={projectById}
+                taskById={taskById}
+                linkedSummaryLabels={labels.linkedSummary}
                 dateLocale={dateLocale}
                 hour12={hour12}
                 intlLocale={intlLocale}

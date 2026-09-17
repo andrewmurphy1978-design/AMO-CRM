@@ -8,6 +8,15 @@ export function formatClockTime(date: Date, hour12: boolean, intlLocale: string)
   return new Intl.DateTimeFormat(intlLocale, { hour: "numeric", minute: "2-digit", hour12 }).format(date);
 }
 
+// "10:00 – 10:45 AM" style range, the way Google Calendar shows an event's
+// time under its title. Falls back to just the start time when there's no
+// end (shouldn't normally happen — every event summary has one).
+export function formatTimeRange(start: Date, end: Date | null, hour12: boolean, intlLocale: string): string {
+  const startStr = formatClockTime(start, hour12, intlLocale);
+  if (!end) return startStr;
+  return `${startStr} – ${formatClockTime(end, hour12, intlLocale)}`;
+}
+
 // Whole-hour gutter labels for a day-grid view: "09:00"/"17:00" on 24h,
 // "9AM"/"5PM" (no space, correctly wrapping past noon) on 12h.
 export function formatHourMark(hour: number, hour12: boolean, intlLocale: string): string {
