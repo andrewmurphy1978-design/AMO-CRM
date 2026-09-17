@@ -7,7 +7,10 @@ const VALID_CATEGORIES: EmailCategory[] = ["NEEDS_REPLY", "NEEDS_ATTENTION", "CA
 
 // Fast, cheap model — this is a bulk triage call over a snippet-length
 // amount of text per message, not a task that needs Sonnet-level judgment.
-const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+// No date suffix: that's the current model id, and a dated variant returns
+// a 404 (which — before the error logging above existed — silently landed
+// everything in the CAN_WAIT fallback with no visible sign why).
+const CLAUDE_MODEL = "claude-haiku-4-5";
 
 function buildPrompt(emails: { id: string; from: string; subject: string; snippet: string }[]): string {
   const list = emails
@@ -46,11 +49,31 @@ async function callClaude(
         messages: [{ role: "user", content: buildPrompt(emails) }],
       }),
     });
-    if (!res.ok) return {};
+    if (!res.ok) {
+      // Logged rather than swallowed so `wrangler tail` can show the real
+      // reason (bad key, wrong model id, rate limit, etc.) instead of every
+      // email just silently landing in CAN_WAIT with no trace of why.
+      console.error("email-classifier: Anthropic API returned", res.status, await res.text());
+      return {};
+    }
 
     const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-    const text = data.content?.find((c) => c.type === "text")?.text ?? "";
-    const parsed = JSON.parse(text) as Record<string, string>;
+    const rawText = data.content?.find((c) => c.type === "text")?.text ?? "";
+    // Claude sometimes wraps JSON in a markdown fence despite being told
+    // not to — strip ```json / ``` fences before parsing, and fall back to
+    // pulling out the first {...} block if that still doesn't parse.
+    const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+    let parsed: Record<string, string>;
+    try {
+      parsed = JSON.parse(cleaned) as Record<string, string>;
+    } catch {
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (!match) {
+        console.error("email-classifier: couldn't find JSON in response:", rawText);
+        return {};
+      }
+      parsed = JSON.parse(match[0]) as Record<string, string>;
+    }
 
     const result: Record<string, EmailCategory> = {};
     for (const [id, category] of Object.entries(parsed)) {
@@ -59,7 +82,8 @@ async function callClaude(
       }
     }
     return result;
-  } catch {
+  } catch (err) {
+    console.error("email-classifier: request failed:", err);
     return {};
   }
 }
