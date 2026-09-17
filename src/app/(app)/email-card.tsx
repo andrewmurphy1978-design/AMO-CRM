@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import RefreshButton from "./refresh-button";
+import EmailQuickActions from "./email-quick-actions";
+import { isOwnDomainEmail } from "@/lib/email-domain";
 import type { EmailSummary } from "@/lib/google";
 
 export interface EmailLabels {
@@ -16,6 +18,9 @@ export interface EmailLabels {
   unreadOtherTemplate: string;
   openInGmail: string;
   openIonosWebmail: string;
+  reply: string;
+  replyAll: string;
+  forward: string;
 }
 
 // "3:15 PM" for something received today, "Sep 12, 3:15 PM" otherwise —
@@ -86,22 +91,28 @@ export default function EmailCard({
               <ul className="mt-2 -mx-2 overflow-hidden rounded-lg">
                 {emails.map((email, i) => (
                   <li key={email.id}>
-                    <a
-                      href={email.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`flex min-w-0 items-start gap-2 px-2 py-1.5 transition-colors hover:bg-amo-lime/10 ${
-                        i % 2 === 1 ? "bg-black/[0.03]" : ""
+                    <div
+                      className={`flex min-w-0 items-start gap-2 px-2 py-1.5 ${
+                        isOwnDomainEmail(email.fromEmail) ? "bg-amo-gold/20" : i % 2 === 1 ? "bg-black/[0.03]" : ""
                       }`}
                     >
-                      <div className="min-w-0 flex-1">
+                      <a
+                        href={email.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="min-w-0 flex-1 hover:opacity-80"
+                      >
                         <p className="truncate text-sm font-medium text-ink">{email.from}</p>
                         <p className="truncate text-xs text-soft">{email.subject}</p>
-                      </div>
+                      </a>
+                      <EmailQuickActions
+                        link={email.link}
+                        labels={{ reply: labels.reply, replyAll: labels.replyAll, forward: labels.forward }}
+                      />
                       <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
                         {formatEmailDate(email.date, hour12, intlLocale)}
                       </span>
-                    </a>
+                    </div>
                   </li>
                 ))}
               </ul>

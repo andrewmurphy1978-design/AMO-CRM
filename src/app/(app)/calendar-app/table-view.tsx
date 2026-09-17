@@ -4,7 +4,7 @@ import { format, type Locale } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatTimeRange } from "@/lib/calendar-time";
-import LinkedSummaryLine, { type LinkedSummaryLabels, type LinkedSummaryValues } from "./linked-summary";
+import LinkedSummaryLine, { type LinkedSummaryValues } from "./linked-summary";
 
 export default function TableView({
   days,
@@ -13,7 +13,6 @@ export default function TableView({
   contactById,
   projectById,
   taskById,
-  linkedSummaryLabels,
   dateLocale,
   hour12,
   intlLocale,
@@ -26,7 +25,6 @@ export default function TableView({
   contactById: Record<string, string>;
   projectById: Record<string, string>;
   taskById: Record<string, string>;
-  linkedSummaryLabels: LinkedSummaryLabels;
   dateLocale: Locale | undefined;
   hour12: boolean;
   intlLocale: string;
@@ -71,8 +69,7 @@ export default function TableView({
                             contactById={contactById}
                             projectById={projectById}
                             taskById={taskById}
-                            labels={linkedSummaryLabels}
-                            className="ml-[7.375rem] truncate text-xs font-normal opacity-90"
+                            className="ml-[7.375rem] mt-3 truncate text-sm font-normal opacity-90"
                           />
                           <div className="flex justify-end pt-0.5">
                             <button
@@ -81,10 +78,10 @@ export default function TableView({
                                 e.stopPropagation();
                                 onRequestLink(event);
                               }}
-                              className="shrink-0 rounded p-1 opacity-80 hover:bg-black/10 hover:opacity-100"
+                              className="shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
                               title="Link"
                             >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
                                 <path
                                   strokeLinecap="round"
                                   strokeLinejoin="round"

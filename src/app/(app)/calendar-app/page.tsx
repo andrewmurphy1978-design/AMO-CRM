@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { addDays, format, startOfDay, startOfWeek } from "date-fns";
 import { auth } from "@/lib/auth";
-import { prisma, withScopedPrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getValidAccessToken, getCalendarEventsInRange } from "@/lib/google";
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -63,7 +63,7 @@ export default async function CalendarAppPage() {
   const eventIds = (events ?? []).map((e) => e.id);
   const eventLinks =
     eventIds.length > 0
-      ? await prisma.calendarEventLink.findMany({ where: { googleEventId: { in: eventIds } } })
+      ? await withScopedPrismaClient((db) => db.calendarEventLink.findMany({ where: { googleEventId: { in: eventIds } } }))
       : [];
   const initialLinks = Object.fromEntries(
     eventLinks.map((l) => [
@@ -143,11 +143,6 @@ export default async function CalendarAppPage() {
             tomorrowColumn: t.dashboard.calendarTomorrow,
             noEvents: t.calendarApp.noEvents,
             linkDialog: linkDialogLabels,
-            linkedSummary: {
-              linkedToPrefix: t.calendarApp.linkedToPrefix,
-              project: t.linkPicker.project,
-              task: t.linkPicker.task,
-            },
           }}
         />
       )}

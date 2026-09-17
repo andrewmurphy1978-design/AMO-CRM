@@ -239,6 +239,9 @@ export default async function DashboardPage() {
     unreadOtherTemplate: t.dashboard.emailUnreadOtherTemplate,
     openInGmail: t.dashboard.openInGmail,
     openIonosWebmail: t.dashboard.openIonosWebmail,
+    reply: t.dashboard.emailReply,
+    replyAll: t.dashboard.emailReplyAll,
+    forward: t.dashboard.emailForward,
   };
   const socialLabels = {
     title: t.dashboard.socialTitle,

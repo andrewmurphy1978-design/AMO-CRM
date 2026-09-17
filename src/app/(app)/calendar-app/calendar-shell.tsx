@@ -17,7 +17,6 @@ import { saveCalendarEventLink } from "@/actions/links";
 import DayGridView from "./day-grid-view";
 import MonthView from "./month-view";
 import TableView from "./table-view";
-import type { LinkedSummaryLabels } from "./linked-summary";
 
 // Opens Google Calendar's own "create event" screen in a new tab — there's
 // no in-app event editor (yet), so adding an event still happens on
@@ -93,7 +92,6 @@ export interface CalendarShellLabels {
   tomorrowColumn: string;
   noEvents: string;
   linkDialog: LinkDialogLabels;
-  linkedSummary: LinkedSummaryLabels;
 }
 
 export default function CalendarShell({
@@ -290,7 +288,6 @@ export default function CalendarShell({
           contactById={contactById}
           projectById={projectById}
           taskById={taskById}
-          linkedSummaryLabels={labels.linkedSummary}
           dateLocale={dateLocale}
           hour12={hour12}
           intlLocale={intlLocale}
@@ -308,7 +305,6 @@ export default function CalendarShell({
                 contactById={contactById}
                 projectById={projectById}
                 taskById={taskById}
-                linkedSummaryLabels={labels.linkedSummary}
                 monthAnchor={anchor}
                 dateLocale={dateLocale}
                 hour12={hour12}
@@ -324,7 +320,6 @@ export default function CalendarShell({
                 contactById={contactById}
                 projectById={projectById}
                 taskById={taskById}
-                linkedSummaryLabels={labels.linkedSummary}
                 dateLocale={dateLocale}
                 hour12={hour12}
                 intlLocale={intlLocale}

@@ -5,7 +5,7 @@ import { format, isToday, isTomorrow, type Locale } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatHourMark, formatTimeRange } from "@/lib/calendar-time";
-import LinkedSummaryLine, { type LinkedSummaryLabels, type LinkedSummaryValues } from "./linked-summary";
+import LinkedSummaryLine, { type LinkedSummaryValues } from "./linked-summary";
 
 const GRID_START_HOUR = 0;
 const GRID_END_HOUR = 24;
@@ -15,10 +15,14 @@ const DEFAULT_SCROLL_HOUR = 7; // scroll to ~7 AM on open, like Google Calendar
 
 // Alternating column backgrounds so days are easy to tell apart at a
 // glance (plain thin borders were barely visible) — today gets its own
-// stronger tint that overrides the zebra stripe entirely.
+// stronger, solid tint that overrides the zebra stripe entirely. These are
+// flat, fully opaque colors rather than translucent overlays (bg-black/5,
+// bg-amo-lime/25, etc.) — a translucent tint lets the page's own
+// background image show through unevenly, which is what made the columns
+// look patchy/distorted instead of a clean flat fill.
 function dayColumnBg(day: Date, index: number): string {
-  if (isToday(day)) return "bg-amo-lime/25";
-  return index % 2 === 0 ? "bg-card-bg" : "bg-black/[0.045]";
+  if (isToday(day)) return "bg-[#d7f2df]";
+  return index % 2 === 0 ? "bg-card-bg" : "bg-[#f0efe8]";
 }
 
 function minutesSinceGridStart(date: Date): number {
@@ -87,7 +91,6 @@ function EventBlock({
   contactById,
   projectById,
   taskById,
-  linkedSummaryLabels,
   onRequestLink,
 }: {
   event: CalendarEventSummary;
@@ -98,7 +101,6 @@ function EventBlock({
   contactById: Record<string, string>;
   projectById: Record<string, string>;
   taskById: Record<string, string>;
-  linkedSummaryLabels: LinkedSummaryLabels;
   onRequestLink: (event: CalendarEventSummary) => void;
 }) {
   const color = eventColor(event.colorId);
@@ -122,8 +124,7 @@ function EventBlock({
         contactById={contactById}
         projectById={projectById}
         taskById={taskById}
-        labels={linkedSummaryLabels}
-        className="mt-0.5 truncate text-[10px] font-normal opacity-90"
+        className="mt-3 truncate text-xs font-normal opacity-90"
       />
       <div className="mt-auto flex justify-end pt-0.5">
         <button
@@ -132,10 +133,10 @@ function EventBlock({
             e.stopPropagation();
             onRequestLink(event);
           }}
-          className="shrink-0 rounded p-1 opacity-80 hover:bg-black/10 hover:opacity-100"
+          className="shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
           title="Link"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
           </svg>
         </button>
@@ -154,7 +155,6 @@ function DayColumn({
   contactById,
   projectById,
   taskById,
-  linkedSummaryLabels,
   noEventsLabel,
   onRequestLink,
 }: {
@@ -167,7 +167,6 @@ function DayColumn({
   contactById: Record<string, string>;
   projectById: Record<string, string>;
   taskById: Record<string, string>;
-  linkedSummaryLabels: LinkedSummaryLabels;
   noEventsLabel: string;
   onRequestLink: (event: CalendarEventSummary) => void;
 }) {
@@ -211,7 +210,6 @@ function DayColumn({
             contactById={contactById}
             projectById={projectById}
             taskById={taskById}
-            linkedSummaryLabels={linkedSummaryLabels}
             style={{ top, height, left: `${(col / cols) * 100}%`, width: `${100 / cols}%` }}
           />
         );
@@ -230,7 +228,6 @@ export default function DayGridView({
   contactById,
   projectById,
   taskById,
-  linkedSummaryLabels,
   dateLocale,
   hour12,
   intlLocale,
@@ -245,7 +242,6 @@ export default function DayGridView({
   contactById: Record<string, string>;
   projectById: Record<string, string>;
   taskById: Record<string, string>;
-  linkedSummaryLabels: LinkedSummaryLabels;
   dateLocale: Locale | undefined;
   hour12: boolean;
   intlLocale: string;
@@ -333,7 +329,6 @@ export default function DayGridView({
               contactById={contactById}
               projectById={projectById}
               taskById={taskById}
-              linkedSummaryLabels={linkedSummaryLabels}
               noEventsLabel={noEventsLabel}
               onRequestLink={onRequestLink}
             />

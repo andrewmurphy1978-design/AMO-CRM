@@ -2,23 +2,15 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma, withScopedPrismaClient } from "@/lib/prisma";
 import { getValidAccessToken, getRecentEmails } from "@/lib/google";
+import { isOwnDomainEmail } from "@/lib/email-domain";
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader from "../page-header";
 import EmailLinkPicker from "./email-link-picker";
-
-// Same reasoning as elsewhere in the app for the "today shows just the
-// time" formatting, but using Intl directly (not date-fns' locale
-// default) so it respects the user's own 24h/12h setting.
-function formatEmailDate(iso: string, hour12: boolean, intlLocale: string): string {
-  const date = new Date(iso);
-  const time = new Intl.DateTimeFormat(intlLocale, { hour: "numeric", minute: "2-digit", hour12 }).format(date);
-  if (date.toDateString() === new Date().toDateString()) return time;
-  const day = new Intl.DateTimeFormat(intlLocale, { month: "short", day: "numeric" }).format(date);
-  return `${day}, ${time}`;
-}
+import EmailTime from "./email-time";
+import EmailQuickActions from "../email-quick-actions";
 
 function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
@@ -143,17 +135,24 @@ export default async function EmailPage() {
                       : null
                 : null;
               return (
-                <li key={email.id} className={i % 2 === 1 ? "bg-black/[0.03]" : ""}>
-                  <div className="flex items-start gap-2 px-4 py-2.5">
-                    <a href={email.link} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 hover:opacity-80">
-                      <p className="truncate text-sm font-medium text-ink">{email.from}</p>
-                      <p className="truncate text-xs text-soft">{email.subject}</p>
+                <li key={email.id} className={isOwnDomainEmail(email.fromEmail) ? "bg-amo-gold/20" : i % 2 === 1 ? "bg-black/[0.03]" : ""}>
+                  <div className="flex items-center gap-3 px-4 py-1.5">
+                    <a
+                      href={email.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-40 shrink-0 truncate text-sm font-medium text-ink hover:opacity-80"
+                    >
+                      {email.from}
                     </a>
-                    <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
-                      {formatEmailDate(email.date, hour12, intlLocale)}
-                    </span>
-                  </div>
-                  <div className="px-4 pb-2.5">
+                    <a
+                      href={email.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 flex-1 truncate text-sm text-soft hover:opacity-80"
+                    >
+                      {email.subject}
+                    </a>
                     <EmailLinkPicker
                       threadId={email.threadId}
                       contacts={contactOptions}
@@ -165,6 +164,13 @@ export default async function EmailPage() {
                       summary={linkedLabel ? t.linkPicker.linkedTo(linkedLabel) : null}
                       labels={linkLabels}
                     />
+                    <EmailQuickActions
+                      link={email.link}
+                      labels={{ reply: t.dashboard.emailReply, replyAll: t.dashboard.emailReplyAll, forward: t.dashboard.emailForward }}
+                    />
+                    <span className="shrink-0 whitespace-nowrap text-xs text-soft">
+                      <EmailTime iso={email.date} hour12={hour12} intlLocale={intlLocale} />
+                    </span>
                   </div>
                 </li>
               );

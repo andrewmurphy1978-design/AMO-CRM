@@ -117,6 +117,7 @@ export interface EmailSummary {
   id: string;
   threadId: string; // the CRM's own EmailLink rows are keyed off this
   from: string;
+  fromEmail: string; // the bare address, e.g. for the andrewmurphy.online highlight
   subject: string;
   snippet: string;
   date: string; // ISO datetime the message was received
@@ -133,6 +134,13 @@ function formatFrom(raw: string): string {
   const match = raw.match(/^"?([^"<]*)"?\s*<.*>$/);
   const name = match?.[1]?.trim();
   return name || raw;
+}
+
+// "Andrew Murphy" <andrew@example.com> -> "andrew@example.com" (falls back
+// to the raw header, trimmed, when there's no angle-bracket address).
+function extractEmailAddress(raw: string): string {
+  const match = raw.match(/<([^>]+)>/);
+  return (match?.[1] ?? raw).trim();
 }
 
 // Takes the access token directly rather than fetching it internally —
@@ -178,10 +186,12 @@ export async function getRecentEmails(
         };
         const headers = data.payload?.headers;
         const threadId = data.threadId ?? data.id;
+        const fromHeader = extractHeader(headers, "From");
         return {
           id: data.id,
           threadId,
-          from: formatFrom(extractHeader(headers, "From")),
+          from: formatFrom(fromHeader),
+          fromEmail: extractEmailAddress(fromHeader),
           subject: extractHeader(headers, "Subject") || "(no subject)",
           snippet: data.snippet ?? "",
           date: data.internalDate ? new Date(Number(data.internalDate)).toISOString() : new Date().toISOString(),

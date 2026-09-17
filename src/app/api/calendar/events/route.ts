@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken, getCalendarEventsInRange } from "@/lib/google";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 
 // Backs the multi-view Calendar page's client-side navigation (switching
 // views, paging to a different week/month/day) — each of those needs a
@@ -22,27 +22,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "start and end query params are required" }, { status: 400 });
   }
 
-  const accessToken = await getValidAccessToken(session.user.id);
-  if (!accessToken) {
-    return NextResponse.json({ error: "not_connected" }, { status: 502 });
+  // One shared client for both DB reads below (the token lookup and the
+  // link lookup, with the Google fetch happening in between) — this route
+  // is hit on every view switch and every Prev/Next click while browsing
+  // the Calendar, and the plain `prisma` proxy opens a brand-new
+  // connection on every property access; two of those landing in quick
+  // succession on every navigation is exactly what was driving repeated
+  // Cloudflare Error 1102s while using the Calendar (same root cause
+  // already fixed for the Google OAuth callback route and this page's own
+  // initial server-rendered load).
+  const result = await withScopedPrismaClient(async (db) => {
+    const accessToken = await getValidAccessToken(session.user.id, db);
+    if (!accessToken) return { error: "not_connected" as const };
+
+    const events = await getCalendarEventsInRange(accessToken, start, end);
+    if (events === null) return { error: "fetch_failed" as const };
+
+    const eventIds = events.map((e) => e.id);
+    const links =
+      eventIds.length > 0 ? await db.calendarEventLink.findMany({ where: { googleEventId: { in: eventIds } } }) : [];
+    const linksByEvent = Object.fromEntries(
+      links.map((l) => [
+        l.googleEventId,
+        { contactId: l.contactId ?? "", projectId: l.projectId ?? "", taskId: l.taskId ?? "", bookingId: l.bookingId ?? "" },
+      ])
+    );
+    return { events, links: linksByEvent };
+  });
+
+  if ("error" in result) {
+    return NextResponse.json({ error: result.error }, { status: 502 });
   }
-
-  const events = await getCalendarEventsInRange(accessToken, start, end);
-  if (events === null) {
-    return NextResponse.json({ error: "fetch_failed" }, { status: 502 });
-  }
-
-  const eventIds = events.map((e) => e.id);
-  const links =
-    eventIds.length > 0
-      ? await prisma.calendarEventLink.findMany({ where: { googleEventId: { in: eventIds } } })
-      : [];
-  const linksByEvent = Object.fromEntries(
-    links.map((l) => [
-      l.googleEventId,
-      { contactId: l.contactId ?? "", projectId: l.projectId ?? "", taskId: l.taskId ?? "", bookingId: l.bookingId ?? "" },
-    ])
-  );
-
-  return NextResponse.json({ events, links: linksByEvent });
+  return NextResponse.json(result);
 }
