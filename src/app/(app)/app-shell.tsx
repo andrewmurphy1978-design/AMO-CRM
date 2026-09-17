@@ -24,17 +24,19 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  // The Dashboard's 3-column layout wants the horizontal space back, so the
-  // sidebar starts collapsed there — but stays a manual toggle everywhere
-  // it's shown, not a one-way setting, so leaving the dashboard restores it.
+  // The Dashboard's 3-column layout, and the Calendar page's own grid
+  // views, both want the horizontal space back, so the sidebar starts
+  // collapsed on either — but stays a manual toggle everywhere it's
+  // shown, not a one-way setting, so leaving them restores it.
   // Re-deriving this on route change is a render-phase state adjustment
   // (React's sanctioned alternative to an effect for this), not an effect,
   // so it can't cascade an extra render.
+  const autoCollapse = (p: string) => p === "/" || p === "/calendar-app";
   const [prevPathname, setPrevPathname] = useState(pathname);
-  const [collapsed, setCollapsed] = useState(pathname === "/");
+  const [collapsed, setCollapsed] = useState(autoCollapse(pathname));
   if (pathname !== prevPathname) {
     setPrevPathname(pathname);
-    setCollapsed(pathname === "/");
+    setCollapsed(autoCollapse(pathname));
   }
 
   // The fixed-position background (globals.css `.amo-bg-image--app`) reads

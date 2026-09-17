@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { isPersonalSectionUser } from "@/lib/personal-watch";
 import AppShell from "./app-shell";
 
 async function handleSignOut() {
@@ -34,6 +35,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/projects", label: t.nav.projects },
     { href: "/marketing", label: t.nav.marketing },
     { href: "/bookings", label: t.nav.bookings },
+    // Visible only on Andrew's own account — family emails/events have no
+    // business reason to show up for any other team member.
+    ...(isPersonalSectionUser(session.user.email) ? [{ href: "/personal", label: t.nav.personal }] : []),
     { href: "/settings", label: t.nav.settings },
   ];
 

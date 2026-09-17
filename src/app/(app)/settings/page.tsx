@@ -9,9 +9,11 @@ import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buf
 import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
+import PersonalWatchForm from "./personal-watch-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
+import { getWatchedPeople, isPersonalSectionUser } from "@/lib/personal-watch";
 import PageHeader from "../page-header";
 
 interface MakeMetadata {
@@ -27,6 +29,7 @@ export default async function SettingsPage({
   const { google: googleStatus, reason: googleErrorReason } = await searchParams;
   const session = await auth();
   const isAdmin = session?.user.role === "ADMIN";
+  const showPersonalCard = isPersonalSectionUser(session?.user.email);
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
@@ -35,7 +38,7 @@ export default async function SettingsPage({
   // equivalent block in src/app/(app)/page.tsx for why (each `prisma.x`
   // property access opens a brand-new client/connection, and enough of
   // those in one request risks Cloudflare's Error 1102).
-  const { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users } =
+  const { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople } =
     await withScopedPrismaClient(async (db) => {
       const currentUser = session
         ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true } })
@@ -54,7 +57,8 @@ export default async function SettingsPage({
       });
       const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
-      return { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users };
+      const watchedPeople = showPersonalCard ? await getWatchedPeople(db) : [];
+      return { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople };
     });
   const hour12 = currentUser?.timeFormat === "HOUR12";
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
@@ -195,6 +199,17 @@ export default async function SettingsPage({
               )}
             </div>
           </section>
+
+          {showPersonalCard && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.personal.settingsTitle}</h2>
+              <p className="mt-1 text-sm text-soft">{t.personal.settingsDescription}</p>
+              <div className="mt-4">
+                <PersonalWatchForm people={watchedPeople} lang={lang} />
+              </div>
+            </section>
+          )}
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />

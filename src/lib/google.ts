@@ -118,6 +118,7 @@ export interface EmailSummary {
   threadId: string; // the CRM's own EmailLink rows are keyed off this
   from: string;
   fromEmail: string; // the bare address, e.g. for the andrewmurphy.online highlight
+  toRaw: string; // raw To header (can list several addresses) — for matching, e.g. the Personal page's watched-address check
   subject: string;
   snippet: string;
   date: string; // ISO datetime the message was received
@@ -141,6 +142,50 @@ function formatFrom(raw: string): string {
 function extractEmailAddress(raw: string): string {
   const match = raw.match(/<([^>]+)>/);
   return (match?.[1] ?? raw).trim();
+}
+
+async function fetchEmailSummary(accessToken: string, id: string): Promise<EmailSummary | null> {
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    id: string;
+    threadId?: string;
+    snippet?: string;
+    internalDate?: string;
+    payload?: { headers?: { name?: string; value?: string }[] };
+  };
+  const headers = data.payload?.headers;
+  const threadId = data.threadId ?? data.id;
+  const fromHeader = extractHeader(headers, "From");
+  // Gmail's own UI shows the message's Date header (when the sender's
+  // mail server says it was sent), not internalDate (when Gmail's
+  // servers received it) — for bulk/marketing mail routed through
+  // multiple relays those can differ by hours, which is what made
+  // this page's times look wrong next to Gmail's own. Date header
+  // parses fine via the Date constructor (RFC 2822 format); fall
+  // back to internalDate only if it's missing or unparseable.
+  const dateHeader = extractHeader(headers, "Date");
+  const parsedDateHeader = dateHeader ? new Date(dateHeader) : null;
+  const date =
+    parsedDateHeader && !isNaN(parsedDateHeader.getTime())
+      ? parsedDateHeader.toISOString()
+      : data.internalDate
+        ? new Date(Number(data.internalDate)).toISOString()
+        : new Date().toISOString();
+  return {
+    id: data.id,
+    threadId,
+    from: formatFrom(fromHeader),
+    fromEmail: extractEmailAddress(fromHeader),
+    toRaw: extractHeader(headers, "To"),
+    subject: extractHeader(headers, "Subject") || "(no subject)",
+    snippet: data.snippet ?? "",
+    date,
+    link: `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
+  };
 }
 
 // Takes the access token directly rather than fetching it internally —
@@ -170,50 +215,36 @@ export async function getRecentEmails(
     const ids = listData.messages?.map((m) => m.id) ?? [];
     if (ids.length === 0) return [];
 
-    const messages = await Promise.all(
-      ids.map(async (id): Promise<EmailSummary | null> => {
-        const res = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        if (!res.ok) return null;
-        const data = (await res.json()) as {
-          id: string;
-          threadId?: string;
-          snippet?: string;
-          internalDate?: string;
-          payload?: { headers?: { name?: string; value?: string }[] };
-        };
-        const headers = data.payload?.headers;
-        const threadId = data.threadId ?? data.id;
-        const fromHeader = extractHeader(headers, "From");
-        // Gmail's own UI shows the message's Date header (when the sender's
-        // mail server says it was sent), not internalDate (when Gmail's
-        // servers received it) — for bulk/marketing mail routed through
-        // multiple relays those can differ by hours, which is what made
-        // this page's times look wrong next to Gmail's own. Date header
-        // parses fine via the Date constructor (RFC 2822 format); fall
-        // back to internalDate only if it's missing or unparseable.
-        const dateHeader = extractHeader(headers, "Date");
-        const parsedDateHeader = dateHeader ? new Date(dateHeader) : null;
-        const date =
-          parsedDateHeader && !isNaN(parsedDateHeader.getTime())
-            ? parsedDateHeader.toISOString()
-            : data.internalDate
-              ? new Date(Number(data.internalDate)).toISOString()
-              : new Date().toISOString();
-        return {
-          id: data.id,
-          threadId,
-          from: formatFrom(fromHeader),
-          fromEmail: extractEmailAddress(fromHeader),
-          subject: extractHeader(headers, "Subject") || "(no subject)",
-          snippet: data.snippet ?? "",
-          date,
-          link: `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
-        };
-      })
+    const messages = await Promise.all(ids.map((id) => fetchEmailSummary(accessToken, id)));
+    return messages.filter((m): m is EmailSummary => m !== null);
+  } catch {
+    return null;
+  }
+}
+
+// Used by the Personal page — messages either from or to any of a set of
+// watched addresses (family members' school/personal accounts), most
+// recent first. One Gmail search covering every address at once, rather
+// than one search per person.
+export async function searchEmailsForAddresses(
+  accessToken: string,
+  addresses: string[],
+  { maxResults = 40 }: { maxResults?: number } = {}
+): Promise<EmailSummary[] | null> {
+  if (addresses.length === 0) return [];
+  try {
+    const clauses = addresses.flatMap((a) => [`from:${a}`, `to:${a}`]);
+    const query = `(${clauses.join(" OR ")})`;
+    const listRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
     );
+    if (!listRes.ok) return null;
+    const listData = (await listRes.json()) as { messages?: { id: string }[] };
+    const ids = listData.messages?.map((m) => m.id) ?? [];
+    if (ids.length === 0) return [];
+
+    const messages = await Promise.all(ids.map((id) => fetchEmailSummary(accessToken, id)));
     return messages.filter((m): m is EmailSummary => m !== null);
   } catch {
     return null;
@@ -332,6 +363,7 @@ export interface CalendarEventSummary {
   allDay: boolean;
   colorId: string | null; // Google Calendar's per-event colorId ("1".."11"), null = calendar's default color
   htmlLink: string | null; // opens this event directly in Google Calendar's own UI
+  attendeeEmails: string[]; // for the Personal page's watched-address match
 }
 
 // Same reasoning as getRecentEmails above — takes the token directly so no
@@ -360,6 +392,7 @@ interface RawGoogleEvent {
   end?: { dateTime?: string; date?: string };
   colorId?: string;
   htmlLink?: string;
+  attendees?: { email?: string }[];
 }
 
 function mapGoogleEvent(item: RawGoogleEvent): CalendarEventSummary {
@@ -371,6 +404,7 @@ function mapGoogleEvent(item: RawGoogleEvent): CalendarEventSummary {
     allDay: !item.start?.dateTime,
     colorId: item.colorId ?? null,
     htmlLink: item.htmlLink ?? null,
+    attendeeEmails: (item.attendees ?? []).map((a) => a.email ?? "").filter(Boolean),
   };
 }
 

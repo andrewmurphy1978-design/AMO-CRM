@@ -609,6 +609,32 @@ model EmailInboxCache {
   @@map("email_inbox_cache")
 }
 
+// The roster behind the "Personal" section — a page visible only to
+// Andrew, gathering emails and calendar events for family members (and
+// himself) rather than the business. Fixed roster (Haley, Lukas, Diane,
+// Me), but each one's watched addresses are data, editable from Andrew's
+// own Settings card, not code.
+model PersonalWatchPerson {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  emails PersonalWatchEmail[]
+
+  @@map("personal_watch_people")
+}
+
+model PersonalWatchEmail {
+  id       String              @id @default(cuid())
+  personId String
+  person   PersonalWatchPerson @relation(fields: [personId], references: [id], onDelete: Cascade)
+  email    String
+
+  @@unique([personId, email])
+  @@map("personal_watch_emails")
+}
+
 // Same idea as EmailLink, but for a Google Calendar event (keyed off its
 // event id) — links an appointment to a client, project, task, and/or a
 // systeme.io booking.
