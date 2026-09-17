@@ -89,11 +89,10 @@ export default async function EmailPage() {
           </>
         }
       />
-      <p className="text-sm text-soft">{t.email.subtitle}</p>
-
       <EmailScreeningView
         initialData={initialData}
         connected={connected}
+        subtitle={t.email.subtitle}
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}

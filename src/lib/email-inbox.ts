@@ -150,11 +150,15 @@ export async function getCachedInbox(db: PrismaClient, userId: string): Promise<
 // very first visit (no cache row yet) or an explicit Refresh — never on a
 // normal reopen.
 export async function refreshEmailInboxCache(db: PrismaClient, userId: string, accessToken: string): Promise<EmailInboxSnapshot> {
-  const previous = await db.emailInboxCache.findUnique({ where: { userId }, select: { fetchedAt: true } });
-
+  // Always re-checks the same fixed window (not just "since the last
+  // refresh") — whether a sent thread is still awaiting a reply can only
+  // be answered fresh each time (a reply might arrive between refreshes,
+  // but so can a thread that's been waiting since before the previous
+  // check), and this costs Gmail calls only, never a Claude credit, so
+  // there's no real saving from narrowing it.
   const [emails, sentAwaitingReply] = await Promise.all([
     getRecentEmails(accessToken, { maxResults: 30, unreadOnly: false }),
-    getSentAwaitingReplies(accessToken, { sinceIso: previous?.fetchedAt.toISOString(), maxResults: 20 }),
+    getSentAwaitingReplies(accessToken, { maxResults: 20 }),
   ]);
   const emailList = emails ?? [];
   const sentList = sentAwaitingReply ?? [];

@@ -150,6 +150,17 @@ export default async function SettingsPage({
               )}
             </div>
           </section>
+
+          {showPersonalCard && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.personal.settingsTitle}</h2>
+              <p className="mt-1 text-sm text-soft">{t.personal.settingsDescription}</p>
+              <div className="mt-4">
+                <PersonalWatchForm people={watchedPeople} lang={lang} />
+              </div>
+            </section>
+          )}
         </div>
 
         {/* Right column: admin-only settings. */}
@@ -199,17 +210,6 @@ export default async function SettingsPage({
               )}
             </div>
           </section>
-
-          {showPersonalCard && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.personal.settingsTitle}</h2>
-              <p className="mt-1 text-sm text-soft">{t.personal.settingsDescription}</p>
-              <div className="mt-4">
-                <PersonalWatchForm people={watchedPeople} lang={lang} />
-              </div>
-            </section>
-          )}
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />

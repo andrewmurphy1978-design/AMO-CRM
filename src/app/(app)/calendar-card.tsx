@@ -136,7 +136,7 @@ function DayColumn({
   const hourMarks = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => GRID_START_HOUR + i);
 
   return (
-    <div className="relative flex-1 border-l border-card-border first:border-l-0">
+    <div className="relative min-w-0 flex-1 border-l border-card-border first:border-l-0">
       {hourMarks.map((h) => (
         <div
           key={h}
@@ -251,8 +251,8 @@ function ThreeDayGrid({
       <div className="flex border-b border-card-border bg-field-bg">
         <div className="w-10 shrink-0" />
         {days.map((day, i) => (
-          <div key={i} className="flex-1 border-l border-card-border py-1.5 text-center first:border-l-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">
+          <div key={i} className="min-w-0 flex-1 border-l border-card-border py-1.5 text-center first:border-l-0">
+            <p className="truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft">
               {isToday(day) ? labels.today : isTomorrow(day) ? labels.tomorrow : format(day, "EEE", { locale: dateLocale })}
             </p>
             <p className={isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}>
@@ -267,7 +267,7 @@ function ThreeDayGrid({
         <div className="flex border-b border-card-border">
           <div className="w-10 shrink-0" />
           {allDayByDay.map((list, i) => (
-            <div key={i} className="flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0">
+            <div key={i} className="min-w-0 flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0">
               {list.map((event) => {
                 const color = eventColor(event.colorId);
                 return (

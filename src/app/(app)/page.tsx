@@ -232,11 +232,10 @@ export default async function DashboardPage() {
     title: t.dashboard.emailTitle,
     refresh: t.dashboard.refresh,
     refreshing: t.dashboard.refreshing,
+    screening: t.dashboard.emailScreening,
     notConnected: t.dashboard.emailNotConnected,
     connectInSettings: t.dashboard.emailConnectInSettings,
-    noUnread: t.dashboard.emailNoUnread,
-    unreadOne: t.dashboard.emailUnreadOne,
-    unreadOtherTemplate: t.dashboard.emailUnreadOtherTemplate,
+    noItems: t.dashboard.emailNoItems,
     openInGmail: t.dashboard.openInGmail,
     openIonosWebmail: t.dashboard.openIonosWebmail,
     reply: t.dashboard.emailReply,
@@ -244,8 +243,7 @@ export default async function DashboardPage() {
     forward: t.dashboard.emailForward,
     categoryNeedsReply: t.email.categoryNeedsReply,
     categoryNeedsAttention: t.email.categoryNeedsAttention,
-    categoryCanWait: t.email.categoryCanWait,
-    categoryLowPriority: t.email.categoryLowPriority,
+    awaitingResponse: t.dashboard.emailAwaitingResponse,
   };
   const socialLabels = {
     title: t.dashboard.socialTitle,
@@ -367,7 +365,7 @@ export default async function DashboardPage() {
         {/* Left column: email, projects, tasks, activity. */}
         <div className="space-y-6">
           <Suspense fallback={<CardSkeleton title={t.dashboard.emailTitle} />}>
-            <EmailCardServer accessToken={googleAccessToken} hour12={hour12} lang={lang} labels={emailLabels} />
+            <EmailCardServer accessToken={googleAccessToken} userId={session?.user.id ?? ""} hour12={hour12} lang={lang} labels={emailLabels} />
           </Suspense>
 
           <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">

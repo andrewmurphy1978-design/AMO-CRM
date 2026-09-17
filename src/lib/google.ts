@@ -264,16 +264,17 @@ export interface SentEmailSummary {
 
 // Recently sent messages whose thread hasn't seen a reply yet — a
 // deterministic "did they answer" check, not a Claude classification, so
-// this costs Gmail API calls only, never an AI credit. `sinceIso` scopes
-// the search to messages sent since the last check (falls back to a fixed
-// window on the very first run, when there's no "last check" yet).
+// this costs Gmail API calls only, never an AI credit. Always re-checks
+// the same fixed window rather than narrowing to "since the last
+// check" — a thread sent before the previous refresh is just as
+// genuinely still-awaiting as one sent since, and there's no AI cost to
+// save by excluding it.
 export async function getSentAwaitingReplies(
   accessToken: string,
-  { sinceIso, maxResults = 20 }: { sinceIso?: string; maxResults?: number } = {}
+  { maxResults = 20 }: { maxResults?: number } = {}
 ): Promise<SentEmailSummary[] | null> {
   try {
-    const afterEpoch = sinceIso ? Math.floor(new Date(sinceIso).getTime() / 1000) : null;
-    const query = afterEpoch && !isNaN(afterEpoch) ? `in:sent after:${afterEpoch}` : "in:sent newer_than:30d";
+    const query = "in:sent newer_than:45d";
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
       { headers: { Authorization: `Bearer ${accessToken}` } }

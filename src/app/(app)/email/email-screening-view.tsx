@@ -118,6 +118,7 @@ function EmailRow({
 export default function EmailScreeningView({
   initialData,
   connected,
+  subtitle,
   contactOptions,
   projectOptions,
   taskOptions,
@@ -126,6 +127,7 @@ export default function EmailScreeningView({
 }: {
   initialData: EmailScreeningPayload | null;
   connected: boolean;
+  subtitle: string;
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
@@ -220,20 +222,26 @@ export default function EmailScreeningView({
 
   if (!connected) {
     return (
-      <p className="text-sm text-soft">
-        {t.email.notConnected}{" "}
-        <Link href="/settings" className="font-semibold text-emerald-700 underline">
-          {t.email.connectInSettings}
-        </Link>
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-soft">{subtitle}</p>
+        <p className="text-sm text-soft">
+          {t.email.notConnected}{" "}
+          <Link href="/settings" className="font-semibold text-emerald-700 underline">
+            {t.email.connectInSettings}
+          </Link>
+        </p>
+      </div>
     );
   }
 
   if (loading && !data) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-card-border bg-card-bg px-5 py-8 text-sm text-soft shadow-sm">
-        <Spinner className="h-5 w-5" />
-        {t.email.screening}
+      <div className="space-y-3">
+        <p className="text-sm text-soft">{subtitle}</p>
+        <div className="flex items-center gap-3 rounded-2xl border border-card-border bg-card-bg px-5 py-8 text-sm text-soft shadow-sm">
+          <Spinner className="h-5 w-5" />
+          {t.email.screening}
+        </div>
       </div>
     );
   }
@@ -260,122 +268,105 @@ export default function EmailScreeningView({
 
   const nothingToShow = groups.length === 0 && recentlyRead.length === 0 && sentAwaitingReply.length === 0;
 
+  function receivedRows(list: EmailSummary[], opts: { markAsRead: boolean }) {
+    return list.map((email, i) => (
+      <EmailRow
+        key={email.id}
+        index={i}
+        highlight={isOwnDomainEmail(email.fromEmail)}
+        primaryLabel={email.from}
+        subject={email.subject}
+        link={email.link}
+        threadId={email.threadId}
+        linkInfo={data?.linksByThread[email.threadId]}
+        linkSummaryText={linkSummaryText(data?.linksByThread[email.threadId])}
+        contactOptions={contactOptions}
+        projectOptions={projectOptions}
+        taskOptions={taskOptions}
+        linkLabels={linkLabels}
+        quickActionLabels={quickActionLabels}
+        dateIso={email.date}
+        hour12={hour12}
+        intlLocale={intlLocale}
+        onOpen={opts.markAsRead ? () => markRead(email.id) : undefined}
+        onLinkSaved={() => markLinked(email.threadId)}
+      />
+    ));
+  }
+
+  const sentRows = sentAwaitingReply.map((s, i) => (
+    <EmailRow
+      key={s.id}
+      index={i}
+      highlight={false}
+      primaryLabel={s.to}
+      subject={s.subject}
+      link={s.link}
+      threadId={s.threadId}
+      linkInfo={data?.linksByThread[s.threadId]}
+      linkSummaryText={linkSummaryText(data?.linksByThread[s.threadId])}
+      contactOptions={contactOptions}
+      projectOptions={projectOptions}
+      taskOptions={taskOptions}
+      linkLabels={linkLabels}
+      quickActionLabels={quickActionLabels}
+      dateIso={s.date}
+      hour12={hour12}
+      intlLocale={intlLocale}
+      onLinkSaved={() => markLinked(s.threadId)}
+    />
+  ));
+
+  // Explicit order (not just CATEGORY_ORDER) so "Sent — awaiting reply"
+  // lands between Needs a reply and Needs your attention regardless of
+  // which category groups are actually non-empty right now.
+  const needsReplyGroup = groups.find((g) => g.category === "NEEDS_REPLY");
+  const restGroups = groups.filter((g) => g.category !== "NEEDS_REPLY");
+  const orderedSections: { key: string; heading: string; count: number; rows: React.ReactNode; dim?: boolean }[] = [
+    ...(needsReplyGroup
+      ? [{ key: "NEEDS_REPLY", heading: categoryLabels.NEEDS_REPLY, count: needsReplyGroup.emails.length, rows: receivedRows(needsReplyGroup.emails, { markAsRead: true }) }]
+      : []),
+    ...(sentAwaitingReply.length > 0
+      ? [{ key: "SENT_AWAITING_REPLY", heading: t.email.sentAwaitingReply, count: sentAwaitingReply.length, rows: sentRows }]
+      : []),
+    ...restGroups.map((g) => ({
+      key: g.category,
+      heading: categoryLabels[g.category],
+      count: g.emails.length,
+      rows: receivedRows(g.emails, { markAsRead: true }),
+    })),
+    ...(recentlyRead.length > 0
+      ? [{ key: "RECENTLY_READ", heading: t.email.recentlyRead, count: recentlyRead.length, rows: receivedRows(recentlyRead, { markAsRead: false }), dim: true }]
+      : []),
+  ];
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-end gap-3">
-        {loading && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-soft">
-            <Spinner className="h-3.5 w-3.5" />
-            {t.email.screening}
-          </span>
-        )}
-        <RefreshButton onClick={refresh} loading={loading} label={t.email.refresh} loadingLabel={t.email.refreshing} />
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm text-soft">{subtitle}</p>
+        <div className="flex items-center gap-3">
+          {loading && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-soft">
+              <Spinner className="h-3.5 w-3.5" />
+              {t.email.screening}
+            </span>
+          )}
+          <RefreshButton onClick={refresh} loading={loading} label={t.email.refresh} loadingLabel={t.email.refreshing} />
+        </div>
       </div>
 
       {nothingToShow && <p className="text-sm text-soft">{t.email.noMessages}</p>}
 
-      {sentAwaitingReply.length > 0 && (
-        <section>
+      {orderedSections.map((section) => (
+        <section key={section.key}>
           <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-soft">
-            {t.email.sentAwaitingReply} <span className="font-normal normal-case text-soft/70">({sentAwaitingReply.length})</span>
+            {section.heading} <span className="font-normal normal-case text-soft/70">({section.count})</span>
           </h2>
-          <div className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm">
-            <ul>
-              {sentAwaitingReply.map((s, i) => (
-                <EmailRow
-                  key={s.id}
-                  index={i}
-                  highlight={false}
-                  primaryLabel={s.to}
-                  subject={s.subject}
-                  link={s.link}
-                  threadId={s.threadId}
-                  linkInfo={data?.linksByThread[s.threadId]}
-                  linkSummaryText={linkSummaryText(data?.linksByThread[s.threadId])}
-                  contactOptions={contactOptions}
-                  projectOptions={projectOptions}
-                  taskOptions={taskOptions}
-                  linkLabels={linkLabels}
-                  quickActionLabels={quickActionLabels}
-                  dateIso={s.date}
-                  hour12={hour12}
-                  intlLocale={intlLocale}
-                  onLinkSaved={() => markLinked(s.threadId)}
-                />
-              ))}
-            </ul>
-          </div>
-        </section>
-      )}
-
-      {groups.map(({ category, emails: groupEmails }) => (
-        <section key={category}>
-          <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-soft">
-            {categoryLabels[category]} <span className="font-normal normal-case text-soft/70">({groupEmails.length})</span>
-          </h2>
-          <div className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm">
-            <ul>
-              {groupEmails.map((email, i) => (
-                <EmailRow
-                  key={email.id}
-                  index={i}
-                  highlight={isOwnDomainEmail(email.fromEmail)}
-                  primaryLabel={email.from}
-                  subject={email.subject}
-                  link={email.link}
-                  threadId={email.threadId}
-                  linkInfo={data?.linksByThread[email.threadId]}
-                  linkSummaryText={linkSummaryText(data?.linksByThread[email.threadId])}
-                  contactOptions={contactOptions}
-                  projectOptions={projectOptions}
-                  taskOptions={taskOptions}
-                  linkLabels={linkLabels}
-                  quickActionLabels={quickActionLabels}
-                  dateIso={email.date}
-                  hour12={hour12}
-                  intlLocale={intlLocale}
-                  onOpen={() => markRead(email.id)}
-                  onLinkSaved={() => markLinked(email.threadId)}
-                />
-              ))}
-            </ul>
+          <div className={`overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm ${section.dim ? "opacity-80" : ""}`}>
+            <ul>{section.rows}</ul>
           </div>
         </section>
       ))}
-
-      {recentlyRead.length > 0 && (
-        <section>
-          <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-soft">
-            {t.email.recentlyRead} <span className="font-normal normal-case text-soft/70">({recentlyRead.length})</span>
-          </h2>
-          <div className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm opacity-80">
-            <ul>
-              {recentlyRead.map((email, i) => (
-                <EmailRow
-                  key={email.id}
-                  index={i}
-                  highlight={isOwnDomainEmail(email.fromEmail)}
-                  primaryLabel={email.from}
-                  subject={email.subject}
-                  link={email.link}
-                  threadId={email.threadId}
-                  linkInfo={data?.linksByThread[email.threadId]}
-                  linkSummaryText={linkSummaryText(data?.linksByThread[email.threadId])}
-                  contactOptions={contactOptions}
-                  projectOptions={projectOptions}
-                  taskOptions={taskOptions}
-                  linkLabels={linkLabels}
-                  quickActionLabels={quickActionLabels}
-                  dateIso={email.date}
-                  hour12={hour12}
-                  intlLocale={intlLocale}
-                  onLinkSaved={() => markLinked(email.threadId)}
-                />
-              ))}
-            </ul>
-          </div>
-        </section>
-      )}
     </div>
   );
 }
