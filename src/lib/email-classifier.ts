@@ -8,10 +8,7 @@ const VALID_CATEGORIES: EmailCategory[] = ["NEEDS_REPLY", "NEEDS_ATTENTION", "CA
 
 // Fast, cheap model — this is a bulk triage call over a snippet-length
 // amount of text per message, not a task that needs Sonnet-level judgment.
-// No date suffix: that's the current model id, and a dated variant returns
-// a 404 (which — before the error logging above existed — silently landed
-// everything in the CAN_WAIT fallback with no visible sign why).
-const CLAUDE_MODEL = "claude-haiku-4-5";
+const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 
 function buildPrompt(emails: { id: string; from: string; subject: string; snippet: string }[]): string {
   const list = emails
