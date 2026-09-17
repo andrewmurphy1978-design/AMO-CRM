@@ -52,7 +52,12 @@ async function callClaude(
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: Math.max(256, emails.length * 20),
+        // Each line is an id (several tokens) plus a category name (up to
+        // 4 tokens for NEEDS_ATTENTION) plus formatting/fence overhead —
+        // 20 tokens/email was too tight and truncated large inboxes
+        // mid-response, losing the whole batch. 60/email plus a big floor
+        // leaves headroom; parsing below is also truncation-tolerant.
+        max_tokens: Math.max(1024, emails.length * 60),
         messages: [{ role: "user", content: buildPrompt(emails) }],
       }),
     });
@@ -66,27 +71,23 @@ async function callClaude(
 
     const data = (await res.json()) as { content?: { type: string; text?: string }[] };
     const rawText = data.content?.find((c) => c.type === "text")?.text ?? "";
-    // Claude sometimes wraps JSON in a markdown fence despite being told
-    // not to — strip ```json / ``` fences before parsing, and fall back to
-    // pulling out the first {...} block if that still doesn't parse.
-    const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-    let parsed: Record<string, string>;
-    try {
-      parsed = JSON.parse(cleaned) as Record<string, string>;
-    } catch {
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (!match) {
-        console.error("email-classifier: couldn't find JSON in response:", rawText);
-        return {};
-      }
-      parsed = JSON.parse(match[0]) as Record<string, string>;
-    }
-
+    // Scan for "id":"CATEGORY" pairs directly rather than requiring the
+    // whole response to be valid JSON — a markdown fence, or a response
+    // that got cut off mid-object because max_tokens ran out on a large
+    // batch, still leaves every *complete* line readable this way, so a
+    // truncated response loses only the trailing few emails instead of
+    // the entire batch.
     const result: Record<string, EmailCategory> = {};
-    for (const [id, category] of Object.entries(parsed)) {
+    const pairPattern = /"([^"]+)"\s*:\s*"([A-Z_]+)"/g;
+    let match: RegExpExecArray | null;
+    while ((match = pairPattern.exec(rawText)) !== null) {
+      const [, id, category] = match;
       if (VALID_CATEGORIES.includes(category as EmailCategory)) {
         result[id] = category as EmailCategory;
       }
+    }
+    if (Object.keys(result).length === 0) {
+      console.error("email-classifier: couldn't find any id/category pairs in response:", rawText);
     }
     return result;
   } catch (err) {
