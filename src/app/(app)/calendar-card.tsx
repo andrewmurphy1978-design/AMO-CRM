@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { addDays, format, isSameDay, isToday, isTomorrow, startOfDay, type Locale } from "date-fns";
 import RefreshButton from "./refresh-button";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
-import { formatClockTime, formatHourMark } from "@/lib/calendar-time";
+import { formatClockTime, formatHourMark, formatTimeRange } from "@/lib/calendar-time";
 
 export interface CalendarLabels {
   title: string;
@@ -21,12 +22,23 @@ export interface CalendarLabels {
   openInCalendar: string;
 }
 
+// Pre-resolved (not raw ids) since the Dashboard card, unlike the full
+// Calendar page, doesn't ship full contacts/projects/tasks lists to the
+// client just to look three names up — the server resolves them once.
+export interface ResolvedEventLink {
+  contactId: string;
+  contactName: string;
+  projectId: string;
+  projectName: string;
+  taskId: string;
+  taskName: string;
+}
 
 const GRID_START_HOUR = 6; // grid content starts at 6 AM...
 const GRID_END_HOUR = 22; // ...through 10 PM, scrollable
 const VISIBLE_HOURS = 8; // ...but only ~9 AM-5 PM is visible without scrolling
 const ROW_HEIGHT = 48; // px per hour
-const MIN_BLOCK_HEIGHT = 18; // px — keeps very short events tappable/legible
+const MIN_BLOCK_HEIGHT = 30; // px — enough room for a time range under the title
 
 function minutesSinceGridStart(date: Date): number {
   const hours = date.getHours() + date.getMinutes() / 60;
@@ -92,12 +104,19 @@ function layoutDayEvents(events: TimedEvent[]): PositionedEvent[] {
 function DayColumn({
   day,
   events,
+  links,
+  hour12,
+  intlLocale,
   labels,
 }: {
   day: Date;
   events: CalendarEventSummary[];
+  links: Record<string, ResolvedEventLink>;
+  hour12: boolean;
+  intlLocale: string;
   labels: CalendarLabels;
 }) {
+  const router = useRouter();
   const timed: TimedEvent[] = events
     .filter((e) => !e.allDay && e.start)
     .map((e) => {
@@ -132,11 +151,14 @@ function DayColumn({
         const color = eventColor(event.colorId);
         const top = (startMin / 60) * ROW_HEIGHT;
         const height = Math.max(MIN_BLOCK_HEIGHT, ((endMin - startMin) / 60) * ROW_HEIGHT - 1);
+        const link = links[event.id];
         return (
-          <Link
+          <div
             key={event.id}
-            href="/calendar"
-            className="absolute block cursor-pointer overflow-hidden rounded px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
+            role="button"
+            tabIndex={0}
+            onClick={() => router.push("/calendar")}
+            className="absolute flex cursor-pointer flex-col overflow-hidden rounded px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
             style={{
               top,
               height,
@@ -147,8 +169,42 @@ function DayColumn({
             }}
             title={event.title}
           >
-            {event.title}
-          </Link>
+            <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
+            {!event.allDay && event.start && (
+              <p className="text-[9px] font-normal opacity-90">
+                {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
+              </p>
+            )}
+            {link && (link.contactName || link.projectName || link.taskName) && (
+              <div className="mt-1 text-[9px] font-normal opacity-90">
+                {link.contactName && (
+                  <div className="truncate">
+                    <Link href={`/contacts/${link.contactId}`} onClick={(e) => e.stopPropagation()} className="underline hover:opacity-80">
+                      {link.contactName}
+                    </Link>
+                  </div>
+                )}
+                {link.projectName && (
+                  <div className="truncate">
+                    <Link href={`/projects/${link.projectId}`} onClick={(e) => e.stopPropagation()} className="underline hover:opacity-80">
+                      {link.projectName}
+                    </Link>
+                  </div>
+                )}
+                {link.taskName && (
+                  <div className="truncate">
+                    <Link
+                      href={`/projects/${link.projectId}/tasks/${link.taskId}/edit`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="underline hover:opacity-80"
+                    >
+                      {link.taskName}
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         );
       })}
       {events.length === 0 && (
@@ -161,6 +217,7 @@ function DayColumn({
 function ThreeDayGrid({
   days,
   eventsByDay,
+  links,
   dateLocale,
   hour12,
   intlLocale,
@@ -168,6 +225,7 @@ function ThreeDayGrid({
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
+  links: Record<string, ResolvedEventLink>;
   dateLocale: Locale | undefined;
   hour12: boolean;
   intlLocale: string;
@@ -215,7 +273,7 @@ function ThreeDayGrid({
                 return (
                   <div
                     key={event.id}
-                    className="truncate rounded px-1 py-0.5 text-[10px] font-medium"
+                    className="w-full whitespace-normal break-words rounded px-1 py-0.5 text-[10px] font-medium"
                     style={{ backgroundColor: color.bg, color: color.fg }}
                     title={event.title}
                   >
@@ -243,7 +301,15 @@ function ThreeDayGrid({
             ))}
           </div>
           {days.map((day, i) => (
-            <DayColumn key={i} day={day} events={eventsByDay[i]} labels={labels} />
+            <DayColumn
+              key={i}
+              day={day}
+              events={eventsByDay[i]}
+              links={links}
+              hour12={hour12}
+              intlLocale={intlLocale}
+              labels={labels}
+            />
           ))}
         </div>
       </div>
@@ -292,7 +358,10 @@ function UpcomingTable({
                           <span className="w-16 shrink-0 font-bold">
                             {!event.allDay && event.start ? formatClockTime(new Date(event.start), hour12, intlLocale) : ""}
                           </span>
-                          <span className="truncate">{event.title}</span>
+                          <span className="min-w-0 flex-1 truncate">{event.title}</span>
+                          <span className="shrink-0 text-[10px] opacity-90">
+                            {!event.allDay && event.end ? formatClockTime(new Date(event.end), hour12, intlLocale) : ""}
+                          </span>
                         </Link>
                       );
                     })}
@@ -309,18 +378,21 @@ function UpcomingTable({
 
 export default function CalendarCard({
   initial,
+  links: initialLinks,
   connected,
   lang,
   hour12,
   labels,
 }: {
   initial: CalendarEventSummary[] | null;
+  links: Record<string, ResolvedEventLink>;
   connected: boolean;
   lang: "en" | "fr";
   hour12: boolean;
   labels: CalendarLabels;
 }) {
   const [events, setEvents] = useState(initial);
+  const [links, setLinks] = useState(initialLinks);
   const [loading, setLoading] = useState(false);
   const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
@@ -329,7 +401,11 @@ export default function CalendarCard({
     setLoading(true);
     try {
       const res = await fetch("/api/dashboard/calendar");
-      if (res.ok) setEvents(((await res.json()) as { events: CalendarEventSummary[] }).events);
+      if (res.ok) {
+        const data = (await res.json()) as { events: CalendarEventSummary[]; links?: Record<string, ResolvedEventLink> };
+        setEvents(data.events);
+        setLinks(data.links ?? {});
+      }
     } catch {
       // Keep showing the last known list rather than clearing it.
     } finally {
@@ -338,7 +414,7 @@ export default function CalendarCard({
   }
 
   const today = startOfDay(new Date());
-  const days = Array.from({ length: 11 }, (_, i) => addDays(today, i));
+  const days = Array.from({ length: 14 }, (_, i) => addDays(today, i));
   const eventsByDay = days.map((day) => (events ?? []).filter((e) => e.start && isSameDay(new Date(e.start), day)));
   const gridDays = days.slice(0, 3);
   const gridEvents = eventsByDay.slice(0, 3);
@@ -366,6 +442,7 @@ export default function CalendarCard({
           <ThreeDayGrid
             days={gridDays}
             eventsByDay={gridEvents}
+            links={links}
             dateLocale={dateLocale}
             hour12={hour12}
             intlLocale={intlLocale}

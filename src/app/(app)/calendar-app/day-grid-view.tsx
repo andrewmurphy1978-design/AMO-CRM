@@ -110,7 +110,7 @@ function EventBlock({
       tabIndex={0}
       onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
       style={{ ...style, backgroundColor: color.bg, color: color.fg }}
-      className="absolute flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
+      className="absolute flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 pr-6 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
       title={event.title}
     >
       <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
@@ -126,21 +126,23 @@ function EventBlock({
         taskById={taskById}
         className="mt-3 truncate text-xs font-normal opacity-90"
       />
-      <div className="mt-auto flex justify-end pt-0.5">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRequestLink(event);
-          }}
-          className="shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
-          title="Link"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-          </svg>
-        </button>
-      </div>
+      {/* Absolutely positioned (not a flex-flow child) so it always shows
+          in the box's corner regardless of how short the box is — a very
+          brief event's box can be too short to also reserve flow space for
+          a link-button row, which is what previously hid it entirely. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRequestLink(event);
+        }}
+        className="absolute bottom-0.5 right-0.5 shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
+        title="Link"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+        </svg>
+      </button>
     </div>
   );
 }

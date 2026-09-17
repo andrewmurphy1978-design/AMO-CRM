@@ -173,7 +173,7 @@ export async function getRecentEmails(
     const messages = await Promise.all(
       ids.map(async (id): Promise<EmailSummary | null> => {
         const res = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
         if (!res.ok) return null;
@@ -187,6 +187,21 @@ export async function getRecentEmails(
         const headers = data.payload?.headers;
         const threadId = data.threadId ?? data.id;
         const fromHeader = extractHeader(headers, "From");
+        // Gmail's own UI shows the message's Date header (when the sender's
+        // mail server says it was sent), not internalDate (when Gmail's
+        // servers received it) — for bulk/marketing mail routed through
+        // multiple relays those can differ by hours, which is what made
+        // this page's times look wrong next to Gmail's own. Date header
+        // parses fine via the Date constructor (RFC 2822 format); fall
+        // back to internalDate only if it's missing or unparseable.
+        const dateHeader = extractHeader(headers, "Date");
+        const parsedDateHeader = dateHeader ? new Date(dateHeader) : null;
+        const date =
+          parsedDateHeader && !isNaN(parsedDateHeader.getTime())
+            ? parsedDateHeader.toISOString()
+            : data.internalDate
+              ? new Date(Number(data.internalDate)).toISOString()
+              : new Date().toISOString();
         return {
           id: data.id,
           threadId,
@@ -194,7 +209,7 @@ export async function getRecentEmails(
           fromEmail: extractEmailAddress(fromHeader),
           subject: extractHeader(headers, "Subject") || "(no subject)",
           snippet: data.snippet ?? "",
-          date: data.internalDate ? new Date(Number(data.internalDate)).toISOString() : new Date().toISOString(),
+          date,
           link: `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
         };
       })
@@ -218,19 +233,19 @@ export interface CalendarEventSummary {
 // Same reasoning as getRecentEmails above — takes the token directly so no
 // Prisma read happens from inside a concurrently-rendered Suspense branch.
 //
-// Fetches today through +12 days — a little wider than the 11 days the
+// Fetches today through +15 days — a little wider than the 14 days the
 // Dashboard displays, to absorb the UTC-vs-America/Montreal offset (the
 // server has no local timezone, so "today" here is computed in UTC; the
 // dashboard buckets events into days client-side, where the browser's
 // real Montreal time takes over). The Dashboard shows the next 3 days as
-// a visual day-grid and the remaining 8 as a scrollable table.
+// a visual day-grid and the remaining 11 as a scrollable table.
 export async function getUpcomingEvents(accessToken: string): Promise<CalendarEventSummary[] | null> {
   const now = new Date();
   const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   return getCalendarEventsInRange(
     accessToken,
     startOfToday.toISOString(),
-    new Date(startOfToday.getTime() + 12 * 24 * 60 * 60 * 1000).toISOString()
+    new Date(startOfToday.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString()
   );
 }
 
