@@ -1,3 +1,5 @@
+"use client";
+
 export interface EmailQuickActionLabels {
   reply: string;
   replyAll: string;
@@ -10,10 +12,17 @@ export interface EmailQuickActionLabels {
 // then Gmail's own Reply/Reply All/Forward buttons are right there. A true
 // in-app compose (via Gmail's send API, with its own OAuth consent and a
 // real To/Cc/Subject/Body dialog) is a separate, larger feature to build
-// later. Plain <a> tags rather than a client component since both the
-// Dashboard's card (client) and the Email page (server) use this the same
-// way — no interactivity needed beyond opening a link.
-export default function EmailQuickActions({ link, labels }: { link: string; labels: EmailQuickActionLabels }) {
+// later. `onOpen` (optional) fires alongside the navigation — used to mark
+// the message read in the CRM the moment any of these is clicked.
+export default function EmailQuickActions({
+  link,
+  labels,
+  onOpen,
+}: {
+  link: string;
+  labels: EmailQuickActionLabels;
+  onOpen?: () => void;
+}) {
   return (
     <div className="flex shrink-0 items-center gap-0.5">
       <a
@@ -21,6 +30,7 @@ export default function EmailQuickActions({ link, labels }: { link: string; labe
         target="_blank"
         rel="noopener noreferrer"
         title={labels.reply}
+        onClick={onOpen}
         className="rounded p-1 text-soft hover:bg-black/10 hover:text-ink"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
@@ -32,6 +42,7 @@ export default function EmailQuickActions({ link, labels }: { link: string; labe
         target="_blank"
         rel="noopener noreferrer"
         title={labels.replyAll}
+        onClick={onOpen}
         className="relative rounded p-1 text-soft hover:bg-black/10 hover:text-ink"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
@@ -46,6 +57,7 @@ export default function EmailQuickActions({ link, labels }: { link: string; labe
         target="_blank"
         rel="noopener noreferrer"
         title={labels.forward}
+        onClick={onOpen}
         className="rounded p-1 text-soft hover:bg-black/10 hover:text-ink"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">

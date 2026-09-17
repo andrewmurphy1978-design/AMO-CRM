@@ -531,6 +531,11 @@ export const dictionaries = {
       categoryNeedsAttention: "Needs your attention",
       categoryCanWait: "Can wait",
       categoryLowPriority: "Everything else",
+      refresh: "Refresh",
+      refreshing: "Screening...",
+      screening: "Screening emails…",
+      recentlyRead: "Recently read (last 7 days)",
+      sentAwaitingReply: "Sent — awaiting reply",
     },
     calendarApp: {
       title: "Calendar",
@@ -1117,6 +1122,11 @@ export const dictionaries = {
       categoryNeedsAttention: "Nécessite votre attention",
       categoryCanWait: "Peut attendre",
       categoryLowPriority: "Autres",
+      refresh: "Actualiser",
+      refreshing: "Analyse en cours...",
+      screening: "Analyse des courriels…",
+      recentlyRead: "Lus récemment (7 derniers jours)",
+      sentAwaitingReply: "Envoyés — en attente de réponse",
     },
     calendarApp: {
       title: "Calendrier",

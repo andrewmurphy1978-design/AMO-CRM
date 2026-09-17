@@ -242,6 +242,10 @@ export default async function DashboardPage() {
     reply: t.dashboard.emailReply,
     replyAll: t.dashboard.emailReplyAll,
     forward: t.dashboard.emailForward,
+    categoryNeedsReply: t.email.categoryNeedsReply,
+    categoryNeedsAttention: t.email.categoryNeedsAttention,
+    categoryCanWait: t.email.categoryCanWait,
+    categoryLowPriority: t.email.categoryLowPriority,
   };
   const socialLabels = {
     title: t.dashboard.socialTitle,

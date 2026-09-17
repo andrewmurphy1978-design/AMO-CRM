@@ -6,6 +6,7 @@ import RefreshButton from "./refresh-button";
 import EmailQuickActions from "./email-quick-actions";
 import { isOwnDomainEmail } from "@/lib/email-domain";
 import type { EmailSummary } from "@/lib/google";
+import type { EmailCategory } from "@/lib/email-classifier";
 
 export interface EmailLabels {
   title: string;
@@ -21,7 +22,18 @@ export interface EmailLabels {
   reply: string;
   replyAll: string;
   forward: string;
+  categoryNeedsReply: string;
+  categoryNeedsAttention: string;
+  categoryCanWait: string;
+  categoryLowPriority: string;
 }
+
+const CATEGORY_BADGE_CLASS: Record<EmailCategory, string> = {
+  NEEDS_REPLY: "bg-red-100 text-red-700",
+  NEEDS_ATTENTION: "bg-amber-100 text-amber-800",
+  CAN_WAIT: "bg-blue-100 text-blue-700",
+  LOW_PRIORITY: "bg-black/5 text-soft",
+};
 
 // "3:15 PM" for something received today, "Sep 12, 3:15 PM" otherwise —
 // matches the user's own 24h/12h preference (see the Date/Time card and
@@ -36,32 +48,59 @@ function formatEmailDate(iso: string, hour12: boolean, intlLocale: string): stri
 
 export default function EmailCard({
   initial,
+  initialClassifications,
   connected,
   hour12,
   lang,
   labels,
 }: {
   initial: EmailSummary[] | null;
+  initialClassifications: Record<string, EmailCategory>;
   connected: boolean;
   hour12: boolean;
   lang: "en" | "fr";
   labels: EmailLabels;
 }) {
   const [emails, setEmails] = useState(initial);
+  const [classifications, setClassifications] = useState(initialClassifications);
   const [loading, setLoading] = useState(false);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
+
+  const categoryLabels: Record<EmailCategory, string> = {
+    NEEDS_REPLY: labels.categoryNeedsReply,
+    NEEDS_ATTENTION: labels.categoryNeedsAttention,
+    CAN_WAIT: labels.categoryCanWait,
+    LOW_PRIORITY: labels.categoryLowPriority,
+  };
 
   async function refresh() {
     setLoading(true);
     try {
       const res = await fetch("/api/dashboard/email");
-      if (res.ok) setEmails(((await res.json()) as { emails: EmailSummary[] }).emails);
+      if (res.ok) {
+        const data = (await res.json()) as { emails: EmailSummary[]; classifications: Record<string, EmailCategory> };
+        setEmails(data.emails);
+        setClassifications(data.classifications);
+        setReadIds(new Set());
+      }
     } catch {
       // Keep showing the last known list rather than clearing it.
     } finally {
       setLoading(false);
     }
   }
+
+  function markRead(id: string) {
+    setReadIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+    fetch("/api/email/mark-read", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    }).catch(() => {});
+  }
+
+  const visibleEmails = (emails ?? []).filter((e) => !readIds.has(e.id));
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
@@ -81,15 +120,17 @@ export default function EmailCard({
         </p>
       ) : (
         <div className="mt-3">
-          {!emails || emails.length === 0 ? (
+          {visibleEmails.length === 0 ? (
             <p className="text-sm text-soft">{labels.noUnread}</p>
           ) : (
             <>
               <p className="text-xs font-medium text-soft">
-                {emails.length === 1 ? labels.unreadOne : labels.unreadOtherTemplate.replace("{count}", String(emails.length))}
+                {visibleEmails.length === 1
+                  ? labels.unreadOne
+                  : labels.unreadOtherTemplate.replace("{count}", String(visibleEmails.length))}
               </p>
               <ul className="mt-2 -mx-2 overflow-hidden rounded-lg">
-                {emails.map((email, i) => (
+                {visibleEmails.map((email, i) => (
                   <li key={email.id}>
                     <div
                       className={`flex min-w-0 items-start gap-2 px-2 py-1.5 ${
@@ -100,14 +141,23 @@ export default function EmailCard({
                         href={email.link}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={() => markRead(email.id)}
                         className="min-w-0 flex-1 hover:opacity-80"
                       >
                         <p className="truncate text-sm font-medium text-ink">{email.from}</p>
+                        {classifications[email.id] && (
+                          <span
+                            className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${CATEGORY_BADGE_CLASS[classifications[email.id]]}`}
+                          >
+                            {categoryLabels[classifications[email.id]]}
+                          </span>
+                        )}
                         <p className="truncate text-xs text-soft">{email.subject}</p>
                       </a>
                       <EmailQuickActions
                         link={email.link}
                         labels={{ reply: labels.reply, replyAll: labels.replyAll, forward: labels.forward }}
+                        onOpen={() => markRead(email.id)}
                       />
                       <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
                         {formatEmailDate(email.date, hour12, intlLocale)}

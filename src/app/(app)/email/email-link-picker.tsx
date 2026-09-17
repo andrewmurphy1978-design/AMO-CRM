@@ -16,6 +16,7 @@ export default function EmailLinkPicker({
   initialTaskId,
   summary,
   labels,
+  onSaved,
 }: {
   threadId: string;
   contacts: LinkOption[];
@@ -26,6 +27,7 @@ export default function EmailLinkPicker({
   initialTaskId: string;
   summary: string | null;
   labels: LinkDialogLabels;
+  onSaved?: (values: LinkValues) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -38,6 +40,7 @@ export default function EmailLinkPicker({
 
   async function handleSave(values: LinkValues) {
     await saveEmailLink(threadId, { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId });
+    onSaved?.(values);
   }
 
   return (

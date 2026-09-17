@@ -220,6 +220,110 @@ export async function getRecentEmails(
   }
 }
 
+export interface SentEmailSummary {
+  id: string;
+  threadId: string;
+  to: string;
+  toEmail: string;
+  subject: string;
+  snippet: string;
+  date: string; // ISO datetime the message was sent
+  link: string; // opens this message's thread directly in Gmail's web UI
+}
+
+// Recently sent messages whose thread hasn't seen a reply yet — a
+// deterministic "did they answer" check, not a Claude classification, so
+// this costs Gmail API calls only, never an AI credit. `sinceIso` scopes
+// the search to messages sent since the last check (falls back to a fixed
+// window on the very first run, when there's no "last check" yet).
+export async function getSentAwaitingReplies(
+  accessToken: string,
+  { sinceIso, maxResults = 20 }: { sinceIso?: string; maxResults?: number } = {}
+): Promise<SentEmailSummary[] | null> {
+  try {
+    const afterEpoch = sinceIso ? Math.floor(new Date(sinceIso).getTime() / 1000) : null;
+    const query = afterEpoch && !isNaN(afterEpoch) ? `in:sent after:${afterEpoch}` : "in:sent newer_than:30d";
+    const listRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!listRes.ok) return null;
+    const listData = (await listRes.json()) as { messages?: { id: string }[] };
+    const ids = listData.messages?.map((m) => m.id) ?? [];
+    if (ids.length === 0) return [];
+
+    const sentMessages = await Promise.all(
+      ids.map(async (id): Promise<SentEmailSummary | null> => {
+        const res = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!res.ok) return null;
+        const data = (await res.json()) as {
+          id: string;
+          threadId?: string;
+          snippet?: string;
+          internalDate?: string;
+          payload?: { headers?: { name?: string; value?: string }[] };
+        };
+        const headers = data.payload?.headers;
+        const threadId = data.threadId ?? data.id;
+        const toHeader = extractHeader(headers, "To");
+        const dateHeader = extractHeader(headers, "Date");
+        const parsedDateHeader = dateHeader ? new Date(dateHeader) : null;
+        const date =
+          parsedDateHeader && !isNaN(parsedDateHeader.getTime())
+            ? parsedDateHeader.toISOString()
+            : data.internalDate
+              ? new Date(Number(data.internalDate)).toISOString()
+              : new Date().toISOString();
+        return {
+          id: data.id,
+          threadId,
+          to: formatFrom(toHeader),
+          toEmail: extractEmailAddress(toHeader),
+          subject: extractHeader(headers, "Subject") || "(no subject)",
+          snippet: data.snippet ?? "",
+          date,
+          link: `https://mail.google.com/mail/u/0/#sent/${threadId}`,
+        };
+      })
+    );
+
+    // Only the most recent sent message per thread matters for "did they
+    // reply yet" — dedupe before spending a thread lookup on each one.
+    const latestByThread = new Map<string, SentEmailSummary>();
+    for (const m of sentMessages) {
+      if (!m) continue;
+      const existing = latestByThread.get(m.threadId);
+      if (!existing || new Date(m.date) > new Date(existing.date)) {
+        latestByThread.set(m.threadId, m);
+      }
+    }
+
+    // Confirm the LAST message in each candidate thread is still ours —
+    // one extra call per distinct thread (bounded by maxResults above) —
+    // since a reply that arrived after our sent message means it's not
+    // "awaiting" anymore even though it matched the `in:sent` search.
+    const results = await Promise.all(
+      Array.from(latestByThread.values()).map(async (m): Promise<SentEmailSummary | null> => {
+        const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${m.threadId}?format=minimal`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!res.ok) return null;
+        const thread = (await res.json()) as { messages?: { labelIds?: string[] }[] };
+        const lastMessage = thread.messages?.[thread.messages.length - 1];
+        const stillAwaiting = Boolean(lastMessage?.labelIds?.includes("SENT")) && !lastMessage?.labelIds?.includes("INBOX");
+        return stillAwaiting ? m : null;
+      })
+    );
+
+    return results.filter((m): m is SentEmailSummary => m !== null);
+  } catch {
+    return null;
+  }
+}
+
 export interface CalendarEventSummary {
   id: string;
   title: string;

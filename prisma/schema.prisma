@@ -579,6 +579,36 @@ model EmailClassification {
   @@map("email_classifications")
 }
 
+// Marks a message as opened in the CRM (independent of Gmail's own
+// read/unread flag — we don't have Gmail write scope, and don't need it;
+// this is purely how the Email page decides what to keep showing).
+// Once set, the email drops out of its category group into a "Recently
+// read" bucket for 7 days (in case it still needs linking), then is
+// archived out of view entirely — sooner if it gets linked before that.
+model EmailReadState {
+  id             String   @id @default(cuid())
+  gmailMessageId String   @unique
+  readAt         DateTime @default(now())
+
+  @@map("email_read_states")
+}
+
+// The Email page's last-fetched inbox + recent sent-awaiting-reply list,
+// one row per user. Reopening the page reads this instead of hitting
+// Gmail (and re-spending Claude credits) on every visit — only pressing
+// Refresh re-fetches and re-classifies (classification itself stays
+// cache-aware via EmailClassification, so a refresh only ever costs a
+// Claude call for genuinely new messages).
+model EmailInboxCache {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  emails            Json
+  sentAwaitingReply Json?
+  fetchedAt         DateTime @default(now())
+
+  @@map("email_inbox_cache")
+}
+
 // Same idea as EmailLink, but for a Google Calendar event (keyed off its
 // event id) — links an appointment to a client, project, task, and/or a
 // systeme.io booking.
