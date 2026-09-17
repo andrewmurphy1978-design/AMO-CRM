@@ -16,6 +16,34 @@ async function requireAdmin() {
   return session;
 }
 
+// The Anthropic API key that powers the Email page's importance screening
+// (see src/lib/email-classifier.ts) expires periodically — storing it here
+// (encrypted, like every other integration key) instead of only as a
+// Cloudflare secret means rotating it is a Settings-page paste, not a
+// terminal command each time.
+export async function saveAnthropicApiKey(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await requireAdmin();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+  const apiKey = String(formData.get("apiKey") ?? "").trim();
+  if (!apiKey) {
+    return { error: t.anthropicKey.keyRequired };
+  }
+
+  const encrypted = await encryptSecret(apiKey);
+
+  await prisma.integrationSetting.upsert({
+    where: { provider: "anthropic" },
+    update: { apiKeyEncrypted: encrypted },
+    create: { provider: "anthropic", apiKeyEncrypted: encrypted },
+  });
+
+  revalidatePath("/settings");
+  return { success: t.anthropicKey.keySaved };
+}
+
 export async function saveSystemeIoApiKey(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData

@@ -3,6 +3,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { getGoogleConnection } from "@/lib/google";
 import { disconnectGoogleAccount } from "@/actions/integrations";
 import SystemeIoForm from "./systeme-io-form";
+import AnthropicKeyForm from "./anthropic-key-form";
 import MakeForm from "./make-form";
 import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buffer-form";
 import UserManagement from "./user-management";
@@ -34,7 +35,7 @@ export default async function SettingsPage({
   // equivalent block in src/app/(app)/page.tsx for why (each `prisma.x`
   // property access opens a brand-new client/connection, and enough of
   // those in one request risks Cloudflare's Error 1102).
-  const { currentUser, integration, makeIntegration, bufferSettings, googleConnection, users } =
+  const { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users } =
     await withScopedPrismaClient(async (db) => {
       const currentUser = session
         ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true } })
@@ -45,12 +46,15 @@ export default async function SettingsPage({
       const makeIntegration = await db.integrationSetting.findUnique({
         where: { provider: "make" },
       });
+      const anthropicIntegration = await db.integrationSetting.findUnique({
+        where: { provider: "anthropic" },
+      });
       const bufferSettings = await db.integrationSetting.findMany({
         where: { provider: { in: ["buffer_en", "buffer_fr", "buffer_fb", "buffer_li"] } },
       });
       const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
-      return { currentUser, integration, makeIntegration, bufferSettings, googleConnection, users };
+      return { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users };
     });
   const hour12 = currentUser?.timeFormat === "HOUR12";
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
@@ -173,6 +177,19 @@ export default async function SettingsPage({
                   autoSyncTime={integration?.autoSyncTime ?? "03:00"}
                   lang={lang}
                 />
+              ) : (
+                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
+              )}
+            </div>
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.anthropicKey.title}</h2>
+            <p className="mt-1 text-sm text-soft">{t.anthropicKey.description}</p>
+            <div className="mt-4">
+              {isAdmin ? (
+                <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} lang={lang} />
               ) : (
                 <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
               )}

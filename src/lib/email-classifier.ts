@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import type { EmailSummary } from "@/lib/google";
+import { decryptSecret } from "@/lib/crypto";
 
 export type EmailCategory = "NEEDS_REPLY" | "NEEDS_ATTENTION" | "CAN_WAIT" | "LOW_PRIORITY";
 
@@ -29,10 +30,19 @@ Emails:
 ${list}`;
 }
 
+// The key can come from the Settings page (stored encrypted, rotated
+// without touching a terminal) or, as a fallback, the Cloudflare secret
+// set via `wrangler secret put` — whichever is configured keeps working.
+async function getStoredApiKey(db: PrismaClient): Promise<string | null> {
+  const setting = await db.integrationSetting.findUnique({ where: { provider: "anthropic" } });
+  if (!setting?.apiKeyEncrypted) return null;
+  return decryptSecret(setting.apiKeyEncrypted);
+}
+
 async function callClaude(
-  emails: { id: string; from: string; subject: string; snippet: string }[]
+  emails: { id: string; from: string; subject: string; snippet: string }[],
+  apiKey: string | null
 ): Promise<Record<string, EmailCategory>> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || emails.length === 0) return {};
 
   try {
@@ -110,8 +120,10 @@ export async function getEmailClassifications(
   const uncached = emails.filter((e) => !(e.id in result));
   if (uncached.length === 0) return result;
 
+  const apiKey = (await getStoredApiKey(db)) ?? process.env.ANTHROPIC_API_KEY ?? null;
   const classified = await callClaude(
-    uncached.map((e) => ({ id: e.id, from: e.from, subject: e.subject, snippet: e.snippet }))
+    uncached.map((e) => ({ id: e.id, from: e.from, subject: e.subject, snippet: e.snippet })),
+    apiKey
   );
 
   const toCreate = Object.entries(classified).map(([gmailMessageId, category]) => ({ gmailMessageId, category }));

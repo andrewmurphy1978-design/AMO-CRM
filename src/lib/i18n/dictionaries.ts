@@ -443,6 +443,20 @@ export const dictionaries = {
       runTime: "Run time (Eastern)",
       save: "Save",
     },
+    anthropicKey: {
+      title: "AI (Email Screening)",
+      description:
+        "Powers the Email page's importance screening (Needs a reply / Needs your attention / Can wait / Everything else). Get a key at console.anthropic.com — paste a new one here whenever it expires, no terminal needed.",
+      apiKeyLabel: "Anthropic API key",
+      apiKeyPlaceholder: "sk-ant-...",
+      saveKey: "Save key",
+      saving: "Saving...",
+      statusLabel: "Status:",
+      connected: "Connected",
+      notConnected: "Not connected",
+      keyRequired: "Enter an API key.",
+      keySaved: "API key saved.",
+    },
     actions: {
       invalidInput: "Invalid input",
       contactEmailExists: "A contact with this email already exists.",
@@ -1011,6 +1025,20 @@ export const dictionaries = {
       enableAutoSync: "Activer la synchronisation planifiée",
       runTime: "Heure d'exécution (Est)",
       save: "Enregistrer",
+    },
+    anthropicKey: {
+      title: "IA (tri des courriels)",
+      description:
+        "Alimente le tri par importance de la page Courriel (Nécessite une réponse / Nécessite votre attention / Peut attendre / Autres). Obtenez une clé sur console.anthropic.com — collez-en une nouvelle ici dès qu'elle expire, sans terminal.",
+      apiKeyLabel: "Clé API Anthropic",
+      apiKeyPlaceholder: "sk-ant-...",
+      saveKey: "Enregistrer la clé",
+      saving: "Enregistrement...",
+      statusLabel: "Statut :",
+      connected: "Connecté",
+      notConnected: "Non connecté",
+      keyRequired: "Entrez une clé API.",
+      keySaved: "Clé API enregistrée.",
     },
     actions: {
       invalidInput: "Entrée invalide",
