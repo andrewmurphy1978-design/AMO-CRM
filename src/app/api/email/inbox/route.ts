@@ -19,7 +19,7 @@ export async function POST() {
     if (!accessToken) return { error: "not_connected" as const };
 
     const snapshot = await refreshEmailInboxCache(db, session.user.id, accessToken);
-    const extras = await getScreeningExtras(db, snapshot);
+    const extras = await getScreeningExtras(db, snapshot, session.user.id);
     return { ...snapshot, ...extras };
   });
 

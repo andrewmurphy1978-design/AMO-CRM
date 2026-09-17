@@ -40,18 +40,23 @@ enum TimeFormat {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  name         String
-  email        String     @unique
-  passwordHash String
-  role         UserRole   @default(MEMBER)
-  phone        String?
-  whatsapp     String?
-  country      String     @default("CA")
-  language     Language   @default(EN)
-  timeFormat   TimeFormat @default(HOUR24)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id                         String     @id @default(cuid())
+  name                       String
+  email                      String     @unique
+  passwordHash               String
+  role                       UserRole   @default(MEMBER)
+  phone                      String?
+  whatsapp                   String?
+  country                    String     @default("CA")
+  language                   Language   @default(EN)
+  timeFormat                 TimeFormat @default(HOUR24)
+  // Free-text rules appended to the Email page's Claude classification
+  // prompt for this user's own inbox — e.g. "always treat emails from
+  // my accountant as Needs a reply". Never required; screening works
+  // fine with the built-in categories alone when this is empty.
+  emailScreeningInstructions String?    @db.Text
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @updatedAt
 
   ownedProjects   Project[]          @relation("ProjectOwner")
   ownedContacts   Contact[]          @relation("ContactOwner")

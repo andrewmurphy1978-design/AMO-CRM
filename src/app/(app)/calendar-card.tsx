@@ -9,6 +9,8 @@ import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatClockTime, formatHourMark, formatTimeRange } from "@/lib/calendar-time";
+import { saveCalendarEventLink } from "@/actions/links";
+import LinkDialog, { type LinkOption, type LinkDialogLabels, type LinkValues } from "./link-dialog";
 
 export interface CalendarLabels {
   title: string;
@@ -108,6 +110,7 @@ function DayColumn({
   hour12,
   intlLocale,
   labels,
+  onRequestLink,
 }: {
   day: Date;
   events: CalendarEventSummary[];
@@ -115,6 +118,7 @@ function DayColumn({
   hour12: boolean;
   intlLocale: string;
   labels: CalendarLabels;
+  onRequestLink: (event: CalendarEventSummary) => void;
 }) {
   const router = useRouter();
   const timed: TimedEvent[] = events
@@ -158,7 +162,7 @@ function DayColumn({
             role="button"
             tabIndex={0}
             onClick={() => router.push("/calendar")}
-            className="absolute flex cursor-pointer flex-col overflow-hidden rounded px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
+            className="absolute flex cursor-pointer flex-col overflow-hidden rounded px-1 py-0.5 pr-4 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
             style={{
               top,
               height,
@@ -204,6 +208,22 @@ function DayColumn({
                 )}
               </div>
             )}
+            {/* Absolutely positioned (not a flow child) so it always shows
+                in the box's corner regardless of how short the box is —
+                same fix as the full Calendar page's event boxes. */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRequestLink(event);
+              }}
+              className="absolute bottom-0.5 right-0.5 shrink-0 rounded-full bg-black/15 p-0.5 hover:bg-black/30"
+              title="Link"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-3 w-3">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+              </svg>
+            </button>
           </div>
         );
       })}
@@ -222,6 +242,7 @@ function ThreeDayGrid({
   hour12,
   intlLocale,
   labels,
+  onRequestLink,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
@@ -229,6 +250,7 @@ function ThreeDayGrid({
   dateLocale: Locale | undefined;
   hour12: boolean;
   intlLocale: string;
+  onRequestLink: (event: CalendarEventSummary) => void;
   labels: CalendarLabels;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -309,6 +331,7 @@ function ThreeDayGrid({
               hour12={hour12}
               intlLocale={intlLocale}
               labels={labels}
+              onRequestLink={onRequestLink}
             />
           ))}
         </div>
@@ -383,6 +406,10 @@ export default function CalendarCard({
   lang,
   hour12,
   labels,
+  contactOptions,
+  projectOptions,
+  taskOptions,
+  linkDialogLabels,
 }: {
   initial: CalendarEventSummary[] | null;
   links: Record<string, ResolvedEventLink>;
@@ -390,12 +417,36 @@ export default function CalendarCard({
   lang: "en" | "fr";
   hour12: boolean;
   labels: CalendarLabels;
+  contactOptions: LinkOption[];
+  projectOptions: LinkOption[];
+  taskOptions: LinkOption[];
+  linkDialogLabels: LinkDialogLabels;
 }) {
   const [events, setEvents] = useState(initial);
   const [links, setLinks] = useState(initialLinks);
   const [loading, setLoading] = useState(false);
+  const [linkTarget, setLinkTarget] = useState<CalendarEventSummary | null>(null);
   const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
+
+  async function handleSaveLink(values: LinkValues) {
+    if (!linkTarget) return;
+    await saveCalendarEventLink(linkTarget.id, { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId });
+    const contactName = contactOptions.find((c) => c.id === values.contactId)?.label ?? "";
+    const projectName = projectOptions.find((p) => p.id === values.projectId)?.label ?? "";
+    const taskName = taskOptions.find((t) => t.id === values.taskId)?.label ?? "";
+    setLinks((prev) => ({
+      ...prev,
+      [linkTarget.id]: {
+        contactId: values.contactId,
+        contactName,
+        projectId: values.projectId,
+        projectName,
+        taskId: values.taskId,
+        taskName,
+      },
+    }));
+  }
 
   async function refresh() {
     setLoading(true);
@@ -447,6 +498,7 @@ export default function CalendarCard({
             hour12={hour12}
             intlLocale={intlLocale}
             labels={labels}
+            onRequestLink={setLinkTarget}
           />
           <UpcomingTable
             days={tableDays}
@@ -468,6 +520,22 @@ export default function CalendarCard({
           </div>
         </div>
       )}
+      <LinkDialog
+        key={linkTarget?.id}
+        open={linkTarget !== null}
+        onClose={() => setLinkTarget(null)}
+        contacts={contactOptions}
+        projects={projectOptions}
+        tasks={taskOptions}
+        initial={{
+          contactId: (linkTarget && links[linkTarget.id]?.contactId) || "",
+          projectId: (linkTarget && links[linkTarget.id]?.projectId) || "",
+          taskId: (linkTarget && links[linkTarget.id]?.taskId) || "",
+          bookingId: "",
+        }}
+        onSave={handleSaveLink}
+        labels={linkDialogLabels}
+      />
     </div>
   );
 }

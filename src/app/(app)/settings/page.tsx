@@ -10,6 +10,7 @@ import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
 import PersonalWatchForm from "./personal-watch-form";
+import EmailScreeningForm from "./email-screening-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -41,7 +42,7 @@ export default async function SettingsPage({
   const { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople } =
     await withScopedPrismaClient(async (db) => {
       const currentUser = session
-        ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true } })
+        ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true, emailScreeningInstructions: true } })
         : null;
       const integration = await db.integrationSetting.findUnique({
         where: { provider: "systeme_io" },
@@ -108,6 +109,15 @@ export default async function SettingsPage({
               <ChangePasswordForm lang={lang} />
             </div>
             {currentUser && <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />}
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.emailScreeningSettings.title}</h2>
+            <p className="mt-1 text-sm text-soft">{t.emailScreeningSettings.description}</p>
+            <div className="mt-4">
+              <EmailScreeningForm initialInstructions={currentUser?.emailScreeningInstructions ?? ""} lang={lang} />
+            </div>
           </section>
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">

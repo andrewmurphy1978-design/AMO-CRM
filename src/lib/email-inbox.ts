@@ -114,7 +114,8 @@ export async function getEmailLinksByThread(db: PrismaClient, threadIds: string[
 // already has open.
 export async function getScreeningExtras(
   db: PrismaClient,
-  snapshot: EmailInboxSnapshot
+  snapshot: EmailInboxSnapshot,
+  userId?: string
 ): Promise<{
   classifications: Record<string, EmailCategory>;
   readStates: Record<string, string>;
@@ -122,7 +123,7 @@ export async function getScreeningExtras(
 }> {
   const allThreadIds = [...new Set([...snapshot.emails.map((e) => e.threadId), ...snapshot.sentAwaitingReply.map((s) => s.threadId)])];
   const [classifications, readStates, linksByThread] = await Promise.all([
-    getEmailClassifications(db, snapshot.emails),
+    getEmailClassifications(db, snapshot.emails, userId),
     getReadStates(
       db,
       snapshot.emails.map((e) => e.id)
@@ -177,7 +178,7 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
   // Cache-aware — only classifies messages EmailClassification hasn't
   // seen before, so a Refresh never re-spends a Claude call on an email
   // it already screened.
-  await getEmailClassifications(db, emailList);
+  await getEmailClassifications(db, emailList, userId);
 
   const fetchedAt = new Date();
   const emailsJson = emailList as unknown as Prisma.InputJsonValue;

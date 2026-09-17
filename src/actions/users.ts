@@ -233,3 +233,26 @@ export async function saveTimeFormat(
 
   return { success: t.actions.timeFormatSaved };
 }
+
+// Free-text rules layered on top of the Email page's Claude classification
+// prompt (see src/lib/email-classifier.ts) — per-user since each team
+// member's inbox is their own. Empty is valid (clears it back to the
+// built-in categories only).
+export async function saveEmailScreeningInstructions(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const instructions = String(formData.get("instructions") ?? "").trim();
+
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { emailScreeningInstructions: instructions || null },
+  });
+  revalidatePath("/settings");
+
+  return { success: t.emailScreeningSettings.saved };
+}

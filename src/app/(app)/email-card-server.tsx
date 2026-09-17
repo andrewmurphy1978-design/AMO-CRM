@@ -26,7 +26,7 @@ export default async function EmailCardServer({
     ? await withScopedPrismaClient(async (db) => {
         const snapshot = await getCachedInbox(db, userId);
         if (!snapshot) return null;
-        const extras = await getScreeningExtras(db, snapshot);
+        const extras = await getScreeningExtras(db, snapshot, userId);
         return { ...snapshot, ...extras };
       })
     : null;

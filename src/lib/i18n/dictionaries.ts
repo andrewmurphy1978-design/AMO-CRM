@@ -555,6 +555,15 @@ export const dictionaries = {
       emailDuplicate: "That email is already added for this person.",
       emailSaved: "Saved.",
     },
+    emailScreeningSettings: {
+      title: "AI email screening rules",
+      description:
+        "Optional extra rules for your own Email page screening, on top of the built-in categories — e.g. \"always treat emails from my accountant as Needs a reply.\"",
+      placeholder: "Add any extra rules, one per line...",
+      save: "Save",
+      saving: "Saving...",
+      saved: "Saved.",
+    },
     calendarApp: {
       title: "Calendar",
       subtitle: "Upcoming appointments, linkable to a client, project, task, or booking.",
@@ -1163,6 +1172,15 @@ export const dictionaries = {
       emailRequired: "Entrez une adresse courriel.",
       emailDuplicate: "Cette adresse est déjà ajoutée pour cette personne.",
       emailSaved: "Enregistré.",
+    },
+    emailScreeningSettings: {
+      title: "Règles IA de tri des courriels",
+      description:
+        "Règles supplémentaires facultatives pour le tri de votre propre page Courriel, en plus des catégories intégrées — par ex. « toujours traiter les courriels de mon comptable comme Nécessite une réponse ».",
+      placeholder: "Ajoutez des règles supplémentaires, une par ligne...",
+      save: "Enregistrer",
+      saving: "Enregistrement...",
+      saved: "Enregistré.",
     },
     calendarApp: {
       title: "Calendrier",

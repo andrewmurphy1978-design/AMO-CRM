@@ -10,17 +10,23 @@ const VALID_CATEGORIES: EmailCategory[] = ["NEEDS_REPLY", "NEEDS_ATTENTION", "CA
 // amount of text per message, not a task that needs Sonnet-level judgment.
 const CLAUDE_MODEL = "claude-haiku-4-5-20251001";
 
-function buildPrompt(emails: { id: string; from: string; subject: string; snippet: string }[]): string {
+function buildPrompt(emails: { id: string; from: string; subject: string; snippet: string }[], customInstructions?: string | null): string {
   const list = emails
     .map((e, i) => `${i + 1}. id: ${e.id}\n   From: ${e.from}\n   Subject: ${e.subject}\n   Snippet: ${e.snippet}`)
     .join("\n\n");
+  // User-supplied rules from Settings, layered on top of the built-in
+  // categories rather than replacing them — e.g. "always treat emails
+  // from my accountant as Needs a reply".
+  const extra = customInstructions?.trim()
+    ? `\nThe user has also given these additional rules — apply them on top of the categories above, and let them override the defaults when they conflict:\n${customInstructions.trim()}\n`
+    : "";
   return `You are triaging an inbox for a busy small-business owner and parent. For each email below, classify it into exactly one of these four categories:
 
 - NEEDS_REPLY: the sender is waiting on a response, answer, or action from the recipient (a question, a request, a client asking something).
 - NEEDS_ATTENTION: important and needs the recipient's attention or action soon, but doesn't require writing a reply (an urgent alert, a bill due, a booking confirmation, a deadline reminder).
 - CAN_WAIT: worth reading eventually but not urgent (school/parent-association newsletters, community updates, general FYI messages).
 - LOW_PRIORITY: no real importance (marketing newsletters, promotional offers, automated receipts/invoices, notifications needing no action).
-
+${extra}
 Respond with ONLY a JSON object mapping each email's "id" to its category — no other text, no markdown fences. Example: {"abc123":"NEEDS_REPLY","def456":"LOW_PRIORITY"}
 
 Emails:
@@ -38,7 +44,8 @@ async function getStoredApiKey(db: PrismaClient): Promise<string | null> {
 
 async function callClaude(
   emails: { id: string; from: string; subject: string; snippet: string }[],
-  apiKey: string | null
+  apiKey: string | null,
+  customInstructions?: string | null
 ): Promise<Record<string, EmailCategory>> {
   if (!apiKey || emails.length === 0) return {};
 
@@ -58,7 +65,7 @@ async function callClaude(
         // mid-response, losing the whole batch. 60/email plus a big floor
         // leaves headroom; parsing below is also truncation-tolerant.
         max_tokens: Math.max(1024, emails.length * 60),
-        messages: [{ role: "user", content: buildPrompt(emails) }],
+        messages: [{ role: "user", content: buildPrompt(emails, customInstructions) }],
       }),
     });
     if (!res.ok) {
@@ -106,7 +113,8 @@ async function callClaude(
 // just without differentiation, rather than breaking.
 export async function getEmailClassifications(
   db: PrismaClient,
-  emails: EmailSummary[]
+  emails: EmailSummary[],
+  userId?: string
 ): Promise<Record<string, EmailCategory>> {
   if (emails.length === 0) return {};
 
@@ -119,9 +127,13 @@ export async function getEmailClassifications(
   if (uncached.length === 0) return result;
 
   const apiKey = (await getStoredApiKey(db)) ?? process.env.ANTHROPIC_API_KEY ?? null;
+  const customInstructions = userId
+    ? (await db.user.findUnique({ where: { id: userId }, select: { emailScreeningInstructions: true } }))?.emailScreeningInstructions
+    : null;
   const classified = await callClaude(
     uncached.map((e) => ({ id: e.id, from: e.from, subject: e.subject, snippet: e.snippet })),
-    apiKey
+    apiKey,
+    customInstructions
   );
 
   const toCreate = Object.entries(classified).map(([gmailMessageId, category]) => ({ gmailMessageId, category }));

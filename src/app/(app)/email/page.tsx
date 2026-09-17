@@ -49,7 +49,7 @@ export default async function EmailPage() {
     if (accessToken && session) {
       const snapshot = await getCachedInbox(db, session.user.id);
       if (snapshot) {
-        const extras = await getScreeningExtras(db, snapshot);
+        const extras = await getScreeningExtras(db, snapshot, session.user.id);
         initialData = { ...snapshot, ...extras };
       }
     }
