@@ -513,6 +513,10 @@ export const dictionaries = {
       notConnected: "Your Google account isn't connected yet.",
       connectInSettings: "Connect it in Settings",
       noMessages: "No messages.",
+      categoryNeedsReply: "Needs a reply",
+      categoryNeedsAttention: "Needs your attention",
+      categoryCanWait: "Can wait",
+      categoryLowPriority: "Everything else",
     },
     calendarApp: {
       title: "Calendar",
@@ -1081,6 +1085,10 @@ export const dictionaries = {
       notConnected: "Votre compte Google n'est pas encore connecté.",
       connectInSettings: "Connectez-le dans Paramètres",
       noMessages: "Aucun message.",
+      categoryNeedsReply: "Nécessite une réponse",
+      categoryNeedsAttention: "Nécessite votre attention",
+      categoryCanWait: "Peut attendre",
+      categoryLowPriority: "Autres",
     },
     calendarApp: {
       title: "Calendrier",

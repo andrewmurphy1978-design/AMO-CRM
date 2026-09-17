@@ -559,6 +559,26 @@ model EmailLink {
   @@map("email_links")
 }
 
+enum EmailCategory {
+  NEEDS_REPLY
+  NEEDS_ATTENTION
+  CAN_WAIT
+  LOW_PRIORITY
+}
+
+// A message's importance rarely changes once received, so this is a
+// permanent cache keyed by Gmail's own message id — classified once (via
+// Claude), never reclassified, so revisiting the Email page doesn't
+// re-spend an API call on messages it's already seen.
+model EmailClassification {
+  id             String        @id @default(cuid())
+  gmailMessageId String        @unique
+  category       EmailCategory
+  classifiedAt   DateTime      @default(now())
+
+  @@map("email_classifications")
+}
+
 // Same idea as EmailLink, but for a Google Calendar event (keyed off its
 // event id) — links an appointment to a client, project, task, and/or a
 // systeme.io booking.
