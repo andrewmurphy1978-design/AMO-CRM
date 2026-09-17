@@ -1,0 +1,296 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  addDays,
+  addMonths,
+  format,
+  isSameDay,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  type Locale,
+} from "date-fns";
+import type { CalendarEventSummary } from "@/lib/google";
+import LinkDialog, { type LinkOption, type LinkDialogLabels, type LinkValues } from "../link-dialog";
+import { saveCalendarEventLink } from "@/actions/links";
+import DayGridView from "./day-grid-view";
+import MonthView from "./month-view";
+import TableView from "./table-view";
+
+type ViewMode = "month" | "week" | "5day" | "3day" | "day" | "table";
+
+interface EventLinkValues {
+  contactId: string;
+  projectId: string;
+  taskId: string;
+  bookingId: string;
+}
+
+function rangeForView(view: ViewMode, anchor: Date): { days: Date[]; rangeStart: Date; rangeEnd: Date } {
+  const today = startOfDay(anchor);
+  switch (view) {
+    case "day":
+      return { days: [today], rangeStart: today, rangeEnd: addDays(today, 1) };
+    case "3day": {
+      const days = [0, 1, 2].map((i) => addDays(today, i));
+      return { days, rangeStart: days[0], rangeEnd: addDays(days[2], 1) };
+    }
+    case "5day": {
+      const monday = startOfWeek(today, { weekStartsOn: 1 });
+      const days = [0, 1, 2, 3, 4].map((i) => addDays(monday, i));
+      return { days, rangeStart: days[0], rangeEnd: addDays(days[4], 1) };
+    }
+    case "week": {
+      const sunday = startOfWeek(today, { weekStartsOn: 0 });
+      const days = Array.from({ length: 7 }, (_, i) => addDays(sunday, i));
+      return { days, rangeStart: days[0], rangeEnd: addDays(days[6], 1) };
+    }
+    case "month": {
+      const gridStart = startOfWeek(startOfMonth(today), { weekStartsOn: 0 });
+      const days = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+      return { days, rangeStart: days[0], rangeEnd: addDays(days[41], 1) };
+    }
+    case "table": {
+      const days = Array.from({ length: 30 }, (_, i) => addDays(today, i));
+      return { days, rangeStart: days[0], rangeEnd: addDays(days[29], 1) };
+    }
+  }
+}
+
+function stepAnchor(view: ViewMode, anchor: Date, dir: 1 | -1): Date {
+  switch (view) {
+    case "day":
+      return addDays(anchor, dir);
+    case "3day":
+      return addDays(anchor, dir * 3);
+    case "5day":
+    case "week":
+      return addDays(anchor, dir * 7);
+    case "month":
+      return addMonths(anchor, dir);
+    case "table":
+      return addDays(anchor, dir * 30);
+  }
+}
+
+export interface CalendarShellLabels {
+  today: string;
+  viewMonth: string;
+  viewWeek: string;
+  view5Day: string;
+  view3Day: string;
+  viewDay: string;
+  viewTable: string;
+  todayColumn: string;
+  tomorrowColumn: string;
+  noEvents: string;
+  linkDialog: LinkDialogLabels;
+}
+
+export default function CalendarShell({
+  initialEvents,
+  initialLinks,
+  contacts,
+  projects,
+  tasks,
+  bookings,
+  hour12,
+  dateLocale,
+  intlLocale,
+  labels,
+}: {
+  initialEvents: CalendarEventSummary[];
+  initialLinks: Record<string, EventLinkValues>;
+  contacts: LinkOption[];
+  projects: LinkOption[];
+  tasks: LinkOption[];
+  bookings: LinkOption[];
+  hour12: boolean;
+  dateLocale: Locale | undefined;
+  intlLocale: string;
+  labels: CalendarShellLabels;
+}) {
+  const [view, setView] = useState<ViewMode>("week");
+  const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
+  const [events, setEvents] = useState(initialEvents);
+  const [links, setLinks] = useState(initialLinks);
+  const [loading, setLoading] = useState(false);
+  const [linkTarget, setLinkTarget] = useState<CalendarEventSummary | null>(null);
+  const isFirstRender = useRef(true);
+
+  const { days, rangeStart, rangeEnd } = rangeForView(view, anchor);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    const params = new URLSearchParams({ start: rangeStart.toISOString(), end: rangeEnd.toISOString() });
+    fetch(`/api/calendar/events?${params.toString()}`)
+      .then((res) => (res.ok ? (res.json() as Promise<{ events?: CalendarEventSummary[]; links?: Record<string, EventLinkValues> }>) : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setEvents(data.events ?? []);
+        setLinks(data.links ?? {});
+      })
+      .catch(() => {
+        // Keep showing the last known events rather than clearing them.
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, rangeStart.getTime(), rangeEnd.getTime()]);
+
+  const eventsByDay = days.map((day) => events.filter((e) => e.start && isSameDay(new Date(e.start), day)));
+
+  const rangeLabel =
+    view === "month"
+      ? format(anchor, "MMMM yyyy", { locale: dateLocale })
+      : view === "day"
+        ? format(anchor, "EEEE, MMMM d, yyyy", { locale: dateLocale })
+        : `${format(days[0], "MMM d", { locale: dateLocale })} – ${format(days[days.length - 1], "MMM d, yyyy", { locale: dateLocale })}`;
+
+  const viewButtons: { key: ViewMode; label: string }[] = [
+    { key: "month", label: labels.viewMonth },
+    { key: "week", label: labels.viewWeek },
+    { key: "5day", label: labels.view5Day },
+    { key: "3day", label: labels.view3Day },
+    { key: "day", label: labels.viewDay },
+    { key: "table", label: labels.viewTable },
+  ];
+
+  const weekdayLabels = Array.from({ length: 7 }, (_, i) => format(addDays(startOfWeek(new Date(), { weekStartsOn: 0 }), i), "EEE", { locale: dateLocale }));
+
+  async function handleSaveLink(values: LinkValues) {
+    if (!linkTarget) return;
+    await saveCalendarEventLink(linkTarget.id, values);
+    setLinks((prev) => ({ ...prev, [linkTarget.id]: values }));
+  }
+
+  const linkInitial: LinkValues = linkTarget
+    ? (links[linkTarget.id] ?? { contactId: "", projectId: "", taskId: "", bookingId: "" })
+    : { contactId: "", projectId: "", taskId: "", bookingId: "" };
+
+  return (
+    // A fixed height via calc() instead of relying on a percentage/flex-grow
+    // chain through every ancestor up to <main> — that chain breaks the
+    // moment any link in it lacks min-height:0 (flex items default to
+    // min-height:auto, so they refuse to shrink below their content's
+    // natural size), and the calendar grid's own content is exactly the
+    // kind of tall, unclamped content that trips that. This is an
+    // approximation (page header + padding), not pixel-perfect, but it's
+    // robust regardless of what the rest of the page's flex layout does.
+    <div className="flex flex-col" style={{ height: "calc(100vh - 180px)" }}>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAnchor(startOfDay(new Date()))}
+            className="rounded-lg border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5"
+          >
+            {labels.today}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAnchor((a) => stepAnchor(view, a, -1))}
+            aria-label="Previous"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft hover:bg-black/5"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAnchor((a) => stepAnchor(view, a, 1))}
+            aria-label="Next"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft hover:bg-black/5"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          <p className="font-display text-sm font-semibold text-ink sm:text-base">{rangeLabel}</p>
+          {loading && <span className="text-xs text-soft">…</span>}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {viewButtons.map((b) => (
+            <button
+              key={b.key}
+              type="button"
+              onClick={() => setView(b.key)}
+              className={
+                view === b.key
+                  ? "btn-primary rounded-lg px-2.5 py-1 text-xs font-semibold shadow-sm"
+                  : "rounded-lg border border-card-border px-2.5 py-1 text-xs font-medium text-ink hover:bg-black/5"
+              }
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === "table" ? (
+        <TableView
+          days={days}
+          eventsByDay={eventsByDay}
+          dateLocale={dateLocale}
+          hour12={hour12}
+          intlLocale={intlLocale}
+          noEventsLabel={labels.noEvents}
+          onRequestLink={setLinkTarget}
+        />
+      ) : (
+        <div className="-mx-4 -mb-4 min-h-0 flex-1 sm:-mx-8 sm:-mb-8">
+          <div className="h-full p-2">
+            {view === "month" ? (
+              <MonthView
+                weeks={Array.from({ length: 6 }, (_, w) => days.slice(w * 7, w * 7 + 7))}
+                eventsByDay={Array.from({ length: 6 }, (_, w) => eventsByDay.slice(w * 7, w * 7 + 7))}
+                monthAnchor={anchor}
+                dateLocale={dateLocale}
+                hour12={hour12}
+                intlLocale={intlLocale}
+                weekdayLabels={weekdayLabels}
+                onRequestLink={setLinkTarget}
+              />
+            ) : (
+              <DayGridView
+                days={days}
+                eventsByDay={eventsByDay}
+                dateLocale={dateLocale}
+                hour12={hour12}
+                intlLocale={intlLocale}
+                todayLabel={labels.todayColumn}
+                tomorrowLabel={labels.tomorrowColumn}
+                noEventsLabel={labels.noEvents}
+                onRequestLink={setLinkTarget}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      <LinkDialog
+        key={linkTarget?.id ?? "none"}
+        open={linkTarget !== null}
+        onClose={() => setLinkTarget(null)}
+        contacts={contacts}
+        projects={projects}
+        tasks={tasks}
+        bookings={bookings}
+        initial={linkInitial}
+        onSave={handleSaveLink}
+        labels={labels.linkDialog}
+      />
+    </div>
+  );
+}

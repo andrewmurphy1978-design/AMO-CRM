@@ -162,6 +162,7 @@ model Contact {
   communityMemberships CommunityMembership[]
   emailLinks           EmailLink[]
   calendarEventLinks   CalendarEventLink[]
+  bookings             Booking[]
 
   @@index([stage])
   @@index([lastName, firstName])
@@ -270,10 +271,12 @@ model AutomationWorkflow {
   @@map("automation_workflows")
 }
 
-// systeme.io Booking Calendar bookings. Also account-level rather than
-// per-contact: the API's Booking resource carries only a bare contactName
-// string for one-to-one bookings (never an id, and nothing at all for group
-// bookings), so it can't be reliably linked to a Contact row.
+// systeme.io Booking Calendar bookings. The API's Booking resource carries
+// only a bare contactName string for one-to-one bookings (never an id, and
+// nothing at all for group bookings) — contactId below is filled in by the
+// sync as a best-effort match against existing contacts by full name, not
+// something systeme.io itself provides, so it's null whenever that match
+// is missing or ambiguous (multiple contacts sharing the same name).
 model Booking {
   id          String   @id @default(cuid())
   systemeIoId Int      @unique
@@ -290,11 +293,15 @@ model Booking {
   bookedAt        DateTime?
   raw             Json
 
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   calendarEventLinks CalendarEventLink[]
 
+  @@index([contactId])
   @@map("bookings")
 }
 

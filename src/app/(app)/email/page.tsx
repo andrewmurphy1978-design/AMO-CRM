@@ -42,12 +42,16 @@ export default async function EmailPage() {
       take: 300,
       select: { id: true, firstName: true, lastName: true, email: true },
     });
-    const projects = await db.project.findMany({ orderBy: { name: "asc" }, take: 300, select: { id: true, name: true } });
+    const projects = await db.project.findMany({
+      orderBy: { name: "asc" },
+      take: 300,
+      select: { id: true, name: true, contactId: true },
+    });
     const tasks = await db.task.findMany({
       where: { status: { not: "DONE" } },
       orderBy: { title: "asc" },
       take: 300,
-      select: { id: true, title: true },
+      select: { id: true, title: true, projectId: true },
     });
     return { googleAccessToken, hour12, contacts, projects, tasks };
   });
@@ -65,8 +69,8 @@ export default async function EmailPage() {
   const linksByThread = new Map(emailLinks.map((l) => [l.gmailThreadId, l]));
 
   const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c) }));
-  const projectOptions = projects.map((p) => ({ id: p.id, label: p.name }));
-  const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title }));
+  const projectOptions = projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId }));
+  const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId }));
 
   const linkLabels = {
     link: t.linkPicker.link,
@@ -75,14 +79,44 @@ export default async function EmailPage() {
     contact: t.linkPicker.contact,
     project: t.linkPicker.project,
     task: t.linkPicker.task,
+    booking: t.linkPicker.booking,
     save: t.linkPicker.save,
     saving: t.linkPicker.saving,
     cancel: t.linkPicker.cancel,
+    clear: t.linkPicker.clear,
+    title: t.linkPicker.title,
+    searchPlaceholder: t.linkPicker.searchPlaceholder,
+    noResults: t.linkPicker.noResults,
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.email.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <PageHeader
+        title={t.email.title}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        location={t.dashboard.myLocation}
+        actions={
+          <>
+            <a
+              href="https://mail.google.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+            >
+              {t.dashboard.openInGmail}
+            </a>
+            <a
+              href="https://mail.ionos.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+            >
+              {t.dashboard.openIonosWebmail}
+            </a>
+          </>
+        }
+      />
       <p className="text-sm text-soft">{t.email.subtitle}</p>
 
       {!googleAccessToken ? (

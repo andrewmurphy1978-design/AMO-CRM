@@ -6,6 +6,8 @@ import { addDays, format, isSameDay, isToday, isTomorrow, startOfDay, type Local
 import RefreshButton from "./refresh-button";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { CalendarEventSummary } from "@/lib/google";
+import { eventColor } from "@/lib/calendar-colors";
+import { formatClockTime, formatHourMark } from "@/lib/calendar-time";
 
 export interface CalendarLabels {
   title: string;
@@ -19,50 +21,6 @@ export interface CalendarLabels {
   openInCalendar: string;
 }
 
-// Google Calendar's own named event colors (colorId -> hex), so events
-// look the same here as they do in Google Calendar itself. No colorId on
-// an event means it uses the calendar's own color, which for a primary
-// calendar is Google's default blue.
-const GOOGLE_EVENT_COLORS: Record<string, { bg: string; fg: string }> = {
-  "1": { bg: "#7986cb", fg: "#fff" }, // Lavender
-  "2": { bg: "#33b679", fg: "#fff" }, // Sage
-  "3": { bg: "#8e24aa", fg: "#fff" }, // Grape
-  "4": { bg: "#e67c73", fg: "#fff" }, // Flamingo
-  "5": { bg: "#f6bf26", fg: "#000" }, // Banana
-  "6": { bg: "#f4511e", fg: "#fff" }, // Tangerine
-  "7": { bg: "#039be5", fg: "#fff" }, // Peacock
-  "8": { bg: "#616161", fg: "#fff" }, // Graphite
-  "9": { bg: "#3f51b5", fg: "#fff" }, // Blueberry
-  "10": { bg: "#0b8043", fg: "#fff" }, // Basil
-  "11": { bg: "#d50000", fg: "#fff" }, // Tomato
-};
-const DEFAULT_EVENT_COLOR = { bg: "#4285f4", fg: "#fff" }; // Google's default calendar blue
-
-function eventColor(colorId: string | null): { bg: string; fg: string } {
-  return (colorId && GOOGLE_EVENT_COLORS[colorId]) || DEFAULT_EVENT_COLOR;
-}
-
-// date-fns' locale-default time formatting ignores the user's own 12h/24h
-// preference (it's tied to the UI language instead — French defaults to
-// 24h, English to 12h), so event/hour-mark times use Intl.DateTimeFormat
-// directly with an explicit hour12, the same approach as World Clocks and
-// the Date/Time card.
-function formatClockTime(date: Date, hour12: boolean, intlLocale: string): string {
-  return new Intl.DateTimeFormat(intlLocale, { hour: "numeric", minute: "2-digit", hour12 }).format(date);
-}
-
-// Whole-hour gutter labels for the 3-day grid: "09:00"/"17:00" on 24h,
-// "9AM"/"5PM" (no space, correctly wrapping past noon) on 12h.
-function formatHourMark(hour: number, hour12: boolean, intlLocale: string): string {
-  const date = new Date(2000, 0, 1, hour, 0);
-  if (!hour12) {
-    return new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
-  }
-  const parts = new Intl.DateTimeFormat(intlLocale, { hour: "numeric", hour12: true }).formatToParts(date);
-  const hourPart = parts.find((p) => p.type === "hour")?.value ?? String(hour);
-  const dayPeriod = parts.find((p) => p.type === "dayPeriod")?.value ?? "";
-  return `${hourPart}${dayPeriod}`;
-}
 
 const GRID_START_HOUR = 6; // grid content starts at 6 AM...
 const GRID_END_HOUR = 22; // ...through 10 PM, scrollable

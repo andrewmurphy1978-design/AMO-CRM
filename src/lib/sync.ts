@@ -184,9 +184,10 @@ async function runSystemeIoSyncWith(db: PrismaClient): Promise<SyncResult> {
     }
 
     try {
+      const contactNameIndex = await buildContactNameIndex(db);
       for await (const bookings of client.iterateBookings()) {
         for (const booking of bookings) {
-          await upsertBooking(db, booking);
+          await upsertBooking(db, booking, contactNameIndex);
           bookingsSynced += 1;
         }
       }
@@ -386,7 +387,27 @@ async function upsertAutomationWorkflow(db: PrismaClient, automation: SystemeIoA
   });
 }
 
-async function upsertBooking(db: PrismaClient, booking: SystemeIoBooking) {
+// systeme.io's Booking API gives only a bare contactName string, never an
+// id — this maps "first last" (lowercased) to a Contact id so bookings can
+// be auto-linked on sync. Built once per sync run (not per booking) since
+// it needs every contact. A name shared by more than one contact maps to
+// null (ambiguous) rather than guessing which one.
+async function buildContactNameIndex(db: PrismaClient): Promise<Map<string, string | null>> {
+  const contacts = await db.contact.findMany({ select: { id: true, firstName: true, lastName: true } });
+  const index = new Map<string, string | null>();
+  for (const c of contacts) {
+    const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim().toLowerCase();
+    if (!name) continue;
+    index.set(name, index.has(name) ? null : c.id);
+  }
+  return index;
+}
+
+async function upsertBooking(db: PrismaClient, booking: SystemeIoBooking, contactNameIndex: Map<string, string | null>) {
+  const matchedContactId = booking.contactName
+    ? (contactNameIndex.get(booking.contactName.trim().toLowerCase()) ?? null)
+    : null;
+
   await db.booking.upsert({
     where: { systemeIoId: booking.id },
     update: {
@@ -396,6 +417,7 @@ async function upsertBooking(db: PrismaClient, booking: SystemeIoBooking) {
       maxParticipants: booking.maxParticipants,
       bookedSlots: booking.bookedSlots,
       contactName: booking.contactName,
+      contactId: matchedContactId,
       status: booking.status,
       paymentStatus: booking.paymentStatus,
       scheduledFor: booking.scheduledFor ? new Date(booking.scheduledFor) : null,
@@ -410,6 +432,7 @@ async function upsertBooking(db: PrismaClient, booking: SystemeIoBooking) {
       maxParticipants: booking.maxParticipants,
       bookedSlots: booking.bookedSlots,
       contactName: booking.contactName,
+      contactId: matchedContactId,
       status: booking.status,
       paymentStatus: booking.paymentStatus,
       scheduledFor: booking.scheduledFor ? new Date(booking.scheduledFor) : null,

@@ -215,15 +215,31 @@ export interface CalendarEventSummary {
 // real Montreal time takes over). The Dashboard shows the next 3 days as
 // a visual day-grid and the remaining 8 as a scrollable table.
 export async function getUpcomingEvents(accessToken: string): Promise<CalendarEventSummary[] | null> {
+  const now = new Date();
+  const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return getCalendarEventsInRange(
+    accessToken,
+    startOfToday.toISOString(),
+    new Date(startOfToday.getTime() + 12 * 24 * 60 * 60 * 1000).toISOString()
+  );
+}
+
+// Same fetch as above, but for an explicit [timeMin, timeMax) window
+// instead of the fixed "today + 12 days" one — used by the multi-view
+// Calendar page, which needs whatever range the current view/navigation
+// is showing (a month, a week, a single day, ...).
+export async function getCalendarEventsInRange(
+  accessToken: string,
+  timeMin: string,
+  timeMax: string
+): Promise<CalendarEventSummary[] | null> {
   try {
-    const now = new Date();
-    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
-    url.searchParams.set("timeMin", startOfToday.toISOString());
-    url.searchParams.set("timeMax", new Date(startOfToday.getTime() + 12 * 24 * 60 * 60 * 1000).toISOString());
+    url.searchParams.set("timeMin", timeMin);
+    url.searchParams.set("timeMax", timeMax);
     url.searchParams.set("singleEvents", "true");
     url.searchParams.set("orderBy", "startTime");
-    url.searchParams.set("maxResults", "100");
+    url.searchParams.set("maxResults", "250");
 
     const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!res.ok) return null;
