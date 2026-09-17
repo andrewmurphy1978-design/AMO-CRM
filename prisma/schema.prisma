@@ -728,6 +728,21 @@ model IntegrationSetting {
   @@map("integration_settings")
 }
 
+// A general-purpose encrypted key/value vault — for API keys that don't
+// power a specific feature the app calls directly (those live in
+// IntegrationSetting instead), just somewhere safer than a local text
+// file. Admin-only, like every other stored secret in this app.
+model ApiKeyVaultEntry {
+  id             String   @id @default(cuid())
+  label          String
+  valueEncrypted String
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("api_key_vault_entries")
+}
+
 // Automation run history shown on the Dashboard's Automations section.
 // "make" rows come from polling the Make API; "zapier" rows arrive via a
 // webhook step added to each Zap (there's no usable "list my recent Zap

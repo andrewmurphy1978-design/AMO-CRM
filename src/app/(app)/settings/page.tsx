@@ -11,6 +11,7 @@ import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
 import PersonalWatchForm from "./personal-watch-form";
 import EmailScreeningForm from "./email-screening-form";
+import ApiKeyVaultForm from "./api-key-vault-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -39,7 +40,7 @@ export default async function SettingsPage({
   // equivalent block in src/app/(app)/page.tsx for why (each `prisma.x`
   // property access opens a brand-new client/connection, and enough of
   // those in one request risks Cloudflare's Error 1102).
-  const { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople } =
+  const { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople, vaultEntries } =
     await withScopedPrismaClient(async (db) => {
       const currentUser = session
         ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true, emailScreeningInstructions: true } })
@@ -59,7 +60,12 @@ export default async function SettingsPage({
       const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
       const watchedPeople = showPersonalCard ? await getWatchedPeople(db) : [];
-      return { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople };
+      // Never select valueEncrypted here — the ciphertext has no reason to
+      // reach the client at all until an admin explicitly reveals one entry.
+      const vaultEntries = isAdmin
+        ? await db.apiKeyVaultEntry.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, label: true, notes: true } })
+        : [];
+      return { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople, vaultEntries };
     });
   const hour12 = currentUser?.timeFormat === "HOUR12";
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
@@ -215,6 +221,19 @@ export default async function SettingsPage({
             <div className="mt-4">
               {isAdmin ? (
                 <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} lang={lang} />
+              ) : (
+                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
+              )}
+            </div>
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.apiVault.title}</h2>
+            <p className="mt-1 text-sm text-soft">{t.apiVault.description}</p>
+            <div className="mt-4">
+              {isAdmin ? (
+                <ApiKeyVaultForm entries={vaultEntries} lang={lang} />
               ) : (
                 <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
               )}
