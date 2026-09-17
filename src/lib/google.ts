@@ -271,7 +271,7 @@ export interface SentEmailSummary {
 // save by excluding it.
 export async function getSentAwaitingReplies(
   accessToken: string,
-  { maxResults = 20 }: { maxResults?: number } = {}
+  { maxResults = 15 }: { maxResults?: number } = {}
 ): Promise<SentEmailSummary[] | null> {
   try {
     const query = "in:sent newer_than:180d";
@@ -283,88 +283,67 @@ export async function getSentAwaitingReplies(
       console.error("getSentAwaitingReplies: messages.list returned", listRes.status, await listRes.text());
       return null;
     }
-    const listData = (await listRes.json()) as { messages?: { id: string }[] };
-    const ids = listData.messages?.map((m) => m.id) ?? [];
-    if (ids.length === 0) return [];
+    // The list response already includes each message's threadId, so
+    // there's no need to fetch every message individually just to learn
+    // it (as a previous version did) — dedupe straight from here. This
+    // and the one thread fetch per distinct thread below are the only
+    // two network calls this makes, which matters: Cloudflare Workers
+    // cap the number of outgoing requests ("subrequests") a single
+    // invocation can make, and the old two-calls-per-message design
+    // (fetch the message, then separately fetch its thread) was blowing
+    // past that limit once combined with the inbox fetch in the same
+    // request, silently killing the whole refresh.
+    const listData = (await listRes.json()) as { messages?: { id: string; threadId?: string }[] };
+    const threadIds = [...new Set((listData.messages ?? []).map((m) => m.threadId ?? m.id))];
+    if (threadIds.length === 0) return [];
 
-    const sentMessages = await Promise.all(
-      ids.map(async (id): Promise<SentEmailSummary | null> => {
+    const results = await Promise.all(
+      threadIds.map(async (threadId): Promise<SentEmailSummary | null> => {
         const res = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+          `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
         if (!res.ok) {
-          console.error("getSentAwaitingReplies: message fetch returned", res.status, await res.text());
+          console.error("getSentAwaitingReplies: thread fetch returned", res.status, await res.text());
           return null;
         }
-        const data = (await res.json()) as {
-          id: string;
-          threadId?: string;
-          snippet?: string;
-          internalDate?: string;
-          payload?: { headers?: { name?: string; value?: string }[] };
+        const thread = (await res.json()) as {
+          messages?: {
+            id: string;
+            labelIds?: string[];
+            internalDate?: string;
+            payload?: { headers?: { name?: string; value?: string }[] };
+          }[];
         };
-        const headers = data.payload?.headers;
-        const threadId = data.threadId ?? data.id;
+        const messages = thread.messages ?? [];
+        // The last message in the thread is the one that decides whether
+        // it's still "awaiting" — if it's ours (SENT, not also INBOX),
+        // nobody has replied since; if a reply arrived, this thread no
+        // longer belongs in this list even though it matched `in:sent`.
+        const lastMessage = messages[messages.length - 1];
+        const stillAwaiting = Boolean(lastMessage?.labelIds?.includes("SENT")) && !lastMessage?.labelIds?.includes("INBOX");
+        if (!stillAwaiting || !lastMessage) return null;
+
+        const headers = lastMessage.payload?.headers;
         const toHeader = extractHeader(headers, "To");
         const dateHeader = extractHeader(headers, "Date");
         const parsedDateHeader = dateHeader ? new Date(dateHeader) : null;
         const date =
           parsedDateHeader && !isNaN(parsedDateHeader.getTime())
             ? parsedDateHeader.toISOString()
-            : data.internalDate
-              ? new Date(Number(data.internalDate)).toISOString()
+            : lastMessage.internalDate
+              ? new Date(Number(lastMessage.internalDate)).toISOString()
               : new Date().toISOString();
         return {
-          id: data.id,
+          id: lastMessage.id,
           threadId,
           to: formatFrom(toHeader),
           toEmail: extractEmailAddress(toHeader),
           subject: extractHeader(headers, "Subject") || "(no subject)",
-          snippet: data.snippet ?? "",
+          snippet: "",
           date,
           link: `https://mail.google.com/mail/u/0/#sent/${threadId}`,
         };
-      })
-    );
-
-    // Only the most recent sent message per thread matters for "did they
-    // reply yet" — dedupe before spending a thread lookup on each one.
-    const latestByThread = new Map<string, SentEmailSummary>();
-    for (const m of sentMessages) {
-      if (!m) continue;
-      const existing = latestByThread.get(m.threadId);
-      if (!existing || new Date(m.date) > new Date(existing.date)) {
-        latestByThread.set(m.threadId, m);
-      }
-    }
-
-    // Confirm the LAST message in each candidate thread is still ours —
-    // one extra call per distinct thread (bounded by maxResults above) —
-    // since a reply that arrived after our sent message means it's not
-    // "awaiting" anymore even though it matched the `in:sent` search.
-    const results = await Promise.all(
-      Array.from(latestByThread.values()).map(async (m): Promise<SentEmailSummary | null> => {
-        const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${m.threadId}?format=minimal`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!res.ok) {
-          console.error("getSentAwaitingReplies: thread fetch returned", res.status, await res.text());
-          return null;
-        }
-        const thread = (await res.json()) as { messages?: { labelIds?: string[] }[] };
-        const lastMessage = thread.messages?.[thread.messages.length - 1];
-        const stillAwaiting = Boolean(lastMessage?.labelIds?.includes("SENT")) && !lastMessage?.labelIds?.includes("INBOX");
-        if (!stillAwaiting) {
-          console.error(
-            "getSentAwaitingReplies: thread excluded, last message labels:",
-            lastMessage?.labelIds,
-            "for",
-            m.toEmail,
-            m.subject
-          );
-        }
-        return stillAwaiting ? m : null;
       })
     );
 

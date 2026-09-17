@@ -157,9 +157,14 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
   // but so can a thread that's been waiting since before the previous
   // check), and this costs Gmail calls only, never a Claude credit, so
   // there's no real saving from narrowing it.
+  // Kept modest on purpose: Cloudflare Workers cap the number of outgoing
+  // subrequests a single invocation can make, and each of these costs one
+  // request per message/thread on top of the initial list call — see
+  // getSentAwaitingReplies in src/lib/google.ts for the incident this
+  // limit caused.
   const [emails, sentAwaitingReply] = await Promise.all([
-    getRecentEmails(accessToken, { maxResults: 30, unreadOnly: false }),
-    getSentAwaitingReplies(accessToken, { maxResults: 20 }),
+    getRecentEmails(accessToken, { maxResults: 20, unreadOnly: false }),
+    getSentAwaitingReplies(accessToken, { maxResults: 15 }),
   ]);
   const emailList = emails ?? [];
   const sentList = sentAwaitingReply ?? [];
