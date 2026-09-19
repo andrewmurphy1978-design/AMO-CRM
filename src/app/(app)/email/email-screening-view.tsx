@@ -23,6 +23,19 @@ const CATEGORY_ORDER: EmailCategory[] = ["NEEDS_REPLY", "NEEDS_ATTENTION", "CAN_
 // sooner if it gets linked before that.
 const RECENTLY_READ_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
+// One accent color per section, keyed by the same `key` used to build
+// orderedSections below — a colored top bar plus a matching count badge,
+// so each category card reads at a glance regardless of its position.
+const SECTION_COLORS: Record<string, { bar: string; badgeBg: string; badgeText: string; heading: string }> = {
+  NEEDS_REPLY: { bar: "bg-rose-500", badgeBg: "bg-rose-100", badgeText: "text-rose-700", heading: "text-rose-700" },
+  SENT_AWAITING_REPLY: { bar: "bg-amber-500", badgeBg: "bg-amber-100", badgeText: "text-amber-700", heading: "text-amber-700" },
+  NEEDS_ATTENTION: { bar: "bg-blue-500", badgeBg: "bg-blue-100", badgeText: "text-blue-700", heading: "text-blue-700" },
+  CAN_WAIT: { bar: "bg-violet-500", badgeBg: "bg-violet-100", badgeText: "text-violet-700", heading: "text-violet-700" },
+  LOW_PRIORITY: { bar: "bg-slate-400", badgeBg: "bg-slate-100", badgeText: "text-slate-600", heading: "text-slate-600" },
+  RECENTLY_READ: { bar: "bg-gray-300", badgeBg: "bg-gray-100", badgeText: "text-gray-500", heading: "text-soft" },
+  COMPLETED: { bar: "bg-emerald-500", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700", heading: "text-emerald-700" },
+};
+
 function Spinner({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={clsx("animate-spin", className)}>
@@ -76,6 +89,14 @@ function CompleteButton({ onClick, title }: { onClick: () => void; title: string
   );
 }
 
+// Fixed widths on every column after the subject (linked-to name, link
+// icon, complete icon, quick actions, date) are what keep icons lined up
+// between rows — a variable-width date string ("19:58" vs "Sep 12, 3:15
+// PM") was previously the last flex child, so its own width change shifted
+// where every fixed-width icon before it landed.
+const LINKED_TO_WIDTH = "w-28";
+const DATE_WIDTH = "w-24";
+
 function EmailRow({
   index,
   highlight,
@@ -89,6 +110,7 @@ function EmailRow({
   threadId,
   linkInfo,
   linkSummaryText,
+  linkedToName,
   contactOptions,
   projectOptions,
   taskOptions,
@@ -114,6 +136,7 @@ function EmailRow({
   threadId: string;
   linkInfo: EmailLinkInfo | undefined;
   linkSummaryText: string | null;
+  linkedToName: string;
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
@@ -150,6 +173,7 @@ function EmailRow({
           {important && <ImportantIcon className="h-3.5 w-3.5 shrink-0 text-red-600" title={importantLabel} />}
           <span className="truncate">{subject}</span>
         </a>
+        <span className={`${LINKED_TO_WIDTH} shrink-0 truncate text-right text-xs font-medium text-emerald-700`}>{linkedToName}</span>
         <EmailLinkPicker
           threadId={threadId}
           contacts={contactOptions}
@@ -162,9 +186,12 @@ function EmailRow({
           labels={linkLabels}
           onSaved={onLinkSaved}
         />
-        {onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}
+        {/* Fixed-width slot even when there's no Complete action (the
+            Completed section itself) — otherwise the icons after it would
+            shift left there relative to every other category. */}
+        <span className="flex w-6 shrink-0 justify-center">{onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}</span>
         <EmailQuickActions link={link} labels={quickActionLabels} onOpen={onOpen} />
-        <span className="shrink-0 whitespace-nowrap text-xs text-soft">
+        <span className={`${DATE_WIDTH} shrink-0 whitespace-nowrap text-right text-xs text-soft`}>
           <EmailTime iso={dateIso} hour12={hour12} intlLocale={intlLocale} />
         </span>
       </div>
@@ -287,6 +314,10 @@ export default function EmailScreeningView({
     return name ? t.linkPicker.linkedTo(name) : null;
   }
 
+  function linkedName(link: EmailLinkInfo | undefined): string {
+    return link?.contactName || link?.projectName || link?.taskName || "";
+  }
+
   if (!connected) {
     return (
       <div className="space-y-3">
@@ -358,6 +389,7 @@ export default function EmailScreeningView({
         threadId={email.threadId}
         linkInfo={data?.linksByThread[email.threadId]}
         linkSummaryText={linkSummaryText(data?.linksByThread[email.threadId])}
+        linkedToName={linkedName(data?.linksByThread[email.threadId])}
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}
@@ -388,6 +420,7 @@ export default function EmailScreeningView({
         threadId={s.threadId}
         linkInfo={data?.linksByThread[s.threadId]}
         linkSummaryText={linkSummaryText(data?.linksByThread[s.threadId])}
+        linkedToName={linkedName(data?.linksByThread[s.threadId])}
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}
@@ -467,16 +500,22 @@ export default function EmailScreeningView({
 
       {nothingToShow && <p className="text-sm text-soft">{t.email.noMessages}</p>}
 
-      {orderedSections.map((section) => (
-        <section key={section.key}>
-          <h2 className="mb-1.5 text-sm font-semibold uppercase tracking-wide text-soft">
-            {section.heading} <span className="font-normal normal-case text-soft/70">({section.count})</span>
-          </h2>
-          <div className={`overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm ${section.dim ? "opacity-80" : ""}`}>
+      {orderedSections.map((section) => {
+        const color = SECTION_COLORS[section.key] ?? SECTION_COLORS.LOW_PRIORITY;
+        return (
+          <section
+            key={section.key}
+            className={`relative overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm ${section.dim ? "opacity-80" : ""}`}
+          >
+            <div className={`absolute inset-x-0 top-0 h-[3px] ${color.bar}`} />
+            <div className="flex items-center gap-2 px-4 pb-2 pt-3.5">
+              <h2 className={`text-sm font-semibold uppercase tracking-wide ${color.heading}`}>{section.heading}</h2>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
+            </div>
             <ul>{section.rows}</ul>
-          </div>
-        </section>
-      ))}
+          </section>
+        );
+      })}
     </div>
   );
 }
