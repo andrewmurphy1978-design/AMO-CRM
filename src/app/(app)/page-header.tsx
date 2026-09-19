@@ -44,10 +44,8 @@ export default function PageHeader({
   return (
     <header className="sticky top-0 z-20 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
       <h1 className="font-display text-xl font-semibold text-amo-white sm:text-2xl">{title}</h1>
-      <div className="flex items-center gap-3">
-        {actions}
-        <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={location} />
-      </div>
+      {actions && <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-3">{actions}</div>}
+      <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={location} />
     </header>
   );
 }

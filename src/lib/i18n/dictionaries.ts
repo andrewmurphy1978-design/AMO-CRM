@@ -527,7 +527,6 @@ export const dictionaries = {
     },
     email: {
       title: "Email",
-      subtitle: "Recent inbox messages, linkable to a client, project, or task.",
       notConnected: "Your Google account isn't connected yet.",
       connectInSettings: "Connect it in Settings",
       noMessages: "No messages.",
@@ -540,6 +539,10 @@ export const dictionaries = {
       screening: "Screening emails…",
       recentlyRead: "Recently read (last 7 days)",
       sentAwaitingReply: "Sent — awaiting reply",
+      completed: "Completed",
+      markComplete: "Mark as done",
+      hasAttachment: "Has an attachment",
+      isImportant: "Marked urgent",
     },
     personal: {
       title: "Personal",
@@ -1163,7 +1166,6 @@ export const dictionaries = {
     },
     email: {
       title: "Courriel",
-      subtitle: "Messages récents de la boîte de réception, liables à un client, projet ou tâche.",
       notConnected: "Votre compte Google n'est pas encore connecté.",
       connectInSettings: "Connectez-le dans Paramètres",
       noMessages: "Aucun message.",
@@ -1176,6 +1178,10 @@ export const dictionaries = {
       screening: "Analyse des courriels…",
       recentlyRead: "Lus récemment (7 derniers jours)",
       sentAwaitingReply: "Envoyés — en attente de réponse",
+      completed: "Terminé",
+      markComplete: "Marquer comme terminé",
+      hasAttachment: "Contient une pièce jointe",
+      isImportant: "Marqué urgent",
     },
     personal: {
       title: "Personnel",

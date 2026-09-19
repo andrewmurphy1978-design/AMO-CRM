@@ -16,6 +16,7 @@ export interface EmailScreeningPayload extends EmailInboxSnapshot {
   classifications: Record<string, EmailCategory>;
   readStates: Record<string, string>;
   linksByThread: Record<string, EmailLinkInfo>;
+  completions: Record<string, string>;
 }
 
 // A thread already linked (by hand, or by a previous auto-link) is never
@@ -75,6 +76,20 @@ export async function markEmailRead(db: PrismaClient, gmailMessageId: string): P
   await db.emailReadState.upsert({ where: { gmailMessageId }, update: {}, create: { gmailMessageId } });
 }
 
+export async function getCompletions(db: PrismaClient, gmailMessageIds: string[]): Promise<Record<string, string>> {
+  if (gmailMessageIds.length === 0) return {};
+  const rows = await db.emailCompletion.findMany({ where: { gmailMessageId: { in: gmailMessageIds } } });
+  const result: Record<string, string> = {};
+  for (const r of rows) result[r.gmailMessageId] = r.completedAt.toISOString();
+  return result;
+}
+
+// The green-check "mark as done" action on an Email page row — moves a
+// received email to the Completed section regardless of its AI category.
+export async function markEmailCompleted(db: PrismaClient, gmailMessageId: string): Promise<void> {
+  await db.emailCompletion.upsert({ where: { gmailMessageId }, update: {}, create: { gmailMessageId } });
+}
+
 export interface EmailLinkInfo {
   contactId: string;
   projectId: string;
@@ -120,17 +135,22 @@ export async function getScreeningExtras(
   classifications: Record<string, EmailCategory>;
   readStates: Record<string, string>;
   linksByThread: Record<string, EmailLinkInfo>;
+  completions: Record<string, string>;
 }> {
   const allThreadIds = [...new Set([...snapshot.emails.map((e) => e.threadId), ...snapshot.sentAwaitingReply.map((s) => s.threadId)])];
-  const [classifications, readStates, linksByThread] = await Promise.all([
+  const [classifications, readStates, linksByThread, completions] = await Promise.all([
     getEmailClassifications(db, snapshot.emails, userId),
     getReadStates(
       db,
       snapshot.emails.map((e) => e.id)
     ),
     getEmailLinksByThread(db, allThreadIds),
+    getCompletions(
+      db,
+      snapshot.emails.map((e) => e.id)
+    ),
   ]);
-  return { classifications, readStates, linksByThread };
+  return { classifications, readStates, linksByThread, completions };
 }
 
 export async function getCachedInbox(db: PrismaClient, userId: string): Promise<EmailInboxSnapshot | null> {

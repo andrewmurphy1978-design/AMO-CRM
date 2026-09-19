@@ -34,11 +34,56 @@ function Spinner({ className }: { className?: string }) {
   );
 }
 
+function AttachmentIcon({ className, title }: { className?: string; title: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
+      <title>{title}</title>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94a3 3 0 1 1 4.243 4.242L9.564 17.31a1.5 1.5 0 0 1-2.122-2.12l8.485-8.486"
+      />
+    </svg>
+  );
+}
+
+function ImportantIcon({ className, title }: { className?: string; title: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <title>{title}</title>
+      <path
+        fillRule="evenodd"
+        d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a1 1 0 0 1 1 1v4.5a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1Zm0 9.25a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function CompleteButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="shrink-0 rounded p-1 text-emerald-600 hover:bg-emerald-600/10 hover:text-emerald-700"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
+      </svg>
+    </button>
+  );
+}
+
 function EmailRow({
   index,
   highlight,
   primaryLabel,
   subject,
+  hasAttachments,
+  important,
+  attachmentLabel,
+  importantLabel,
   link,
   threadId,
   linkInfo,
@@ -53,11 +98,17 @@ function EmailRow({
   intlLocale,
   onOpen,
   onLinkSaved,
+  onComplete,
+  completeLabel,
 }: {
   index: number;
   highlight: boolean;
   primaryLabel: string;
   subject: string;
+  hasAttachments?: boolean;
+  important?: boolean;
+  attachmentLabel: string;
+  importantLabel: string;
   link: string;
   threadId: string;
   linkInfo: EmailLinkInfo | undefined;
@@ -72,6 +123,8 @@ function EmailRow({
   intlLocale: string;
   onOpen?: () => void;
   onLinkSaved: (values: LinkValues) => void;
+  onComplete?: () => void;
+  completeLabel: string;
 }) {
   return (
     <li className={highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : ""}>
@@ -90,9 +143,11 @@ function EmailRow({
           target="_blank"
           rel="noopener noreferrer"
           onClick={onOpen}
-          className="min-w-0 flex-1 truncate text-sm text-soft hover:opacity-80"
+          className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm text-soft hover:opacity-80"
         >
-          {subject}
+          {hasAttachments && <AttachmentIcon className="h-3.5 w-3.5 shrink-0" title={attachmentLabel} />}
+          {important && <ImportantIcon className="h-3.5 w-3.5 shrink-0 text-red-600" title={importantLabel} />}
+          <span className="truncate">{subject}</span>
         </a>
         <EmailLinkPicker
           threadId={threadId}
@@ -106,6 +161,7 @@ function EmailRow({
           labels={linkLabels}
           onSaved={onLinkSaved}
         />
+        {onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}
         <EmailQuickActions link={link} labels={quickActionLabels} onOpen={onOpen} />
         <span className="shrink-0 whitespace-nowrap text-xs text-soft">
           <EmailTime iso={dateIso} hour12={hour12} intlLocale={intlLocale} />
@@ -118,7 +174,6 @@ function EmailRow({
 export default function EmailScreeningView({
   initialData,
   connected,
-  subtitle,
   contactOptions,
   projectOptions,
   taskOptions,
@@ -127,7 +182,6 @@ export default function EmailScreeningView({
 }: {
   initialData: EmailScreeningPayload | null;
   connected: boolean;
-  subtitle: string;
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
@@ -142,10 +196,11 @@ export default function EmailScreeningView({
   // synchronous setState call of its own (which the fetch's first `await`
   // already defers past).
   const [loading, setLoading] = useState(() => !initialData && connected);
-  // Optimistic local overrides so opening/linking a message updates the
-  // grouping immediately, without waiting on a round trip.
+  // Optimistic local overrides so opening/linking/completing a message
+  // updates the grouping immediately, without waiting on a round trip.
   const [readOverrides, setReadOverrides] = useState<Record<string, string>>({});
   const [linkOverrides, setLinkOverrides] = useState<Record<string, boolean>>({});
+  const [completedOverrides, setCompletedOverrides] = useState<Record<string, string>>({});
 
   async function runScreening() {
     try {
@@ -154,6 +209,7 @@ export default function EmailScreeningView({
         setData((await res.json()) as EmailScreeningPayload);
         setReadOverrides({});
         setLinkOverrides({});
+        setCompletedOverrides({});
       }
     } catch {
       // Keep showing the last known data rather than clearing it.
@@ -190,6 +246,15 @@ export default function EmailScreeningView({
     setLinkOverrides((prev) => ({ ...prev, [threadId]: true }));
   }
 
+  function markComplete(id: string) {
+    setCompletedOverrides((prev) => (prev[id] ? prev : { ...prev, [id]: new Date().toISOString() }));
+    fetch("/api/email/mark-complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    }).catch(() => {});
+  }
+
   const linkLabels = {
     link: t.linkPicker.link,
     edit: t.linkPicker.edit,
@@ -223,7 +288,6 @@ export default function EmailScreeningView({
   if (!connected) {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-soft">{subtitle}</p>
         <p className="text-sm text-soft">
           {t.email.notConnected}{" "}
           <Link href="/settings" className="font-semibold text-emerald-700 underline">
@@ -236,29 +300,32 @@ export default function EmailScreeningView({
 
   if (loading && !data) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-soft">{subtitle}</p>
-        <div className="flex items-center gap-3 rounded-2xl border border-card-border bg-card-bg px-5 py-8 text-sm text-soft shadow-sm">
-          <Spinner className="h-5 w-5" />
-          {t.email.screening}
-        </div>
+      <div className="flex items-center gap-3 rounded-2xl border border-card-border bg-card-bg px-5 py-8 text-sm text-soft shadow-sm">
+        <Spinner className="h-5 w-5" />
+        {t.email.screening}
       </div>
     );
   }
 
   const isLinked = (e: { threadId: string }): boolean => linkOverrides[e.threadId] || Boolean(data?.linksByThread[e.threadId]);
   const readIso = (e: { id: string }): string | undefined => readOverrides[e.id] ?? data?.readStates[e.id];
+  const isCompleted = (id: string): boolean => Boolean(completedOverrides[id] ?? data?.completions[id]);
 
   const now = new Date().getTime();
   const emails = data?.emails ?? [];
   const sentAwaitingReply = data?.sentAwaitingReply ?? [];
 
+  const completedEmails = emails.filter((e) => isCompleted(e.id));
+  const activeEmails = emails.filter((e) => !isCompleted(e.id));
+  const awaitingSent = sentAwaitingReply.filter((s) => s.status === "awaiting" && !isCompleted(s.id));
+  const completedSent = sentAwaitingReply.filter((s) => s.status === "completed" || isCompleted(s.id));
+
   const groups: { category: EmailCategory; emails: EmailSummary[] }[] = CATEGORY_ORDER.map((category) => ({
     category,
-    emails: emails.filter((e) => !readIso(e) && data?.classifications[e.id] === category),
+    emails: activeEmails.filter((e) => !readIso(e) && data?.classifications[e.id] === category),
   })).filter((g) => g.emails.length > 0);
 
-  const recentlyRead = emails
+  const recentlyRead = activeEmails
     .filter((e) => {
       const iso = readIso(e);
       if (!iso || isLinked(e)) return false;
@@ -266,9 +333,14 @@ export default function EmailScreeningView({
     })
     .sort((a, b) => new Date(readIso(b)!).getTime() - new Date(readIso(a)!).getTime());
 
-  const nothingToShow = groups.length === 0 && recentlyRead.length === 0 && sentAwaitingReply.length === 0;
+  const nothingToShow =
+    groups.length === 0 &&
+    recentlyRead.length === 0 &&
+    awaitingSent.length === 0 &&
+    completedEmails.length === 0 &&
+    completedSent.length === 0;
 
-  function receivedRows(list: EmailSummary[], opts: { markAsRead: boolean }) {
+  function receivedRows(list: EmailSummary[], opts: { markAsRead: boolean; showComplete: boolean }) {
     return list.map((email, i) => (
       <EmailRow
         key={email.id}
@@ -276,6 +348,10 @@ export default function EmailScreeningView({
         highlight={isOwnDomainEmail(email.fromEmail)}
         primaryLabel={email.from}
         subject={email.subject}
+        hasAttachments={email.hasAttachments}
+        important={email.important}
+        attachmentLabel={t.email.hasAttachment}
+        importantLabel={t.email.isImportant}
         link={email.link}
         threadId={email.threadId}
         linkInfo={data?.linksByThread[email.threadId]}
@@ -290,76 +366,108 @@ export default function EmailScreeningView({
         intlLocale={intlLocale}
         onOpen={opts.markAsRead ? () => markRead(email.id) : undefined}
         onLinkSaved={() => markLinked(email.threadId)}
+        onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
+        completeLabel={t.email.markComplete}
       />
     ));
   }
 
-  const sentRows = sentAwaitingReply.map((s, i) => (
-    <EmailRow
-      key={s.id}
-      index={i}
-      highlight={false}
-      primaryLabel={s.to}
-      subject={s.subject}
-      link={s.link}
-      threadId={s.threadId}
-      linkInfo={data?.linksByThread[s.threadId]}
-      linkSummaryText={linkSummaryText(data?.linksByThread[s.threadId])}
-      contactOptions={contactOptions}
-      projectOptions={projectOptions}
-      taskOptions={taskOptions}
-      linkLabels={linkLabels}
-      quickActionLabels={quickActionLabels}
-      dateIso={s.date}
-      hour12={hour12}
-      intlLocale={intlLocale}
-      onLinkSaved={() => markLinked(s.threadId)}
-    />
-  ));
+  function sentRows(list: typeof sentAwaitingReply, opts: { showComplete: boolean }) {
+    return list.map((s, i) => (
+      <EmailRow
+        key={s.id}
+        index={i}
+        highlight={false}
+        primaryLabel={s.to}
+        subject={s.subject}
+        attachmentLabel={t.email.hasAttachment}
+        importantLabel={t.email.isImportant}
+        link={s.link}
+        threadId={s.threadId}
+        linkInfo={data?.linksByThread[s.threadId]}
+        linkSummaryText={linkSummaryText(data?.linksByThread[s.threadId])}
+        contactOptions={contactOptions}
+        projectOptions={projectOptions}
+        taskOptions={taskOptions}
+        linkLabels={linkLabels}
+        quickActionLabels={quickActionLabels}
+        dateIso={s.date}
+        hour12={hour12}
+        intlLocale={intlLocale}
+        onLinkSaved={() => markLinked(s.threadId)}
+        onComplete={opts.showComplete ? () => markComplete(s.id) : undefined}
+        completeLabel={t.email.markComplete}
+      />
+    ));
+  }
 
   // Explicit order (not just CATEGORY_ORDER) so "Sent — awaiting reply"
   // lands between Needs a reply and Needs your attention regardless of
-  // which category groups are actually non-empty right now.
+  // which category groups are actually non-empty right now, and Completed
+  // always sits last.
   const needsReplyGroup = groups.find((g) => g.category === "NEEDS_REPLY");
   const restGroups = groups.filter((g) => g.category !== "NEEDS_REPLY");
+  // One combined, date-sorted list for the Completed section — mixes
+  // received messages marked done by hand with sent threads Gmail shows a
+  // reply has arrived on.
+  const completedCount = completedEmails.length + completedSent.length;
   const orderedSections: { key: string; heading: string; count: number; rows: React.ReactNode; dim?: boolean }[] = [
     ...(needsReplyGroup
-      ? [{ key: "NEEDS_REPLY", heading: categoryLabels.NEEDS_REPLY, count: needsReplyGroup.emails.length, rows: receivedRows(needsReplyGroup.emails, { markAsRead: true }) }]
+      ? [{ key: "NEEDS_REPLY", heading: categoryLabels.NEEDS_REPLY, count: needsReplyGroup.emails.length, rows: receivedRows(needsReplyGroup.emails, { markAsRead: true, showComplete: true }) }]
       : []),
-    ...(sentAwaitingReply.length > 0
-      ? [{ key: "SENT_AWAITING_REPLY", heading: t.email.sentAwaitingReply, count: sentAwaitingReply.length, rows: sentRows }]
+    ...(awaitingSent.length > 0
+      ? [{ key: "SENT_AWAITING_REPLY", heading: t.email.sentAwaitingReply, count: awaitingSent.length, rows: sentRows(awaitingSent, { showComplete: true }) }]
       : []),
     ...restGroups.map((g) => ({
       key: g.category,
       heading: categoryLabels[g.category],
       count: g.emails.length,
-      rows: receivedRows(g.emails, { markAsRead: true }),
+      rows: receivedRows(g.emails, { markAsRead: true, showComplete: true }),
     })),
     ...(recentlyRead.length > 0
-      ? [{ key: "RECENTLY_READ", heading: t.email.recentlyRead, count: recentlyRead.length, rows: receivedRows(recentlyRead, { markAsRead: false }), dim: true }]
+      ? [
+          {
+            key: "RECENTLY_READ",
+            heading: t.email.recentlyRead,
+            count: recentlyRead.length,
+            rows: receivedRows(recentlyRead, { markAsRead: false, showComplete: true }),
+            dim: true,
+          },
+        ]
+      : []),
+    ...(completedCount > 0
+      ? [
+          {
+            key: "COMPLETED",
+            heading: t.email.completed,
+            count: completedCount,
+            rows: [
+              ...receivedRows(completedEmails, { markAsRead: false, showComplete: false }),
+              ...sentRows(completedSent, { showComplete: false }),
+            ],
+            dim: true,
+          },
+        ]
       : []),
   ];
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-soft">{subtitle}</p>
-        <div className="flex items-center gap-3">
-          {loading && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-soft">
-              <Spinner className="h-3.5 w-3.5" />
-              {t.email.screening}
-            </span>
-          )}
-          <RefreshButton onClick={refresh} loading={loading} label={t.email.refresh} loadingLabel={t.email.refreshing} />
-        </div>
+      <div className="flex items-center justify-end gap-3">
+        {loading && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-soft">
+            <Spinner className="h-3.5 w-3.5" />
+            {t.email.screening}
+          </span>
+        )}
+        <RefreshButton onClick={refresh} loading={loading} label={t.email.refresh} loadingLabel={t.email.refreshing} />
       </div>
 
       {nothingToShow && <p className="text-sm text-soft">{t.email.noMessages}</p>}
 
       {orderedSections.map((section) => (
         <section key={section.key}>
-          <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-soft">
+          <h2 className="mb-1.5 text-sm font-semibold uppercase tracking-wide text-soft">
             {section.heading} <span className="font-normal normal-case text-soft/70">({section.count})</span>
           </h2>
           <div className={`overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm ${section.dim ? "opacity-80" : ""}`}>

@@ -115,10 +115,13 @@ export default function EmailCard({
 
   const isRead = (id: string): boolean => readOverrides[id] || Boolean(data?.readStates[id]);
   const emails = data?.emails ?? [];
-  const sentAwaitingReply = data?.sentAwaitingReply ?? [];
+  // Only threads still genuinely awaiting a reply — sentAwaitingReply now
+  // also carries ones Gmail shows a reply has arrived on (so the Email
+  // page can list them under Completed), which don't belong in this card.
+  const awaitingSent = (data?.sentAwaitingReply ?? []).filter((s) => s.status === "awaiting");
   const needsReply = emails.filter((e) => !isRead(e.id) && data?.classifications[e.id] === "NEEDS_REPLY");
   const needsAttention = emails.filter((e) => !isRead(e.id) && data?.classifications[e.id] === "NEEDS_ATTENTION");
-  const nothingToShow = needsReply.length === 0 && sentAwaitingReply.length === 0 && needsAttention.length === 0;
+  const nothingToShow = needsReply.length === 0 && awaitingSent.length === 0 && needsAttention.length === 0;
 
   function emailRow(email: EmailSummary, i: number) {
     return (
@@ -184,25 +187,25 @@ export default function EmailCard({
 
           {needsReply.length > 0 && (
             <div className="shrink-0">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-soft">
+              <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-soft">
                 {labels.categoryNeedsReply} <span className="font-normal normal-case text-soft/70">({needsReply.length})</span>
               </h3>
               <ul className="-mx-2 overflow-hidden rounded-lg">{needsReply.map((e, i) => emailRow(e, i))}</ul>
             </div>
           )}
 
-          {sentAwaitingReply.length > 0 && (
+          {awaitingSent.length > 0 && (
             <div className="shrink-0">
-              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-soft">
-                {labels.awaitingResponse} <span className="font-normal normal-case text-soft/70">({sentAwaitingReply.length})</span>
+              <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-soft">
+                {labels.awaitingResponse} <span className="font-normal normal-case text-soft/70">({awaitingSent.length})</span>
               </h3>
-              <ul className="-mx-2 overflow-hidden rounded-lg">{sentAwaitingReply.map((s, i) => sentRow(s, i))}</ul>
+              <ul className="-mx-2 overflow-hidden rounded-lg">{awaitingSent.map((s, i) => sentRow(s, i))}</ul>
             </div>
           )}
 
           {needsAttention.length > 0 && (
             <div className="flex min-h-0 flex-1 flex-col">
-              <h3 className="mb-1 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">
+              <h3 className="mb-1 shrink-0 text-sm font-semibold uppercase tracking-wide text-soft">
                 {labels.categoryNeedsAttention} <span className="font-normal normal-case text-soft/70">({needsAttention.length})</span>
               </h3>
               <ul className="-mx-2 min-h-0 flex-1 overflow-y-auto overflow-x-hidden rounded-lg">{needsAttention.map((e, i) => emailRow(e, i))}</ul>

@@ -598,6 +598,19 @@ model EmailReadState {
   @@map("email_read_states")
 }
 
+// Manually marked "done" from the Email page's green-check action — kept
+// separate from EmailClassification (the AI category) since completion is
+// a user action, not something Claude decides. Unscoped by user, matching
+// EmailReadState: message ids are unique per Gmail account and this app's
+// few team accounts never collide in practice.
+model EmailCompletion {
+  id             String   @id @default(cuid())
+  gmailMessageId String   @unique
+  completedAt    DateTime @default(now())
+
+  @@map("email_completions")
+}
+
 // The Email page's last-fetched inbox + recent sent-awaiting-reply list,
 // one row per user. Reopening the page reads this instead of hitting
 // Gmail (and re-spending Claude credits) on every visit — only pressing

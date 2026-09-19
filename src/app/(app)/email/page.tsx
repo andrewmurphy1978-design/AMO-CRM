@@ -92,7 +92,6 @@ export default async function EmailPage() {
       <EmailScreeningView
         initialData={initialData}
         connected={connected}
-        subtitle={t.email.subtitle}
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}

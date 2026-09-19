@@ -123,6 +123,8 @@ export interface EmailSummary {
   snippet: string;
   date: string; // ISO datetime the message was received
   link: string; // opens this message's thread directly in Gmail's web UI
+  hasAttachments: boolean;
+  important: boolean; // the sender marked it Urgent/High priority
 }
 
 function extractHeader(headers: { name?: string; value?: string }[] | undefined, name: string): string {
@@ -144,9 +146,40 @@ function extractEmailAddress(raw: string): string {
   return (match?.[1] ?? raw).trim();
 }
 
+// Attachment presence isn't in the message's headers, so it isn't visible
+// under format=metadata — it only shows up in the MIME part tree, which
+// needs format=full. To keep that from costing extra data transfer per
+// message (format=full otherwise inlines every part's base64 body), a
+// `fields` partial-response mask asks Gmail for just the parts' filename/
+// mimeType skeleton, skipping every part's actual body content.
+const MESSAGE_FIELDS =
+  "id,threadId,snippet,internalDate,payload(headers,mimeType,filename,parts(filename,mimeType,parts(filename,mimeType,parts(filename,mimeType))))";
+
+interface MessagePart {
+  filename?: string;
+  mimeType?: string;
+  parts?: MessagePart[];
+}
+
+function hasAttachmentPart(part: MessagePart | undefined): boolean {
+  if (!part) return false;
+  if (part.filename && part.filename.length > 0) return true;
+  return (part.parts ?? []).some(hasAttachmentPart);
+}
+
+// The sender's own "Mark as important/urgent" flag (Outlook and most mail
+// clients set one of these headers) — distinct from Gmail's own ML-driven
+// "importance" heuristic, which isn't a reliable "this was sent as
+// urgent" signal.
+function isMarkedImportant(headers: { name?: string; value?: string }[] | undefined): boolean {
+  const importance = extractHeader(headers, "Importance").toLowerCase();
+  const priority = extractHeader(headers, "X-Priority").toLowerCase();
+  return importance === "high" || priority === "1" || priority === "highest";
+}
+
 async function fetchEmailSummary(accessToken: string, id: string): Promise<EmailSummary | null> {
   const res = await fetch(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full&fields=${encodeURIComponent(MESSAGE_FIELDS)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   if (!res.ok) return null;
@@ -155,7 +188,7 @@ async function fetchEmailSummary(accessToken: string, id: string): Promise<Email
     threadId?: string;
     snippet?: string;
     internalDate?: string;
-    payload?: { headers?: { name?: string; value?: string }[] };
+    payload?: MessagePart & { headers?: { name?: string; value?: string }[] };
   };
   const headers = data.payload?.headers;
   const threadId = data.threadId ?? data.id;
@@ -185,6 +218,8 @@ async function fetchEmailSummary(accessToken: string, id: string): Promise<Email
     snippet: data.snippet ?? "",
     date,
     link: `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
+    hasAttachments: hasAttachmentPart(data.payload),
+    important: isMarkedImportant(headers),
   };
 }
 
@@ -260,6 +295,11 @@ export interface SentEmailSummary {
   snippet: string;
   date: string; // ISO datetime the message was sent
   link: string; // opens this message's thread directly in Gmail's web UI
+  // "awaiting": the last message in the thread is still ours (no reply
+  // yet). "completed": a reply has since arrived — kept in the list
+  // (rather than dropped) so the Email page can show it under Completed
+  // instead of it just vanishing.
+  status: "awaiting" | "completed";
 }
 
 // Recently sent messages whose thread hasn't seen a reply yet — a
@@ -318,11 +358,12 @@ export async function getSentAwaitingReplies(
         const messages = thread.messages ?? [];
         // The last message in the thread is the one that decides whether
         // it's still "awaiting" — if it's ours (SENT, not also INBOX),
-        // nobody has replied since; if a reply arrived, this thread no
-        // longer belongs in this list even though it matched `in:sent`.
+        // nobody has replied since; if a reply arrived, the thread moves
+        // to "completed" instead of being dropped, so it can still show
+        // up under the Email page's Completed section.
         const lastMessage = messages[messages.length - 1];
-        const stillAwaiting = Boolean(lastMessage?.labelIds?.includes("SENT")) && !lastMessage?.labelIds?.includes("INBOX");
-        if (!stillAwaiting || !lastMessage) return null;
+        if (!lastMessage) return null;
+        const stillAwaiting = Boolean(lastMessage.labelIds?.includes("SENT")) && !lastMessage.labelIds?.includes("INBOX");
 
         const headers = lastMessage.payload?.headers;
         const toHeader = extractHeader(headers, "To");
@@ -343,6 +384,7 @@ export async function getSentAwaitingReplies(
           snippet: "",
           date,
           link: `https://mail.google.com/mail/u/0/#sent/${threadId}`,
+          status: stillAwaiting ? "awaiting" : "completed",
         };
       })
     );

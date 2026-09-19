@@ -51,8 +51,13 @@ export default function EmailLinkPicker({
         title={summary ? `${summary} · ${labels.edit}` : labels.link}
         className={`shrink-0 rounded p-1 hover:bg-black/10 ${summary ? "text-emerald-700" : "text-soft"}`}
       >
+        {/* A clearer two-ring chain glyph — the previous icon read as a
+            paperclip at small sizes, which now clashes with the actual
+            attachment paperclip icon on each row. */}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+          <circle cx="8" cy="16" r="4" />
+          <circle cx="16" cy="8" r="4" />
+          <path strokeLinecap="round" d="M10.8 13.2 13.2 10.8" />
         </svg>
       </button>
       <LinkDialog

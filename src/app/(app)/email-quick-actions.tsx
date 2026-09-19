@@ -43,14 +43,14 @@ export default function EmailQuickActions({
         rel="noopener noreferrer"
         title={labels.replyAll}
         onClick={onOpen}
-        className="relative rounded p-1 text-soft hover:bg-black/10 hover:text-ink"
+        className="rounded p-1 text-soft hover:bg-black/10 hover:text-ink"
       >
+        {/* Two overlapping back-arrows (distinct from the single Reply
+            arrow above) — the standard "reply all" glyph. */}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15 7 10m0 0 5-5M7 10h9a6 6 0 0 1 6 6v1.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8 15 3 10m5-5-5 5" />
         </svg>
-        <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-current text-[6px] font-bold leading-none text-card-bg">
-          2
-        </span>
       </a>
       <a
         href={link}
