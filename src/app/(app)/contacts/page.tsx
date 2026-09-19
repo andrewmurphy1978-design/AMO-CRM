@@ -26,9 +26,9 @@ function toArray(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
-function TagPills({ tags }: { tags: { tagId: string; tag: { name: string } }[] }) {
+function TagPills({ tags, vertical }: { tags: { tagId: string; tag: { name: string } }[]; vertical?: boolean }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className={vertical ? "flex flex-col items-start gap-1" : "flex flex-wrap gap-1"}>
       {sortTags(tags).map((ct) => (
         <span
           key={ct.tagId}
@@ -180,15 +180,32 @@ export default async function ContactsPage({
               const languageTags = contact.tags.filter((ct) => isLanguageTag(ct.tag.name));
               const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
               return (
-                <tr key={contact.id} style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}>
+                <tr key={contact.id} className="group relative" style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}>
                   <td className="px-4 py-3">
-                    <Link href={`/contacts/${contact.id}`} className="font-medium text-ink hover:underline">
+                    {/* The whole row is clickable via this link stretching over
+                        it (position:relative on the <tr> above makes it the
+                        containing block for this absolutely-positioned span,
+                        regardless of the td/a in between) — a pure-CSS
+                        "stretched link" so no client component is needed just
+                        for row navigation. */}
+                    <Link href={`/contacts/${contact.id}`} className="relative z-10 font-medium text-ink group-hover:underline">
+                      <span className="absolute inset-0 z-0 group-hover:bg-black/5" aria-hidden="true" />
                       {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
                     </Link>
                   </td>
-                  <td className="px-4 py-3 text-ink/70">{contact.email}</td>
                   <td className="px-4 py-3 text-ink/70">
-                    <PhoneDisplay value={contact.phone} country={contact.country} />
+                    <div>{contact.email}</div>
+                    {contact.email2 && <div className="text-xs text-soft">{contact.email2}</div>}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-ink/70">
+                    <div>
+                      <PhoneDisplay value={contact.phone} country={contact.country} />
+                    </div>
+                    {contact.phone2 && (
+                      <div className="text-xs text-soft">
+                        <PhoneDisplay value={contact.phone2} country={contact.country} />
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-ink/70">
                     {contact.country ? (
@@ -206,8 +223,8 @@ export default async function ContactsPage({
                       {STAGE_LABELS[contact.stage]}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <TagPills tags={languageTags} />
+                  <td className="w-px px-4 py-3">
+                    <TagPills tags={languageTags} vertical />
                   </td>
                   <td className="px-4 py-3">
                     <TagPills tags={otherTags} />

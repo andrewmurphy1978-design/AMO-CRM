@@ -24,16 +24,17 @@ const CATEGORY_ORDER: EmailCategory[] = ["NEEDS_REPLY", "NEEDS_ATTENTION", "CAN_
 const RECENTLY_READ_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 // One accent color per section, keyed by the same `key` used to build
-// orderedSections below — a colored top bar plus a matching count badge,
-// so each category card reads at a glance regardless of its position.
-const SECTION_COLORS: Record<string, { bar: string; badgeBg: string; badgeText: string; heading: string }> = {
-  NEEDS_REPLY: { bar: "bg-rose-500", badgeBg: "bg-rose-100", badgeText: "text-rose-700", heading: "text-rose-700" },
-  SENT_AWAITING_REPLY: { bar: "bg-amber-500", badgeBg: "bg-amber-100", badgeText: "text-amber-700", heading: "text-amber-700" },
-  NEEDS_ATTENTION: { bar: "bg-blue-500", badgeBg: "bg-blue-100", badgeText: "text-blue-700", heading: "text-blue-700" },
-  CAN_WAIT: { bar: "bg-violet-500", badgeBg: "bg-violet-100", badgeText: "text-violet-700", heading: "text-violet-700" },
-  LOW_PRIORITY: { bar: "bg-slate-400", badgeBg: "bg-slate-100", badgeText: "text-slate-600", heading: "text-slate-600" },
-  RECENTLY_READ: { bar: "bg-gray-300", badgeBg: "bg-gray-100", badgeText: "text-gray-500", heading: "text-soft" },
-  COMPLETED: { bar: "bg-emerald-500", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700", heading: "text-emerald-700" },
+// orderedSections below — the whole card header (not just a thin bar) uses
+// the category color, with the row list underneath kept plain so the
+// messages themselves always look the same regardless of category.
+const SECTION_COLORS: Record<string, { headerBg: string; headerText: string; badgeBg: string; badgeText: string }> = {
+  NEEDS_REPLY: { headerBg: "bg-rose-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
+  SENT_AWAITING_REPLY: { headerBg: "bg-amber-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
+  NEEDS_ATTENTION: { headerBg: "bg-blue-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
+  CAN_WAIT: { headerBg: "bg-violet-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
+  LOW_PRIORITY: { headerBg: "bg-slate-300", headerText: "text-slate-800", badgeBg: "bg-white/60", badgeText: "text-slate-800" },
+  RECENTLY_READ: { headerBg: "bg-gray-200", headerText: "text-gray-700", badgeBg: "bg-white/70", badgeText: "text-gray-700" },
+  COMPLETED: { headerBg: "bg-emerald-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
 };
 
 function Spinner({ className }: { className?: string }) {
@@ -89,6 +90,41 @@ function CompleteButton({ onClick, title }: { onClick: () => void; title: string
   );
 }
 
+// The Completed section's own check — filled (white check on a solid
+// green background) instead of the plain outline used to mark something
+// done, so it reads as "this is done, click to undo" rather than as
+// another "mark done" prompt.
+function UncompleteButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="shrink-0 rounded bg-emerald-600 p-1 text-white hover:bg-emerald-700"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
+      </svg>
+    </button>
+  );
+}
+
+// The Recently Read section's "put it back" action — reopens the message
+// into whichever category it was in before it was opened.
+function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button type="button" onClick={onClick} title={title} className="shrink-0 rounded p-1 text-soft hover:bg-black/10 hover:text-ink">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 6.75c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125H3.375A1.125 1.125 0 0 1 2.25 17.25V6.75Zm0 0 9.75 6.75 9.75-6.75"
+        />
+      </svg>
+    </button>
+  );
+}
+
 // Fixed widths on every column after the subject (linked-to name, link
 // icon, complete icon, quick actions, date) are what keep icons lined up
 // between rows — a variable-width date string ("19:58" vs "Sep 12, 3:15
@@ -110,7 +146,7 @@ function EmailRow({
   threadId,
   linkInfo,
   linkSummaryText,
-  linkedToName,
+  linkedTo,
   contactOptions,
   projectOptions,
   taskOptions,
@@ -122,7 +158,11 @@ function EmailRow({
   onOpen,
   onLinkSaved,
   onComplete,
+  onUncomplete,
+  onMarkUnread,
   completeLabel,
+  uncompleteLabel,
+  markUnreadLabel,
 }: {
   index: number;
   highlight: boolean;
@@ -136,7 +176,7 @@ function EmailRow({
   threadId: string;
   linkInfo: EmailLinkInfo | undefined;
   linkSummaryText: string | null;
-  linkedToName: string;
+  linkedTo: { name: string; href: string } | null;
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
@@ -148,10 +188,14 @@ function EmailRow({
   onOpen?: () => void;
   onLinkSaved: (values: LinkValues) => void;
   onComplete?: () => void;
+  onUncomplete?: () => void;
+  onMarkUnread?: () => void;
   completeLabel: string;
+  uncompleteLabel: string;
+  markUnreadLabel: string;
 }) {
   return (
-    <li className={highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : ""}>
+    <li className={clsx("transition-colors hover:bg-black/5", highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : "")}>
       <div className="flex items-center gap-3 px-4 py-1.5">
         <a
           href={link}
@@ -173,7 +217,13 @@ function EmailRow({
           {important && <ImportantIcon className="h-3.5 w-3.5 shrink-0 text-red-600" title={importantLabel} />}
           <span className="truncate">{subject}</span>
         </a>
-        <span className={`${LINKED_TO_WIDTH} shrink-0 truncate text-right text-xs font-medium text-emerald-700`}>{linkedToName}</span>
+        <span className={`${LINKED_TO_WIDTH} shrink-0 truncate text-right text-xs font-medium`}>
+          {linkedTo && (
+            <Link href={linkedTo.href} className="text-emerald-700 hover:underline">
+              {linkedTo.name}
+            </Link>
+          )}
+        </span>
         <EmailLinkPicker
           threadId={threadId}
           contacts={contactOptions}
@@ -186,10 +236,15 @@ function EmailRow({
           labels={linkLabels}
           onSaved={onLinkSaved}
         />
-        {/* Fixed-width slot even when there's no Complete action (the
-            Completed section itself) — otherwise the icons after it would
-            shift left there relative to every other category. */}
-        <span className="flex w-6 shrink-0 justify-center">{onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}</span>
+        {/* Fixed-width slots even when a given row has no action there (e.g.
+            the Completed section has no Complete button of its own, and
+            only Recently Read has an unread button) — otherwise the icons
+            after them would shift between sections. */}
+        <span className="flex w-6 shrink-0 justify-center">
+          {onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}
+          {onUncomplete && <UncompleteButton onClick={onUncomplete} title={uncompleteLabel} />}
+        </span>
+        <span className="flex w-6 shrink-0 justify-center">{onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}</span>
         <EmailQuickActions link={link} labels={quickActionLabels} onOpen={onOpen} />
         <span className={`${DATE_WIDTH} shrink-0 whitespace-nowrap text-right text-xs text-soft`}>
           <EmailTime iso={dateIso} hour12={hour12} intlLocale={intlLocale} />
@@ -224,11 +279,13 @@ export default function EmailScreeningView({
   // synchronous setState call of its own (which the fetch's first `await`
   // already defers past).
   const [loading, setLoading] = useState(() => connected && (!initialData || isStale(initialData.fetchedAt)));
-  // Optimistic local overrides so opening/linking/completing a message
-  // updates the grouping immediately, without waiting on a round trip.
-  const [readOverrides, setReadOverrides] = useState<Record<string, string>>({});
+  // Optimistic local overrides so opening/linking/completing/undoing a
+  // message updates the grouping immediately, without waiting on a round
+  // trip. `null` means "explicitly cleared" (mark unread / uncomplete) as
+  // opposed to `undefined`, meaning no override — fall back to server data.
+  const [readOverrides, setReadOverrides] = useState<Record<string, string | null>>({});
   const [linkOverrides, setLinkOverrides] = useState<Record<string, boolean>>({});
-  const [completedOverrides, setCompletedOverrides] = useState<Record<string, string>>({});
+  const [completedOverrides, setCompletedOverrides] = useState<Record<string, string | null>>({});
 
   async function runScreening() {
     try {
@@ -262,13 +319,22 @@ export default function EmailScreeningView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function markRead(id: string) {
-    setReadOverrides((prev) => (prev[id] ? prev : { ...prev, [id]: new Date().toISOString() }));
-    fetch("/api/email/mark-read", {
+  function postJson(url: string, id: string) {
+    fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ id }),
     }).catch(() => {});
+  }
+
+  function markRead(id: string) {
+    setReadOverrides((prev) => (prev[id] ? prev : { ...prev, [id]: new Date().toISOString() }));
+    postJson("/api/email/mark-read", id);
+  }
+
+  function markUnread(id: string) {
+    setReadOverrides((prev) => ({ ...prev, [id]: null }));
+    postJson("/api/email/mark-unread", id);
   }
 
   function markLinked(threadId: string) {
@@ -277,11 +343,12 @@ export default function EmailScreeningView({
 
   function markComplete(id: string) {
     setCompletedOverrides((prev) => (prev[id] ? prev : { ...prev, [id]: new Date().toISOString() }));
-    fetch("/api/email/mark-complete", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id }),
-    }).catch(() => {});
+    postJson("/api/email/mark-complete", id);
+  }
+
+  function markUncomplete(id: string) {
+    setCompletedOverrides((prev) => ({ ...prev, [id]: null }));
+    postJson("/api/email/mark-uncomplete", id);
   }
 
   const linkLabels = {
@@ -314,8 +381,12 @@ export default function EmailScreeningView({
     return name ? t.linkPicker.linkedTo(name) : null;
   }
 
-  function linkedName(link: EmailLinkInfo | undefined): string {
-    return link?.contactName || link?.projectName || link?.taskName || "";
+  function linkedTo(link: EmailLinkInfo | undefined): { name: string; href: string } | null {
+    if (!link) return null;
+    if (link.contactName) return { name: link.contactName, href: `/contacts/${link.contactId}` };
+    if (link.projectName) return { name: link.projectName, href: `/projects/${link.projectId}` };
+    if (link.taskName) return { name: link.taskName, href: `/projects/${link.projectId}/tasks/${link.taskId}/edit` };
+    return null;
   }
 
   if (!connected) {
@@ -341,8 +412,14 @@ export default function EmailScreeningView({
   }
 
   const isLinked = (e: { threadId: string }): boolean => linkOverrides[e.threadId] || Boolean(data?.linksByThread[e.threadId]);
-  const readIso = (e: { id: string }): string | undefined => readOverrides[e.id] ?? data?.readStates[e.id];
-  const isCompleted = (id: string): boolean => Boolean(completedOverrides[id] ?? data?.completions[id]);
+  const readIso = (e: { id: string }): string | undefined => {
+    const override = readOverrides[e.id];
+    return override !== undefined ? (override ?? undefined) : data?.readStates[e.id];
+  };
+  const isCompleted = (id: string): boolean => {
+    const override = completedOverrides[id];
+    return override !== undefined ? override !== null : Boolean(data?.completions[id]);
+  };
 
   const now = new Date().getTime();
   const emails = data?.emails ?? [];
@@ -373,7 +450,7 @@ export default function EmailScreeningView({
     completedEmails.length === 0 &&
     completedSent.length === 0;
 
-  function receivedRows(list: EmailSummary[], opts: { markAsRead: boolean; showComplete: boolean }) {
+  function receivedRows(list: EmailSummary[], opts: { markAsRead: boolean; showComplete?: boolean; showUncomplete?: boolean; showMarkUnread?: boolean }) {
     return list.map((email, i) => (
       <EmailRow
         key={email.id}
@@ -389,7 +466,7 @@ export default function EmailScreeningView({
         threadId={email.threadId}
         linkInfo={data?.linksByThread[email.threadId]}
         linkSummaryText={linkSummaryText(data?.linksByThread[email.threadId])}
-        linkedToName={linkedName(data?.linksByThread[email.threadId])}
+        linkedTo={linkedTo(data?.linksByThread[email.threadId])}
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}
@@ -401,12 +478,16 @@ export default function EmailScreeningView({
         onOpen={opts.markAsRead ? () => markRead(email.id) : undefined}
         onLinkSaved={() => markLinked(email.threadId)}
         onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
+        onUncomplete={opts.showUncomplete ? () => markUncomplete(email.id) : undefined}
+        onMarkUnread={opts.showMarkUnread ? () => markUnread(email.id) : undefined}
         completeLabel={t.email.markComplete}
+        uncompleteLabel={t.email.markUncomplete}
+        markUnreadLabel={t.email.markUnread}
       />
     ));
   }
 
-  function sentRows(list: typeof sentAwaitingReply, opts: { showComplete: boolean }) {
+  function sentRows(list: typeof sentAwaitingReply, opts: { showComplete?: boolean; showUncomplete?: boolean }) {
     return list.map((s, i) => (
       <EmailRow
         key={s.id}
@@ -420,7 +501,7 @@ export default function EmailScreeningView({
         threadId={s.threadId}
         linkInfo={data?.linksByThread[s.threadId]}
         linkSummaryText={linkSummaryText(data?.linksByThread[s.threadId])}
-        linkedToName={linkedName(data?.linksByThread[s.threadId])}
+        linkedTo={linkedTo(data?.linksByThread[s.threadId])}
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}
@@ -431,7 +512,14 @@ export default function EmailScreeningView({
         intlLocale={intlLocale}
         onLinkSaved={() => markLinked(s.threadId)}
         onComplete={opts.showComplete ? () => markComplete(s.id) : undefined}
+        // A thread with status "completed" got that way because Gmail
+        // shows a reply arrived — that can't be undone from here, so only
+        // a thread manually completed while still "awaiting" gets an
+        // uncomplete button.
+        onUncomplete={opts.showUncomplete && s.status === "awaiting" ? () => markUncomplete(s.id) : undefined}
         completeLabel={t.email.markComplete}
+        uncompleteLabel={t.email.markUncomplete}
+        markUnreadLabel={t.email.markUnread}
       />
     ));
   }
@@ -465,7 +553,7 @@ export default function EmailScreeningView({
             key: "RECENTLY_READ",
             heading: t.email.recentlyRead,
             count: recentlyRead.length,
-            rows: receivedRows(recentlyRead, { markAsRead: false, showComplete: true }),
+            rows: receivedRows(recentlyRead, { markAsRead: false, showComplete: true, showMarkUnread: true }),
             dim: true,
           },
         ]
@@ -477,8 +565,8 @@ export default function EmailScreeningView({
             heading: t.email.completed,
             count: completedCount,
             rows: [
-              ...receivedRows(completedEmails, { markAsRead: false, showComplete: false }),
-              ...sentRows(completedSent, { showComplete: false }),
+              ...receivedRows(completedEmails, { markAsRead: false, showUncomplete: true }),
+              ...sentRows(completedSent, { showUncomplete: true }),
             ],
             dim: true,
           },
@@ -503,16 +591,12 @@ export default function EmailScreeningView({
       {orderedSections.map((section) => {
         const color = SECTION_COLORS[section.key] ?? SECTION_COLORS.LOW_PRIORITY;
         return (
-          <section
-            key={section.key}
-            className={`relative overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm ${section.dim ? "opacity-80" : ""}`}
-          >
-            <div className={`absolute inset-x-0 top-0 h-[3px] ${color.bar}`} />
-            <div className="flex items-center gap-2 px-4 pb-2 pt-3.5">
-              <h2 className={`text-sm font-semibold uppercase tracking-wide ${color.heading}`}>{section.heading}</h2>
+          <section key={section.key} className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
+            <div className={`flex items-center gap-2 px-4 py-2.5 ${color.headerBg}`}>
+              <h2 className={`text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
             </div>
-            <ul>{section.rows}</ul>
+            <ul className={`bg-card-bg ${section.dim ? "opacity-80" : ""}`}>{section.rows}</ul>
           </section>
         );
       })}

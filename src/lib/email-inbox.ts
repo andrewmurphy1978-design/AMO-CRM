@@ -76,6 +76,12 @@ export async function markEmailRead(db: PrismaClient, gmailMessageId: string): P
   await db.emailReadState.upsert({ where: { gmailMessageId }, update: {}, create: { gmailMessageId } });
 }
 
+// The "mark as unread" action on a Recently Read row — deletes the read
+// marker so the message reappears in its original category.
+export async function markEmailUnread(db: PrismaClient, gmailMessageId: string): Promise<void> {
+  await db.emailReadState.deleteMany({ where: { gmailMessageId } });
+}
+
 export async function getCompletions(db: PrismaClient, gmailMessageIds: string[]): Promise<Record<string, string>> {
   if (gmailMessageIds.length === 0) return {};
   const rows = await db.emailCompletion.findMany({ where: { gmailMessageId: { in: gmailMessageIds } } });
@@ -88,6 +94,13 @@ export async function getCompletions(db: PrismaClient, gmailMessageIds: string[]
 // received email to the Completed section regardless of its AI category.
 export async function markEmailCompleted(db: PrismaClient, gmailMessageId: string): Promise<void> {
   await db.emailCompletion.upsert({ where: { gmailMessageId }, update: {}, create: { gmailMessageId } });
+}
+
+// The Completed section's own check button toggles back off — the message
+// returns to whichever category/section it was in before being completed
+// (recomputed fresh from its classification/read-state, not remembered).
+export async function markEmailUncompleted(db: PrismaClient, gmailMessageId: string): Promise<void> {
+  await db.emailCompletion.deleteMany({ where: { gmailMessageId } });
 }
 
 export interface EmailLinkInfo {

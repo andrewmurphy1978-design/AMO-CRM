@@ -129,6 +129,7 @@ model Contact {
   // pushed back to systeme.io on save — everything below is CRM-only
   // enrichment with no systeme.io equivalent.
   phone2   String?
+  email2   String?
   whatsapp String?
 
   otherAddress String?

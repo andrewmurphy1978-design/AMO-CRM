@@ -29,6 +29,19 @@ function parseByLeadingCallingCode(value: string): PhoneNumber | null {
   }
 }
 
+// libphonenumber's own formatInternational() renders NANP numbers as
+// "+1 514-950-6985" (space + hyphens) — not the "+1 (514) 953-6985" style
+// (parens around the area code) that's the common North American
+// convention and what was asked for. Its formatNational() output for NANP
+// numbers IS exactly that "(514) 953-6985" shape, so for calling code "1"
+// this just prefixes that instead of using the international formatter.
+// Every other country keeps formatInternational(), whose "+CC XX XXX
+// XXXX"-style grouping already matches how European numbers are commonly
+// written.
+function formatForDisplay(parsed: PhoneNumber): string {
+  return parsed.countryCallingCode === "1" ? `+1 ${parsed.formatNational()}` : parsed.formatInternational();
+}
+
 // Splits a stored phone value into its country (for the flag) and an
 // internationally formatted number, the same way the flag-based PhoneField
 // collects it. Falls back to the raw stored value untouched when it isn't
@@ -46,13 +59,13 @@ export function parsePhoneForDisplay(
 
   const byCallingCode = parseByLeadingCallingCode(value);
   if (byCallingCode) {
-    return { country: byCallingCode.country ?? null, formatted: byCallingCode.formatInternational() };
+    return { country: byCallingCode.country ?? null, formatted: formatForDisplay(byCallingCode) };
   }
 
   try {
     const parsed = parsePhoneNumber(value, (defaultCountry as CountryCode) || undefined);
     if (!parsed) return { country: defaultCountry ?? null, formatted: value };
-    return { country: parsed.country ?? defaultCountry ?? null, formatted: parsed.formatInternational() };
+    return { country: parsed.country ?? defaultCountry ?? null, formatted: formatForDisplay(parsed) };
   } catch {
     return { country: defaultCountry ?? null, formatted: value };
   }
