@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format, isToday, isTomorrow, type Locale } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatHourMark, formatTimeRange } from "@/lib/calendar-time";
+import { layoutDayEvents, type TimedEvent } from "@/lib/calendar-layout";
 import LinkedSummaryLine, { type LinkedSummaryValues } from "./linked-summary";
 
 const GRID_START_HOUR = 0;
@@ -29,62 +30,16 @@ function minutesSinceGridStart(date: Date): number {
   return (date.getHours() + date.getMinutes() / 60 - GRID_START_HOUR) * 60;
 }
 
-interface TimedEvent {
-  event: CalendarEventSummary;
-  startMin: number;
-  endMin: number;
-}
-
-interface PositionedEvent extends TimedEvent {
-  col: number;
-  cols: number;
-}
-
-// Standard column-packing algorithm for side-by-side overlapping events —
-// same approach as the Dashboard's calendar-card.tsx.
-function layoutDayEvents(events: TimedEvent[]): PositionedEvent[] {
-  const sorted = [...events].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
-  const columns: TimedEvent[][] = [];
-  const clusterAssignments: { event: TimedEvent; col: number }[] = [];
-  const result: PositionedEvent[] = [];
-  let clusterEnd = -Infinity;
-
-  function flushCluster() {
-    if (clusterAssignments.length === 0) return;
-    const cols = columns.length;
-    for (const { event, col } of clusterAssignments) result.push({ ...event, col, cols });
-    columns.length = 0;
-    clusterAssignments.length = 0;
-  }
-
-  for (const ev of sorted) {
-    if (ev.startMin >= clusterEnd) {
-      flushCluster();
-      clusterEnd = -Infinity;
-    }
-    let placedCol = -1;
-    for (let c = 0; c < columns.length; c++) {
-      const last = columns[c][columns[c].length - 1];
-      if (last.endMin <= ev.startMin) {
-        placedCol = c;
-        break;
-      }
-    }
-    if (placedCol === -1) {
-      columns.push([]);
-      placedCol = columns.length - 1;
-    }
-    columns[placedCol].push(ev);
-    clusterAssignments.push({ event: ev, col: placedCol });
-    clusterEnd = Math.max(clusterEnd, ev.endMin);
-  }
-  flushCluster();
-  return result;
-}
-
+// A single event can render as more than one stacked box (see
+// layoutDayEvents in @/lib/calendar-layout for why) — only the first
+// segment shows the title/time, and only the last carries the link
+// button, so a widened event reads as one shape that jogs wider partway
+// down rather than several unrelated boxes.
 function EventBlock({
   event,
   style,
+  isFirst,
+  isLast,
   hour12,
   intlLocale,
   linkValues,
@@ -95,6 +50,8 @@ function EventBlock({
 }: {
   event: CalendarEventSummary;
   style: React.CSSProperties;
+  isFirst: boolean;
+  isLast: boolean;
   hour12: boolean;
   intlLocale: string;
   linkValues: LinkedSummaryValues | undefined;
@@ -110,39 +67,45 @@ function EventBlock({
       tabIndex={0}
       onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
       style={{ ...style, backgroundColor: color.bg, color: color.fg }}
-      className="absolute flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 pr-6 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
+      className={`absolute flex cursor-pointer flex-col overflow-hidden px-1.5 py-1 pr-6 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
       title={event.title}
     >
-      <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
-      {!event.allDay && event.start && (
-        <p className="text-[10px] font-normal opacity-90">
-          {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
-        </p>
+      {isFirst && (
+        <>
+          <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
+          {!event.allDay && event.start && (
+            <p className="text-[10px] font-normal opacity-90">
+              {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
+            </p>
+          )}
+          <LinkedSummaryLine
+            values={linkValues}
+            contactById={contactById}
+            projectById={projectById}
+            taskById={taskById}
+            className="mt-3 truncate text-xs font-normal opacity-90"
+          />
+        </>
       )}
-      <LinkedSummaryLine
-        values={linkValues}
-        contactById={contactById}
-        projectById={projectById}
-        taskById={taskById}
-        className="mt-3 truncate text-xs font-normal opacity-90"
-      />
-      {/* Absolutely positioned (not a flex-flow child) so it always shows
-          in the box's corner regardless of how short the box is — a very
-          brief event's box can be too short to also reserve flow space for
-          a link-button row, which is what previously hid it entirely. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRequestLink(event);
-        }}
-        className="absolute bottom-0.5 right-0.5 shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
-        title="Link"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-        </svg>
-      </button>
+      {isLast && (
+        // Absolutely positioned (not a flex-flow child) so it always shows
+        // in the box's corner regardless of how short the box is — a very
+        // brief event's box can be too short to also reserve flow space
+        // for a link-button row, which is what previously hid it entirely.
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestLink(event);
+          }}
+          className="absolute bottom-0.5 right-0.5 shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
+          title="Link"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -172,7 +135,7 @@ function DayColumn({
   noEventsLabel: string;
   onRequestLink: (event: CalendarEventSummary) => void;
 }) {
-  const timed: TimedEvent[] = events
+  const timed: TimedEvent<CalendarEventSummary>[] = events
     .filter((e) => !e.allDay && e.start)
     .map((e) => {
       const start = new Date(e.start as string);
@@ -198,24 +161,35 @@ function DayColumn({
           style={{ top: (h - GRID_START_HOUR) * ROW_HEIGHT }}
         />
       ))}
-      {positioned.map(({ event, startMin, endMin, col, cols }) => {
-        const top = (startMin / 60) * ROW_HEIGHT;
-        const height = Math.max(MIN_BLOCK_HEIGHT, ((endMin - startMin) / 60) * ROW_HEIGHT - 1);
-        return (
-          <EventBlock
-            key={event.id}
-            event={event}
-            onRequestLink={onRequestLink}
-            hour12={hour12}
-            intlLocale={intlLocale}
-            linkValues={links[event.id]}
-            contactById={contactById}
-            projectById={projectById}
-            taskById={taskById}
-            style={{ top, height, left: `${(col / cols) * 100}%`, width: `${100 / cols}%` }}
-          />
-        );
-      })}
+      {positioned.map(({ event, segments }) =>
+        segments.map((seg, i) => {
+          const isFirst = i === 0;
+          const isLast = i === segments.length - 1;
+          const top = (seg.startMin / 60) * ROW_HEIGHT;
+          const natural = ((seg.endMin - seg.startMin) / 60) * ROW_HEIGHT - (isLast ? 1 : 0);
+          // Only the first/last segment need room for the title or the
+          // link button — a middle segment (rare: an event widening more
+          // than once) is just a plain colored strip, so it can be as
+          // short as its real duration without a minimum.
+          const height = isFirst || isLast ? Math.max(MIN_BLOCK_HEIGHT, natural) : natural;
+          return (
+            <EventBlock
+              key={`${event.id}-${i}`}
+              event={event}
+              onRequestLink={onRequestLink}
+              isFirst={isFirst}
+              isLast={isLast}
+              hour12={hour12}
+              intlLocale={intlLocale}
+              linkValues={links[event.id]}
+              contactById={contactById}
+              projectById={projectById}
+              taskById={taskById}
+              style={{ top, height, left: `${(seg.col / seg.cols) * 100}%`, width: `${(seg.span / seg.cols) * 100}%` }}
+            />
+          );
+        })
+      )}
       {events.length === 0 && (
         <div className="absolute inset-0 flex items-start justify-center pt-6 text-xs text-soft">{noEventsLabel}</div>
       )}
@@ -253,6 +227,8 @@ export default function DayGridView({
   onRequestLink: (event: CalendarEventSummary) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(45);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -260,53 +236,71 @@ export default function DayGridView({
     }
   }, []);
 
+  // The all-day row's sticky offset has to equal the header row's real
+  // rendered height (not a guess) or it either overlaps the header or
+  // leaves a gap once the header wraps to a different height (locale text,
+  // font tweaks, etc.).
+  useEffect(() => {
+    if (headerRef.current) setHeaderHeight(headerRef.current.getBoundingClientRect().height);
+  }, [days, dateLocale, todayLabel, tomorrowLabel]);
+
   const allDayByDay = eventsByDay.map((events) => events.filter((e) => e.allDay));
   const hourMarks = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => GRID_START_HOUR + i);
   const hasAllDay = allDayByDay.some((list) => list.length > 0);
 
   return (
+    // Header, all-day strip, and hour grid used to be three independent
+    // sibling flex rows — only the hour grid lived inside the
+    // overflow-y-auto scroller. That let the two contexts disagree on how
+    // much width each row actually had (the scroller reserves space for its
+    // own scrollbar; the header/all-day rows above it don't), so the last
+    // day column could end up a few pixels narrower or clipped in the
+    // header than in the body. Putting all three inside ONE scroll
+    // container — with the header/all-day rows made `sticky` so they still
+    // look fixed while only the hours scroll — means every row is measured
+    // in the exact same width context, so the columns can't drift apart.
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-card-border">
-      <div className="flex shrink-0 border-b border-card-border">
-        <div className="w-14 shrink-0 bg-field-bg" />
-        {days.map((day, i) => (
-          <div key={i} className={`min-w-0 flex-1 border-l border-card-border py-1.5 text-center first:border-l-0 ${dayColumnBg(day, i)}`}>
-            <p className="truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft">
-              {isToday(day) ? todayLabel : isTomorrow(day) ? tomorrowLabel : format(day, "EEE", { locale: dateLocale })}
-            </p>
-            <p className={isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}>
-              {format(day, "d MMM", { locale: dateLocale })}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {hasAllDay && (
-        <div className="flex shrink-0 border-b border-card-border">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <div ref={headerRef} className="sticky top-0 z-20 flex border-b border-card-border bg-card-bg">
           <div className="w-14 shrink-0 bg-field-bg" />
-          {allDayByDay.map((list, i) => (
-            <div key={i} className={`min-w-0 flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(days[i], i)}`}>
-              {list.map((event) => {
-                const color = eventColor(event.colorId);
-                return (
-                  <div
-                    key={event.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
-                    className="flex cursor-pointer items-start gap-1 overflow-hidden rounded px-1 py-0.5 text-xs font-medium"
-                    style={{ backgroundColor: color.bg, color: color.fg }}
-                    title={event.title}
-                  >
-                    <span className="min-w-0 flex-1 whitespace-normal break-words">{event.title}</span>
-                  </div>
-                );
-              })}
+          {days.map((day, i) => (
+            <div key={i} className={`min-w-0 flex-1 border-l border-card-border py-1.5 text-center first:border-l-0 ${dayColumnBg(day, i)}`}>
+              <p className="truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft">
+                {isToday(day) ? todayLabel : isTomorrow(day) ? tomorrowLabel : format(day, "EEE", { locale: dateLocale })}
+              </p>
+              <p className={isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}>
+                {format(day, "d MMM", { locale: dateLocale })}
+              </p>
             </div>
           ))}
         </div>
-      )}
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        {hasAllDay && (
+          <div className="sticky z-20 flex border-b border-card-border" style={{ top: headerHeight }}>
+            <div className="w-14 shrink-0 bg-field-bg" />
+            {allDayByDay.map((list, i) => (
+              <div key={i} className={`min-w-0 flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(days[i], i)}`}>
+                {list.map((event) => {
+                  const color = eventColor(event.colorId);
+                  return (
+                    <div
+                      key={event.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
+                      className="flex cursor-pointer items-start gap-1 overflow-hidden rounded px-1 py-0.5 text-xs font-medium"
+                      style={{ backgroundColor: color.bg, color: color.fg }}
+                      title={event.title}
+                    >
+                      <span className="min-w-0 flex-1 whitespace-normal break-words">{event.title}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="relative flex" style={{ height: (GRID_END_HOUR - GRID_START_HOUR) * ROW_HEIGHT }}>
           <div className="relative w-14 shrink-0 bg-field-bg">
             {hourMarks.map((h) => (

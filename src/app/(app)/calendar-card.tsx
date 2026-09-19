@@ -9,6 +9,7 @@ import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatClockTime, formatHourMark, formatTimeRange } from "@/lib/calendar-time";
+import { layoutDayEvents, type TimedEvent } from "@/lib/calendar-layout";
 import { saveCalendarEventLink } from "@/actions/links";
 import LinkDialog, { type LinkOption, type LinkDialogLabels, type LinkValues } from "./link-dialog";
 
@@ -47,62 +48,6 @@ function minutesSinceGridStart(date: Date): number {
   return (hours - GRID_START_HOUR) * 60;
 }
 
-interface TimedEvent {
-  event: CalendarEventSummary;
-  startMin: number; // minutes since grid start, clamped to the grid range
-  endMin: number;
-}
-
-interface PositionedEvent extends TimedEvent {
-  col: number;
-  cols: number;
-}
-
-// Places overlapping events side by side (like Google Calendar) instead
-// of stacking them on top of each other. Standard column-packing
-// algorithm: walk events in start order, put each in the first column
-// whose last event has already ended, and close out a "cluster" (which
-// shares one column count) once no event is still open.
-function layoutDayEvents(events: TimedEvent[]): PositionedEvent[] {
-  const sorted = [...events].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
-  const columns: TimedEvent[][] = [];
-  const clusterAssignments: { event: TimedEvent; col: number }[] = [];
-  const result: PositionedEvent[] = [];
-  let clusterEnd = -Infinity;
-
-  function flushCluster() {
-    if (clusterAssignments.length === 0) return;
-    const cols = columns.length;
-    for (const { event, col } of clusterAssignments) result.push({ ...event, col, cols });
-    columns.length = 0;
-    clusterAssignments.length = 0;
-  }
-
-  for (const ev of sorted) {
-    if (ev.startMin >= clusterEnd) {
-      flushCluster();
-      clusterEnd = -Infinity;
-    }
-    let placedCol = -1;
-    for (let c = 0; c < columns.length; c++) {
-      const last = columns[c][columns[c].length - 1];
-      if (last.endMin <= ev.startMin) {
-        placedCol = c;
-        break;
-      }
-    }
-    if (placedCol === -1) {
-      columns.push([]);
-      placedCol = columns.length - 1;
-    }
-    columns[placedCol].push(ev);
-    clusterAssignments.push({ event: ev, col: placedCol });
-    clusterEnd = Math.max(clusterEnd, ev.endMin);
-  }
-  flushCluster();
-  return result;
-}
-
 function DayColumn({
   day,
   events,
@@ -121,7 +66,7 @@ function DayColumn({
   onRequestLink: (event: CalendarEventSummary) => void;
 }) {
   const router = useRouter();
-  const timed: TimedEvent[] = events
+  const timed: TimedEvent<CalendarEventSummary>[] = events
     .filter((e) => !e.allDay && e.start)
     .map((e) => {
       const start = new Date(e.start as string);
@@ -151,82 +96,95 @@ function DayColumn({
       {isToday(day) && (
         <div className="absolute inset-x-0 top-0 bg-amo-lime/[0.04]" style={{ height: (GRID_END_HOUR - GRID_START_HOUR) * ROW_HEIGHT }} />
       )}
-      {positioned.map(({ event, startMin, endMin, col, cols }) => {
-        const color = eventColor(event.colorId);
-        const top = (startMin / 60) * ROW_HEIGHT;
-        const height = Math.max(MIN_BLOCK_HEIGHT, ((endMin - startMin) / 60) * ROW_HEIGHT - 1);
-        const link = links[event.id];
-        return (
-          <div
-            key={event.id}
-            role="button"
-            tabIndex={0}
-            onClick={() => router.push("/calendar")}
-            className="absolute flex cursor-pointer flex-col overflow-hidden rounded px-1 py-0.5 pr-4 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
-            style={{
-              top,
-              height,
-              left: `${(col / cols) * 100}%`,
-              width: `${100 / cols}%`,
-              backgroundColor: color.bg,
-              color: color.fg,
-            }}
-            title={event.title}
-          >
-            <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
-            {!event.allDay && event.start && (
-              <p className="text-[9px] font-normal opacity-90">
-                {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
-              </p>
-            )}
-            {link && (link.contactName || link.projectName || link.taskName) && (
-              <div className="mt-1 text-[9px] font-normal opacity-90">
-                {link.contactName && (
-                  <div className="truncate">
-                    <Link href={`/contacts/${link.contactId}`} onClick={(e) => e.stopPropagation()} className="underline hover:opacity-80">
-                      {link.contactName}
-                    </Link>
-                  </div>
-                )}
-                {link.projectName && (
-                  <div className="truncate">
-                    <Link href={`/projects/${link.projectId}`} onClick={(e) => e.stopPropagation()} className="underline hover:opacity-80">
-                      {link.projectName}
-                    </Link>
-                  </div>
-                )}
-                {link.taskName && (
-                  <div className="truncate">
-                    <Link
-                      href={`/projects/${link.projectId}/tasks/${link.taskId}/edit`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="underline hover:opacity-80"
-                    >
-                      {link.taskName}
-                    </Link>
-                  </div>
-                )}
-              </div>
-            )}
-            {/* Absolutely positioned (not a flow child) so it always shows
-                in the box's corner regardless of how short the box is —
-                same fix as the full Calendar page's event boxes. */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onRequestLink(event);
+      {positioned.map(({ event, segments }) =>
+        segments.map((seg, i) => {
+          const isFirst = i === 0;
+          const isLast = i === segments.length - 1;
+          const color = eventColor(event.colorId);
+          const top = (seg.startMin / 60) * ROW_HEIGHT;
+          const natural = ((seg.endMin - seg.startMin) / 60) * ROW_HEIGHT - (isLast ? 1 : 0);
+          // Only the first/last segment need room for the title or the
+          // link button — see the same pattern in day-grid-view.tsx.
+          const height = isFirst || isLast ? Math.max(MIN_BLOCK_HEIGHT, natural) : natural;
+          const link = links[event.id];
+          return (
+            <div
+              key={`${event.id}-${i}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => router.push("/calendar")}
+              className={`absolute flex cursor-pointer flex-col overflow-hidden px-1 py-0.5 pr-4 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
+              style={{
+                top,
+                height,
+                left: `${(seg.col / seg.cols) * 100}%`,
+                width: `${(seg.span / seg.cols) * 100}%`,
+                backgroundColor: color.bg,
+                color: color.fg,
               }}
-              className="absolute bottom-0.5 right-0.5 shrink-0 rounded-full bg-black/15 p-0.5 hover:bg-black/30"
-              title="Link"
+              title={event.title}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-3 w-3">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-              </svg>
-            </button>
-          </div>
-        );
-      })}
+              {isFirst && (
+                <>
+                  <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
+                  {!event.allDay && event.start && (
+                    <p className="text-[9px] font-normal opacity-90">
+                      {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
+                    </p>
+                  )}
+                  {link && (link.contactName || link.projectName || link.taskName) && (
+                    <div className="mt-1 text-[9px] font-normal opacity-90">
+                      {link.contactName && (
+                        <div className="truncate">
+                          <Link href={`/contacts/${link.contactId}`} onClick={(e) => e.stopPropagation()} className="underline hover:opacity-80">
+                            {link.contactName}
+                          </Link>
+                        </div>
+                      )}
+                      {link.projectName && (
+                        <div className="truncate">
+                          <Link href={`/projects/${link.projectId}`} onClick={(e) => e.stopPropagation()} className="underline hover:opacity-80">
+                            {link.projectName}
+                          </Link>
+                        </div>
+                      )}
+                      {link.taskName && (
+                        <div className="truncate">
+                          <Link
+                            href={`/projects/${link.projectId}/tasks/${link.taskId}/edit`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="underline hover:opacity-80"
+                          >
+                            {link.taskName}
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+              {isLast && (
+                // Absolutely positioned (not a flow child) so it always shows
+                // in the box's corner regardless of how short the box is —
+                // same fix as the full Calendar page's event boxes.
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestLink(event);
+                  }}
+                  className="absolute bottom-0.5 right-0.5 shrink-0 rounded-full bg-black/15 p-0.5 hover:bg-black/30"
+                  title="Link"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-3 w-3">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          );
+        })
+      )}
       {events.length === 0 && (
         <div className="absolute inset-0 flex items-start justify-center pt-6 text-xs text-soft">{labels.noEvents}</div>
       )}
@@ -254,6 +212,10 @@ function ThreeDayGrid({
   labels: CalendarLabels;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const allDayRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(45);
+  const [allDayHeight, setAllDayHeight] = useState(0);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -267,49 +229,58 @@ function ThreeDayGrid({
   const hourMarks = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => GRID_START_HOUR + i);
   const hasAllDay = allDayByDay.some((list) => list.length > 0);
 
-  return (
-    <div className="mt-3 overflow-hidden rounded-xl border border-card-border">
-      {/* Day headers */}
-      <div className="flex border-b border-card-border bg-field-bg">
-        <div className="w-10 shrink-0" />
-        {days.map((day, i) => (
-          <div key={i} className="min-w-0 flex-1 border-l border-card-border py-1.5 text-center first:border-l-0">
-            <p className="truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft">
-              {isToday(day) ? labels.today : isTomorrow(day) ? labels.tomorrow : format(day, "EEE", { locale: dateLocale })}
-            </p>
-            <p className={isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}>
-              {format(day, "d MMM", { locale: dateLocale })}
-            </p>
-          </div>
-        ))}
-      </div>
+  // The header/all-day rows' real heights (not a guess) are what the
+  // all-day row's sticky offset and the scroller's visible-height budget
+  // need — see the same pattern in day-grid-view.tsx.
+  useEffect(() => {
+    if (headerRef.current) setHeaderHeight(headerRef.current.getBoundingClientRect().height);
+    setAllDayHeight(allDayRef.current ? allDayRef.current.getBoundingClientRect().height : 0);
+  }, [days, dateLocale, labels.today, labels.tomorrow, hasAllDay, allDayByDay]);
 
-      {/* All-day strip */}
-      {hasAllDay && (
-        <div className="flex border-b border-card-border">
+  return (
+    // Header, all-day strip, and hour grid all live inside the same
+    // overflow-y-auto scroller (header/all-day made sticky) instead of
+    // being three independent sibling rows — see day-grid-view.tsx for
+    // why that's what keeps every row's day columns pixel-identical.
+    <div className="mt-3 overflow-hidden rounded-xl border border-card-border">
+      <div ref={scrollRef} className="overflow-y-auto" style={{ maxHeight: VISIBLE_HOURS * ROW_HEIGHT + headerHeight + allDayHeight }}>
+        <div ref={headerRef} className="sticky top-0 z-20 flex border-b border-card-border bg-field-bg">
           <div className="w-10 shrink-0" />
-          {allDayByDay.map((list, i) => (
-            <div key={i} className="min-w-0 flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0">
-              {list.map((event) => {
-                const color = eventColor(event.colorId);
-                return (
-                  <div
-                    key={event.id}
-                    className="w-full whitespace-normal break-words rounded px-1 py-0.5 text-[10px] font-medium"
-                    style={{ backgroundColor: color.bg, color: color.fg }}
-                    title={event.title}
-                  >
-                    {event.title}
-                  </div>
-                );
-              })}
+          {days.map((day, i) => (
+            <div key={i} className="min-w-0 flex-1 border-l border-card-border py-1.5 text-center first:border-l-0">
+              <p className="truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft">
+                {isToday(day) ? labels.today : isTomorrow(day) ? labels.tomorrow : format(day, "EEE", { locale: dateLocale })}
+              </p>
+              <p className={isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}>
+                {format(day, "d MMM", { locale: dateLocale })}
+              </p>
             </div>
           ))}
         </div>
-      )}
 
-      {/* Scrollable hourly grid */}
-      <div ref={scrollRef} className="overflow-y-auto" style={{ maxHeight: VISIBLE_HOURS * ROW_HEIGHT }}>
+        {hasAllDay && (
+          <div ref={allDayRef} className="sticky z-20 flex border-b border-card-border bg-card-bg" style={{ top: headerHeight }}>
+            <div className="w-10 shrink-0" />
+            {allDayByDay.map((list, i) => (
+              <div key={i} className="min-w-0 flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0">
+                {list.map((event) => {
+                  const color = eventColor(event.colorId);
+                  return (
+                    <div
+                      key={event.id}
+                      className="w-full whitespace-normal break-words rounded px-1 py-0.5 text-[10px] font-medium"
+                      style={{ backgroundColor: color.bg, color: color.fg }}
+                      title={event.title}
+                    >
+                      {event.title}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="relative flex" style={{ height: (GRID_END_HOUR - GRID_START_HOUR) * ROW_HEIGHT }}>
           <div className="relative w-10 shrink-0">
             {hourMarks.map((h) => (
