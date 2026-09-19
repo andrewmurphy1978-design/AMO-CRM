@@ -6,6 +6,7 @@ import clsx from "@/lib/clsx";
 import RefreshButton from "./refresh-button";
 import EmailQuickActions from "./email-quick-actions";
 import { isOwnDomainEmail } from "@/lib/email-domain";
+import { isStale } from "@/lib/staleness";
 import type { EmailSummary, SentEmailSummary } from "@/lib/google";
 import type { EmailScreeningPayload } from "@/lib/email-inbox";
 
@@ -74,7 +75,7 @@ export default function EmailCard({
   // effect below can kick off the initial screen without a synchronous
   // setState call of its own (the fetch's first `await` already defers
   // past that) — same shape as the Email page's own cold-start effect.
-  const [loading, setLoading] = useState(() => !initialData && connected);
+  const [loading, setLoading] = useState(() => connected && (!initialData || isStale(initialData.fetchedAt)));
   const [readOverrides, setReadOverrides] = useState<Record<string, boolean>>({});
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
 
@@ -98,9 +99,10 @@ export default function EmailCard({
   }
 
   useEffect(() => {
+    // Runs once on mount: either there's no cache yet, or what's cached is
+    // older than the 15-minute stale window (see @/lib/staleness).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!initialData && connected) runScreening();
-    // Only ever auto-runs once, on the very first mount with no cache yet.
+    if (connected && (!initialData || isStale(initialData.fetchedAt))) runScreening();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -598,6 +598,20 @@ model EmailReadState {
   @@map("email_read_states")
 }
 
+// The Personal page's last-fetched family emails/events, one row per user
+// (only Andrew's account currently qualifies — see isPersonalSectionUser).
+// Same reasoning as EmailInboxCache: reopening the page reads this instead
+// of re-running a live Gmail search + per-message fetch on every visit.
+model PersonalInboxCache {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  emails    Json
+  events    Json
+  fetchedAt DateTime @default(now())
+
+  @@map("personal_inbox_cache")
+}
+
 // Manually marked "done" from the Email page's green-check action — kept
 // separate from EmailClassification (the AI category) since completion is
 // a user action, not something Claude decides. Unscoped by user, matching

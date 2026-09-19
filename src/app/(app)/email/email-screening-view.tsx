@@ -5,6 +5,7 @@ import Link from "next/link";
 import clsx from "@/lib/clsx";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { isOwnDomainEmail } from "@/lib/email-domain";
+import { isStale } from "@/lib/staleness";
 import type { EmailSummary } from "@/lib/google";
 import type { EmailCategory } from "@/lib/email-classifier";
 import type { EmailLinkInfo, EmailScreeningPayload } from "@/lib/email-inbox";
@@ -195,7 +196,7 @@ export default function EmailScreeningView({
   // away so the effect below can kick off the initial screen without a
   // synchronous setState call of its own (which the fetch's first `await`
   // already defers past).
-  const [loading, setLoading] = useState(() => !initialData && connected);
+  const [loading, setLoading] = useState(() => connected && (!initialData || isStale(initialData.fetchedAt)));
   // Optimistic local overrides so opening/linking/completing a message
   // updates the grouping immediately, without waiting on a round trip.
   const [readOverrides, setReadOverrides] = useState<Record<string, string>>({});
@@ -224,12 +225,13 @@ export default function EmailScreeningView({
   }
 
   useEffect(() => {
-    // Only ever auto-runs once, on the very first mount with no cache yet —
-    // fetches straight into `loading`'s already-true initial state above,
-    // same one-shot-fetch-on-mount shape as the Weather card's geolocation
-    // effect.
+    // Runs once on mount: either there's no cache yet, or what's cached is
+    // older than the 15-minute stale window (see @/lib/staleness) — both
+    // cases silently refresh in the background while the (possibly stale)
+    // cached view stays on screen, fetching straight into `loading`'s
+    // already-true initial state above.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!initialData && connected) runScreening();
+    if (connected && (!initialData || isStale(initialData.fetchedAt))) runScreening();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
