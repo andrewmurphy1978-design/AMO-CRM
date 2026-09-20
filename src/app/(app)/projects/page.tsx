@@ -99,6 +99,8 @@ export default async function ProjectsPage({
                   project.contact.email}
               </p>
               <p className="mt-3 text-xs text-soft">
+                {t.projectTypes[project.type]}
+                {" · "}
                 {t.projects.tasksDone(doneCount, project.tasks.length)}
                 {project.owner && ` · ${project.owner.name}`}
               </p>

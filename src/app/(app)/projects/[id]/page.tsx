@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { format } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import TaskRow from "./task-row";
 import QuickAddTask from "./quick-add-task";
@@ -44,6 +45,7 @@ export default async function ProjectDetailPage({
       include: {
         contact: true,
         owner: true,
+        teamMembers: { include: { user: true } },
         tasks: {
           orderBy: [{ status: "asc" }, { dueDate: "asc" }],
           include: { assignee: true },
@@ -78,9 +80,15 @@ export default async function ProjectDetailPage({
           <h1 className="font-display text-2xl font-semibold text-ink">{project.name}</h1>
           <p className="mt-1 text-sm text-soft">
             {STATUS_LABELS[project.status]}
+            {` · ${t.projectTypes[project.type]}`}
             {project.owner && ` · ${t.projectDetail.owner}: ${project.owner.name}`}
-            {project.dueDate && ` · ${t.projectDetail.due} ${new Date(project.dueDate).toLocaleDateString()}`}
+            {project.dueDate && ` · ${t.projectDetail.due} ${format(project.dueDate, "MMMM d, yyyy", { locale: dateLocale })}`}
           </p>
+          {project.teamMembers.length > 0 && (
+            <p className="mt-1 text-sm text-soft">
+              {t.projectForm.teamMembers}: {project.teamMembers.map((tm) => tm.user.name).join(", ")}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Link

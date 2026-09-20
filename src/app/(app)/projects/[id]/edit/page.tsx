@@ -14,7 +14,13 @@ export default async function EditProjectPage({
 
   // One shared client — see src/lib/prisma.ts for why.
   const { project, contacts, users } = await withScopedPrismaClient(async (db) => {
-    const project = await db.project.findUnique({ where: { id } });
+    const project = await db.project.findUnique({
+      where: { id },
+      include: {
+        teamMembers: true,
+        phases: { orderBy: { order: "asc" } },
+      },
+    });
     const contacts = await db.contact.findMany({
       orderBy: { createdAt: "desc" },
       select: { id: true, email: true, firstName: true, lastName: true },

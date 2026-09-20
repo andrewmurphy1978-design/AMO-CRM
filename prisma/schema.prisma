@@ -58,9 +58,10 @@ model User {
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @updatedAt
 
-  ownedProjects   Project[]          @relation("ProjectOwner")
-  ownedContacts   Contact[]          @relation("ContactOwner")
-  assignedTasks   Task[]             @relation("TaskAssignee")
+  ownedProjects   Project[]           @relation("ProjectOwner")
+  ownedContacts   Contact[]           @relation("ContactOwner")
+  assignedTasks   Task[]              @relation("TaskAssignee")
+  projectTeams    ProjectTeamMember[]
   activityEntries ActivityLogEntry[]
   interactions    Interaction[]
   googleAccount   GoogleAccount?
@@ -423,11 +424,23 @@ enum ProjectStatus {
   CANCELLED
 }
 
+// Based on Andrew's own service lines — drives no logic yet, just lets
+// Projects be filtered/reported on by the kind of work.
+enum ProjectType {
+  WEBSITE
+  FUNNEL
+  APP
+  SOCIAL_MEDIA
+  CONSULTING
+  OTHER
+}
+
 model Project {
   id          String        @id @default(cuid())
   name        String
   description String?       @db.Text
   status      ProjectStatus @default(PLANNING)
+  type        ProjectType   @default(OTHER)
 
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -442,6 +455,8 @@ model Project {
   updatedAt DateTime @updatedAt
 
   tasks              Task[]
+  phases             ProjectPhase[]
+  teamMembers        ProjectTeamMember[]
   activity           ActivityLogEntry[]
   interactions       Interaction[]
   proposals          Proposal[]
@@ -452,6 +467,37 @@ model Project {
   @@index([status])
   @@index([contactId])
   @@map("projects")
+}
+
+// Team members working on a project, beyond its single owner — e.g. a
+// designer and a copywriter both helping deliver the same website build.
+model ProjectTeamMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addedAt   DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@map("project_team_members")
+}
+
+// Sub-projects/steps within a Project — a lightweight grouping that existing
+// Tasks opt into (via Task.phaseId) rather than a separate work-item type of
+// their own.
+model ProjectPhase {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  tasks Task[]
+
+  @@index([projectId])
+  @@map("project_phases")
 }
 
 enum ProposalStatus {
@@ -538,9 +584,16 @@ model Task {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  phaseId String?
+  phase   ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+
   assigneeId String?
   assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
 
+  // "dueDate" predates the standalone Task feature and is kept as the
+  // column name to avoid a rename migration — the Task UI presents it as
+  // "End date" alongside the newer startDate.
+  startDate   DateTime?
   dueDate     DateTime?
   completedAt DateTime?
 
@@ -552,6 +605,7 @@ model Task {
 
   @@index([projectId])
   @@index([status])
+  @@index([phaseId])
   @@map("tasks")
 }
 
