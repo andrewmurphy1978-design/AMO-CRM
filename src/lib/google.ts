@@ -1,4 +1,4 @@
-import { prisma, withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
 // One personal Google connection per CRM user (Gmail + Calendar,
@@ -18,7 +18,7 @@ interface StoredGoogleData {
   email: string | null;
 }
 
-async function loadStored(userId: string, db: PrismaClient = prisma): Promise<StoredGoogleData | null> {
+async function loadStored(userId: string, db: PrismaClient): Promise<StoredGoogleData | null> {
   const row = await db.googleAccount.findUnique({ where: { userId } });
   if (!row) return null;
   try {
@@ -36,8 +36,8 @@ async function loadStored(userId: string, db: PrismaClient = prisma): Promise<St
 export async function saveGoogleTokens(
   userId: string,
   next: { accessToken: string; refreshToken?: string; expiresAt: string },
-  email?: string | null,
-  db: PrismaClient = prisma
+  db: PrismaClient,
+  email?: string | null
 ): Promise<void> {
   const existing = await loadStored(userId, db);
   const refreshToken = next.refreshToken ?? existing?.tokens.refreshToken;
@@ -61,10 +61,7 @@ export async function disconnectGoogle(userId: string): Promise<void> {
   await withScopedPrismaClient((db) => db.googleAccount.deleteMany({ where: { userId } }));
 }
 
-export async function getGoogleConnection(
-  userId: string,
-  db: PrismaClient = prisma
-): Promise<{ email: string | null } | null> {
+export async function getGoogleConnection(userId: string, db: PrismaClient): Promise<{ email: string | null } | null> {
   const row = await db.googleAccount.findUnique({ where: { userId } });
   if (!row) return null;
   return { email: row.email };
@@ -74,7 +71,7 @@ export async function getGoogleConnection(
 // expired (or expiring within a minute). Returns null when this user
 // hasn't connected Google, or the refresh itself fails (e.g. the grant
 // was revoked).
-export async function getValidAccessToken(userId: string, db: PrismaClient = prisma): Promise<string | null> {
+export async function getValidAccessToken(userId: string, db: PrismaClient): Promise<string | null> {
   const stored = await loadStored(userId, db);
   if (!stored) return null;
 
@@ -104,7 +101,6 @@ export async function getValidAccessToken(userId: string, db: PrismaClient = pri
     await saveGoogleTokens(
       userId,
       { accessToken: data.access_token, expiresAt: new Date(Date.now() + (data.expires_in ?? 3600) * 1000).toISOString() },
-      undefined,
       db
     );
     return data.access_token;

@@ -1,4 +1,4 @@
-import { prisma, withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
 import {
   SystemeIoClient,
@@ -24,12 +24,10 @@ export interface SyncResult {
 }
 
 // Used outside the bulk sync (e.g. pushing a single contact edit back to
-// systeme.io). Pass a `db` from a caller's own withScopedPrismaClient block
-// when this is one of several Prisma calls in the same request (e.g.
-// contacts.ts's tag/update actions) — falls back to the regular
-// auto-reconnecting `prisma` proxy for genuinely one-off callers (cron
-// jobs) that have no scoped client of their own.
-export async function getSystemeIoClient(db: PrismaClient = prisma): Promise<SystemeIoClient | null> {
+// systeme.io). `db` has no default on purpose — every caller passes its
+// own scoped client (see src/lib/prisma.ts) rather than falling back to
+// the raw `prisma` proxy, which never closes its connection.
+export async function getSystemeIoClient(db: PrismaClient): Promise<SystemeIoClient | null> {
   const setting = await db.integrationSetting.findUnique({
     where: { provider: "systeme_io" },
   });

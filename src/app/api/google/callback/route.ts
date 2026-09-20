@@ -73,8 +73,8 @@ export async function GET(request: NextRequest) {
           refreshToken: tokenData.refresh_token,
           expiresAt: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
         },
-        email,
-        db
+        db,
+        email
       )
     );
 

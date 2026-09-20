@@ -8,10 +8,6 @@ export type PrismaClient = PrismaClientType;
 
 const require = createRequire(import.meta.url);
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
 // getCloudflareContext() only succeeds once inside a request being handled
 // under the real Cloudflare Workers runtime (it reads bindings out of an
 // AsyncLocalStorage set up per-request) — everywhere else (local `next dev`,
@@ -64,9 +60,8 @@ function createPrismaClient(workers: boolean): PrismaClient {
   // instance (as opposed to a bare connection config it builds its own
   // Pool from) is to treat the Pool's lifecycle as the caller's
   // responsibility — its cleanup on $disconnect() only removes its error
-  // listener, it never calls pool.end(). Every fresh Pool created above
-  // (once per request under Workers, since getPrismaClient() never caches
-  // there, and once per withScopedPrismaClient call everywhere) was
+  // listener, it never calls pool.end(). Every fresh Pool created here
+  // (once per withScopedPrismaClient call, i.e. once per request) was
   // therefore leaking its underlying TCP connection forever — the actual
   // cause of Error 1102 recurring after enough page loads/actions
   // accumulated open connections against Hyperdrive/Neon, independent of
@@ -79,64 +74,29 @@ function createPrismaClient(workers: boolean): PrismaClient {
   });
 }
 
+// Every database access in this app goes through this function — there is
+// no shared/cached client and no raw `prisma` export. An earlier version
+// had one (a Proxy that built a fresh client on every property access);
+// it was removed once an audit confirmed every real caller already went
+// through this function instead, and keeping it around was a live
+// landmine: a raw `prisma.model.method()` call left `$disconnect()` never
+// invoked, silently leaking a Postgres connection against Hyperdrive/Neon
+// on every single invocation forever (the root cause behind a long-running
+// "Error 1102" saga in this app's history) — see disposeExternalPool above
+// for the other half of that bug (a client that WAS disconnected wasn't
+// actually closing its Pool either).
+//
 // In Cloudflare Workers, a Pool's underlying TCP socket belongs only to the
-// request that opened it — the module scope (globalThis) can be reused by
-// an unrelated later request in the same isolate, and a later request
-// reusing a socket from a previous one doesn't fail cleanly, it hangs
-// forever (this was the cause of the "Error 1101" / hung-request bugs).
-// So the client must NEVER be cached across requests when running under
-// Workers: build a fresh one every time. Hyperdrive pools connections on
-// Cloudflare's side specifically so that doing this per request is cheap.
-//
-// (A per-request cache — keyed off the object getCloudflareContext()
-// returns — was tried here to cut down repeat connections per page, but it
-// broke sign-out in production: Workers ties an I/O object's validity to
-// the specific top-level invocation that created it, not just to "the same
-// logical request" as AsyncLocalStorage sees it, and a Server Action is a
-// separate invocation from the page render it's attached to. Reusing a
-// pool's socket across that boundary hit exactly the kind of failure the
-// paragraph above warns about. Don't reintroduce that cache without a way
-// to actually verify it against the real Workers runtime, not just a local
-// build.)
-//
-// Plain Node.js (local dev, `next build`, scripts) is a normal long-lived
-// process with no such per-request isolation, so caching there is safe and
-// avoids reconnecting on every call.
-function getPrismaClient(): PrismaClient {
-  const workers = isCloudflareWorkers();
-  if (workers) {
-    return createPrismaClient(true);
-  }
-  if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = createPrismaClient(false);
-  }
-  return globalForPrisma.prisma;
-}
-
-export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
-  get(_target, prop, receiver) {
-    return Reflect.get(getPrismaClient() as object, prop, receiver);
-  },
-});
-
-// For a single operation that makes many database calls back-to-back (e.g.
-// the systeme.io sync, which can easily be 100+ upserts for a modest
-// contact list) — the `prisma` proxy above builds a brand-new client (and,
-// under Workers, a brand-new pooled connection) on every single property
-// access, which is fine for a normal page render's handful of queries but
-// turns a bulk operation into a CPU-heavy pile of fresh connections within
-// one Worker invocation, which is very likely what's tripping Cloudflare's
-// "Error 1102" resource-limit page during sync.
-//
-// This builds exactly one client, hands it to `fn` to use for every call in
-// that operation, and disconnects it when `fn` resolves or throws. This is
-// NOT the per-request-context cache that broke sign-out (see the comment
-// above `getPrismaClient`) — that failure mode was about a client being
-// read back by a *later, separate* top-level invocation (a Server Action
-// after the page render that created it). Here the client is a plain local
-// variable that never escapes this one continuous call — created, used, and
-// torn down within the same invocation — so there's no cross-invocation
-// socket reuse for Workers' I/O model to object to.
+// request that opened it — reusing one across requests doesn't fail
+// cleanly, it hangs forever (this was the cause of the earlier "Error 1101"
+// / hung-request bugs) — so a cached, cross-request client was never safe
+// there. This builds a fresh client for every call, on every platform,
+// hands it to `fn`, and disconnects it (now that disposeExternalPool makes
+// that actually close the socket) when `fn` resolves or throws — created,
+// used, and torn down within one continuous invocation, so there's no
+// cross-invocation socket reuse for Workers' I/O model to object to.
+// Hyperdrive pools connections on Cloudflare's side specifically so that
+// doing this per call is cheap.
 export async function withScopedPrismaClient<T>(fn: (db: PrismaClient) => Promise<T>): Promise<T> {
   const client = createPrismaClient(isCloudflareWorkers());
   try {
