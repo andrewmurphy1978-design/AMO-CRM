@@ -15,8 +15,10 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { countryFullName } from "@/lib/country-flag";
+import { getTimezoneForCountryState } from "@/lib/timezone";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
+import ContactTimezoneCard from "@/components/contact-timezone-card";
 
 // Systeme.io custom field slugs that duplicate a real Contact column shown
 // elsewhere on this page — hidden from "Other systeme.io fields" so the
@@ -235,6 +237,13 @@ export default async function ContactDetailPage({
     ])
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
+  // Primary address only (not the "other"/billing addresses) drives the
+  // contact's own local time card.
+  const contactTimeZone = getTimezoneForCountryState(contact.country, contact.state);
+  const timeZoneLocationLabel =
+    [contact.city, contact.state ?? countryFullName(contact.country)].filter(Boolean).join(", ") ||
+    countryFullName(contact.country);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -245,20 +254,30 @@ export default async function ContactDetailPage({
             {contact.systemeIoId && ` · systeme.io #${contact.systemeIoId}`}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Link
-            href={`/contacts/${contact.id}/edit`}
-            className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
-          >
-            {t.contactDetail.edit}
-          </Link>
-          <Link
-            href={`/projects/new?contactId=${contact.id}`}
-            className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
-          >
-            {t.contactDetail.newProject}
-          </Link>
-          <DeleteContactButton lang={lang} contactId={contact.id} />
+        <div className="flex flex-col items-end gap-2">
+          {contactTimeZone && (
+            <ContactTimezoneCard
+              timeZone={contactTimeZone}
+              locationLabel={timeZoneLocationLabel}
+              hour12={hour12}
+              lang={lang}
+            />
+          )}
+          <div className="flex gap-2">
+            <Link
+              href={`/contacts/${contact.id}/edit`}
+              className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
+            >
+              {t.contactDetail.edit}
+            </Link>
+            <Link
+              href={`/projects/new?contactId=${contact.id}`}
+              className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
+            >
+              {t.contactDetail.newProject}
+            </Link>
+            <DeleteContactButton lang={lang} contactId={contact.id} />
+          </div>
         </div>
       </div>
 
