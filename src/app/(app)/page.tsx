@@ -11,6 +11,7 @@ import PageHeader from "./page-header";
 import CardSkeleton from "./card-skeleton";
 import WeatherCardServer from "./weather-card-server";
 import NewsCardServer from "./news-card-server";
+import SportsCardServer from "./sports-card-server";
 import MarketsCardServer from "./markets-card-server";
 import EmailCard from "./email-card";
 import CalendarCardServer from "./calendar-card-server";
@@ -245,6 +246,18 @@ export default async function DashboardPage() {
     indices: t.dashboard.marketsIndices,
     commodities: t.dashboard.marketsCommodities,
     crypto: t.dashboard.marketsCrypto,
+  };
+  const sportsLabels = {
+    title: t.dashboard.sportsTitle,
+    unavailable: t.dashboard.sportsUnavailable,
+    lastGame: t.dashboard.sportsLastGame,
+    nextGame: t.dashboard.sportsNextGame,
+    final: t.dashboard.sportsFinal,
+    vs: t.dashboard.sportsVs,
+    at: t.dashboard.sportsAt,
+    series: t.dashboard.sportsSeries,
+    refresh: t.dashboard.refresh,
+    refreshing: t.dashboard.refreshing,
   };
 
   const emailLabels = {
@@ -533,6 +546,9 @@ export default async function DashboardPage() {
           <WorldClocks title="World clocks" hour12={hour12} />
           <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
             <NewsCardServer labels={newsLabels} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton title={t.dashboard.sportsTitle} />}>
+            <SportsCardServer labels={sportsLabels} lang={lang} hour12={hour12} />
           </Suspense>
           <Suspense fallback={<CardSkeleton title={t.dashboard.marketsTitle} />}>
             <MarketsCardServer labels={marketsLabels} />
