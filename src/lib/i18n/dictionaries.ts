@@ -213,6 +213,7 @@ export const dictionaries = {
     },
     contactForm: {
       email: "Email",
+      email2: "Second email",
       phone: "Phone number",
       phone2: "Second phone number",
       whatsapp: "WhatsApp number",
@@ -281,6 +282,8 @@ export const dictionaries = {
       noProposalsInvoicesYet: "No proposals or invoices yet.",
       viewProject: "View project",
       callsEmails: "Calls & emails",
+      linkedEmailsTitle: "Linked emails",
+      noLinkedEmails: "No emails linked yet.",
       systemActivity: "System activity",
       tagsTitle: "Tags",
       addTagPlaceholder: "Add a tag...",
@@ -851,6 +854,7 @@ export const dictionaries = {
     },
     contactForm: {
       email: "Courriel",
+      email2: "Second courriel",
       phone: "Numéro de téléphone",
       phone2: "Second numéro de téléphone",
       whatsapp: "Numéro WhatsApp",
@@ -919,6 +923,8 @@ export const dictionaries = {
       noProposalsInvoicesYet: "Aucune proposition ou facture pour le moment.",
       viewProject: "Voir le projet",
       callsEmails: "Appels et courriels",
+      linkedEmailsTitle: "Courriels liés",
+      noLinkedEmails: "Aucun courriel lié pour le moment.",
       systemActivity: "Activité du système",
       tagsTitle: "Étiquettes",
       addTagPlaceholder: "Ajouter une étiquette...",

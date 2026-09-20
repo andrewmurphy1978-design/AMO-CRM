@@ -556,6 +556,16 @@ model EmailLink {
   taskId String?
   task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
+  // A snapshot taken at link time (subject/sender/date/Gmail url), not a
+  // live reference — Gmail threads aren't otherwise queryable from here
+  // without knowing which team member's account owns them (EmailLink has
+  // no userId), so this is what lets a Contact's "Linked emails" card show
+  // something readable without a live Gmail call on every page view.
+  subject     String?
+  fromLabel   String?
+  messageDate DateTime?
+  gmailLink   String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

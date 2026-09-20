@@ -12,6 +12,7 @@ import { getDict } from "@/lib/i18n/dictionaries";
 
 const ContactSchema = z.object({
   email: z.string().email("A valid email is required"),
+  email2: z.string().trim().optional(),
   firstName: z.string().trim().optional(),
   lastName: z.string().trim().optional(),
   phone: z.string().trim().optional(),
@@ -42,6 +43,7 @@ const ContactSchema = z.object({
 });
 
 const CONTACT_FORM_FIELDS = [
+  "email2",
   "firstName",
   "lastName",
   "phone",

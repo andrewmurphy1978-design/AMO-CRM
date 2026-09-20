@@ -141,6 +141,7 @@ export default async function ContactDetailPage({
         subscriptions: { orderBy: { startedAt: "desc" } },
         courseEnrollments: { orderBy: { enrolledAt: "desc" } },
         communityMemberships: { orderBy: { joinedAt: "desc" } },
+        emailLinks: { orderBy: { messageDate: "desc" }, take: 20 },
       },
     });
     const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
@@ -220,7 +221,10 @@ export default async function ContactDetailPage({
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
               <div className="sm:col-span-2">
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldEmail}</dt>
-                <dd className="text-ink">{contact.email}</dd>
+                <dd className="space-y-0.5 text-ink">
+                  <div>{contact.email}</div>
+                  {contact.email2 && <div>{contact.email2}</div>}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldPhones}</dt>
@@ -532,6 +536,32 @@ export default async function ContactDetailPage({
             dateLocale={dateLocale}
             intlLocale={intlLocale}
           />
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.linkedEmailsTitle}</h2>
+            {contact.emailLinks.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.contactDetail.noLinkedEmails}</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {contact.emailLinks.map((link) => (
+                  <li key={link.id} className="text-sm">
+                    {link.gmailLink ? (
+                      <a href={link.gmailLink} target="_blank" rel="noopener noreferrer" className="text-ink hover:underline">
+                        {link.subject || "—"}
+                      </a>
+                    ) : (
+                      <p className="text-ink">{link.subject || "—"}</p>
+                    )}
+                    <p className="text-xs text-soft">
+                      {link.fromLabel}
+                      {link.messageDate && ` · ${format(link.messageDate, "PPp", { locale: dateLocale })}`}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       </div>
     </div>

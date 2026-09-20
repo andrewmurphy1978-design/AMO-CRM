@@ -8,6 +8,10 @@ export type { LinkOption };
 
 export default function EmailLinkPicker({
   threadId,
+  subject,
+  fromLabel,
+  date,
+  link,
   contacts,
   projects,
   tasks,
@@ -19,6 +23,10 @@ export default function EmailLinkPicker({
   onSaved,
 }: {
   threadId: string;
+  subject: string;
+  fromLabel: string;
+  date: string;
+  link: string;
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
@@ -39,7 +47,7 @@ export default function EmailLinkPicker({
   };
 
   async function handleSave(values: LinkValues) {
-    await saveEmailLink(threadId, { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId });
+    await saveEmailLink(threadId, { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId }, { subject, fromLabel, date, link });
     onSaved?.(values);
   }
 

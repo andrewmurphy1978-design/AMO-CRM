@@ -9,6 +9,7 @@ import MultiSelect from "@/components/multi-select";
 
 type ContactFormValues = {
   email?: string;
+  email2?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   phone?: string | null;
@@ -85,8 +86,9 @@ export default function ContactForm({
 
       {/* Line 1: Email (wide), Phone numbers (stacked), WhatsApp */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="sm:col-span-2">
+        <div className="sm:col-span-2 space-y-1.5">
           <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
+          <Field label={t.contactForm.email2} name="email2" type="email" defaultValue={defaultValues?.email2 ?? ""} />
         </div>
         <div>
           <label className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</label>

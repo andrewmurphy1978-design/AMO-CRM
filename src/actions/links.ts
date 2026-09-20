@@ -11,7 +11,12 @@ import { prisma } from "@/lib/prisma";
 
 export async function saveEmailLink(
   gmailThreadId: string,
-  target: { contactId?: string; projectId?: string; taskId?: string }
+  target: { contactId?: string; projectId?: string; taskId?: string },
+  // A snapshot taken at link time — Gmail threads aren't otherwise
+  // queryable from a Contact/Project/Task page without knowing which team
+  // member's account owns them (EmailLink has no userId), so this is what
+  // lets those pages show something readable without a live Gmail call.
+  meta?: { subject?: string; fromLabel?: string; date?: string; link?: string }
 ): Promise<void> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
@@ -23,14 +28,21 @@ export async function saveEmailLink(
   if (!contactId && !projectId && !taskId) {
     await prisma.emailLink.deleteMany({ where: { gmailThreadId } });
   } else {
+    const snapshot = {
+      subject: meta?.subject,
+      fromLabel: meta?.fromLabel,
+      messageDate: meta?.date ? new Date(meta.date) : undefined,
+      gmailLink: meta?.link,
+    };
     await prisma.emailLink.upsert({
       where: { gmailThreadId },
-      update: { contactId, projectId, taskId },
-      create: { gmailThreadId, contactId, projectId, taskId },
+      update: { contactId, projectId, taskId, ...snapshot },
+      create: { gmailThreadId, contactId, projectId, taskId, ...snapshot },
     });
   }
 
   revalidatePath("/email");
+  revalidatePath("/contacts");
 }
 
 export async function saveCalendarEventLink(

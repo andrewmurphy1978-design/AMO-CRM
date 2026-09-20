@@ -226,6 +226,10 @@ function EmailRow({
         </span>
         <EmailLinkPicker
           threadId={threadId}
+          subject={subject}
+          fromLabel={primaryLabel}
+          date={dateIso}
+          link={link}
           contacts={contactOptions}
           projects={projectOptions}
           tasks={taskOptions}

@@ -24,7 +24,16 @@ export interface EmailScreeningPayload extends EmailInboxSnapshot {
 // matching the other party's address against an existing Contact. Runs
 // against whichever address list ("from" for received, "to" for sent) the
 // caller passes; case-insensitive since header casing is not reliable.
-async function autoLinkToContacts(db: PrismaClient, candidates: { threadId: string; email: string }[]): Promise<void> {
+interface AutoLinkCandidate {
+  threadId: string;
+  email: string;
+  subject: string;
+  fromLabel: string;
+  date: string;
+  link: string;
+}
+
+async function autoLinkToContacts(db: PrismaClient, candidates: AutoLinkCandidate[]): Promise<void> {
   if (candidates.length === 0) return;
 
   const threadIds = [...new Set(candidates.map((c) => c.threadId))];
@@ -46,17 +55,24 @@ async function autoLinkToContacts(db: PrismaClient, candidates: { threadId: stri
 
   // One thread might appear twice in `unlinked` (e.g. several sent
   // messages before a reply) — dedupe so each thread is only upserted once.
-  const toLink = new Map<string, string>();
+  const toLink = new Map<string, { contactId: string; candidate: AutoLinkCandidate }>();
   for (const c of unlinked) {
     const contactId = contactByEmail.get(c.email.toLowerCase());
-    if (contactId && !toLink.has(c.threadId)) toLink.set(c.threadId, contactId);
+    if (contactId && !toLink.has(c.threadId)) toLink.set(c.threadId, { contactId, candidate: c });
   }
 
-  for (const [gmailThreadId, contactId] of toLink) {
+  for (const [gmailThreadId, { contactId, candidate }] of toLink) {
     await db.emailLink.upsert({
       where: { gmailThreadId },
       update: {}, // never override a link that appeared since the check above
-      create: { gmailThreadId, contactId },
+      create: {
+        gmailThreadId,
+        contactId,
+        subject: candidate.subject,
+        fromLabel: candidate.fromLabel,
+        messageDate: new Date(candidate.date),
+        gmailLink: candidate.link,
+      },
     });
   }
 }
@@ -205,11 +221,11 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
   await Promise.all([
     autoLinkToContacts(
       db,
-      emailList.map((e) => ({ threadId: e.threadId, email: e.fromEmail }))
+      emailList.map((e) => ({ threadId: e.threadId, email: e.fromEmail, subject: e.subject, fromLabel: e.from, date: e.date, link: e.link }))
     ),
     autoLinkToContacts(
       db,
-      sentList.map((s) => ({ threadId: s.threadId, email: s.toEmail }))
+      sentList.map((s) => ({ threadId: s.threadId, email: s.toEmail, subject: s.subject, fromLabel: s.to, date: s.date, link: s.link }))
     ),
   ]);
 
