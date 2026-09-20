@@ -14,6 +14,7 @@ export default function ContactFilters({
   allStagesLabel,
   allTagsLabel,
   filterLabel,
+  trailing,
 }: {
   q: string;
   stageOptions: { value: string; label: string }[];
@@ -24,6 +25,10 @@ export default function ContactFilters({
   allStagesLabel: string;
   allTagsLabel: string;
   filterLabel: string;
+  // Rendered at the end of the same flex-wrap row as the filter controls
+  // (the shown-count pill + New contact button) rather than on their own
+  // line above it.
+  trailing?: React.ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -83,6 +88,7 @@ export default function ContactFilters({
       >
         {filterLabel}
       </button>
+      {trailing}
     </form>
   );
 }
