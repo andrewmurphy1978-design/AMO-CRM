@@ -168,7 +168,20 @@ described in the main README.
 
 ## Redeploying later
 
-Whenever you make code changes:
+A GitHub Actions workflow (`.github/workflows/deploy.yml`) now deploys
+automatically on every push to the repo's main branch — you shouldn't need
+to run `npm run cf:deploy` by hand anymore. One-time setup: add two repo
+secrets under **Settings > Secrets and variables > Actions**:
+
+- `CLOUDFLARE_API_TOKEN` — dash.cloudflare.com > My Profile > API Tokens >
+  Create Token, using the "Edit Cloudflare Workers" template.
+- `CLOUDFLARE_ACCOUNT_ID` — shown on the right side of any page in the
+  Cloudflare dashboard, or via `npx wrangler whoami`.
+
+Without those two secrets set, the workflow will fail at the deploy step —
+everything else (typecheck, lint) still runs and reports as usual.
+
+If you'd rather deploy by hand instead:
 
 ```bash
 npm run cf:deploy
@@ -176,7 +189,8 @@ npm run cf:deploy
 
 Whenever you change your Prisma schema, run `npx prisma migrate deploy`
 against Neon (with `DATABASE_URL` in your local `.env` pointed at Neon)
-before deploying the new code.
+before deploying the new code — the auto-deploy workflow does **not** run
+migrations for you.
 
 ## Using your own domain (optional)
 

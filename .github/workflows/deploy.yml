@@ -1,0 +1,45 @@
+name: Deploy to Cloudflare
+
+# Builds and deploys the Worker on every push to the main branch, so
+# `npm run cf:deploy` no longer has to be run by hand after each change.
+#
+# Setup required (one-time), in the GitHub repo: Settings > Secrets and
+# variables > Actions > New repository secret:
+#   - CLOUDFLARE_API_TOKEN — a token with "Edit Cloudflare Workers" template
+#     permissions (dash.cloudflare.com > My Profile > API Tokens > Create
+#     Token), scoped to this account.
+#   - CLOUDFLARE_ACCOUNT_ID — found on the right side of any page in the
+#     Cloudflare dashboard, or via `npx wrangler whoami`.
+#
+# This does NOT run database migrations — if a change includes a Prisma
+# schema change, run `npx prisma migrate deploy` against Neon by hand
+# before (or right after) this deploys the new code, same as DEPLOY.md
+# already describes for manual deploys.
+
+on:
+  push:
+    branches:
+      - claude/andrew-murphy-crm-psambw
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+      - run: npx eslint src
+
+      - name: Deploy to Cloudflare Workers
+        run: npm run cf:deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
