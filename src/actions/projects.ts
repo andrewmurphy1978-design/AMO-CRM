@@ -105,9 +105,9 @@ export async function createProject(
 
 export async function updateProject(
   projectId: string,
-  _prevState: { error?: string; success?: string } | undefined,
+  _prevState: { error?: string } | undefined,
   formData: FormData
-): Promise<{ error?: string; success?: string }> {
+): Promise<{ error?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -172,7 +172,7 @@ export async function updateProject(
 
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
-  return { success: t.actions.projectUpdated };
+  redirect(`/projects/${projectId}`);
 }
 
 export async function deleteProject(projectId: string) {

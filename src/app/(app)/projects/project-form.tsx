@@ -1,7 +1,9 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
+import { format } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 import MultiSelect from "@/components/multi-select";
 
 type ProjectFormValues = {
@@ -25,10 +27,7 @@ export default function ProjectForm({
   submitLabel,
   lang,
 }: {
-  action: (
-    prevState: { error?: string; success?: string } | undefined,
-    formData: FormData
-  ) => Promise<{ error?: string; success?: string }>;
+  action: (prevState: { error?: string } | undefined, formData: FormData) => Promise<{ error?: string }>;
   defaultValues?: ProjectFormValues;
   contacts: { id: string; label: string }[];
   users: { id: string; name: string }[];
@@ -152,24 +151,8 @@ export default function ProjectForm({
             />
           </div>
         </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.startDate}</label>
-          <input
-            type="date"
-            name="startDate"
-            defaultValue={toDateInput(defaultValues?.startDate)}
-            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.dueDate}</label>
-          <input
-            type="date"
-            name="dueDate"
-            defaultValue={toDateInput(defaultValues?.dueDate)}
-            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-          />
-        </div>
+        <DateField label={t.projectForm.startDate} name="startDate" defaultValue={defaultValues?.startDate} lang={lang} />
+        <DateField label={t.projectForm.dueDate} name="dueDate" defaultValue={defaultValues?.dueDate} lang={lang} />
       </div>
 
       {defaultValues?.phases !== undefined && (
@@ -217,7 +200,6 @@ export default function ProjectForm({
       </div>
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-      {state?.success && <p className="text-sm text-emerald-700">{state.success}</p>}
 
       <button
         type="submit"
@@ -235,4 +217,50 @@ function toDateInput(value?: Date | string | null): string {
   const date = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().slice(0, 10);
+}
+
+// Shows "September 26, 2026" (or "26 septembre, 2026" in French) while
+// unfocused; switches to a plain yyyy-mm-dd text field for editing once
+// focused, and back on blur. The visible input is never itself submitted —
+// a hidden input alongside it always carries the canonical yyyy-mm-dd
+// value, so the submitted date never depends on the locale-formatted
+// display string being parseable.
+function DateField({
+  label,
+  name,
+  defaultValue,
+  lang,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: Date | string | null;
+  lang: Lang;
+}) {
+  const [value, setValue] = useState(() => toDateInput(defaultValue));
+  const [focused, setFocused] = useState(false);
+  const dateLocale = getDateLocale(lang);
+
+  const longFormat = lang === "fr" ? "d MMMM, yyyy" : "MMMM d, yyyy";
+  const displayValue = (() => {
+    if (!value) return "";
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return value;
+    return format(date, longFormat, { locale: dateLocale });
+  })();
+
+  return (
+    <div>
+      <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{label}</label>
+      <input
+        type="text"
+        value={focused ? value : displayValue}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={focused ? "yyyy-mm-dd" : undefined}
+        className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+      />
+      <input type="hidden" name={name} value={value} />
+    </div>
+  );
 }
