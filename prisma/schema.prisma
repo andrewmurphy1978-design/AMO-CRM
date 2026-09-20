@@ -951,6 +951,20 @@ model ServicePriceListItem {
   @@map("service_price_list_items")
 }
 
+// Single-row cache (always id "singleton") of CAD->{USD,EUR,GBP} exchange
+// rates, refreshed from a live rate API when stale — see
+// src/lib/exchange-rates.ts. Every Proposal/Invoice total is computed in
+// its own currency and converted through this cache, never a hardcoded
+// rate.
+model ExchangeRateCache {
+  id        String   @id @default("singleton")
+  base      String   @default("CAD")
+  rates     Json // e.g. {"USD": 0.73, "EUR": 0.68, "GBP": 0.58}
+  fetchedAt DateTime @default(now())
+
+  @@map("exchange_rate_cache")
+}
+
 // Single-row table (always id "singleton") for billing-wide settings that
 // apply to every Proposal/Invoice rather than one Contact — currently just
 // the Canadian-tax gate: Andrew doesn't charge GST/QST/HST until his
