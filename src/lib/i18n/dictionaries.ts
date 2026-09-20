@@ -214,8 +214,11 @@ export const dictionaries = {
     contactForm: {
       email: "Email",
       email2: "Second email",
+      addEmail: "Add another email",
       phone: "Phone number",
       phone2: "Second phone number",
+      addPhone: "Add another phone number",
+      removeEntry: "Remove",
       whatsapp: "WhatsApp number",
       stage: "Stage",
       tags: "Tags",
@@ -855,8 +858,11 @@ export const dictionaries = {
     contactForm: {
       email: "Courriel",
       email2: "Second courriel",
+      addEmail: "Ajouter un autre courriel",
       phone: "Numéro de téléphone",
       phone2: "Second numéro de téléphone",
+      addPhone: "Ajouter un autre numéro de téléphone",
+      removeEntry: "Retirer",
       whatsapp: "Numéro WhatsApp",
       stage: "Étape",
       tags: "Étiquettes",

@@ -13,10 +13,12 @@ import { getDict } from "@/lib/i18n/dictionaries";
 const ContactSchema = z.object({
   email: z.string().email("A valid email is required"),
   email2: z.string().trim().optional(),
+  extraEmails: z.array(z.string().trim()).optional(),
   firstName: z.string().trim().optional(),
   lastName: z.string().trim().optional(),
   phone: z.string().trim().optional(),
   phone2: z.string().trim().optional(),
+  extraPhones: z.array(z.string().trim()).optional(),
   whatsapp: z.string().trim().optional(),
   company: z.string().trim().optional(),
   locale: z.string().trim().optional(),
@@ -73,9 +75,11 @@ const CONTACT_FORM_FIELDS = [
 ] as const;
 
 function readContactForm(formData: FormData) {
-  const raw: Record<string, string | undefined> = {
+  const raw: Record<string, string | string[] | undefined> = {
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
     stage: String(formData.get("stage") ?? "LEAD"),
+    extraEmails: formData.getAll("extraEmails").map(String).map((v) => v.trim()).filter(Boolean),
+    extraPhones: formData.getAll("extraPhones").map(String).map((v) => v.trim()).filter(Boolean),
   };
   for (const field of CONTACT_FORM_FIELDS) {
     raw[field] = String(formData.get(field) ?? "").trim() || undefined;
@@ -267,7 +271,7 @@ export async function updateContact(
         if (client) {
           const fields: Record<string, string> = {};
           for (const [column, slug] of Object.entries(DEFAULT_PUSH_FIELD_SLUGS)) {
-            const value = (data as Record<string, string | undefined>)[column];
+            const value = (data as unknown as Record<string, string | undefined>)[column];
             if (!value) continue;
             // systeme.io's "country" field expects a 2-letter ISO 3166 code
             // (per its API docs), not the full country name the CRM stores.

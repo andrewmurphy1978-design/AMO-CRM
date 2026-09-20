@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { COUNTRIES } from "@/lib/countries";
 import { countryToCode } from "@/lib/country-flag";
@@ -10,10 +10,12 @@ import MultiSelect from "@/components/multi-select";
 type ContactFormValues = {
   email?: string;
   email2?: string | null;
+  extraEmails?: string[] | null;
   firstName?: string | null;
   lastName?: string | null;
   phone?: string | null;
   phone2?: string | null;
+  extraPhones?: string[] | null;
   whatsapp?: string | null;
   company?: string | null;
   locale?: string | null;
@@ -65,6 +67,18 @@ export default function ContactForm({
   const t = getDict(lang);
   const [selectedTags, setSelectedTags] = useState<string[]>(currentTags ?? []);
 
+  // Extra phones/emails beyond the first two — each row keeps a stable id
+  // (independent of array position) so removing one from the middle doesn't
+  // remount the ones after it and lose their in-progress edits.
+  const [extraEmails, setExtraEmails] = useState(() =>
+    (defaultValues?.extraEmails ?? []).map((value, id) => ({ id, value }))
+  );
+  const nextEmailId = useRef(extraEmails.length);
+  const [extraPhones, setExtraPhones] = useState(() =>
+    (defaultValues?.extraPhones ?? []).map((value, id) => ({ id, value }))
+  );
+  const nextPhoneId = useRef(extraPhones.length);
+
   // Only seeds the phone fields' initial flag — each PhoneField's flag is
   // independently changeable afterward regardless of the address country.
   const phoneCountry = countryToCode(defaultValues?.country) ?? "CA";
@@ -89,12 +103,61 @@ export default function ContactForm({
         <div className="sm:col-span-2 space-y-1.5">
           <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
           <Field label={t.contactForm.email2} name="email2" type="email" defaultValue={defaultValues?.email2 ?? ""} />
+          {extraEmails.map((row) => (
+            <div key={row.id} className="flex items-end gap-1.5">
+              <div className="flex-1">
+                <input
+                  type="email"
+                  name="extraEmails"
+                  defaultValue={row.value}
+                  className={FIELD_CLASS}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setExtraEmails((rows) => rows.filter((r) => r.id !== row.id))}
+                className="mb-0.5 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                aria-label={t.contactForm.removeEntry}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setExtraEmails((rows) => [...rows, { id: nextEmailId.current++, value: "" }])}
+            className="text-xs font-semibold text-amo-lime hover:underline"
+          >
+            + {t.contactForm.addEmail}
+          </button>
         </div>
         <div>
           <label className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</label>
           <div className="mt-1 space-y-1.5">
             <PhoneField name="phone" label={t.contactForm.phone} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone} hideLabel />
             <PhoneField name="phone2" label={t.contactForm.phone2} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone2} hideLabel />
+            {extraPhones.map((row) => (
+              <div key={row.id} className="flex items-center gap-1.5">
+                <div className="flex-1">
+                  <PhoneField name="extraPhones" label="" defaultCountry={phoneCountry} defaultValue={row.value} hideLabel />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExtraPhones((rows) => rows.filter((r) => r.id !== row.id))}
+                  className="rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                  aria-label={t.contactForm.removeEntry}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setExtraPhones((rows) => [...rows, { id: nextPhoneId.current++, value: "" }])}
+              className="text-xs font-semibold text-amo-lime hover:underline"
+            >
+              + {t.contactForm.addPhone}
+            </button>
           </div>
         </div>
         <PhoneField name="whatsapp" label={t.contactForm.whatsapp} defaultCountry={phoneCountry} defaultValue={defaultValues?.whatsapp} />

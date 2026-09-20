@@ -130,6 +130,10 @@ model Contact {
   // enrichment with no systeme.io equivalent.
   phone2   String?
   email2   String?
+  // Unlimited additional phones/emails beyond the first two, added via the
+  // "+" button on the Contact form — order in the array is display order.
+  extraPhones String[] @default([])
+  extraEmails String[] @default([])
   whatsapp String?
 
   otherAddress String?

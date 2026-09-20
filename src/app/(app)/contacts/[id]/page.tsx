@@ -224,6 +224,9 @@ export default async function ContactDetailPage({
                 <dd className="space-y-0.5 text-ink">
                   <div>{contact.email}</div>
                   {contact.email2 && <div>{contact.email2}</div>}
+                  {contact.extraEmails.map((email) => (
+                    <div key={email}>{email}</div>
+                  ))}
                 </dd>
               </div>
               <div>
@@ -237,6 +240,11 @@ export default async function ContactDetailPage({
                       <PhoneDisplay value={contact.phone2} country={contact.country} />
                     </div>
                   )}
+                  {contact.extraPhones.map((phone) => (
+                    <div key={phone}>
+                      <PhoneDisplay value={phone} country={contact.country} />
+                    </div>
+                  ))}
                 </dd>
               </div>
               <div>
