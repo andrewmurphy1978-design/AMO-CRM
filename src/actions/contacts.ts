@@ -52,6 +52,7 @@ const ContactSchema = z.object({
   storeDomain: z.string().trim().optional(),
   storeHostingProvider: z.string().trim().optional(),
   storeDesignApp: z.string().trim().optional(),
+  autoSendInvoiceReminders: z.boolean(),
   stage: z.enum(["LEAD", "PROSPECT", "CLIENT", "PAST_CLIENT", "UNSUBSCRIBED"]),
   notes: z.string().trim().optional(),
 });
@@ -114,11 +115,12 @@ function readSocialLinks(formData: FormData): { platform: string; url: string }[
 }
 
 function readContactForm(formData: FormData) {
-  const raw: Record<string, string | string[] | undefined> = {
+  const raw: Record<string, string | string[] | boolean | undefined> = {
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
     stage: String(formData.get("stage") ?? "LEAD"),
     extraEmails: formData.getAll("extraEmails").map(String).map((v) => v.trim()).filter(Boolean),
     extraPhones: formData.getAll("extraPhones").map(String).map((v) => v.trim()).filter(Boolean),
+    autoSendInvoiceReminders: formData.get("autoSendInvoiceReminders") === "on",
   };
   for (const field of CONTACT_FORM_FIELDS) {
     raw[field] = String(formData.get(field) ?? "").trim() || undefined;

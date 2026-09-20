@@ -150,6 +150,10 @@ model Contact {
   billingContactName String?
   billingEmail       String?
   billingPhone       String?
+  // When true, invoice payment reminders for this contact go out
+  // automatically on schedule; when false, they're drafted for manual
+  // review/send instead — set per-contact rather than as one global choice.
+  autoSendInvoiceReminders Boolean @default(false)
 
   // --- Tech stack info for done-for-you web/funnel/email/store services ---
   websiteDomain          String?

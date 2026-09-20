@@ -366,6 +366,9 @@ export default async function ContactDetailPage({
                     )}
                   </div>
                 )}
+                <p className="mt-3 text-xs text-soft">
+                  {contact.autoSendInvoiceReminders ? t.contactDetail.invoiceRemindersAuto : t.contactDetail.invoiceRemindersManual}
+                </p>
               </div>
             </div>
 

@@ -38,6 +38,7 @@ type ContactFormValues = {
   billingContactName?: string | null;
   billingEmail?: string | null;
   billingPhone?: string | null;
+  autoSendInvoiceReminders?: boolean;
   websiteDomain?: string | null;
   websiteHostingProvider?: string | null;
   websiteDesignApp?: string | null;
@@ -304,6 +305,19 @@ export default function ContactForm({
             + {t.contactForm.addSocialLink}
           </button>
         </div>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            name="autoSendInvoiceReminders"
+            defaultChecked={defaultValues?.autoSendInvoiceReminders ?? false}
+            className="accent-amo-lime"
+          />
+          {t.contactForm.autoSendInvoiceReminders}
+        </label>
+        <p className="mt-1 text-xs text-soft">{t.contactForm.autoSendInvoiceRemindersHelp}</p>
       </div>
 
       <div>
