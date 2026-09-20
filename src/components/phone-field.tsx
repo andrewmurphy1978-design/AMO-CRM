@@ -22,12 +22,16 @@ export default function PhoneField({
   defaultCountry,
   defaultValue,
   hideLabel,
+  hideExtension,
 }: {
   name: string;
   label: string;
   defaultCountry: string;
   defaultValue?: string | null;
   hideLabel?: boolean;
+  // WhatsApp numbers don't take extensions — unlike a landline/office phone
+  // number, there's no PBX behind it to route through.
+  hideExtension?: boolean;
 }) {
   // Contacts synced from systeme.io often have phone numbers stored in
   // national format (e.g. "(514) 950-6985") rather than the E.164 string
@@ -54,17 +58,19 @@ export default function PhoneField({
           onChange={setValue}
           className="amo-phone-input min-w-0 flex-1"
         />
-        <input
-          type="text"
-          inputMode="numeric"
-          value={ext}
-          onChange={(e) => setExt(e.target.value.replace(/[^\d]/g, ""))}
-          placeholder="ext."
-          aria-label="Extension"
-          className="w-16 shrink-0 rounded-md border border-card-border bg-field-bg px-2 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-        />
+        {!hideExtension && (
+          <input
+            type="text"
+            inputMode="numeric"
+            value={ext}
+            onChange={(e) => setExt(e.target.value.replace(/[^\d]/g, ""))}
+            placeholder="ext."
+            aria-label="Extension"
+            className="w-24 shrink-0 rounded-md border border-card-border bg-field-bg px-2 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+          />
+        )}
       </div>
-      <input type="hidden" name={name} value={combined} />
+      <input type="hidden" name={name} value={hideExtension ? (value ?? "") : combined} />
     </div>
   );
 }

@@ -19,6 +19,7 @@ import { getTimezoneForCountryState } from "@/lib/timezone";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import ContactTimezoneCard from "@/components/contact-timezone-card";
+import PlatformIcon from "@/components/platform-icon";
 
 // Systeme.io custom field slugs that duplicate a real Contact column shown
 // elsewhere on this page — hidden from "Other systeme.io fields" so the
@@ -180,6 +181,9 @@ export default async function ContactDetailPage({
         communityMemberships: { orderBy: { joinedAt: "desc" } },
         emailLinks: { orderBy: { messageDate: "desc" }, take: 20 },
         socialLinks: { orderBy: { createdAt: "asc" } },
+        extraAddresses: { orderBy: { order: "asc" } },
+        messagingAccounts: { orderBy: { order: "asc" } },
+        techStackItems: { orderBy: { order: "asc" } },
       },
     });
     const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
@@ -207,7 +211,8 @@ export default async function ContactDetailPage({
       contact.emailMarketingApp ||
       contact.storeDomain ||
       contact.storeHostingProvider ||
-      contact.storeDesignApp
+      contact.storeDesignApp ||
+      contact.techStackItems.length > 0
   );
 
   const billingItems = contact.projects
@@ -337,24 +342,29 @@ export default async function ContactDetailPage({
               </div>
             </dl>
 
-            {/* Addresses: Main, Other, Billing side by side */}
+            {/* Addresses: Main (plus any extra addresses, below it), Billing */}
             <div className="mt-6 grid gap-6 sm:grid-cols-3">
-              <AddressBlock
-                title={t.contactDetail.mainAddressTitle}
-                address={contact.address}
-                city={contact.city}
-                state={contact.state}
-                zip={contact.zip}
-                country={contact.country}
-              />
-              <AddressBlock
-                title={t.contactDetail.otherAddressTitle}
-                address={contact.otherAddress}
-                city={contact.otherCity}
-                state={contact.otherState}
-                zip={contact.otherZip}
-                country={contact.otherCountry}
-              />
+              <div className="space-y-4 sm:col-span-2">
+                <AddressBlock
+                  title={t.contactDetail.mainAddressTitle}
+                  address={contact.address}
+                  city={contact.city}
+                  state={contact.state}
+                  zip={contact.zip}
+                  country={contact.country}
+                />
+                {contact.extraAddresses.map((addr) => (
+                  <AddressBlock
+                    key={addr.id}
+                    title={t.contactDetail.additionalAddressTitle}
+                    address={addr.address}
+                    city={addr.city}
+                    state={addr.state}
+                    zip={addr.zip}
+                    country={addr.country}
+                  />
+                ))}
+              </div>
               <div>
                 <AddressBlock
                   title={t.contactDetail.billingAddressTitle}
@@ -428,11 +438,22 @@ export default async function ContactDetailPage({
                     app={contact.storeDesignApp}
                     t={t}
                   />
+                  {contact.techStackItems.map((item) => (
+                    <TechStackBlock
+                      key={item.id}
+                      title={item.label}
+                      domain={item.domain}
+                      hostingProvider={item.hostingProvider}
+                      appLabel={t.contactForm.appColumn}
+                      app={item.app}
+                      t={t}
+                    />
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Social media links */}
+            {/* Social media links — real brand icon, whole card links out */}
             {contact.socialLinks.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.socialLinksTitle}</h3>
@@ -443,10 +464,30 @@ export default async function ContactDetailPage({
                       href={link.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-full border border-card-border bg-field-bg px-3 py-1 text-xs font-medium text-ink hover:border-amo-gold"
+                      className="flex items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink hover:border-amo-gold"
                     >
+                      <PlatformIcon platform={link.platform} className="h-4 w-4" />
                       {link.platform}
                     </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Other messaging apps (Telegram, Discord, etc.) — WhatsApp has
+                its own dedicated field above */}
+            {contact.messagingAccounts.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.messagingAppsTitle}</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {contact.messagingAccounts.map((row) => (
+                    <span
+                      key={row.id}
+                      className="flex items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink"
+                    >
+                      <PlatformIcon platform={row.app} className="h-4 w-4" />
+                      {row.handle}
+                    </span>
                   ))}
                 </div>
               </div>

@@ -7,6 +7,10 @@ import { countryToCode } from "@/lib/country-flag";
 import { regionOptionsForCountry, normalizeRegionForCountry } from "@/lib/regions";
 import PhoneField from "@/components/phone-field";
 import MultiSelect from "@/components/multi-select";
+import PlatformIcon from "@/components/platform-icon";
+import { MESSAGING_APPS } from "@/lib/platform-icons";
+
+type ExtraAddress = { address?: string | null; city?: string | null; state?: string | null; zip?: string | null; country?: string | null };
 
 type ContactFormValues = {
   email?: string;
@@ -26,11 +30,7 @@ type ContactFormValues = {
   state?: string | null;
   zip?: string | null;
   country?: string | null;
-  otherAddress?: string | null;
-  otherCity?: string | null;
-  otherState?: string | null;
-  otherZip?: string | null;
-  otherCountry?: string | null;
+  extraAddresses?: ExtraAddress[] | null;
   billingAddress?: string | null;
   billingCity?: string | null;
   billingState?: string | null;
@@ -52,7 +52,9 @@ type ContactFormValues = {
   storeDomain?: string | null;
   storeHostingProvider?: string | null;
   storeDesignApp?: string | null;
+  techStackItems?: { label: string; domain?: string | null; hostingProvider?: string | null; app?: string | null }[] | null;
   socialLinks?: { platform: string; url: string }[] | null;
+  messagingAccounts?: { app: string; handle: string }[] | null;
   notes?: string | null;
 };
 
@@ -100,6 +102,21 @@ export default function ContactForm({
     (defaultValues?.socialLinks ?? []).map((link, id) => ({ id, ...link }))
   );
   const nextSocialId = useRef(socialLinks.length);
+
+  const [extraAddresses, setExtraAddresses] = useState(() =>
+    (defaultValues?.extraAddresses ?? []).map((addr, id) => ({ id, ...addr }))
+  );
+  const nextAddressId = useRef(extraAddresses.length);
+
+  const [messagingAccounts, setMessagingAccounts] = useState(() =>
+    (defaultValues?.messagingAccounts ?? []).map((row, id) => ({ id, ...row }))
+  );
+  const nextMessagingId = useRef(messagingAccounts.length);
+
+  const [techStackItems, setTechStackItems] = useState(() =>
+    (defaultValues?.techStackItems ?? []).map((row, id) => ({ id, ...row }))
+  );
+  const nextTechStackId = useRef(techStackItems.length);
 
   // Only seeds the phone fields' initial flag — each PhoneField's flag is
   // independently changeable afterward regardless of the address country.
@@ -194,7 +211,13 @@ export default function ContactForm({
             </button>
           </div>
         </div>
-        <PhoneField name="whatsapp" label={t.contactForm.whatsapp} defaultCountry={phoneCountry} defaultValue={defaultValues?.whatsapp} />
+        <PhoneField
+          name="whatsapp"
+          label={t.contactForm.whatsapp}
+          defaultCountry={phoneCountry}
+          defaultValue={defaultValues?.whatsapp}
+          hideExtension
+        />
       </div>
 
       {/* Name + Stage + Tags */}
@@ -251,10 +274,32 @@ export default function ContactForm({
         </div>
       </div>
 
-      {/* Line 3: addresses — Main, Other, Billing side by side */}
+      {/* Line 3: addresses — Main (plus any extra addresses added via the
+          "+" button, same pattern as extra emails/phones) and Billing. */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <AddressGroup title={t.contactForm.mainAddressTitle} prefix="" t={t} values={defaultValues} />
-        <AddressGroup title={t.contactForm.otherAddressTitle} prefix="other" t={t} values={defaultValues} />
+        <div className="space-y-4 lg:col-span-2">
+          <AddressGroup title={t.contactForm.mainAddressTitle} prefix="" t={t} values={defaultValues} />
+          {extraAddresses.map((row) => (
+            <AddressGroup
+              key={row.id}
+              title={t.contactForm.additionalAddressTitle}
+              prefix="extraAddress"
+              t={t}
+              values={row}
+              onRemove={() => setExtraAddresses((rows) => rows.filter((r) => r.id !== row.id))}
+              removeLabel={t.contactForm.removeEntry}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() =>
+              setExtraAddresses((rows) => [...rows, { id: nextAddressId.current++, address: "", city: "", state: "", zip: "", country: "Canada" }])
+            }
+            className="text-xs font-semibold text-amo-lime hover:underline"
+          >
+            + {t.contactForm.addAddress}
+          </button>
+        </div>
         <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} values={defaultValues}>
           <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={defaultValues?.billingContactName ?? ""} />
           <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={defaultValues?.billingEmail ?? ""} />
@@ -287,9 +332,49 @@ export default function ContactForm({
               <TechStackRow label={t.contactForm.funnelsGroupTitle} prefix="funnels" values={defaultValues} />
               <TechStackRow label={t.contactForm.emailGroupTitle} prefix="email" values={defaultValues} appSuffix="MarketingApp" />
               <TechStackRow label={t.contactForm.storeGroupTitle} prefix="store" values={defaultValues} />
+              {techStackItems.map((row) => (
+                <tr key={row.id}>
+                  <td className="px-3 py-2">
+                    <input
+                      name="techStackLabel"
+                      defaultValue={row.label}
+                      placeholder={t.contactForm.techStackLabelPlaceholder}
+                      className={TABLE_INPUT_CLASS}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input name="techStackDomain" defaultValue={row.domain ?? ""} className={TABLE_INPUT_CLASS} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input name="techStackHostingProvider" defaultValue={row.hostingProvider ?? ""} className={TABLE_INPUT_CLASS} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                      <input name="techStackApp" defaultValue={row.app ?? ""} className={TABLE_INPUT_CLASS} />
+                      <button
+                        type="button"
+                        onClick={() => setTechStackItems((rows) => rows.filter((r) => r.id !== row.id))}
+                        className="shrink-0 rounded-md border border-card-border px-2 py-1.5 text-xs text-soft hover:text-ink"
+                        aria-label={t.contactForm.removeEntry}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
+        <button
+          type="button"
+          onClick={() =>
+            setTechStackItems((rows) => [...rows, { id: nextTechStackId.current++, label: "", domain: "", hostingProvider: "", app: "" }])
+          }
+          className="mt-2 text-xs font-semibold text-amo-lime hover:underline"
+        >
+          + {t.contactForm.addTechStackRow}
+        </button>
       </div>
 
       {/* Social media links — unlimited rows, e.g. a personal profile and a
@@ -342,6 +427,56 @@ export default function ContactForm({
         </div>
       </div>
 
+      {/* Messaging apps beyond WhatsApp (which keeps its own dedicated phone
+          field above) — Telegram, Discord, etc. First field is the app
+          (shown with its logo), second is the contact's ID/handle on it. */}
+      <div>
+        <label className={LABEL_CLASS}>{t.contactForm.messagingAppsTitle}</label>
+        <div className="mt-1 space-y-1.5">
+          {messagingAccounts.map((row) => (
+            <div key={row.id} className="flex items-center gap-1.5">
+              <PlatformIcon platform={row.app} className="h-5 w-5 shrink-0" />
+              <select
+                name="messagingApp"
+                value={row.app}
+                onChange={(e) =>
+                  setMessagingAccounts((rows) => rows.map((r) => (r.id === row.id ? { ...r, app: e.target.value } : r)))
+                }
+                className="mt-0 w-28 shrink-0 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+              >
+                {MESSAGING_APPS.map((app) => (
+                  <option key={app} value={app}>
+                    {app}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                name="messagingHandle"
+                defaultValue={row.handle}
+                placeholder={t.contactForm.messagingHandle}
+                className={`${FIELD_CLASS} mt-0 flex-1`}
+              />
+              <button
+                type="button"
+                onClick={() => setMessagingAccounts((rows) => rows.filter((r) => r.id !== row.id))}
+                className="rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                aria-label={t.contactForm.removeEntry}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setMessagingAccounts((rows) => [...rows, { id: nextMessagingId.current++, app: "Telegram", handle: "" }])}
+            className="text-xs font-semibold text-amo-lime hover:underline"
+          >
+            + {t.contactForm.addMessagingApp}
+          </button>
+        </div>
+      </div>
+
       <div>
         <label className="flex items-center gap-2 text-sm text-ink">
           <input
@@ -385,17 +520,27 @@ function AddressGroup({
   t,
   values,
   children,
+  onRemove,
+  removeLabel,
 }: {
   title: string;
-  prefix: "" | "other" | "billing";
+  prefix: "" | "billing" | "extraAddress";
   t: ReturnType<typeof getDict>;
-  values?: ContactFormValues;
+  // For "" and "billing", the full form's default values (fields already
+  // live at the prefixed key, e.g. billingAddress). For "extraAddress", one
+  // row's own unprefixed values ({address, city, state, zip, country}) —
+  // the prefix there only applies to the submitted field *name*, so extra
+  // address rows share one parallel-array name per field (getAll-able),
+  // not so their own values can be looked up under it.
+  values?: ContactFormValues | ExtraAddress;
   children?: React.ReactNode;
+  onRemove?: () => void;
+  removeLabel?: string;
 }) {
   const field = (suffix: string) => (prefix ? `${prefix}${suffix}` : suffix.charAt(0).toLowerCase() + suffix.slice(1));
   const get = (suffix: string): string => {
-    const key = field(suffix) as keyof ContactFormValues;
-    return (values?.[key] as string | null | undefined) ?? "";
+    const key = (prefix === "extraAddress" ? suffix.charAt(0).toLowerCase() + suffix.slice(1) : field(suffix)) as string;
+    return ((values as Record<string, string | null | undefined> | undefined)?.[key]) ?? "";
   };
 
   // Tracked locally so the State/Province field can switch to a region
@@ -408,7 +553,19 @@ function AddressGroup({
 
   return (
     <div className="rounded-lg border border-card-border p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h3>
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h3>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded-md border border-card-border px-2 py-1 text-xs text-soft hover:text-ink"
+            aria-label={removeLabel}
+          >
+            ✕
+          </button>
+        )}
+      </div>
       <div className="mt-3 grid gap-4">
         <div>
           <label className={LABEL_CLASS}>{t.contactForm.addressLine}</label>

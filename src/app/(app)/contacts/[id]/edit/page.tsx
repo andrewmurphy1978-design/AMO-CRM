@@ -16,7 +16,13 @@ export default async function EditContactPage({
   const { contact, allTags } = await withScopedPrismaClient(async (db) => {
     const contact = await db.contact.findUnique({
       where: { id },
-      include: { tags: { include: { tag: true } }, socialLinks: { orderBy: { createdAt: "asc" } } },
+      include: {
+        tags: { include: { tag: true } },
+        socialLinks: { orderBy: { createdAt: "asc" } },
+        extraAddresses: { orderBy: { order: "asc" } },
+        messagingAccounts: { orderBy: { order: "asc" } },
+        techStackItems: { orderBy: { order: "asc" } },
+      },
     });
     const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
     return { contact, allTags };

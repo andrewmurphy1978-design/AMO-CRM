@@ -28,11 +28,6 @@ const ContactSchema = z.object({
   state: z.string().trim().optional(),
   zip: z.string().trim().optional(),
   country: z.string().trim().optional(),
-  otherAddress: z.string().trim().optional(),
-  otherCity: z.string().trim().optional(),
-  otherState: z.string().trim().optional(),
-  otherZip: z.string().trim().optional(),
-  otherCountry: z.string().trim().optional(),
   billingAddress: z.string().trim().optional(),
   billingCity: z.string().trim().optional(),
   billingState: z.string().trim().optional(),
@@ -72,11 +67,6 @@ const CONTACT_FORM_FIELDS = [
   "state",
   "zip",
   "country",
-  "otherAddress",
-  "otherCity",
-  "otherState",
-  "otherZip",
-  "otherCountry",
   "billingAddress",
   "billingCity",
   "billingState",
@@ -115,6 +105,72 @@ function readSocialLinks(formData: FormData): { platform: string; url: string }[
   return links;
 }
 
+// Parallel "extraAddress{Address,City,State,Zip,Country}" inputs (same
+// index = same row) — additional addresses beyond the main one, added via
+// the Contact form's "+" button. A row is kept if any field beyond country
+// (the select always has some value) is filled in.
+function readExtraAddresses(formData: FormData) {
+  const addresses = formData.getAll("extraAddressAddress").map(String);
+  const cities = formData.getAll("extraAddressCity").map(String);
+  const states = formData.getAll("extraAddressState").map(String);
+  const zips = formData.getAll("extraAddressZip").map(String);
+  const countries = formData.getAll("extraAddressCountry").map(String);
+  const rows: { address: string; city: string; state: string; zip: string; country: string; order: number }[] = [];
+  for (let i = 0; i < addresses.length; i++) {
+    const address = addresses[i]?.trim() ?? "";
+    const city = cities[i]?.trim() ?? "";
+    const zip = zips[i]?.trim() ?? "";
+    if (!address && !city && !zip) continue;
+    const country = countries[i]?.trim() ?? "";
+    rows.push({
+      address,
+      city,
+      state: normalizeRegionForCountry(country, states[i]?.trim()) ?? "",
+      zip,
+      country,
+      order: rows.length,
+    });
+  }
+  return rows;
+}
+
+// Parallel "messagingApp"/"messagingHandle" inputs (same index = same row)
+// — Telegram/Discord/etc, beyond WhatsApp's own dedicated phone field.
+function readMessagingAccounts(formData: FormData) {
+  const apps = formData.getAll("messagingApp").map(String);
+  const handles = formData.getAll("messagingHandle").map(String);
+  const rows: { app: string; handle: string; order: number }[] = [];
+  for (let i = 0; i < handles.length; i++) {
+    const handle = handles[i]?.trim() ?? "";
+    if (!handle) continue;
+    rows.push({ app: (apps[i] ?? "Other").trim() || "Other", handle, order: rows.length });
+  }
+  return rows;
+}
+
+// Parallel "techStack{Label,Domain,HostingProvider,App}" inputs (same
+// index = same row) — extra Tech Stack lines beyond the fixed Website/
+// Funnels/Email/Store ones, with a free-text label instead of a fixed name.
+function readTechStackItems(formData: FormData) {
+  const labels = formData.getAll("techStackLabel").map(String);
+  const domains = formData.getAll("techStackDomain").map(String);
+  const hostingProviders = formData.getAll("techStackHostingProvider").map(String);
+  const apps = formData.getAll("techStackApp").map(String);
+  const rows: { label: string; domain: string; hostingProvider: string; app: string; order: number }[] = [];
+  for (let i = 0; i < labels.length; i++) {
+    const label = labels[i]?.trim() ?? "";
+    if (!label) continue;
+    rows.push({
+      label,
+      domain: domains[i]?.trim() ?? "",
+      hostingProvider: hostingProviders[i]?.trim() ?? "",
+      app: apps[i]?.trim() ?? "",
+      order: rows.length,
+    });
+  }
+  return rows;
+}
+
 function readContactForm(formData: FormData) {
   const raw: Record<string, string | string[] | boolean | undefined> = {
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
@@ -130,7 +186,6 @@ function readContactForm(formData: FormData) {
   // canonical code when the country has one, but this keeps state/province
   // correct for any older data or a direct API call too.
   raw.state = normalizeRegionForCountry(raw.country as string | undefined, raw.state as string | undefined) || undefined;
-  raw.otherState = normalizeRegionForCountry(raw.otherCountry as string | undefined, raw.otherState as string | undefined) || undefined;
   raw.billingState = normalizeRegionForCountry(raw.billingCountry as string | undefined, raw.billingState as string | undefined) || undefined;
   return ContactSchema.parse(raw);
 }
@@ -257,6 +312,27 @@ export async function createContact(
       });
     }
 
+    const extraAddresses = readExtraAddresses(formData);
+    if (extraAddresses.length > 0) {
+      await db.contactAddress.createMany({
+        data: extraAddresses.map((addr) => ({ ...addr, contactId: contact.id })),
+      });
+    }
+
+    const messagingAccounts = readMessagingAccounts(formData);
+    if (messagingAccounts.length > 0) {
+      await db.contactMessagingAccount.createMany({
+        data: messagingAccounts.map((row) => ({ ...row, contactId: contact.id })),
+      });
+    }
+
+    const techStackItems = readTechStackItems(formData);
+    if (techStackItems.length > 0) {
+      await db.contactTechStackItem.createMany({
+        data: techStackItems.map((row) => ({ ...row, contactId: contact.id })),
+      });
+    }
+
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     for (const name of desiredTags) {
       await addTagToContactWith(db, contact.id, name);
@@ -323,6 +399,30 @@ export async function updateContact(
     if (socialLinks.length > 0) {
       await db.contactSocialLink.createMany({
         data: socialLinks.map((link) => ({ ...link, contactId })),
+      });
+    }
+
+    const extraAddresses = readExtraAddresses(formData);
+    await db.contactAddress.deleteMany({ where: { contactId } });
+    if (extraAddresses.length > 0) {
+      await db.contactAddress.createMany({
+        data: extraAddresses.map((addr) => ({ ...addr, contactId })),
+      });
+    }
+
+    const messagingAccounts = readMessagingAccounts(formData);
+    await db.contactMessagingAccount.deleteMany({ where: { contactId } });
+    if (messagingAccounts.length > 0) {
+      await db.contactMessagingAccount.createMany({
+        data: messagingAccounts.map((row) => ({ ...row, contactId })),
+      });
+    }
+
+    const techStackItems = readTechStackItems(formData);
+    await db.contactTechStackItem.deleteMany({ where: { contactId } });
+    if (techStackItems.length > 0) {
+      await db.contactTechStackItem.createMany({
+        data: techStackItems.map((row) => ({ ...row, contactId })),
       });
     }
 

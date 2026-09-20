@@ -129,28 +129,22 @@ model Contact {
   // Only the core fields above (phone/address/city/state/zip/country) are
   // pushed back to systeme.io on save — everything below is CRM-only
   // enrichment with no systeme.io equivalent.
-  phone2   String?
-  email2   String?
+  phone2      String?
+  email2      String?
   // Unlimited additional phones/emails beyond the first two, added via the
   // "+" button on the Contact form — order in the array is display order.
   extraPhones String[] @default([])
   extraEmails String[] @default([])
-  whatsapp String?
+  whatsapp    String?
 
-  otherAddress String?
-  otherCity    String?
-  otherState   String?
-  otherZip     String?
-  otherCountry String?
-
-  billingAddress     String?
-  billingCity        String?
-  billingState       String?
-  billingZip         String?
-  billingCountry     String?
-  billingContactName String?
-  billingEmail       String?
-  billingPhone       String?
+  billingAddress           String?
+  billingCity              String?
+  billingState             String?
+  billingZip               String?
+  billingCountry           String?
+  billingContactName       String?
+  billingEmail             String?
+  billingPhone             String?
   // When true, invoice payment reminders for this contact go out
   // automatically on schedule; when false, they're drafted for manual
   // review/send instead — set per-contact rather than as one global choice.
@@ -193,10 +187,67 @@ model Contact {
   calendarEventLinks   CalendarEventLink[]
   bookings             Booking[]
   socialLinks          ContactSocialLink[]
+  extraAddresses       ContactAddress[]
+  messagingAccounts    ContactMessagingAccount[]
+  techStackItems       ContactTechStackItem[]
 
   @@index([stage])
   @@index([lastName, firstName])
   @@map("contacts")
+}
+
+// Additional addresses beyond the main one, added via the Contact form's
+// "+" button — same pattern as extraEmails/extraPhones, but an address
+// needs several fields so it's a related row rather than a plain string.
+// Replaces the old single otherAddress/otherCity/... columns.
+model ContactAddress {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  address   String?
+  city      String?
+  state     String?
+  zip       String?
+  country   String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([contactId])
+  @@map("contact_addresses")
+}
+
+// Messaging apps beyond WhatsApp (which keeps its own dedicated phone
+// field) — Telegram, Discord, Signal, etc. Each row is an app + the
+// contact's handle/ID on it, added via the Contact form's "+" button.
+model ContactMessagingAccount {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  app       String
+  handle    String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([contactId])
+  @@map("contact_messaging_accounts")
+}
+
+// Extra tech-stack rows beyond the fixed Website/Funnels/Email/Store ones
+// — e.g. a booking app or a membership site — where the row's own label is
+// free text instead of one of those four fixed names.
+model ContactTechStackItem {
+  id              String   @id @default(cuid())
+  contactId       String
+  contact         Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label           String
+  domain          String?
+  hostingProvider String?
+  app             String?
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([contactId])
+  @@map("contact_tech_stack_items")
 }
 
 // Unlimited social profile/page links per contact, added via the Contact
@@ -283,8 +334,8 @@ model CommunityMembership {
 // Contact detail page (unlike Subscription/CourseEnrollment/
 // CommunityMembership above, which are per-contact).
 model EmailCampaign {
-  id          String   @id @default(cuid())
-  systemeIoId Int      @unique
+  id          String @id @default(cuid())
+  systemeIoId Int    @unique
 
   name           String?
   subject        String?
@@ -302,8 +353,8 @@ model EmailCampaign {
 }
 
 model AutomationWorkflow {
-  id          String   @id @default(cuid())
-  systemeIoId Int      @unique
+  id          String @id @default(cuid())
+  systemeIoId Int    @unique
 
   name        String?
   status      String?
@@ -323,8 +374,8 @@ model AutomationWorkflow {
 // something systeme.io itself provides, so it's null whenever that match
 // is missing or ambiguous (multiple contacts sharing the same name).
 model Booking {
-  id          String   @id @default(cuid())
-  systemeIoId Int      @unique
+  id          String @id @default(cuid())
+  systemeIoId Int    @unique
 
   eventName       String?
   eventType       String?
@@ -529,12 +580,12 @@ model Proposal {
   // items on the proposal itself.
   coverLetter String? @db.Text
 
-  subtotal    Float  @default(0)
-  gstAmount   Float  @default(0)
-  qstAmount   Float  @default(0)
-  hstAmount   Float  @default(0)
-  taxAmount   Float  @default(0) // gstAmount + qstAmount + hstAmount
-  totalAmount Float  @default(0) // subtotal + taxAmount
+  subtotal    Float @default(0)
+  gstAmount   Float @default(0)
+  qstAmount   Float @default(0)
+  hstAmount   Float @default(0)
+  taxAmount   Float @default(0) // gstAmount + qstAmount + hstAmount
+  totalAmount Float @default(0) // subtotal + taxAmount
 
   sentAt      DateTime?
   respondedAt DateTime?
@@ -974,7 +1025,7 @@ model AutomationRun {
   externalId String? // Make execution id / Zapier-provided id
   name       String? // scenario/zap name
   status     String // "success" | "error"
-  message    String? @db.Text
+  message    String?  @db.Text
   occurredAt DateTime
   raw        Json?
 
@@ -1062,11 +1113,11 @@ model ExchangeRateCache {
 // revenue crosses the $30,000 registration threshold, so this stays off
 // until he flips it.
 model BillingSettings {
-  id                 String   @id @default("singleton")
-  chargeCanadianTax  Boolean  @default(false)
-  gstNumber          String?
-  qstNumber          String?
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default("singleton")
+  chargeCanadianTax Boolean  @default(false)
+  gstNumber         String?
+  qstNumber         String?
+  updatedAt         DateTime @updatedAt
 
   @@map("billing_settings")
 }
