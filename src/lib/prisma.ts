@@ -60,7 +60,19 @@ function createPrismaClient(workers: boolean): PrismaClient {
   // local pool here only ever needs to hold the connection(s) for a single
   // request; keep it small.
   const pool = new Pool({ connectionString: resolveConnectionString(workers), max: workers ? 1 : 3 });
-  const adapter = new PrismaPg(pool);
+  // @prisma/adapter-pg's default behavior for a caller-supplied Pool
+  // instance (as opposed to a bare connection config it builds its own
+  // Pool from) is to treat the Pool's lifecycle as the caller's
+  // responsibility — its cleanup on $disconnect() only removes its error
+  // listener, it never calls pool.end(). Every fresh Pool created above
+  // (once per request under Workers, since getPrismaClient() never caches
+  // there, and once per withScopedPrismaClient call everywhere) was
+  // therefore leaking its underlying TCP connection forever — the actual
+  // cause of Error 1102 recurring after enough page loads/actions
+  // accumulated open connections against Hyperdrive/Neon, independent of
+  // how many queries any single request ran. disposeExternalPool makes
+  // $disconnect() actually call pool.end() and close the socket.
+  const adapter = new PrismaPg(pool, { disposeExternalPool: true });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
