@@ -18,6 +18,7 @@ import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
+import PageHeader, { HeaderBreadcrumb } from "../../page-header";
 
 export default async function ProjectDetailPage({
   params,
@@ -66,19 +67,25 @@ export default async function ProjectDetailPage({
 
   const openTasks = project.tasks.filter((t) => t.status !== "DONE");
   const doneTasks = project.tasks.filter((t) => t.status === "DONE");
+  const clientName =
+    [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.email;
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title={
+          <HeaderBreadcrumb
+            parts={[{ label: clientName, href: `/contacts/${project.contact.id}` }, { label: project.name }]}
+          />
+        }
+        hour12={hour12}
+        dateLocale={dateLocale}
+        location={t.dashboard.myLocation}
+      />
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-sm text-soft">
-            <Link href={`/contacts/${project.contact.id}`} className="hover:underline">
-              {[project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") ||
-                project.contact.email}
-            </Link>
-          </p>
-          <h1 className="font-display text-2xl font-semibold text-ink">{project.name}</h1>
-          <p className="mt-1 text-sm text-soft">
             {STATUS_LABELS[project.status]}
             {` · ${t.projectTypes[project.type]}`}
             {project.owner && ` · ${t.projectDetail.owner}: ${project.owner.name}`}

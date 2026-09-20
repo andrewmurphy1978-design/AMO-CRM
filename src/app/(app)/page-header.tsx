@@ -1,6 +1,33 @@
 import type { ReactNode } from "react";
 import type { Locale } from "date-fns";
+import Link from "next/link";
 import DateTimeCard from "./date-time-card";
+
+// A detail page's contextual title, e.g. client name -> project name, or
+// task -> project -> client (order per page, see each page's own
+// breadcrumb array). Every part except the last is normally a link back
+// to that record; the last part (the current page) is rendered as plain
+// text. Passed as PageHeader's `title` so every detail page reuses the
+// exact same sticky bar — same height as the list-page headers — instead
+// of each page growing its own title block.
+export function HeaderBreadcrumb({ parts }: { parts: { label: string; href?: string }[] }) {
+  return (
+    <span className="truncate">
+      {parts.map((part, i) => (
+        <span key={i}>
+          {i > 0 && <span className="mx-1.5 text-amo-white/40">/</span>}
+          {part.href ? (
+            <Link href={part.href} className="hover:underline">
+              {part.label}
+            </Link>
+          ) : (
+            part.label
+          )}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 // Shared sticky header for every page under (app) — dark green like the
 // sidebar, the Date/Time/Location card on the right (an optional action
@@ -18,7 +45,7 @@ export default function PageHeader({
   logoUrl,
   actions,
 }: {
-  title: string;
+  title: ReactNode;
   hour12: boolean;
   dateLocale: Locale | undefined;
   location: string;
@@ -30,7 +57,7 @@ export default function PageHeader({
       <header className="sticky top-0 z-20 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={logoUrl} alt="Andrew Murphy Online" className="h-auto w-36 shrink-0 object-contain sm:w-56" />
-        <h1 className="absolute left-1/2 -translate-x-1/2 font-display text-xl font-semibold text-amo-white sm:text-2xl">
+        <h1 className="absolute left-1/2 -translate-x-1/2 truncate font-display text-xl font-semibold text-amo-white sm:text-2xl">
           {title}
         </h1>
         <div className="flex items-center gap-3">
@@ -43,7 +70,7 @@ export default function PageHeader({
 
   return (
     <header className="sticky top-0 z-20 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
-      <h1 className="font-display text-xl font-semibold text-amo-white sm:text-2xl">{title}</h1>
+      <h1 className="min-w-0 truncate font-display text-xl font-semibold text-amo-white sm:text-2xl">{title}</h1>
       {actions && <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-3">{actions}</div>}
       <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={location} />
     </header>

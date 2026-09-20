@@ -2,10 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import DeleteTaskButton from "./delete-button";
+import PageHeader, { HeaderBreadcrumb } from "../../page-header";
 
 const PRIORITY_COLORS: Record<string, string> = {
   LOW: "bg-black/5 text-soft",
@@ -23,35 +26,54 @@ export default async function TaskDetailPage({
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
+  const session = await auth();
 
-  const task = await withScopedPrismaClient((db) =>
-    db.task.findUnique({
+  // One shared client for both reads below — see the equivalent comment in
+  // contacts/[id]/page.tsx for why (Error 1102 risk from separate raw
+  // `prisma` property accesses).
+  const { task, hour12 } = await withScopedPrismaClient(async (db) => {
+    const task = await db.task.findUnique({
       where: { id },
       include: {
         project: { include: { contact: true } },
         phase: true,
         assignee: true,
       },
-    })
-  );
+    });
+    const hour12 = await getHour12(session, db);
+    return { task, hour12 };
+  });
 
   if (!task) notFound();
 
+  const clientName =
+    [task.project.contact.firstName, task.project.contact.lastName].filter(Boolean).join(" ") ||
+    task.project.contact.email;
+
   return (
     <div className="max-w-3xl space-y-6">
+      <PageHeader
+        title={
+          <HeaderBreadcrumb
+            parts={[
+              { label: task.title },
+              { label: task.project.name, href: `/projects/${task.project.id}` },
+              { label: clientName, href: `/contacts/${task.project.contact.id}` },
+            ]}
+          />
+        }
+        hour12={hour12}
+        dateLocale={dateLocale}
+        location={t.dashboard.myLocation}
+      />
+
       <Link href="/tasks" className="text-sm text-soft hover:underline">
         ← {t.taskDetail.backToTasks}
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-soft">
-            <Link href={`/projects/${task.project.id}`} className="hover:underline">
-              {task.project.name}
-            </Link>
-          </p>
-          <h1 className="font-display text-2xl font-semibold text-ink">{task.title}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-soft">
+          <p className="flex flex-wrap items-center gap-2 text-sm text-soft">
             <span>{t.taskStatuses[task.status]}</span>
             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[task.priority]}`}>
               {t.priorities[task.priority]}

@@ -20,6 +20,7 @@ import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import ContactTimezoneCard from "@/components/contact-timezone-card";
 import PlatformIcon from "@/components/platform-icon";
+import PageHeader from "../../page-header";
 
 // Systeme.io custom field slugs that duplicate a real Contact column shown
 // elsewhere on this page — hidden from "Other systeme.io fields" so the
@@ -251,10 +252,11 @@ export default async function ContactDetailPage({
 
   return (
     <div className="space-y-6">
+      <PageHeader title={fullName} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">{fullName}</h1>
-          <p className="mt-1 text-sm text-soft">
+          <p className="text-sm text-soft">
             {STAGE_LABELS[contact.stage]}
             {contact.systemeIoId && ` · systeme.io #${contact.systemeIoId}`}
           </p>
