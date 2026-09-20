@@ -328,11 +328,19 @@ export default async function ContactDetailPage({
               </div>
             </dl>
 
-            {/* Line 2: Company, Language, Time zone */}
-            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+            {/* Line 2: Company, Type of company, Industry, Language, Time zone */}
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
               <div>
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldCompany}</dt>
                 <dd className="text-ink">{contact.company ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.companyType}</dt>
+                <dd className="text-ink">{contact.companyType ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.industry}</dt>
+                <dd className="text-ink">{contact.industry ?? "—"}</dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldLanguage}</dt>

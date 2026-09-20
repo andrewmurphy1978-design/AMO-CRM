@@ -7,14 +7,21 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { COUNTRIES } from "@/lib/countries";
 import { countryToCode } from "@/lib/country-flag";
 import { regionOptionsForCountry, normalizeRegionForCountry } from "@/lib/regions";
+import { tagKind, TAG_KIND_COLORS, TAG_KIND_RANK, isLanguageTag } from "@/lib/tag-colors";
+import { normalizeFieldSlug, SERVICES_REQUIRED_DEFAULT_SLUG, PROJECT_GOAL_DEFAULT_SLUG } from "@/lib/custom-field-slugs";
+import { COMPANY_TYPES } from "@/lib/company-types";
+import { stateLabelForCountry, zipLabelForCountry } from "@/lib/address-labels";
+import { INDUSTRIES } from "@/lib/industries";
 import PhoneField from "@/components/phone-field";
 import PlatformIcon from "@/components/platform-icon";
+import ContactTimezoneCard from "@/components/contact-timezone-card";
 import { MESSAGING_APPS, VOIP_APPS } from "@/lib/platform-icons";
 import { getWorldTimeZoneOptions } from "@/lib/timezones";
 import PageHeader from "../page-header";
 
 type ExtraAddress = { address?: string | null; city?: string | null; state?: string | null; zip?: string | null; country?: string | null };
 type AppHandleRow = { app: string; handle: string };
+type FieldValueRow = { fieldSlug: string; value: string | null };
 
 type ContactFormValues = {
   email?: string;
@@ -26,6 +33,8 @@ type ContactFormValues = {
   phone2?: string | null;
   extraPhones?: string[] | null;
   company?: string | null;
+  companyType?: string | null;
+  industry?: string | null;
   locale?: string | null;
   timeZone?: string | null;
   stage?: string;
@@ -62,8 +71,11 @@ type ContactFormValues = {
   voipAccounts?: AppHandleRow[] | null;
   notes?: string | null;
   source?: string | null;
+  systemeIoId?: number | null;
   systemeIoRegisteredAt?: Date | string | null;
   lastSyncedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  fieldValues?: FieldValueRow[] | null;
 };
 
 const SOCIAL_PLATFORMS = ["Facebook", "Instagram", "LinkedIn", "TikTok", "YouTube", "X", "Website", "Other"];
@@ -71,6 +83,30 @@ const SOCIAL_PLATFORMS = ["Facebook", "Instagram", "LinkedIn", "TikTok", "YouTub
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
+
+// One accent color per card — same "solid header bar" approach as the
+// Email page's category sections, so each group of fields is visually
+// distinct at a glance instead of the whole page being one long list.
+const CARD_COLORS: Record<string, string> = {
+  general: "bg-emerald-600",
+  contact: "bg-sky-600",
+  addresses: "bg-amber-500",
+  techStack: "bg-slate-600",
+  social: "bg-violet-600",
+  voip: "bg-indigo-600",
+  invoice: "bg-rose-600",
+  other: "bg-teal-600",
+  notes: "bg-stone-500",
+};
+
+function Card({ color, title, children }: { color: keyof typeof CARD_COLORS; title: string; children: ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm">
+      <div className={`px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white ${CARD_COLORS[color]}`}>{title}</div>
+      <div className="space-y-4 p-4">{children}</div>
+    </section>
+  );
+}
 
 export default function ContactForm({
   action,
@@ -101,10 +137,19 @@ export default function ContactForm({
   const [state, formAction, pending] = useActionState(action, undefined);
   const t = getDict(lang);
   const [selectedTags, setSelectedTags] = useState<string[]>(currentTags ?? []);
+  const [timeZone, setTimeZone] = useState(defaultValues?.timeZone ?? "");
 
   // Every world timezone, sorted west to east — computed once (deterministic
   // given a fixed reference date, so no server/client hydration mismatch).
   const [timeZoneOptions] = useState(() => getWorldTimeZoneOptions());
+
+  // Language tags first (matching the Contacts list page's own ordering),
+  // then everything else, each colored the same way it is there.
+  const sortedTags = [...allTags].sort(
+    (a, b) => TAG_KIND_RANK[tagKind(a.name)] - TAG_KIND_RANK[tagKind(b.name)] || a.name.localeCompare(b.name)
+  );
+  const languageTagList = sortedTags.filter((tag) => isLanguageTag(tag.name));
+  const otherTagList = sortedTags.filter((tag) => !isLanguageTag(tag.name));
 
   // Extra phones/emails beyond the first two — each row keeps a stable id
   // (independent of array position) so removing one from the middle doesn't
@@ -156,6 +201,17 @@ export default function ContactForm({
     { value: "UNSUBSCRIBED", label: t.stages.UNSUBSCRIBED },
   ];
 
+  // A contact with no systeme.io id was never synced — created directly in
+  // the CRM — so its Source is ours to edit; a synced contact's Source
+  // stays whatever systeme.io reported, read-only.
+  const isManual = !defaultValues?.systemeIoId;
+  const registeredAt = defaultValues?.systemeIoRegisteredAt ?? (isManual ? defaultValues?.createdAt : null);
+
+  const findFieldValue = (normalized: string) =>
+    defaultValues?.fieldValues?.find((fv) => normalizeFieldSlug(fv.fieldSlug) === normalized);
+  const servicesRequired = findFieldValue("servicesrequired");
+  const projectGoal = findFieldValue("projectgoaldescription");
+
   return (
     <form action={formAction} className="space-y-6">
       <PageHeader
@@ -181,200 +237,243 @@ export default function ContactForm({
         <input key={name} type="hidden" name="tags" value={name} />
       ))}
 
-      {/* Line 1: Email (stacked), Phone numbers (stacked), Instant messaging
-          apps (stacked — WhatsApp is just another row here now, no more
-          separate dedicated field/column). */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
-        <div className="sm:col-span-2 lg:col-span-1 space-y-1.5">
-          <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
-          <input
-            type="email"
-            name="email2"
-            defaultValue={defaultValues?.email2 ?? ""}
-            aria-label={t.contactForm.email2}
-            className={FIELD_CLASS}
-          />
-          {extraEmails.map((row) => (
-            <div key={row.id} className="flex items-end gap-1.5">
-              <div className="flex-1">
-                <input
-                  type="email"
-                  name="extraEmails"
-                  defaultValue={row.value}
-                  className={FIELD_CLASS}
+      <datalist id="companyTypeOptions">
+        {COMPANY_TYPES.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+      <datalist id="industryOptions">
+        {INDUSTRIES.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+
+      <Card color="general" title={t.contactForm.cardGeneralInfo}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Row 1 */}
+          <Field label={t.contactForm.firstName} name="firstName" defaultValue={defaultValues?.firstName ?? ""} />
+          <Field label={t.contactForm.lastName} name="lastName" defaultValue={defaultValues?.lastName ?? ""} />
+          <Field label={t.contactForm.company} name="company" defaultValue={defaultValues?.company ?? ""} />
+          <div className="flex flex-col lg:row-span-3">
+            <label className={LABEL_CLASS}>{t.contactForm.tags}</label>
+            <div className="mt-1 max-h-[28rem] flex-1 overflow-y-auto rounded-md border border-card-border bg-field-bg p-2">
+              {sortedTags.length === 0 && <p className="px-1 py-1 text-sm text-soft">—</p>}
+              {languageTagList.map((tag) => (
+                <TagCheckbox
+                  key={tag.id}
+                  tag={tag}
+                  checked={selectedTags.includes(tag.name)}
+                  onToggle={() =>
+                    setSelectedTags((prev) => (prev.includes(tag.name) ? prev.filter((n) => n !== tag.name) : [...prev, tag.name]))
+                  }
                 />
+              ))}
+              {languageTagList.length > 0 && otherTagList.length > 0 && (
+                <div className="my-2 border-t-2 border-dashed border-ink/20" />
+              )}
+              {otherTagList.map((tag) => (
+                <TagCheckbox
+                  key={tag.id}
+                  tag={tag}
+                  checked={selectedTags.includes(tag.name)}
+                  onToggle={() =>
+                    setSelectedTags((prev) => (prev.includes(tag.name) ? prev.filter((n) => n !== tag.name) : [...prev, tag.name]))
+                  }
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Row 2 */}
+          <Field
+            label={t.contactForm.companyType}
+            name="companyType"
+            defaultValue={defaultValues?.companyType ?? ""}
+            list="companyTypeOptions"
+          />
+          <Field label={t.contactForm.industry} name="industry" defaultValue={defaultValues?.industry ?? ""} list="industryOptions" />
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.language}</label>
+            <div className="mt-2 flex items-center gap-4 text-sm text-ink">
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="radio"
+                  name="locale"
+                  value="en"
+                  defaultChecked={(defaultValues?.locale ?? "en").toLowerCase().startsWith("en")}
+                  className="accent-amo-lime"
+                />
+                {t.team.english}
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="radio"
+                  name="locale"
+                  value="fr"
+                  defaultChecked={(defaultValues?.locale ?? "").toLowerCase().startsWith("fr")}
+                  className="accent-amo-lime"
+                />
+                {t.team.french}
+              </label>
+            </div>
+          </div>
+
+          {/* Row 3 */}
+          <Field
+            label={t.contactForm.stage}
+            name="stage"
+            as="select"
+            defaultValue={defaultValues?.stage ?? "LEAD"}
+            options={STAGES}
+          />
+          <div aria-hidden="true" />
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.timeZone}</label>
+            <div className="mt-1 flex items-start gap-2">
+              <select
+                name="timeZone"
+                value={timeZone}
+                onChange={(e) => setTimeZone(e.target.value)}
+                className={`${FIELD_CLASS} mt-0 flex-1`}
+              >
+                <option value="">—</option>
+                {timeZoneOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {timeZone && (
+                <div className="w-36 shrink-0">
+                  <ContactTimezoneCard timeZone={timeZone} locationLabel={t.contactForm.timeZoneNow} hour12={hour12} lang={lang} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card color="contact" title={t.contactForm.cardContactInfo}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
+          <div className="sm:col-span-2 lg:col-span-1 space-y-1.5">
+            <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
+            <input
+              type="email"
+              name="email2"
+              defaultValue={defaultValues?.email2 ?? ""}
+              aria-label={t.contactForm.email2}
+              className={FIELD_CLASS}
+            />
+            {extraEmails.map((row) => (
+              <div key={row.id} className="flex items-end gap-1.5">
+                <div className="flex-1">
+                  <input
+                    type="email"
+                    name="extraEmails"
+                    defaultValue={row.value}
+                    className={FIELD_CLASS}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExtraEmails((rows) => rows.filter((r) => r.id !== row.id))}
+                  className="mb-0.5 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                  aria-label={t.contactForm.removeEntry}
+                >
+                  ✕
+                </button>
               </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setExtraEmails((rows) => [...rows, { id: nextEmailId.current++, value: "" }])}
+              className="text-xs font-semibold text-amo-lime hover:underline"
+            >
+              + {t.contactForm.addEmail}
+            </button>
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</label>
+            <div className="mt-1 space-y-1.5">
+              <PhoneField name="phone" label={t.contactForm.phone} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone} hideLabel />
+              <PhoneField name="phone2" label={t.contactForm.phone2} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone2} hideLabel />
+              {extraPhones.map((row) => (
+                <PhoneField
+                  key={row.id}
+                  name="extraPhones"
+                  label=""
+                  defaultCountry={phoneCountry}
+                  defaultValue={row.value}
+                  hideLabel
+                  onRemove={() => setExtraPhones((rows) => rows.filter((r) => r.id !== row.id))}
+                  removeLabel={t.contactForm.removeEntry}
+                />
+              ))}
               <button
                 type="button"
-                onClick={() => setExtraEmails((rows) => rows.filter((r) => r.id !== row.id))}
-                className="mb-0.5 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
-                aria-label={t.contactForm.removeEntry}
+                onClick={() => setExtraPhones((rows) => [...rows, { id: nextPhoneId.current++, value: "" }])}
+                className="text-xs font-semibold text-amo-lime hover:underline"
               >
-                ✕
+                + {t.contactForm.addPhone}
               </button>
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setExtraEmails((rows) => [...rows, { id: nextEmailId.current++, value: "" }])}
-            className="text-xs font-semibold text-amo-lime hover:underline"
-          >
-            + {t.contactForm.addEmail}
-          </button>
+          </div>
+          <AppHandleList
+            title={t.contactForm.messagingAppsTitle}
+            addLabel={t.contactForm.addMessagingApp}
+            handlePlaceholder={t.contactForm.messagingHandle}
+            appFieldName="messagingApp"
+            handleFieldName="messagingHandle"
+            appOptions={MESSAGING_APPS}
+            rows={messagingAccounts}
+            setRows={setMessagingAccounts}
+            removeLabel={t.contactForm.removeEntry}
+            onAdd={() => setMessagingAccounts((rows) => [...rows, { id: nextMessagingId.current++, app: MESSAGING_APPS[0], handle: "" }])}
+          />
         </div>
-        <div>
-          <label className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</label>
-          <div className="mt-1 space-y-1.5">
-            <PhoneField name="phone" label={t.contactForm.phone} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone} hideLabel />
-            <PhoneField name="phone2" label={t.contactForm.phone2} defaultCountry={phoneCountry} defaultValue={defaultValues?.phone2} hideLabel />
-            {extraPhones.map((row) => (
-              <PhoneField
+      </Card>
+
+      <Card color="addresses" title={t.contactForm.cardAddresses}>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-4">
+            <AddressGroup title={t.contactForm.mainAddressTitle} prefix="" t={t} lang={lang} values={defaultValues} />
+            {extraAddresses.map((row) => (
+              <AddressGroup
                 key={row.id}
-                name="extraPhones"
-                label=""
-                defaultCountry={phoneCountry}
-                defaultValue={row.value}
-                hideLabel
-                onRemove={() => setExtraPhones((rows) => rows.filter((r) => r.id !== row.id))}
+                title={t.contactForm.additionalAddressTitle}
+                prefix="extraAddress"
+                t={t}
+                lang={lang}
+                values={row}
+                onRemove={() => setExtraAddresses((rows) => rows.filter((r) => r.id !== row.id))}
                 removeLabel={t.contactForm.removeEntry}
               />
             ))}
             <button
               type="button"
-              onClick={() => setExtraPhones((rows) => [...rows, { id: nextPhoneId.current++, value: "" }])}
+              onClick={() =>
+                setExtraAddresses((rows) => [...rows, { id: nextAddressId.current++, address: "", city: "", state: "", zip: "", country: "Canada" }])
+              }
               className="text-xs font-semibold text-amo-lime hover:underline"
             >
-              + {t.contactForm.addPhone}
+              + {t.contactForm.addAddress}
             </button>
           </div>
-        </div>
-        <AppHandleList
-          title={t.contactForm.messagingAppsTitle}
-          addLabel={t.contactForm.addMessagingApp}
-          handlePlaceholder={t.contactForm.messagingHandle}
-          appFieldName="messagingApp"
-          handleFieldName="messagingHandle"
-          appOptions={MESSAGING_APPS}
-          rows={messagingAccounts}
-          setRows={setMessagingAccounts}
-          removeLabel={t.contactForm.removeEntry}
-          onAdd={() => setMessagingAccounts((rows) => [...rows, { id: nextMessagingId.current++, app: MESSAGING_APPS[0], handle: "" }])}
-        />
-      </div>
-
-      {/* Name + Stage + Tags (checkbox listbox, spans down beside Company/
-          Language below it) + Company + Language + Time Zone */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label={t.contactForm.firstName} name="firstName" defaultValue={defaultValues?.firstName ?? ""} />
-        <Field label={t.contactForm.lastName} name="lastName" defaultValue={defaultValues?.lastName ?? ""} />
-        <Field
-          label={t.contactForm.stage}
-          name="stage"
-          as="select"
-          defaultValue={defaultValues?.stage ?? "LEAD"}
-          options={STAGES}
-        />
-        <div className="lg:row-span-2">
-          <label className={LABEL_CLASS}>{t.contactForm.tags}</label>
-          <div className="mt-1 max-h-40 overflow-y-auto rounded-md border border-card-border bg-field-bg p-2">
-            {allTags.length === 0 && <p className="px-1 py-1 text-sm text-soft">—</p>}
-            {allTags.map((tag) => (
-              <label key={tag.id} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 text-sm text-ink hover:bg-black/5">
-                <input
-                  type="checkbox"
-                  checked={selectedTags.includes(tag.name)}
-                  onChange={() =>
-                    setSelectedTags((prev) => (prev.includes(tag.name) ? prev.filter((n) => n !== tag.name) : [...prev, tag.name]))
-                  }
-                  className="h-4 w-4 rounded border-card-border accent-amo-lime"
-                />
-                {tag.name}
-              </label>
-            ))}
-          </div>
-        </div>
-        <Field label={t.contactForm.company} name="company" defaultValue={defaultValues?.company ?? ""} />
-        <div>
-          <label className={LABEL_CLASS}>{t.contactForm.language}</label>
-          <div className="mt-2 flex items-center gap-4 text-sm text-ink">
-            <label className="flex items-center gap-1.5">
-              <input
-                type="radio"
-                name="locale"
-                value="en"
-                defaultChecked={(defaultValues?.locale ?? "en").toLowerCase().startsWith("en")}
-                className="accent-amo-lime"
-              />
-              {t.team.english}
-            </label>
-            <label className="flex items-center gap-1.5">
-              <input
-                type="radio"
-                name="locale"
-                value="fr"
-                defaultChecked={(defaultValues?.locale ?? "").toLowerCase().startsWith("fr")}
-                className="accent-amo-lime"
-              />
-              {t.team.french}
-            </label>
-          </div>
-        </div>
-        <div>
-          <label className={LABEL_CLASS}>{t.contactForm.timeZone}</label>
-          <select name="timeZone" defaultValue={defaultValues?.timeZone ?? ""} className={FIELD_CLASS}>
-            <option value="">—</option>
-            {timeZoneOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Addresses — Main (plus any extra addresses added via "+", same
-          pattern as extra emails/phones) and Billing, equal-width columns. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="space-y-4">
-          <AddressGroup title={t.contactForm.mainAddressTitle} prefix="" t={t} values={defaultValues} />
-          {extraAddresses.map((row) => (
-            <AddressGroup
-              key={row.id}
-              title={t.contactForm.additionalAddressTitle}
-              prefix="extraAddress"
-              t={t}
-              values={row}
-              onRemove={() => setExtraAddresses((rows) => rows.filter((r) => r.id !== row.id))}
-              removeLabel={t.contactForm.removeEntry}
+          <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} lang={lang} values={defaultValues}>
+            <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={defaultValues?.billingContactName ?? ""} />
+            <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={defaultValues?.billingEmail ?? ""} />
+            <PhoneField
+              name="billingPhone"
+              label={t.contactForm.billingPhone}
+              defaultCountry={billingPhoneCountry}
+              defaultValue={defaultValues?.billingPhone}
             />
-          ))}
-          <button
-            type="button"
-            onClick={() =>
-              setExtraAddresses((rows) => [...rows, { id: nextAddressId.current++, address: "", city: "", state: "", zip: "", country: "Canada" }])
-            }
-            className="text-xs font-semibold text-amo-lime hover:underline"
-          >
-            + {t.contactForm.addAddress}
-          </button>
+          </AddressGroup>
         </div>
-        <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} values={defaultValues}>
-          <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={defaultValues?.billingContactName ?? ""} />
-          <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={defaultValues?.billingEmail ?? ""} />
-          <PhoneField
-            name="billingPhone"
-            label={t.contactForm.billingPhone}
-            defaultCountry={billingPhoneCountry}
-            defaultValue={defaultValues?.billingPhone}
-          />
-        </AddressGroup>
-      </div>
+      </Card>
 
-      {/* Tech stack — one row per Website/Funnels/Email/Store, columns
-          Domain/Provider/App, plus any custom rows added via "+". */}
-      <div>
-        <h3 className={LABEL_CLASS}>{t.contactForm.techStackTitle}</h3>
-        <div className="mt-2 overflow-x-auto rounded-lg border border-card-border">
+      <Card color="techStack" title={t.contactForm.techStackTitle}>
+        <div className="overflow-x-auto rounded-lg border border-card-border">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-card-border bg-black/[0.02] text-left text-xs uppercase tracking-wide text-soft">
@@ -428,96 +527,93 @@ export default function ContactForm({
           onClick={() =>
             setTechStackItems((rows) => [...rows, { id: nextTechStackId.current++, label: "", domain: "", hostingProvider: "", app: "" }])
           }
-          className="mt-2 text-xs font-semibold text-amo-lime hover:underline"
+          className="text-xs font-semibold text-amo-lime hover:underline"
         >
           + {t.contactForm.addTechStackRow}
         </button>
-      </div>
+      </Card>
 
-      {/* Social media links — unlimited rows, e.g. a personal profile and a
-          separate business page on the same platform */}
-      <div>
-        <label className={LABEL_CLASS}>{t.contactForm.socialLinksTitle}</label>
-        <div className="mt-1 space-y-1.5">
-          {socialLinks.map((row) => (
-            <div key={row.id} className="flex items-center gap-1.5">
-              <AppSelect
-                name="socialPlatform"
-                value={row.platform}
-                onChange={(platform) => setSocialLinks((rows) => rows.map((r) => (r.id === row.id ? { ...r, platform } : r)))}
-                options={SOCIAL_PLATFORMS}
-              />
-              <input
-                type="url"
-                name="socialUrl"
-                defaultValue={row.url}
-                placeholder="https://…"
-                className={`${FIELD_CLASS} mt-0 flex-1`}
-              />
-              <button
-                type="button"
-                onClick={() => setSocialLinks((rows) => rows.filter((r) => r.id !== row.id))}
-                className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
-                aria-label={t.contactForm.removeEntry}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => setSocialLinks((rows) => [...rows, { id: nextSocialId.current++, platform: "Facebook", url: "" }])}
-            className="text-xs font-semibold text-amo-lime hover:underline"
-          >
-            + {t.contactForm.addSocialLink}
-          </button>
-        </div>
-      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card color="social" title={t.contactForm.cardSocialMedia}>
+          <div className="space-y-1.5">
+            {socialLinks.map((row) => (
+              <div key={row.id} className="flex items-center gap-1.5">
+                <AppSelect
+                  name="socialPlatform"
+                  value={row.platform}
+                  onChange={(platform) => setSocialLinks((rows) => rows.map((r) => (r.id === row.id ? { ...r, platform } : r)))}
+                  options={SOCIAL_PLATFORMS}
+                />
+                <input
+                  type="url"
+                  name="socialUrl"
+                  defaultValue={row.url}
+                  placeholder="https://…"
+                  className={`${FIELD_CLASS} mt-0 flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSocialLinks((rows) => rows.filter((r) => r.id !== row.id))}
+                  className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                  aria-label={t.contactForm.removeEntry}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setSocialLinks((rows) => [...rows, { id: nextSocialId.current++, platform: "Facebook", url: "" }])}
+              className="text-xs font-semibold text-amo-lime hover:underline"
+            >
+              + {t.contactForm.addSocialLink}
+            </button>
+          </div>
+        </Card>
 
-      {/* Preferred VoIP apps — separate from the instant-messaging list
-          above (a contact can chat on WhatsApp but prefer Zoom for calls). */}
-      <AppHandleList
-        title={t.contactForm.voipAppsTitle}
-        addLabel={t.contactForm.addVoipApp}
-        handlePlaceholder={t.contactForm.voipHandle}
-        appFieldName="voipApp"
-        handleFieldName="voipHandle"
-        appOptions={VOIP_APPS}
-        rows={voipAccounts}
-        setRows={setVoipAccounts}
-        removeLabel={t.contactForm.removeEntry}
-        onAdd={() => setVoipAccounts((rows) => [...rows, { id: nextVoipId.current++, app: VOIP_APPS[0], handle: "" }])}
-      />
-
-      <div>
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            name="autoSendInvoiceReminders"
-            defaultChecked={defaultValues?.autoSendInvoiceReminders ?? false}
-            className="accent-amo-lime"
+        <Card color="voip" title={t.contactForm.cardVoipApps}>
+          <AppHandleListBody
+            addLabel={t.contactForm.addVoipApp}
+            handlePlaceholder={t.contactForm.voipHandle}
+            appFieldName="voipApp"
+            handleFieldName="voipHandle"
+            appOptions={VOIP_APPS}
+            rows={voipAccounts}
+            setRows={setVoipAccounts}
+            removeLabel={t.contactForm.removeEntry}
+            onAdd={() => setVoipAccounts((rows) => [...rows, { id: nextVoipId.current++, app: VOIP_APPS[0], handle: "" }])}
           />
-          {t.contactForm.autoSendInvoiceReminders}
-        </label>
-        <p className="mt-1 text-xs text-soft">{t.contactForm.autoSendInvoiceRemindersHelp}</p>
+        </Card>
       </div>
 
-      {/* Read-only systeme.io sync info — nothing here is submitted with the
-          form, it's just where the contact's own record came from. */}
-      <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">
-        <h3 className={LABEL_CLASS}>{t.contactForm.systemeIoInfoTitle}</h3>
-        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+      <Card color="invoice" title={t.contactForm.cardInvoice}>
+        <div>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              name="autoSendInvoiceReminders"
+              defaultChecked={defaultValues?.autoSendInvoiceReminders ?? false}
+              className="accent-amo-lime"
+            />
+            {t.contactForm.autoSendInvoiceReminders}
+          </label>
+          <p className="mt-1 text-xs text-soft">{t.contactForm.autoSendInvoiceRemindersHelp}</p>
+        </div>
+      </Card>
+
+      <Card color="other" title={t.contactForm.cardOtherInfo}>
+        <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <p className={LABEL_CLASS}>{t.contactDetail.fieldSource}</p>
-            <p className="mt-1 text-sm text-ink">{defaultValues?.source ?? "—"}</p>
+            {isManual ? (
+              <input name="source" defaultValue={defaultValues?.source ?? "manual"} className={FIELD_CLASS} />
+            ) : (
+              <p className="mt-1 text-sm text-ink">{defaultValues?.source ?? "—"}</p>
+            )}
           </div>
           <div>
             <p className={LABEL_CLASS}>{t.contactDetail.registeredPrefix}</p>
-            <p className="mt-1 text-sm text-ink">
-              {defaultValues?.systemeIoRegisteredAt
-                ? format(new Date(defaultValues.systemeIoRegisteredAt), "PP", { locale: dateLocale })
-                : "—"}
-            </p>
+            <p className="mt-1 text-sm text-ink">{registeredAt ? format(new Date(registeredAt), "PP", { locale: dateLocale }) : "—"}</p>
           </div>
           <div>
             <p className={LABEL_CLASS}>{t.contactDetail.lastSyncedPrefix}</p>
@@ -528,18 +624,43 @@ export default function ContactForm({
             </p>
           </div>
         </div>
-      </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={LABEL_CLASS}>{t.contactDetail.servicesRequiredLabel}</label>
+            <input type="hidden" name="servicesRequiredSlug" value={servicesRequired?.fieldSlug ?? SERVICES_REQUIRED_DEFAULT_SLUG} />
+            <textarea name="servicesRequired" rows={2} defaultValue={servicesRequired?.value ?? ""} className={FIELD_CLASS} />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.contactDetail.projectGoalLabel}</label>
+            <input type="hidden" name="projectGoalDescriptionSlug" value={projectGoal?.fieldSlug ?? PROJECT_GOAL_DEFAULT_SLUG} />
+            <textarea name="projectGoalDescription" rows={2} defaultValue={projectGoal?.value ?? ""} className={FIELD_CLASS} />
+          </div>
+        </div>
+      </Card>
 
-      <div>
-        <label className={LABEL_CLASS}>{t.contactForm.notes}</label>
-        <textarea
-          name="notes"
-          rows={3}
-          defaultValue={defaultValues?.notes ?? ""}
-          className={FIELD_CLASS}
-        />
-      </div>
+      <Card color="notes" title={t.contactForm.cardNotes}>
+        <textarea name="notes" rows={3} defaultValue={defaultValues?.notes ?? ""} className={FIELD_CLASS} />
+      </Card>
     </form>
+  );
+}
+
+// A colored checkbox row matching this tag's pill color on the Contacts
+// list page, instead of a plain checkbox + label.
+function TagCheckbox({
+  tag,
+  checked,
+  onToggle,
+}: {
+  tag: { id: string; name: string };
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <label className={`mt-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm first:mt-0 ${TAG_KIND_COLORS[tagKind(tag.name)]}`}>
+      <input type="checkbox" checked={checked} onChange={onToggle} className="h-4 w-4 rounded border-card-border accent-amo-lime" />
+      {tag.name}
+    </label>
   );
 }
 
@@ -580,8 +701,7 @@ function AppSelect({
 // Shared shape for the Instant messaging apps and Preferred VoIP apps
 // sections — both are an unlimited list of (app, handle) rows with a live
 // icon preview, an "add" button, and a remove button per row.
-function AppHandleList({
-  title,
+function AppHandleListBody({
   addLabel,
   handlePlaceholder,
   appFieldName,
@@ -592,7 +712,6 @@ function AppHandleList({
   removeLabel,
   onAdd,
 }: {
-  title: string;
   addLabel: string;
   handlePlaceholder: string;
   appFieldName: string;
@@ -604,37 +723,48 @@ function AppHandleList({
   onAdd: () => void;
 }) {
   return (
+    <div className="space-y-1.5">
+      {rows.map((row) => (
+        <div key={row.id} className="flex items-center gap-1.5">
+          <AppSelect
+            name={appFieldName}
+            value={row.app}
+            onChange={(app) => setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, app } : r)))}
+            options={appOptions}
+          />
+          <input
+            type="text"
+            name={handleFieldName}
+            defaultValue={row.handle}
+            placeholder={handlePlaceholder}
+            className={`${FIELD_CLASS} mt-0 flex-1`}
+          />
+          <button
+            type="button"
+            onClick={() => setRows((rs) => rs.filter((r) => r.id !== row.id))}
+            className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+            aria-label={removeLabel}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={onAdd} className="text-xs font-semibold text-amo-lime hover:underline">
+        + {addLabel}
+      </button>
+    </div>
+  );
+}
+
+function AppHandleList(
+  props: Parameters<typeof AppHandleListBody>[0] & { title: string }
+) {
+  const { title, ...rest } = props;
+  return (
     <div>
       <label className={LABEL_CLASS}>{title}</label>
-      <div className="mt-1 space-y-1.5">
-        {rows.map((row) => (
-          <div key={row.id} className="flex items-center gap-1.5">
-            <AppSelect
-              name={appFieldName}
-              value={row.app}
-              onChange={(app) => setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, app } : r)))}
-              options={appOptions}
-            />
-            <input
-              type="text"
-              name={handleFieldName}
-              defaultValue={row.handle}
-              placeholder={handlePlaceholder}
-              className={`${FIELD_CLASS} mt-0 flex-1`}
-            />
-            <button
-              type="button"
-              onClick={() => setRows((rs) => rs.filter((r) => r.id !== row.id))}
-              className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
-              aria-label={removeLabel}
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-        <button type="button" onClick={onAdd} className="text-xs font-semibold text-amo-lime hover:underline">
-          + {addLabel}
-        </button>
+      <div className="mt-1">
+        <AppHandleListBody {...rest} />
       </div>
     </div>
   );
@@ -644,6 +774,7 @@ function AddressGroup({
   title,
   prefix,
   t,
+  lang,
   values,
   children,
   onRemove,
@@ -652,6 +783,7 @@ function AddressGroup({
   title: string;
   prefix: "" | "billing" | "extraAddress";
   t: ReturnType<typeof getDict>;
+  lang: Lang;
   // For "" and "billing", the full form's default values (fields already
   // live at the prefixed key, e.g. billingAddress). For "extraAddress", one
   // row's own unprefixed values ({address, city, state, zip, country}) —
@@ -701,7 +833,7 @@ function AddressGroup({
           <Field label={t.contactForm.city} name={field("City")} defaultValue={get("City")} />
           {regionOptions ? (
             <div>
-              <label className={LABEL_CLASS}>{t.contactForm.state}</label>
+              <label className={LABEL_CLASS}>{stateLabelForCountry(country, lang)}</label>
               <select name={field("State")} defaultValue={normalizedState} className={FIELD_CLASS}>
                 <option value="">—</option>
                 {regionOptions.map((opt) => (
@@ -712,11 +844,11 @@ function AddressGroup({
               </select>
             </div>
           ) : (
-            <Field label={t.contactForm.state} name={field("State")} defaultValue={get("State")} />
+            <Field label={stateLabelForCountry(country, lang)} name={field("State")} defaultValue={get("State")} />
           )}
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <Field label={t.contactForm.zip} name={field("Zip")} defaultValue={get("Zip")} />
+          <Field label={zipLabelForCountry(country, lang)} name={field("Zip")} defaultValue={get("Zip")} />
           <div>
             <label className={LABEL_CLASS}>{t.contactForm.country}</label>
             <select
@@ -780,6 +912,7 @@ function Field({
   defaultValue,
   as,
   options,
+  list,
 }: {
   label: string;
   name: string;
@@ -788,6 +921,7 @@ function Field({
   defaultValue?: string | null;
   as?: "select";
   options?: { value: string; label: string }[];
+  list?: string;
 }) {
   return (
     <div>
@@ -809,6 +943,7 @@ function Field({
           type={type}
           required={required}
           defaultValue={defaultValue ?? ""}
+          list={list}
           className={FIELD_CLASS}
         />
       )}

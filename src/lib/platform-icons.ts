@@ -1,9 +1,13 @@
 // Real brand icons for social platforms and messaging apps, via Simple
-// Icons' CDN build (each SVG already carries that brand's own color) —
-// same "reference a public icon CDN by URL" approach already used for
-// country flags (country-flag.ts) and crypto logos (markets.ts), rather
-// than hand-maintaining SVG path data locally.
-const SIMPLE_ICONS_BASE = "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons";
+// Icons' own hosted CDN — same "reference a public icon CDN by URL"
+// approach already used for country flags (country-flag.ts) and crypto
+// logos (markets.ts), rather than hand-maintaining SVG path data locally.
+// Deliberately NOT jsdelivr's raw npm package (cdn.jsdelivr.net/npm/
+// simple-icons/icons/*.svg) — those SVGs use `fill: currentColor` with no
+// color baked in, so an <img> renders them plain black. simpleicons.org's
+// own CDN serves each icon pre-colored in its official brand color by
+// default (a hex path segment after the slug overrides that color).
+const SIMPLE_ICONS_BASE = "https://cdn.simpleicons.org";
 
 const SLUGS: Record<string, string> = {
   Facebook: "facebook",
@@ -37,7 +41,7 @@ const SLUGS: Record<string, string> = {
 // FaceTime) — the caller falls back to a generic icon for those.
 export function platformIconUrl(platform: string): string | null {
   const slug = SLUGS[platform];
-  return slug ? `${SIMPLE_ICONS_BASE}/${slug}.svg` : null;
+  return slug ? `${SIMPLE_ICONS_BASE}/${slug}` : null;
 }
 
 // Instant-messaging apps, offered on the Contact form's unified messaging

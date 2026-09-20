@@ -126,6 +126,11 @@ model Contact {
   website   String?
 
   // --- Our own CRM-level fields (not from systeme.io) ---
+  // Legal structure (e.g. "LLC", "Inc.") and business category — free text
+  // backed by a suggestion list on the form, not a rigid enum, since these
+  // vary a lot by country.
+  companyType String?
+  industry    String?
   // Only the core fields above (phone/address/city/state/zip/country) are
   // pushed back to systeme.io on save — everything below is CRM-only
   // enrichment with no systeme.io equivalent.

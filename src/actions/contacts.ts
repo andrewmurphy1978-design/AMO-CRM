@@ -21,8 +21,14 @@ const ContactSchema = z.object({
   phone2: z.string().trim().optional(),
   extraPhones: z.array(z.string().trim()).optional(),
   company: z.string().trim().optional(),
+  companyType: z.string().trim().optional(),
+  industry: z.string().trim().optional(),
   locale: z.string().trim().optional(),
   timeZone: z.string().trim().optional(),
+  // Only ever actually submitted when the contact isn't systeme.io-synced
+  // (see contact-form.tsx) — for a synced contact the field isn't rendered,
+  // so this resolves to undefined and Prisma's update leaves it untouched.
+  source: z.string().trim().optional(),
   address: z.string().trim().optional(),
   city: z.string().trim().optional(),
   state: z.string().trim().optional(),
@@ -60,8 +66,11 @@ const CONTACT_FORM_FIELDS = [
   "phone",
   "phone2",
   "company",
+  "companyType",
+  "industry",
   "locale",
   "timeZone",
+  "source",
   "address",
   "city",
   "state",
@@ -161,6 +170,38 @@ function readVoipAccounts(formData: FormData) {
     rows.push({ app: (apps[i] ?? "Other").trim() || "Other", handle, order: rows.length });
   }
   return rows;
+}
+
+// Reads one editable "known" systeme.io custom field — the value input and
+// a hidden input carrying the exact fieldSlug to write it under (resolved
+// client-side in contact-form.tsx: an existing ContactFieldValue row's own
+// slug when there is one, otherwise the field's default slug). Returns null
+// if the slug is missing (shouldn't happen — the hidden input always
+// renders — but guards against a malformed submission touching an
+// unintended field).
+function readCustomFieldEdit(formData: FormData, valueField: string, slugField: string): { slug: string; value: string } | null {
+  const slug = String(formData.get(slugField) ?? "").trim();
+  if (!slug) return null;
+  return { slug, value: String(formData.get(valueField) ?? "").trim() };
+}
+
+async function saveCustomFieldEdits(db: PrismaClient, contactId: string, formData: FormData) {
+  const edits = [
+    readCustomFieldEdit(formData, "servicesRequired", "servicesRequiredSlug"),
+    readCustomFieldEdit(formData, "projectGoalDescription", "projectGoalDescriptionSlug"),
+  ].filter((edit): edit is { slug: string; value: string } => edit !== null);
+
+  for (const edit of edits) {
+    if (edit.value) {
+      await db.contactFieldValue.upsert({
+        where: { contactId_fieldSlug: { contactId, fieldSlug: edit.slug } },
+        update: { value: edit.value },
+        create: { contactId, fieldSlug: edit.slug, value: edit.value },
+      });
+    } else {
+      await db.contactFieldValue.deleteMany({ where: { contactId, fieldSlug: edit.slug } });
+    }
+  }
 }
 
 // Parallel "techStack{Label,Domain,HostingProvider,App}" inputs (same
@@ -355,6 +396,8 @@ export async function createContact(
       });
     }
 
+    await saveCustomFieldEdits(db, contact.id, formData);
+
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     for (const name of desiredTags) {
       await addTagToContactWith(db, contact.id, name);
@@ -456,11 +499,15 @@ export async function updateContact(
       });
     }
 
+    await saveCustomFieldEdits(db, contactId, formData);
+
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     await syncContactTagsWith(db, contactId, desiredTags);
 
     // Best-effort push back to systeme.io — never fails the CRM save itself.
-    let warning = "";
+    // Reported back either way (success or failure) so "Contact updated"
+    // doesn't leave the user guessing whether systeme.io actually got it.
+    let syncStatus = "";
     if (updated.systemeIoId) {
       try {
         const client = await getSystemeIoClient(db);
@@ -474,17 +521,16 @@ export async function updateContact(
             fields[slug] = column === "country" ? (countryToCode(value) ?? value) : value;
           }
           const { skipped } = await client.updateContactFields(updated.systemeIoId, fields);
-          if (skipped.length > 0) {
-            warning = t.actions.contactUpdatedPartialWarning(skipped);
-          }
+          syncStatus =
+            skipped.length > 0 ? t.actions.contactUpdatedPartialWarning(skipped) : t.actions.contactUpdatedSystemeIoSynced;
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "unknown error";
-        warning = t.actions.contactUpdatedWarning(message);
+        syncStatus = t.actions.contactUpdatedWarning(message);
       }
     }
 
-    return { warning };
+    return { syncStatus };
   });
 
   if ("error" in result) {
@@ -493,7 +539,7 @@ export async function updateContact(
 
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${contactId}`);
-  return { success: `${t.actions.contactUpdated}${result.warning}` };
+  return { success: `${t.actions.contactUpdated}${result.syncStatus}` };
 }
 
 export async function deleteContact(contactId: string) {

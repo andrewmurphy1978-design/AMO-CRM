@@ -27,6 +27,7 @@ export default async function EditContactPage({
         messagingAccounts: { orderBy: { order: "asc" } },
         voipAccounts: { orderBy: { order: "asc" } },
         techStackItems: { orderBy: { order: "asc" } },
+        fieldValues: true,
       },
     });
     const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
