@@ -15,7 +15,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { countryFullName } from "@/lib/country-flag";
-import { getTimezoneForCountryState } from "@/lib/timezone";
+import { getTimezoneForCountryState, utcOffsetLabel } from "@/lib/timezone";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import ContactTimezoneCard from "@/components/contact-timezone-card";
@@ -184,6 +184,7 @@ export default async function ContactDetailPage({
         socialLinks: { orderBy: { createdAt: "asc" } },
         extraAddresses: { orderBy: { order: "asc" } },
         messagingAccounts: { orderBy: { order: "asc" } },
+        voipAccounts: { orderBy: { order: "asc" } },
         techStackItems: { orderBy: { order: "asc" } },
       },
     });
@@ -243,9 +244,10 @@ export default async function ContactDetailPage({
     ])
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-  // Primary address only (not the "other"/billing addresses) drives the
-  // contact's own local time card.
-  const contactTimeZone = getTimezoneForCountryState(contact.country, contact.state);
+  // An explicitly-chosen Time Zone on the contact record wins over the
+  // country/state-derived guess. Primary address only (not the "other"/
+  // billing addresses) drives the fallback guess.
+  const contactTimeZone = contact.timeZone || getTimezoneForCountryState(contact.country, contact.state);
   const timeZoneLocationLabel =
     [contact.city, contact.state ?? countryFullName(contact.country)].filter(Boolean).join(", ") ||
     countryFullName(contact.country);
@@ -294,8 +296,8 @@ export default async function ContactDetailPage({
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
             <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.contactDetailsTitle}</h2>
 
-            {/* Line 1: Email (wide), Phone numbers (stacked), WhatsApp */}
-            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4">
+            {/* Line 1: Email (wide), Phone numbers */}
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
               <div className="sm:col-span-2">
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldEmail}</dt>
                 <dd className="space-y-0.5 text-ink">
@@ -324,16 +326,10 @@ export default async function ContactDetailPage({
                   ))}
                 </dd>
               </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldWhatsapp}</dt>
-                <dd className="text-ink">
-                  <PhoneDisplay value={contact.whatsapp} country={contact.country} />
-                </dd>
-              </div>
             </dl>
 
-            {/* Line 2: Company, Language */}
-            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            {/* Line 2: Company, Language, Time zone */}
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
               <div>
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldCompany}</dt>
                 <dd className="text-ink">{contact.company ?? "—"}</dd>
@@ -341,6 +337,12 @@ export default async function ContactDetailPage({
               <div>
                 <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldLanguage}</dt>
                 <dd className="text-ink">{languageDisplay(contact.locale, t)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldTimeZone}</dt>
+                <dd className="text-ink">
+                  {contact.timeZone ? `(${utcOffsetLabel(contact.timeZone)}) ${contact.timeZone.replace(/_/g, " ")}` : "—"}
+                </dd>
               </div>
             </dl>
 
@@ -476,13 +478,31 @@ export default async function ContactDetailPage({
               </div>
             )}
 
-            {/* Other messaging apps (Telegram, Discord, etc.) — WhatsApp has
-                its own dedicated field above */}
+            {/* Instant messaging apps (WhatsApp, Telegram, Discord, etc.) */}
             {contact.messagingAccounts.length > 0 && (
               <div className="mt-6">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.messagingAppsTitle}</h3>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {contact.messagingAccounts.map((row) => (
+                    <span
+                      key={row.id}
+                      className="flex items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink"
+                    >
+                      <PlatformIcon platform={row.app} className="h-4 w-4" />
+                      {row.handle}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Preferred VoIP apps (Zoom, Google Meet, Teams, etc.) —
+                distinct from the instant-messaging list above */}
+            {contact.voipAccounts.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.voipAppsTitle}</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {contact.voipAccounts.map((row) => (
                     <span
                       key={row.id}
                       className="flex items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink"

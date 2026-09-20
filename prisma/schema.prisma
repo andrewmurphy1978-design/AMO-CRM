@@ -135,7 +135,10 @@ model Contact {
   // "+" button on the Contact form — order in the array is display order.
   extraPhones String[] @default([])
   extraEmails String[] @default([])
-  whatsapp    String?
+  // IANA zone id (e.g. "America/Toronto"), explicitly chosen on the Contact
+  // form — takes precedence over the country/state-derived guess in
+  // getTimezoneForCountryState when set.
+  timeZone    String?
 
   billingAddress           String?
   billingCity              String?
@@ -189,6 +192,7 @@ model Contact {
   socialLinks          ContactSocialLink[]
   extraAddresses       ContactAddress[]
   messagingAccounts    ContactMessagingAccount[]
+  voipAccounts         ContactVoipAccount[]
   techStackItems       ContactTechStackItem[]
 
   @@index([stage])
@@ -230,6 +234,24 @@ model ContactMessagingAccount {
 
   @@index([contactId])
   @@map("contact_messaging_accounts")
+}
+
+// Preferred video/voice calling apps — Zoom, Google Meet, Teams, Skype,
+// FaceTime, etc. — distinct from the instant-messaging apps above (a
+// contact can prefer WhatsApp for chat but Zoom for calls). Each row is an
+// app + the contact's ID/link/handle on it, added via the Contact form's
+// "+" button; more than one is allowed.
+model ContactVoipAccount {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  app       String
+  handle    String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([contactId])
+  @@map("contact_voip_accounts")
 }
 
 // Extra tech-stack rows beyond the fixed Website/Funnels/Email/Store ones

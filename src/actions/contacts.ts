@@ -20,9 +20,9 @@ const ContactSchema = z.object({
   phone: z.string().trim().optional(),
   phone2: z.string().trim().optional(),
   extraPhones: z.array(z.string().trim()).optional(),
-  whatsapp: z.string().trim().optional(),
   company: z.string().trim().optional(),
   locale: z.string().trim().optional(),
+  timeZone: z.string().trim().optional(),
   address: z.string().trim().optional(),
   city: z.string().trim().optional(),
   state: z.string().trim().optional(),
@@ -59,9 +59,9 @@ const CONTACT_FORM_FIELDS = [
   "lastName",
   "phone",
   "phone2",
-  "whatsapp",
   "company",
   "locale",
+  "timeZone",
   "address",
   "city",
   "state",
@@ -139,6 +139,21 @@ function readExtraAddresses(formData: FormData) {
 function readMessagingAccounts(formData: FormData) {
   const apps = formData.getAll("messagingApp").map(String);
   const handles = formData.getAll("messagingHandle").map(String);
+  const rows: { app: string; handle: string; order: number }[] = [];
+  for (let i = 0; i < handles.length; i++) {
+    const handle = handles[i]?.trim() ?? "";
+    if (!handle) continue;
+    rows.push({ app: (apps[i] ?? "Other").trim() || "Other", handle, order: rows.length });
+  }
+  return rows;
+}
+
+// Parallel "voipApp"/"voipHandle" inputs (same index = same row) — preferred
+// video/voice calling apps, a separate list from the instant-messaging one
+// above.
+function readVoipAccounts(formData: FormData) {
+  const apps = formData.getAll("voipApp").map(String);
+  const handles = formData.getAll("voipHandle").map(String);
   const rows: { app: string; handle: string; order: number }[] = [];
   for (let i = 0; i < handles.length; i++) {
     const handle = handles[i]?.trim() ?? "";
@@ -326,6 +341,13 @@ export async function createContact(
       });
     }
 
+    const voipAccounts = readVoipAccounts(formData);
+    if (voipAccounts.length > 0) {
+      await db.contactVoipAccount.createMany({
+        data: voipAccounts.map((row) => ({ ...row, contactId: contact.id })),
+      });
+    }
+
     const techStackItems = readTechStackItems(formData);
     if (techStackItems.length > 0) {
       await db.contactTechStackItem.createMany({
@@ -415,6 +437,14 @@ export async function updateContact(
     if (messagingAccounts.length > 0) {
       await db.contactMessagingAccount.createMany({
         data: messagingAccounts.map((row) => ({ ...row, contactId })),
+      });
+    }
+
+    const voipAccounts = readVoipAccounts(formData);
+    await db.contactVoipAccount.deleteMany({ where: { contactId } });
+    if (voipAccounts.length > 0) {
+      await db.contactVoipAccount.createMany({
+        data: voipAccounts.map((row) => ({ ...row, contactId })),
       });
     }
 

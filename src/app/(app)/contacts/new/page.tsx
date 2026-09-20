@@ -1,21 +1,34 @@
 import ContactForm from "../contact-form";
 import { createContact } from "@/actions/contacts";
+import { auth } from "@/lib/auth";
+import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 import { withScopedPrismaClient } from "@/lib/prisma";
 
 export default async function NewContactPage() {
   const lang = await getLang();
   const t = getDict(lang);
-  const allTags = await withScopedPrismaClient((db) => db.tag.findMany({ orderBy: { name: "asc" } }));
+  const dateLocale = getDateLocale(lang);
+  const session = await auth();
+
+  const { allTags, hour12 } = await withScopedPrismaClient(async (db) => {
+    const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
+    const hour12 = await getHour12(session, db);
+    return { allTags, hour12 };
+  });
 
   return (
-    <div className="max-w-5xl">
-      <h1 className="font-display text-2xl font-semibold text-ink">{t.newContactPage.title}</h1>
-      <p className="mt-1 text-sm text-soft">{t.newContactPage.subtitle}</p>
-      <div className="mt-6 rounded-lg border border-card-border bg-card-bg p-6 shadow-sm">
-        <ContactForm action={createContact} submitLabel={t.contactForm.createContact} lang={lang} allTags={allTags} />
-      </div>
-    </div>
+    <ContactForm
+      action={createContact}
+      submitLabel={t.contactForm.createContact}
+      lang={lang}
+      allTags={allTags}
+      title={t.newContactPage.title}
+      hour12={hour12}
+      dateLocale={dateLocale}
+      location={t.dashboard.myLocation}
+    />
   );
 }

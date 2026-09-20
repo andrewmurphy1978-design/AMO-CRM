@@ -23,6 +23,8 @@ export default function PhoneField({
   defaultValue,
   hideLabel,
   hideExtension,
+  onRemove,
+  removeLabel,
 }: {
   name: string;
   label: string;
@@ -32,6 +34,12 @@ export default function PhoneField({
   // WhatsApp numbers don't take extensions — unlike a landline/office phone
   // number, there's no PBX behind it to route through.
   hideExtension?: boolean;
+  // Rendered as part of this same flex row (not wrapped around the outside
+  // by the caller) so a removable row is pixel-identical to a fixed one —
+  // wrapping from outside used to squeeze this field's own internal layout
+  // unpredictably depending on what else shared the row with it.
+  onRemove?: () => void;
+  removeLabel?: string;
 }) {
   // Contacts synced from systeme.io often have phone numbers stored in
   // national format (e.g. "(514) 950-6985") rather than the E.164 string
@@ -68,6 +76,16 @@ export default function PhoneField({
             aria-label="Extension"
             className="w-24 shrink-0 rounded-md border border-card-border bg-field-bg px-2 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           />
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+            aria-label={removeLabel}
+          >
+            ✕
+          </button>
         )}
       </div>
       <input type="hidden" name={name} value={hideExtension ? (value ?? "") : combined} />
