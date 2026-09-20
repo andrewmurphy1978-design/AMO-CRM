@@ -31,6 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     // projects/tasks/bookings) — the previous embedded Google Calendar
     // view is kept, unlinked, at /calendar as a fallback to revert to.
     { href: "/calendar-app", label: t.nav.calendar },
+    { href: "/tasks", label: t.nav.tasks },
     { href: "/contacts", label: t.nav.contacts },
     { href: "/projects", label: t.nav.projects },
     { href: "/marketing", label: t.nav.marketing },

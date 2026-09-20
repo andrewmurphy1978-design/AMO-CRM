@@ -5,10 +5,12 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 type TaskFormValues = {
   title?: string;
+  phaseId?: string | null;
   description?: string | null;
   status?: string;
   priority?: string;
   assigneeId?: string | null;
+  startDate?: Date | string | null;
   dueDate?: Date | string | null;
 };
 
@@ -17,6 +19,7 @@ export default function TaskForm({
   projectId,
   defaultValues,
   users,
+  phases,
   submitLabel,
   lang,
 }: {
@@ -27,6 +30,7 @@ export default function TaskForm({
   projectId: string;
   defaultValues?: TaskFormValues;
   users: { id: string; name: string }[];
+  phases?: { id: string; name: string }[];
   submitLabel: string;
   lang: Lang;
 }) {
@@ -105,6 +109,15 @@ export default function TaskForm({
           </select>
         </div>
         <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.startDate}</label>
+          <input
+            type="date"
+            name="startDate"
+            defaultValue={toDateInput(defaultValues?.startDate)}
+            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+          />
+        </div>
+        <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.dueDate}</label>
           <input
             type="date"
@@ -113,6 +126,23 @@ export default function TaskForm({
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           />
         </div>
+        {phases && phases.length > 0 && (
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.phase}</label>
+            <select
+              name="phaseId"
+              defaultValue={defaultValues?.phaseId ?? ""}
+              className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+            >
+              <option value="">{t.taskForm.noPhase}</option>
+              {phases.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div>

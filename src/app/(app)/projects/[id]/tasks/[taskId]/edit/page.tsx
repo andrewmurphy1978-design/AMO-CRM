@@ -13,10 +13,11 @@ export default async function EditTaskPage({
   const { id, taskId } = await params;
 
   // One shared client — see src/lib/prisma.ts for why.
-  const { task, users } = await withScopedPrismaClient(async (db) => {
+  const { task, users, phases } = await withScopedPrismaClient(async (db) => {
     const task = await db.task.findUnique({ where: { id: taskId } });
     const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
-    return { task, users };
+    const phases = await db.projectPhase.findMany({ where: { projectId: id }, orderBy: { order: "asc" } });
+    return { task, users, phases };
   });
 
   if (!task || task.projectId !== id) notFound();
@@ -34,6 +35,7 @@ export default async function EditTaskPage({
           projectId={id}
           defaultValues={task}
           users={users}
+          phases={phases}
           submitLabel={t.taskForm.saveChanges}
           lang={lang}
         />
