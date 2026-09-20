@@ -4,6 +4,7 @@ import { useActionState, useRef, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { COUNTRIES } from "@/lib/countries";
 import { countryToCode } from "@/lib/country-flag";
+import { regionOptionsForCountry, normalizeRegionForCountry } from "@/lib/regions";
 import PhoneField from "@/components/phone-field";
 import MultiSelect from "@/components/multi-select";
 
@@ -119,11 +120,23 @@ export default function ContactForm({
         <input key={name} type="hidden" name="tags" value={name} />
       ))}
 
-      {/* Line 1: Email (wide), Phone numbers (stacked), WhatsApp */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="sm:col-span-2 space-y-1.5">
+      {/* Line 1: Email (wide), Phone numbers (stacked), WhatsApp — the phone
+          column needs more than a plain 1-of-4 share once a row grows a
+          remove button (and, further down, an extension input): at the old
+          equal-ish widths that combination overflowed rightward into the
+          WhatsApp column, whose own unclipped grid cell (painted later in
+          DOM order) then silently ate the click meant for the button
+          underneath it. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="sm:col-span-2 lg:col-span-1 space-y-1.5">
           <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
-          <Field label={t.contactForm.email2} name="email2" type="email" defaultValue={defaultValues?.email2 ?? ""} />
+          <input
+            type="email"
+            name="email2"
+            defaultValue={defaultValues?.email2 ?? ""}
+            aria-label={t.contactForm.email2}
+            className={FIELD_CLASS}
+          />
           {extraEmails.map((row) => (
             <div key={row.id} className="flex items-end gap-1.5">
               <div className="flex-1">
@@ -254,12 +267,29 @@ export default function ContactForm({
         </AddressGroup>
       </div>
 
-      {/* Line 4: tech stack — Website, Funnels, Email, Store side by side */}
-      <div className="grid gap-4 lg:grid-cols-4">
-        <TechStackGroup title={t.contactForm.websiteGroupTitle} prefix="website" t={t} values={defaultValues} />
-        <TechStackGroup title={t.contactForm.funnelsGroupTitle} prefix="funnels" t={t} values={defaultValues} />
-        <TechStackGroup title={t.contactForm.emailGroupTitle} prefix="email" t={t} values={defaultValues} showMarketingApp />
-        <TechStackGroup title={t.contactForm.storeGroupTitle} prefix="store" t={t} values={defaultValues} />
+      {/* Line 4: tech stack — one row per Website/Funnels/Email/Store,
+          columns Domain/Provider/App, instead of 4 separate cards — much
+          less vertical space for what's otherwise 12 near-identical fields. */}
+      <div>
+        <h3 className={LABEL_CLASS}>{t.contactForm.techStackTitle}</h3>
+        <div className="mt-2 overflow-x-auto rounded-lg border border-card-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-card-border bg-black/[0.02] text-left text-xs uppercase tracking-wide text-soft">
+                <th className="px-3 py-2 font-semibold"></th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.domain}</th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.hostingProvider}</th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.appColumn}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-card-border">
+              <TechStackRow label={t.contactForm.websiteGroupTitle} prefix="website" values={defaultValues} />
+              <TechStackRow label={t.contactForm.funnelsGroupTitle} prefix="funnels" values={defaultValues} />
+              <TechStackRow label={t.contactForm.emailGroupTitle} prefix="email" values={defaultValues} appSuffix="MarketingApp" />
+              <TechStackRow label={t.contactForm.storeGroupTitle} prefix="store" values={defaultValues} />
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Social media links — unlimited rows, e.g. a personal profile and a
@@ -272,7 +302,12 @@ export default function ContactForm({
               <select
                 name="socialPlatform"
                 defaultValue={row.platform}
-                className={`${FIELD_CLASS} mt-0 w-40 shrink-0`}
+                // Deliberately not spreading FIELD_CLASS here — it bakes in
+                // `w-full`, which (regardless of class order in this string)
+                // wins over a plain `w-*` override in Tailwind's generated
+                // stylesheet and silently stretched this select to fill the
+                // row, squeezing the URL input next to it down to nothing.
+                className="mt-0 w-28 shrink-0 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
               >
                 {SOCIAL_PLATFORMS.map((p) => (
                   <option key={p} value={p}>
@@ -363,6 +398,14 @@ function AddressGroup({
     return (values?.[key] as string | null | undefined) ?? "";
   };
 
+  // Tracked locally so the State/Province field can switch to a region
+  // dropdown (or back to free text) the moment Country changes, without a
+  // page reload — the dropdown's own value is normalized to that country's
+  // 2-letter/short code, matching whatever's already stored when possible.
+  const [country, setCountry] = useState(get("Country") || "Canada");
+  const regionOptions = regionOptionsForCountry(country);
+  const normalizedState = normalizeRegionForCountry(country, get("State"));
+
   return (
     <div className="rounded-lg border border-card-border p-4">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h3>
@@ -373,13 +416,32 @@ function AddressGroup({
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Field label={t.contactForm.city} name={field("City")} defaultValue={get("City")} />
-          <Field label={t.contactForm.state} name={field("State")} defaultValue={get("State")} />
+          {regionOptions ? (
+            <div>
+              <label className={LABEL_CLASS}>{t.contactForm.state}</label>
+              <select name={field("State")} defaultValue={normalizedState} className={FIELD_CLASS}>
+                <option value="">—</option>
+                {regionOptions.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name} ({opt.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <Field label={t.contactForm.state} name={field("State")} defaultValue={get("State")} />
+          )}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Field label={t.contactForm.zip} name={field("Zip")} defaultValue={get("Zip")} />
           <div>
             <label className={LABEL_CLASS}>{t.contactForm.country}</label>
-            <select name={field("Country")} defaultValue={get("Country") || "Canada"} className={FIELD_CLASS}>
+            <select
+              name={field("Country")}
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className={FIELD_CLASS}
+            >
               {COUNTRIES.map((c) => (
                 <option key={c.code} value={c.name}>
                   {c.name}
@@ -394,35 +456,36 @@ function AddressGroup({
   );
 }
 
-function TechStackGroup({
-  title,
+const TABLE_INPUT_CLASS =
+  "w-full rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
+
+function TechStackRow({
+  label,
   prefix,
-  t,
   values,
-  showMarketingApp,
+  appSuffix = "DesignApp",
 }: {
-  title: string;
+  label: string;
   prefix: "website" | "funnels" | "email" | "store";
-  t: ReturnType<typeof getDict>;
   values?: ContactFormValues;
-  showMarketingApp?: boolean;
+  appSuffix?: "DesignApp" | "MarketingApp";
 }) {
   const field = (suffix: string) => `${prefix}${suffix}` as keyof ContactFormValues;
   const get = (suffix: string): string => (values?.[field(suffix)] as string | null | undefined) ?? "";
 
   return (
-    <div className="rounded-lg border border-card-border p-4">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h3>
-      <div className="mt-3 grid gap-4">
-        <Field label={t.contactForm.domain} name={field("Domain")} defaultValue={get("Domain")} />
-        <Field label={t.contactForm.hostingProvider} name={field("HostingProvider")} defaultValue={get("HostingProvider")} />
-        {showMarketingApp ? (
-          <Field label={t.contactForm.marketingApp} name={field("MarketingApp")} defaultValue={get("MarketingApp")} />
-        ) : (
-          <Field label={t.contactForm.designApp} name={field("DesignApp")} defaultValue={get("DesignApp")} />
-        )}
-      </div>
-    </div>
+    <tr>
+      <td className="whitespace-nowrap px-3 py-2 text-xs font-semibold uppercase tracking-wide text-soft">{label}</td>
+      <td className="px-3 py-2">
+        <input name={field("Domain")} defaultValue={get("Domain")} className={TABLE_INPUT_CLASS} />
+      </td>
+      <td className="px-3 py-2">
+        <input name={field("HostingProvider")} defaultValue={get("HostingProvider")} className={TABLE_INPUT_CLASS} />
+      </td>
+      <td className="px-3 py-2">
+        <input name={field(appSuffix)} defaultValue={get(appSuffix)} className={TABLE_INPUT_CLASS} />
+      </td>
+    </tr>
   );
 }
 

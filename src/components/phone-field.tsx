@@ -4,7 +4,7 @@ import { useState } from "react";
 import PhoneInput, { type Value, type Country } from "react-phone-number-input";
 import flags from "react-phone-number-input/flags";
 import "react-phone-number-input/style.css";
-import { toE164 } from "@/lib/phone-display";
+import { toE164, splitPhoneExtension } from "@/lib/phone-display";
 
 // A flag-first international phone field (like the one on the marketing
 // site's funnel forms): the calling code is picked from the flag dropdown
@@ -13,7 +13,9 @@ import { toE164 } from "@/lib/phone-display";
 // field elsewhere in the form. `defaultCountry` only seeds the flag shown
 // before the user picks one. The formatted display and the calling code
 // live in the same widget, but the value submitted with the form is the
-// full E.164 string (e.g. "+15149536985"), carried via a hidden input.
+// full E.164 string (e.g. "+15149536985"), plus " x1234" appended when an
+// extension was entered — carried via a single hidden input either way, so
+// no caller needs its own extra form field or column just for this.
 export default function PhoneField({
   name,
   label,
@@ -30,23 +32,39 @@ export default function PhoneField({
   // Contacts synced from systeme.io often have phone numbers stored in
   // national format (e.g. "(514) 950-6985") rather than the E.164 string
   // this widget's controlled `value` prop requires to render formatted —
-  // normalize once up front using the same country hint as the flag.
-  const [value, setValue] = useState<Value | undefined>(
-    (toE164(defaultValue, defaultCountry) as Value) || undefined
-  );
+  // normalize once up front using the same country hint as the flag. Any
+  // trailing extension is split off before parsing and kept in its own
+  // field, never fed to the phone-number widget itself.
+  const [initialNumber] = useState(() => splitPhoneExtension(defaultValue ?? "").number);
+  const [initialExt] = useState(() => splitPhoneExtension(defaultValue ?? "").ext ?? "");
+  const [value, setValue] = useState<Value | undefined>((toE164(initialNumber, defaultCountry) as Value) || undefined);
+  const [ext, setExt] = useState(initialExt);
+
+  const combined = ext.trim() ? `${value ?? ""} x${ext.trim()}` : (value ?? "");
 
   return (
     <div>
       {!hideLabel && <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{label}</label>}
-      <PhoneInput
-        international
-        flags={flags}
-        defaultCountry={defaultCountry as Country}
-        value={value}
-        onChange={setValue}
-        className={hideLabel ? "amo-phone-input" : "amo-phone-input mt-1"}
-      />
-      <input type="hidden" name={name} value={value ?? ""} />
+      <div className={`flex items-center gap-1.5 ${hideLabel ? "" : "mt-1"}`}>
+        <PhoneInput
+          international
+          flags={flags}
+          defaultCountry={defaultCountry as Country}
+          value={value}
+          onChange={setValue}
+          className="amo-phone-input min-w-0 flex-1"
+        />
+        <input
+          type="text"
+          inputMode="numeric"
+          value={ext}
+          onChange={(e) => setExt(e.target.value.replace(/[^\d]/g, ""))}
+          placeholder="ext."
+          aria-label="Extension"
+          className="w-16 shrink-0 rounded-md border border-card-border bg-field-bg px-2 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+        />
+      </div>
+      <input type="hidden" name={name} value={combined} />
     </div>
   );
 }

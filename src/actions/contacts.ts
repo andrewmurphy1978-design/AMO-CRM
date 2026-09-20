@@ -8,6 +8,7 @@ import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getSystemeIoClient } from "@/lib/sync";
 import { DEFAULT_PUSH_FIELD_SLUGS } from "@/lib/systemeio";
 import { countryToCode } from "@/lib/country-flag";
+import { normalizeRegionForCountry } from "@/lib/regions";
 import { getDict } from "@/lib/i18n/dictionaries";
 
 const ContactSchema = z.object({
@@ -125,6 +126,12 @@ function readContactForm(formData: FormData) {
   for (const field of CONTACT_FORM_FIELDS) {
     raw[field] = String(formData.get(field) ?? "").trim() || undefined;
   }
+  // Belt-and-suspenders: the edit form's region dropdown already submits a
+  // canonical code when the country has one, but this keeps state/province
+  // correct for any older data or a direct API call too.
+  raw.state = normalizeRegionForCountry(raw.country as string | undefined, raw.state as string | undefined) || undefined;
+  raw.otherState = normalizeRegionForCountry(raw.otherCountry as string | undefined, raw.otherState as string | undefined) || undefined;
+  raw.billingState = normalizeRegionForCountry(raw.billingCountry as string | undefined, raw.billingState as string | undefined) || undefined;
   return ContactSchema.parse(raw);
 }
 

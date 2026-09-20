@@ -195,11 +195,9 @@ export default async function ContactsPage({
                   </td>
                   <td className="px-4 py-3 text-ink/70">
                     <div>{contact.email}</div>
-                    {contact.email2 && <div className="text-xs text-soft">{contact.email2}</div>}
+                    {contact.email2 && <div>{contact.email2}</div>}
                     {contact.extraEmails.map((email) => (
-                      <div key={email} className="text-xs text-soft">
-                        {email}
-                      </div>
+                      <div key={email}>{email}</div>
                     ))}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-ink/70">
@@ -207,12 +205,12 @@ export default async function ContactsPage({
                       <PhoneDisplay value={contact.phone} country={contact.country} />
                     </div>
                     {contact.phone2 && (
-                      <div className="text-xs text-soft">
+                      <div>
                         <PhoneDisplay value={contact.phone2} country={contact.country} />
                       </div>
                     )}
                     {contact.extraPhones.map((phone) => (
-                      <div key={phone} className="text-xs text-soft">
+                      <div key={phone}>
                         <PhoneDisplay value={phone} country={contact.country} />
                       </div>
                     ))}

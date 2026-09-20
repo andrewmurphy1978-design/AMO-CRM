@@ -18,6 +18,20 @@ import { parsePhoneNumber, type CountryCode, type PhoneNumber } from "libphonenu
 // this is only attempted once there are enough digits (11+) that a stray
 // national-only number (typically 10 digits or fewer) can't be mistaken for
 // one with a calling code prefix.
+// Recognizes "x1234", "ext 1234", "ext. 1234", "extension 1234" (any
+// casing, with or without a preceding space) at the end of a stored phone
+// value, so an extension can travel inside the same single text field
+// instead of needing its own column. Digits-only on purpose — a stray "x"
+// inside a formatted number (there isn't one) would never match this
+// anchored-at-the-end pattern.
+const EXTENSION_PATTERN = /\s*(?:x|ext\.?|extension)\s*(\d+)\s*$/i;
+
+export function splitPhoneExtension(value: string): { number: string; ext: string | null } {
+  const match = value.match(EXTENSION_PATTERN);
+  if (!match) return { number: value.trim(), ext: null };
+  return { number: value.slice(0, match.index).trim(), ext: match[1] };
+}
+
 function parseByLeadingCallingCode(value: string): PhoneNumber | null {
   const digits = value.replace(/\D/g, "");
   if (digits.length < 11) return null;
@@ -57,17 +71,20 @@ export function parsePhoneForDisplay(
 ): { country: string | null; formatted: string } | null {
   if (!value) return null;
 
-  const byCallingCode = parseByLeadingCallingCode(value);
+  const { number, ext } = splitPhoneExtension(value);
+  const suffix = ext ? ` x ${ext}` : "";
+
+  const byCallingCode = parseByLeadingCallingCode(number);
   if (byCallingCode) {
-    return { country: byCallingCode.country ?? null, formatted: formatForDisplay(byCallingCode) };
+    return { country: byCallingCode.country ?? null, formatted: formatForDisplay(byCallingCode) + suffix };
   }
 
   try {
-    const parsed = parsePhoneNumber(value, (defaultCountry as CountryCode) || undefined);
-    if (!parsed) return { country: defaultCountry ?? null, formatted: value };
-    return { country: parsed.country ?? defaultCountry ?? null, formatted: formatForDisplay(parsed) };
+    const parsed = parsePhoneNumber(number, (defaultCountry as CountryCode) || undefined);
+    if (!parsed) return { country: defaultCountry ?? null, formatted: number + suffix };
+    return { country: parsed.country ?? defaultCountry ?? null, formatted: formatForDisplay(parsed) + suffix };
   } catch {
-    return { country: defaultCountry ?? null, formatted: value };
+    return { country: defaultCountry ?? null, formatted: number + suffix };
   }
 }
 
@@ -77,14 +94,15 @@ export function parsePhoneForDisplay(
 // unchanged if it can't be parsed.
 export function toE164(value?: string | null, defaultCountry?: string | null): string | null {
   if (!value) return null;
+  const { number } = splitPhoneExtension(value);
 
-  const byCallingCode = parseByLeadingCallingCode(value);
+  const byCallingCode = parseByLeadingCallingCode(number);
   if (byCallingCode) return byCallingCode.number;
 
   try {
-    const parsed = parsePhoneNumber(value, (defaultCountry as CountryCode) || undefined);
-    return parsed ? parsed.number : value;
+    const parsed = parsePhoneNumber(number, (defaultCountry as CountryCode) || undefined);
+    return parsed ? parsed.number : number;
   } catch {
-    return value;
+    return number;
   }
 }
