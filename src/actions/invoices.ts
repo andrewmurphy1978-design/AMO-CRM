@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma, withScopedPrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { computeBillingTotals, contactTaxLocation, type LineItemInput } from "@/lib/billing-totals";
 
@@ -18,8 +18,8 @@ const InvoiceSchema = z.object({
   notes: z.string().trim().optional(),
 });
 
-async function contactIdForProject(projectId: string): Promise<string> {
-  const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { contactId: true } });
+async function contactIdForProject(db: PrismaClient, projectId: string): Promise<string> {
+  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { contactId: true } });
   return project.contactId;
 }
 
@@ -55,23 +55,26 @@ export async function createInvoice(
   const amount = Number(data.amount);
   if (Number.isNaN(amount)) return { error: t.actions.invalidInput };
 
-  await prisma.invoice.create({
-    data: {
-      projectId: data.projectId,
-      number: data.number,
-      status: data.status,
-      amount,
-      subtotal: amount,
-      totalAmount: amount,
-      currency: data.currency,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      notes: data.notes,
-      sentAt: data.status === "SENT" ? new Date() : null,
-      paidAt: data.status === "PAID" ? new Date() : null,
-    },
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.invoice.create({
+      data: {
+        projectId: data.projectId,
+        number: data.number,
+        status: data.status,
+        amount,
+        subtotal: amount,
+        totalAmount: amount,
+        currency: data.currency,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        notes: data.notes,
+        sentAt: data.status === "SENT" ? new Date() : null,
+        paidAt: data.status === "PAID" ? new Date() : null,
+      },
+    });
+    return contactIdForProject(db, data.projectId);
   });
 
-  revalidateBoth(data.projectId, await contactIdForProject(data.projectId));
+  revalidateBoth(data.projectId, contactId);
   return { success: t.actions.invoiceCreated };
 }
 
@@ -79,24 +82,30 @@ export async function updateInvoiceStatus(invoiceId: string, projectId: string, 
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: {
-      status: status as "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELED",
-      ...(status === "SENT" ? { sentAt: new Date() } : {}),
-      ...(status === "PAID" ? { paidAt: new Date() } : {}),
-    },
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        status: status as "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELED",
+        ...(status === "SENT" ? { sentAt: new Date() } : {}),
+        ...(status === "PAID" ? { paidAt: new Date() } : {}),
+      },
+    });
+    return contactIdForProject(db, projectId);
   });
 
-  revalidateBoth(projectId, await contactIdForProject(projectId));
+  revalidateBoth(projectId, contactId);
 }
 
 export async function deleteInvoice(invoiceId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  const contactId = await contactIdForProject(projectId);
-  await prisma.invoice.delete({ where: { id: invoiceId } });
+  const contactId = await withScopedPrismaClient(async (db) => {
+    const contactId = await contactIdForProject(db, projectId);
+    await db.invoice.delete({ where: { id: invoiceId } });
+    return contactId;
+  });
   revalidateBoth(projectId, contactId);
 }
 
@@ -109,7 +118,7 @@ export async function convertProposalToInvoice(proposalId: string, projectId: st
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  const invoice = await withScopedPrismaClient(async (db) => {
+  const { invoice, contactId } = await withScopedPrismaClient(async (db) => {
     const proposal = await db.proposal.findUniqueOrThrow({
       where: { id: proposalId },
       include: { lineItems: { orderBy: { order: "asc" } } },
@@ -147,10 +156,10 @@ export async function convertProposalToInvoice(proposalId: string, projectId: st
       });
     }
 
-    return invoice;
+    return { invoice, contactId: await contactIdForProject(db, projectId) };
   });
 
-  revalidateBoth(projectId, await contactIdForProject(projectId));
+  revalidateBoth(projectId, contactId);
   redirect(`/projects/${projectId}/invoices/${invoice.id}`);
 }
 
@@ -161,10 +170,12 @@ export async function markInvoiceReminderSent(invoiceId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: { lastReminderAt: new Date(), reminderCount: { increment: 1 } },
-  });
+  await withScopedPrismaClient((db) =>
+    db.invoice.update({
+      where: { id: invoiceId },
+      data: { lastReminderAt: new Date(), reminderCount: { increment: 1 } },
+    })
+  );
 
   revalidatePath("/invoices");
 }

@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 
 // Zapier has no usable "list my recent Zap runs" API for a personal account,
 // so this is the practical alternative: add one extra step at the end of
 // each Zap (a "Webhooks by Zapier" POST action) pointed at this URL with
 // header `Authorization: Bearer $ZAPIER_WEBHOOK_SECRET`, sending a small
-// JSON body describing what just happened. A single POST per Zap run, so
-// the regular auto-reconnecting `prisma` proxy is fine here — this isn't
-// the bulk-upsert pattern that needed a scoped client elsewhere.
+// JSON body describing what just happened.
 //
 // Expected body (all fields optional except one of zapName/name):
 // { "zapName": "...", "status": "success" | "error", "message": "...", "runId": "..." }
@@ -33,16 +31,17 @@ export async function POST(request: Request) {
   const externalId = pickString(data, ["runId", "id"]);
 
   const runData = { name, status, message, occurredAt: new Date(), raw: data as never };
-  if (externalId) {
-    // A real run id lets a Zap's own retries land as one row instead of piling up duplicates.
-    await prisma.automationRun.upsert({
-      where: { source_externalId: { source: "zapier", externalId } },
-      update: runData,
-      create: { source: "zapier", externalId, ...runData },
-    });
-  } else {
-    await prisma.automationRun.create({ data: { source: "zapier", ...runData } });
-  }
+  await withScopedPrismaClient((db) => {
+    if (externalId) {
+      // A real run id lets a Zap's own retries land as one row instead of piling up duplicates.
+      return db.automationRun.upsert({
+        where: { source_externalId: { source: "zapier", externalId } },
+        update: runData,
+        create: { source: "zapier", externalId, ...runData },
+      });
+    }
+    return db.automationRun.create({ data: { source: "zapier", ...runData } });
+  });
 
   return NextResponse.json({ ok: true });
 }

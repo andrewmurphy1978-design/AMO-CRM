@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -24,14 +24,16 @@ export default async function TaskDetailPage({
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
-  const task = await prisma.task.findUnique({
-    where: { id },
-    include: {
-      project: { include: { contact: true } },
-      phase: true,
-      assignee: true,
-    },
-  });
+  const task = await withScopedPrismaClient((db) =>
+    db.task.findUnique({
+      where: { id },
+      include: {
+        project: { include: { contact: true } },
+        phase: true,
+        assignee: true,
+      },
+    })
+  );
 
   if (!task) notFound();
 

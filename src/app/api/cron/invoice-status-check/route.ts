@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 
 // The same GitHub Actions workflow that pings the other cron routes every
 // 15 minutes also pings this one — it only needs to run once a day since
@@ -32,10 +32,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ skipped: true, reason: "not the scheduled time" });
   }
 
-  const result = await prisma.invoice.updateMany({
-    where: { status: "SENT", dueDate: { lt: new Date() } },
-    data: { status: "OVERDUE" },
-  });
+  const result = await withScopedPrismaClient((db) =>
+    db.invoice.updateMany({
+      where: { status: "SENT", dueDate: { lt: new Date() } },
+      data: { status: "OVERDUE" },
+    })
+  );
 
   return NextResponse.json({ ok: true, flippedToOverdue: result.count });
 }

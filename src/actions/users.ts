@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma, withScopedPrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { getDict } from "@/lib/i18n/dictionaries";
 
@@ -156,7 +156,7 @@ export async function resetUserPassword(
 
   const password = generateTempPassword();
   const passwordHash = await hashPassword(password);
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+  await withScopedPrismaClient((db) => db.user.update({ where: { id: userId }, data: { passwordHash } }));
 
   revalidatePath("/settings");
   return { password };
@@ -167,7 +167,7 @@ export async function deleteUser(userId: string) {
   if (session.user.id === userId) {
     throw new Error("You cannot remove your own account.");
   }
-  await prisma.user.delete({ where: { id: userId } });
+  await withScopedPrismaClient((db) => db.user.delete({ where: { id: userId } }));
   revalidatePath("/settings");
 }
 
@@ -230,7 +230,7 @@ export async function saveTimeFormat(
     return { error: t.actions.invalidInput };
   }
 
-  await prisma.user.update({ where: { id: session.user.id }, data: { timeFormat } });
+  await withScopedPrismaClient((db) => db.user.update({ where: { id: session.user.id }, data: { timeFormat } }));
   revalidatePath("/settings");
   revalidatePath("/");
 
@@ -251,10 +251,12 @@ export async function saveEmailScreeningInstructions(
 
   const instructions = String(formData.get("instructions") ?? "").trim();
 
-  await prisma.user.update({
-    where: { id: session.user.id },
-    data: { emailScreeningInstructions: instructions || null },
-  });
+  await withScopedPrismaClient((db) =>
+    db.user.update({
+      where: { id: session.user.id },
+      data: { emailScreeningInstructions: instructions || null },
+    })
+  );
   revalidatePath("/settings");
 
   return { success: t.emailScreeningSettings.saved };

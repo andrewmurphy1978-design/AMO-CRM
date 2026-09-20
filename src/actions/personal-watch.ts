@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { isPersonalSectionUser } from "@/lib/personal-watch";
 import { getDict } from "@/lib/i18n/dictionaries";
 
@@ -27,7 +27,7 @@ export async function addPersonalWatchEmail(
   }
 
   try {
-    await prisma.personalWatchEmail.create({ data: { personId, email } });
+    await withScopedPrismaClient((db) => db.personalWatchEmail.create({ data: { personId, email } }));
   } catch {
     return { error: t.personal.emailDuplicate };
   }
@@ -46,7 +46,7 @@ export async function updatePersonalWatchEmail(id: string, email: string): Promi
   }
 
   try {
-    await prisma.personalWatchEmail.update({ where: { id }, data: { email: trimmed } });
+    await withScopedPrismaClient((db) => db.personalWatchEmail.update({ where: { id }, data: { email: trimmed } }));
   } catch {
     return { error: t.personal.emailDuplicate };
   }
@@ -58,7 +58,7 @@ export async function updatePersonalWatchEmail(id: string, email: string): Promi
 
 export async function deletePersonalWatchEmail(id: string): Promise<void> {
   await requirePersonalSectionUser();
-  await prisma.personalWatchEmail.delete({ where: { id } });
+  await withScopedPrismaClient((db) => db.personalWatchEmail.delete({ where: { id } }));
   revalidatePath("/settings");
   revalidatePath("/personal");
 }

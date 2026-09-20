@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { verifyPassword } from "@/lib/password";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Required on platforms that don't run a traditional Node.js server
@@ -28,9 +28,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: email.toLowerCase().trim() },
-        });
+        const user = await withScopedPrismaClient((db) =>
+          db.user.findUnique({
+            where: { email: email.toLowerCase().trim() },
+          })
+        );
         if (!user) return null;
 
         const valid = await verifyPassword(password, user.passwordHash);

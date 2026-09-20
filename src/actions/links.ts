@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 
 // Both Gmail threads and Google Calendar events live outside our database —
 // these actions just point a stable external id (thread id / event id) at
@@ -25,21 +25,23 @@ export async function saveEmailLink(
   const projectId = target.projectId || null;
   const taskId = target.taskId || null;
 
-  if (!contactId && !projectId && !taskId) {
-    await prisma.emailLink.deleteMany({ where: { gmailThreadId } });
-  } else {
-    const snapshot = {
-      subject: meta?.subject,
-      fromLabel: meta?.fromLabel,
-      messageDate: meta?.date ? new Date(meta.date) : undefined,
-      gmailLink: meta?.link,
-    };
-    await prisma.emailLink.upsert({
-      where: { gmailThreadId },
-      update: { contactId, projectId, taskId, ...snapshot },
-      create: { gmailThreadId, contactId, projectId, taskId, ...snapshot },
-    });
-  }
+  await withScopedPrismaClient(async (db) => {
+    if (!contactId && !projectId && !taskId) {
+      await db.emailLink.deleteMany({ where: { gmailThreadId } });
+    } else {
+      const snapshot = {
+        subject: meta?.subject,
+        fromLabel: meta?.fromLabel,
+        messageDate: meta?.date ? new Date(meta.date) : undefined,
+        gmailLink: meta?.link,
+      };
+      await db.emailLink.upsert({
+        where: { gmailThreadId },
+        update: { contactId, projectId, taskId, ...snapshot },
+        create: { gmailThreadId, contactId, projectId, taskId, ...snapshot },
+      });
+    }
+  });
 
   revalidatePath("/email");
   revalidatePath("/contacts");
@@ -57,15 +59,17 @@ export async function saveCalendarEventLink(
   const taskId = target.taskId || null;
   const bookingId = target.bookingId || null;
 
-  if (!contactId && !projectId && !taskId && !bookingId) {
-    await prisma.calendarEventLink.deleteMany({ where: { googleEventId } });
-  } else {
-    await prisma.calendarEventLink.upsert({
-      where: { googleEventId },
-      update: { contactId, projectId, taskId, bookingId },
-      create: { googleEventId, contactId, projectId, taskId, bookingId },
-    });
-  }
+  await withScopedPrismaClient(async (db) => {
+    if (!contactId && !projectId && !taskId && !bookingId) {
+      await db.calendarEventLink.deleteMany({ where: { googleEventId } });
+    } else {
+      await db.calendarEventLink.upsert({
+        where: { googleEventId },
+        update: { contactId, projectId, taskId, bookingId },
+        create: { googleEventId, contactId, projectId, taskId, bookingId },
+      });
+    }
+  });
 
   revalidatePath("/calendar-app");
 }

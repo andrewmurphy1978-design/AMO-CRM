@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 
 const ServiceItemSchema = z.object({
@@ -50,7 +50,7 @@ export async function createServicePriceListItem(
     throw error;
   }
 
-  await prisma.servicePriceListItem.create({ data });
+  await withScopedPrismaClient((db) => db.servicePriceListItem.create({ data }));
   revalidatePath("/settings");
   return { success: t.servicePriceList.saved };
 }
@@ -75,13 +75,13 @@ export async function updateServicePriceListItem(
     throw error;
   }
 
-  await prisma.servicePriceListItem.update({ where: { id: itemId }, data });
+  await withScopedPrismaClient((db) => db.servicePriceListItem.update({ where: { id: itemId }, data }));
   revalidatePath("/settings");
   return { success: t.servicePriceList.saved };
 }
 
 export async function deleteServicePriceListItem(itemId: string) {
   await requireAdmin();
-  await prisma.servicePriceListItem.delete({ where: { id: itemId } });
+  await withScopedPrismaClient((db) => db.servicePriceListItem.delete({ where: { id: itemId } }));
   revalidatePath("/settings");
 }

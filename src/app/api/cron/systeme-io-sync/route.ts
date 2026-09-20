@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { runSystemeIoSync } from "@/lib/sync";
 
 // Floors an "HH:MM" time to its 15-minute bucket, e.g. "03:07" -> "03:00".
@@ -35,9 +35,11 @@ export async function GET(request: Request) {
     }
   }
 
-  const setting = await prisma.integrationSetting.findUnique({
-    where: { provider: "systeme_io" },
-  });
+  const setting = await withScopedPrismaClient((db) =>
+    db.integrationSetting.findUnique({
+      where: { provider: "systeme_io" },
+    })
+  );
 
   if (!setting?.autoSyncEnabled || !setting.apiKeyEncrypted) {
     return NextResponse.json({ skipped: true, reason: "auto-sync disabled" });

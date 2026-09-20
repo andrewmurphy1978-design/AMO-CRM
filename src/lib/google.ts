@@ -1,4 +1,4 @@
-import { prisma, type PrismaClient } from "@/lib/prisma";
+import { prisma, withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 
 // One personal Google connection per CRM user (Gmail + Calendar,
@@ -58,7 +58,7 @@ export async function saveGoogleTokens(
 }
 
 export async function disconnectGoogle(userId: string): Promise<void> {
-  await prisma.googleAccount.deleteMany({ where: { userId } });
+  await withScopedPrismaClient((db) => db.googleAccount.deleteMany({ where: { userId } }));
 }
 
 export async function getGoogleConnection(

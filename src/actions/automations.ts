@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
 import { runMakeSync } from "@/lib/automations";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -30,11 +30,13 @@ export async function saveMakeApiKey(
 
   const encrypted = await encryptSecret(apiKey);
 
-  await prisma.integrationSetting.upsert({
-    where: { provider: "make" },
-    update: { apiKeyEncrypted: encrypted, metadata: { zone, teamId }, lastSyncStatus: null, lastSyncError: null },
-    create: { provider: "make", apiKeyEncrypted: encrypted, metadata: { zone, teamId } },
-  });
+  await withScopedPrismaClient((db) =>
+    db.integrationSetting.upsert({
+      where: { provider: "make" },
+      update: { apiKeyEncrypted: encrypted, metadata: { zone, teamId }, lastSyncStatus: null, lastSyncError: null },
+      create: { provider: "make", apiKeyEncrypted: encrypted, metadata: { zone, teamId } },
+    })
+  );
 
   revalidatePath("/settings");
   return { success: t.automations.makeKeySaved };

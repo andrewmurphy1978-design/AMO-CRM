@@ -1,4 +1,4 @@
-import { prisma, withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
 import { MakeClient } from "@/lib/make";
 
@@ -8,13 +8,15 @@ interface MakeMetadata {
 }
 
 export async function getMakeClient(): Promise<{ client: MakeClient; teamId: number } | null> {
-  const setting = await prisma.integrationSetting.findUnique({ where: { provider: "make" } });
-  if (!setting?.apiKeyEncrypted) return null;
-  const metadata = (setting.metadata as MakeMetadata | null) ?? {};
-  const teamId = Number(metadata.teamId);
-  if (!teamId) return null;
-  const apiKey = await decryptSecret(setting.apiKeyEncrypted);
-  return { client: new MakeClient(apiKey, metadata.zone || "us2.make.com"), teamId };
+  return withScopedPrismaClient(async (db) => {
+    const setting = await db.integrationSetting.findUnique({ where: { provider: "make" } });
+    if (!setting?.apiKeyEncrypted) return null;
+    const metadata = (setting.metadata as MakeMetadata | null) ?? {};
+    const teamId = Number(metadata.teamId);
+    if (!teamId) return null;
+    const apiKey = await decryptSecret(setting.apiKeyEncrypted);
+    return { client: new MakeClient(apiKey, metadata.zone || "us2.make.com"), teamId };
+  });
 }
 
 export interface MakeSyncResult {
@@ -22,11 +24,9 @@ export interface MakeSyncResult {
 }
 
 // Same reasoning as runSystemeIoSync in src/lib/sync.ts: this can make many
-// database calls (one per execution per scenario), and under Cloudflare
-// Workers the regular auto-reconnecting `prisma` proxy would open a fresh
-// connection for every one of them — heavy enough on its own to risk a
-// Cloudflare resource-limit error. One scoped client is reused for the
-// whole sync instead.
+// database calls (one per execution per scenario), and the raw `prisma`
+// proxy would open a fresh, never-closed connection for every one of them.
+// One scoped client is reused for the whole sync instead.
 export async function runMakeSync(): Promise<MakeSyncResult> {
   return withScopedPrismaClient((db) => runMakeSyncWith(db));
 }

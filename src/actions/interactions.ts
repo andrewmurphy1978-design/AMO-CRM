@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 
 const InteractionSchema = z.object({
   type: z.enum(["CALL", "EMAIL", "MEETING", "NOTE"]),
@@ -36,16 +36,18 @@ export async function logInteraction(
     throw error;
   }
 
-  await prisma.interaction.create({
-    data: {
-      type: data.type,
-      subject: data.subject,
-      notes: data.notes,
-      contactId: data.contactId,
-      projectId: data.projectId,
-      loggedById: session.user.id,
-    },
-  });
+  await withScopedPrismaClient((db) =>
+    db.interaction.create({
+      data: {
+        type: data.type,
+        subject: data.subject,
+        notes: data.notes,
+        contactId: data.contactId,
+        projectId: data.projectId,
+        loggedById: session.user.id,
+      },
+    })
+  );
 
   revalidatePath(`/contacts/${data.contactId}`);
   if (data.projectId) {
@@ -63,7 +65,7 @@ export async function deleteInteraction(
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await prisma.interaction.delete({ where: { id: interactionId } });
+  await withScopedPrismaClient((db) => db.interaction.delete({ where: { id: interactionId } }));
 
   revalidatePath(`/contacts/${contactId}`);
   if (projectId) {

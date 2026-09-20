@@ -2,12 +2,12 @@ import ContactForm from "../contact-form";
 import { createContact } from "@/actions/contacts";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 
 export default async function NewContactPage() {
   const lang = await getLang();
   const t = getDict(lang);
-  const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
+  const allTags = await withScopedPrismaClient((db) => db.tag.findMany({ orderBy: { name: "asc" } }));
 
   return (
     <div className="max-w-5xl">

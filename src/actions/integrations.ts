@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
 import { runSystemeIoSync } from "@/lib/sync";
 import { disconnectGoogle } from "@/lib/google";
@@ -34,11 +34,13 @@ export async function saveAnthropicApiKey(
 
   const encrypted = await encryptSecret(apiKey);
 
-  await prisma.integrationSetting.upsert({
-    where: { provider: "anthropic" },
-    update: { apiKeyEncrypted: encrypted },
-    create: { provider: "anthropic", apiKeyEncrypted: encrypted },
-  });
+  await withScopedPrismaClient((db) =>
+    db.integrationSetting.upsert({
+      where: { provider: "anthropic" },
+      update: { apiKeyEncrypted: encrypted },
+      create: { provider: "anthropic", apiKeyEncrypted: encrypted },
+    })
+  );
 
   revalidatePath("/settings");
   return { success: t.anthropicKey.keySaved };
@@ -57,11 +59,13 @@ export async function saveSystemeIoApiKey(
 
   const encrypted = await encryptSecret(apiKey);
 
-  await prisma.integrationSetting.upsert({
-    where: { provider: "systeme_io" },
-    update: { apiKeyEncrypted: encrypted, lastSyncStatus: null, lastSyncError: null },
-    create: { provider: "systeme_io", apiKeyEncrypted: encrypted },
-  });
+  await withScopedPrismaClient((db) =>
+    db.integrationSetting.upsert({
+      where: { provider: "systeme_io" },
+      update: { apiKeyEncrypted: encrypted, lastSyncStatus: null, lastSyncError: null },
+      create: { provider: "systeme_io", apiKeyEncrypted: encrypted },
+    })
+  );
 
   revalidatePath("/settings");
   return { success: t.actions.systemeioKeySaved };
@@ -102,11 +106,13 @@ export async function triggerSystemeIoSync(): Promise<{
 
 export async function toggleAutoSync(enabled: boolean) {
   await requireAdmin();
-  await prisma.integrationSetting.upsert({
-    where: { provider: "systeme_io" },
-    update: { autoSyncEnabled: enabled },
-    create: { provider: "systeme_io", autoSyncEnabled: enabled },
-  });
+  await withScopedPrismaClient((db) =>
+    db.integrationSetting.upsert({
+      where: { provider: "systeme_io" },
+      update: { autoSyncEnabled: enabled },
+      create: { provider: "systeme_io", autoSyncEnabled: enabled },
+    })
+  );
   revalidatePath("/settings");
 }
 
@@ -121,11 +127,13 @@ export async function saveAutoSyncTime(
     return { error: t.actions.scheduleInvalidTime };
   }
 
-  await prisma.integrationSetting.upsert({
-    where: { provider: "systeme_io" },
-    update: { autoSyncTime: time },
-    create: { provider: "systeme_io", autoSyncTime: time },
-  });
+  await withScopedPrismaClient((db) =>
+    db.integrationSetting.upsert({
+      where: { provider: "systeme_io" },
+      update: { autoSyncTime: time },
+      create: { provider: "systeme_io", autoSyncTime: time },
+    })
+  );
 
   revalidatePath("/settings");
   return { success: t.actions.scheduleSaved };

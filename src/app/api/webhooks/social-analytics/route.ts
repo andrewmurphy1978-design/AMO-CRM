@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { SOCIAL_PLATFORMS, SOCIAL_LANGUAGES, todaySocialDateKey, type SocialPlatform, type SocialLanguage } from "@/lib/social";
 
 // Fed by the Make.com "Social Analytics Sync" scenario, which calls each
@@ -40,61 +40,64 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No valid snapshots in body" }, { status: 400 });
   }
 
-  let saved = 0;
-  for (const snapshot of snapshots) {
-    const base = {
-      engagement: snapshot.engagement,
-      views: snapshot.views,
-      raw: snapshot.raw as never,
-      capturedAt: new Date(),
-    };
-    if (snapshot.followersDelta !== null) {
-      // Fed one bundle per array entry by a Make Iterator (LinkedIn has no
-      // single "total followers" field — see src/lib/social.ts). The first
-      // bundle of each run (iterationIndex 1, or absent for a single-call
-      // platform) resets the count; later bundles in the same run add to
-      // it, so a same-day re-run doesn't double-count.
-      if (snapshot.iterationIndex === null || snapshot.iterationIndex <= 1) {
-        await prisma.socialAnalyticsSnapshot.upsert({
-          where: {
-            platform_language_dateKey: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey },
-          },
-          update: { followers: snapshot.followersDelta, ...base },
-          create: {
-            platform: snapshot.platform,
-            language: snapshot.language,
-            dateKey: snapshot.dateKey,
-            followers: snapshot.followersDelta,
-            ...base,
-          },
-        });
+  const saved = await withScopedPrismaClient(async (db) => {
+    let saved = 0;
+    for (const snapshot of snapshots) {
+      const base = {
+        engagement: snapshot.engagement,
+        views: snapshot.views,
+        raw: snapshot.raw as never,
+        capturedAt: new Date(),
+      };
+      if (snapshot.followersDelta !== null) {
+        // Fed one bundle per array entry by a Make Iterator (LinkedIn has no
+        // single "total followers" field — see src/lib/social.ts). The first
+        // bundle of each run (iterationIndex 1, or absent for a single-call
+        // platform) resets the count; later bundles in the same run add to
+        // it, so a same-day re-run doesn't double-count.
+        if (snapshot.iterationIndex === null || snapshot.iterationIndex <= 1) {
+          await db.socialAnalyticsSnapshot.upsert({
+            where: {
+              platform_language_dateKey: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey },
+            },
+            update: { followers: snapshot.followersDelta, ...base },
+            create: {
+              platform: snapshot.platform,
+              language: snapshot.language,
+              dateKey: snapshot.dateKey,
+              followers: snapshot.followersDelta,
+              ...base,
+            },
+          });
+        } else {
+          await db.socialAnalyticsSnapshot.upsert({
+            where: {
+              platform_language_dateKey: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey },
+            },
+            update: { followers: { increment: snapshot.followersDelta }, ...base },
+            create: {
+              platform: snapshot.platform,
+              language: snapshot.language,
+              dateKey: snapshot.dateKey,
+              followers: snapshot.followersDelta,
+              ...base,
+            },
+          });
+        }
       } else {
-        await prisma.socialAnalyticsSnapshot.upsert({
+        const data = { followers: snapshot.followers, ...base };
+        await db.socialAnalyticsSnapshot.upsert({
           where: {
             platform_language_dateKey: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey },
           },
-          update: { followers: { increment: snapshot.followersDelta }, ...base },
-          create: {
-            platform: snapshot.platform,
-            language: snapshot.language,
-            dateKey: snapshot.dateKey,
-            followers: snapshot.followersDelta,
-            ...base,
-          },
+          update: data,
+          create: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey, ...data },
         });
       }
-    } else {
-      const data = { followers: snapshot.followers, ...base };
-      await prisma.socialAnalyticsSnapshot.upsert({
-        where: {
-          platform_language_dateKey: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey },
-        },
-        update: data,
-        create: { platform: snapshot.platform, language: snapshot.language, dateKey: snapshot.dateKey, ...data },
-      });
+      saved += 1;
     }
-    saved += 1;
-  }
+    return saved;
+  });
 
   return NextResponse.json({ ok: true, saved });
 }

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma, withScopedPrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 
 const TaskSchema = z.object({
@@ -52,20 +52,22 @@ export async function createTask(
     throw error;
   }
 
-  await prisma.task.create({
-    data: {
-      title: data.title,
-      projectId: data.projectId,
-      phaseId: data.phaseId || null,
-      description: data.description,
-      status: data.status,
-      priority: data.priority,
-      assigneeId: data.assigneeId || null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      completedAt: data.status === "DONE" ? new Date() : null,
-    },
-  });
+  await withScopedPrismaClient((db) =>
+    db.task.create({
+      data: {
+        title: data.title,
+        projectId: data.projectId,
+        phaseId: data.phaseId || null,
+        description: data.description,
+        status: data.status,
+        priority: data.priority,
+        assigneeId: data.assigneeId || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        completedAt: data.status === "DONE" ? new Date() : null,
+      },
+    })
+  );
 
   revalidatePath(`/projects/${data.projectId}`);
   revalidatePath("/tasks");
@@ -93,20 +95,22 @@ export async function createTaskAndRedirect(
     throw error;
   }
 
-  const task = await prisma.task.create({
-    data: {
-      title: data.title,
-      projectId: data.projectId,
-      phaseId: data.phaseId || null,
-      description: data.description,
-      status: data.status,
-      priority: data.priority,
-      assigneeId: data.assigneeId || null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      completedAt: data.status === "DONE" ? new Date() : null,
-    },
-  });
+  const task = await withScopedPrismaClient((db) =>
+    db.task.create({
+      data: {
+        title: data.title,
+        projectId: data.projectId,
+        phaseId: data.phaseId || null,
+        description: data.description,
+        status: data.status,
+        priority: data.priority,
+        assigneeId: data.assigneeId || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        completedAt: data.status === "DONE" ? new Date() : null,
+      },
+    })
+  );
 
   revalidatePath(`/projects/${data.projectId}`);
   revalidatePath("/tasks");
@@ -171,13 +175,15 @@ export async function toggleTaskStatus(taskId: string, projectId: string, done: 
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await prisma.task.update({
-    where: { id: taskId },
-    data: {
-      status: done ? "DONE" : "TODO",
-      completedAt: done ? new Date() : null,
-    },
-  });
+  await withScopedPrismaClient((db) =>
+    db.task.update({
+      where: { id: taskId },
+      data: {
+        status: done ? "DONE" : "TODO",
+        completedAt: done ? new Date() : null,
+      },
+    })
+  );
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/tasks");
@@ -188,7 +194,7 @@ export async function deleteTask(taskId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await prisma.task.delete({ where: { id: taskId } });
+  await withScopedPrismaClient((db) => db.task.delete({ where: { id: taskId } }));
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/tasks");
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { getDict } from "@/lib/i18n/dictionaries";
 
@@ -28,9 +28,11 @@ export async function addVaultEntry(
   }
 
   const valueEncrypted = await encryptSecret(value);
-  await prisma.apiKeyVaultEntry.create({
-    data: { label, valueEncrypted, notes: notes || null },
-  });
+  await withScopedPrismaClient((db) =>
+    db.apiKeyVaultEntry.create({
+      data: { label, valueEncrypted, notes: notes || null },
+    })
+  );
 
   revalidatePath("/settings");
   return { success: t.apiVault.saved };
@@ -38,7 +40,7 @@ export async function addVaultEntry(
 
 export async function deleteVaultEntry(id: string): Promise<void> {
   await requireAdmin();
-  await prisma.apiKeyVaultEntry.delete({ where: { id } });
+  await withScopedPrismaClient((db) => db.apiKeyVaultEntry.delete({ where: { id } }));
   revalidatePath("/settings");
 }
 
@@ -48,7 +50,7 @@ export async function deleteVaultEntry(id: string): Promise<void> {
 export async function revealVaultEntry(id: string): Promise<{ value?: string; error?: string }> {
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
-  const entry = await prisma.apiKeyVaultEntry.findUnique({ where: { id } });
+  const entry = await withScopedPrismaClient((db) => db.apiKeyVaultEntry.findUnique({ where: { id } }));
   if (!entry) return { error: t.apiVault.notFound };
   const value = await decryptSecret(entry.valueEncrypted);
   return { value };

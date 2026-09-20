@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma, withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { computeBillingTotals, contactTaxLocation, type LineItemInput } from "@/lib/billing-totals";
 import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
@@ -18,8 +18,8 @@ const ProposalSchema = z.object({
   notes: z.string().trim().optional(),
 });
 
-async function contactIdForProject(projectId: string): Promise<string> {
-  const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { contactId: true } });
+async function contactIdForProject(db: PrismaClient, projectId: string): Promise<string> {
+  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { contactId: true } });
   return project.contactId;
 }
 
@@ -55,21 +55,24 @@ export async function createProposal(
   // breakdown only applies to proposals built through the full editor,
   // which is where a currency/jurisdiction is actually chosen deliberately.
   const amount = data.amount ? Number(data.amount) : null;
-  await prisma.proposal.create({
-    data: {
-      projectId: data.projectId,
-      title: data.title,
-      status: data.status,
-      amount,
-      subtotal: amount ?? 0,
-      totalAmount: amount ?? 0,
-      currency: data.currency,
-      notes: data.notes,
-      sentAt: data.status === "SENT" ? new Date() : null,
-    },
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposal.create({
+      data: {
+        projectId: data.projectId,
+        title: data.title,
+        status: data.status,
+        amount,
+        subtotal: amount ?? 0,
+        totalAmount: amount ?? 0,
+        currency: data.currency,
+        notes: data.notes,
+        sentAt: data.status === "SENT" ? new Date() : null,
+      },
+    });
+    return contactIdForProject(db, data.projectId);
   });
 
-  revalidateBoth(data.projectId, await contactIdForProject(data.projectId));
+  revalidateBoth(data.projectId, contactId);
   return { success: t.actions.proposalCreated };
 }
 
@@ -78,24 +81,30 @@ export async function updateProposalStatus(proposalId: string, projectId: string
   if (!session) throw new Error("Not authenticated");
 
   const now = new Date();
-  await prisma.proposal.update({
-    where: { id: proposalId },
-    data: {
-      status: status as "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED",
-      ...(status === "SENT" ? { sentAt: now } : {}),
-      ...(status === "ACCEPTED" || status === "DECLINED" ? { respondedAt: now } : {}),
-    },
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposal.update({
+      where: { id: proposalId },
+      data: {
+        status: status as "DRAFT" | "SENT" | "ACCEPTED" | "DECLINED",
+        ...(status === "SENT" ? { sentAt: now } : {}),
+        ...(status === "ACCEPTED" || status === "DECLINED" ? { respondedAt: now } : {}),
+      },
+    });
+    return contactIdForProject(db, projectId);
   });
 
-  revalidateBoth(projectId, await contactIdForProject(projectId));
+  revalidateBoth(projectId, contactId);
 }
 
 export async function deleteProposal(proposalId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  const contactId = await contactIdForProject(projectId);
-  await prisma.proposal.delete({ where: { id: proposalId } });
+  const contactId = await withScopedPrismaClient(async (db) => {
+    const contactId = await contactIdForProject(db, projectId);
+    await db.proposal.delete({ where: { id: proposalId } });
+    return contactId;
+  });
   revalidateBoth(projectId, contactId);
 }
 

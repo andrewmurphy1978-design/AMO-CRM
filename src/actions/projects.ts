@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { prisma, withScopedPrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 
 const ProjectSchema = z.object({
@@ -179,7 +179,7 @@ export async function deleteProject(projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await prisma.project.delete({ where: { id: projectId } });
+  await withScopedPrismaClient((db) => db.project.delete({ where: { id: projectId } }));
   revalidatePath("/projects");
   redirect("/projects");
 }
