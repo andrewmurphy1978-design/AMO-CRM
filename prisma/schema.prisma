@@ -517,9 +517,24 @@ model Proposal {
   project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title     String
   status    ProposalStatus @default(DRAFT)
+  // Legacy flat total from the original quick-add flow — still written
+  // there for a proposal with no line items. Once line items exist,
+  // subtotal/taxAmount/totalAmount below are authoritative and this is
+  // just kept in sync with totalAmount for anything still reading it.
   amount    Float?
   currency  String         @default("CAD")
   notes     String?        @db.Text
+
+  // AI-assisted (or hand-written) opening paragraph shown above the line
+  // items on the proposal itself.
+  coverLetter String? @db.Text
+
+  subtotal    Float  @default(0)
+  gstAmount   Float  @default(0)
+  qstAmount   Float  @default(0)
+  hstAmount   Float  @default(0)
+  taxAmount   Float  @default(0) // gstAmount + qstAmount + hstAmount
+  totalAmount Float  @default(0) // subtotal + taxAmount
 
   sentAt      DateTime?
   respondedAt DateTime?
@@ -527,8 +542,45 @@ model Proposal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  lineItems       ProposalLineItem[]
+  paymentSchedule ProposalPaymentScheduleItem[]
+  invoices        Invoice[]
+
   @@index([projectId])
   @@map("proposals")
+}
+
+// A priced line item on a Proposal — either picked from the Service price
+// list (in which case description/unitPrice start out copied from it, then
+// can be freely edited) or entered from scratch.
+model ProposalLineItem {
+  id          String   @id @default(cuid())
+  proposalId  String
+  proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float
+  order       Int      @default(0)
+
+  @@index([proposalId])
+  @@map("proposal_line_items")
+}
+
+// One row of a Proposal's payment schedule agreement — e.g. "50% deposit"
+// / "50% on completion". Either a percentage of the total or a fixed
+// amount, never both.
+model ProposalPaymentScheduleItem {
+  id         String    @id @default(cuid())
+  proposalId String
+  proposal   Proposal  @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  label      String
+  percentage Float?
+  amount     Float?
+  dueDate    DateTime?
+  order      Int       @default(0)
+
+  @@index([proposalId])
+  @@map("proposal_payment_schedule_items")
 }
 
 enum InvoiceStatus {
@@ -539,25 +591,64 @@ enum InvoiceStatus {
   CANCELED
 }
 
-// Client-facing invoices. Same "always via a Project" shape as Proposal.
+// Client-facing invoices. Same "always via a Project" shape as Proposal —
+// optionally generated from an already-accepted Proposal (copying its line
+// items/tax breakdown as a starting point), but can also stand alone.
 model Invoice {
-  id        String        @id @default(cuid())
-  projectId String
-  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  number    String?
-  status    InvoiceStatus @default(DRAFT)
-  amount    Float
-  currency  String        @default("CAD")
-  notes     String?       @db.Text
+  id         String        @id @default(cuid())
+  projectId  String
+  project    Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  proposalId String?
+  proposal   Proposal?     @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  number     String?
+  status     InvoiceStatus @default(DRAFT)
+  // Legacy flat total — see the comment on Proposal.amount above; same
+  // fallback relationship with subtotal/taxAmount/totalAmount below.
+  amount     Float
+  currency   String        @default("CAD")
+  notes      String?       @db.Text
+
+  subtotal    Float @default(0)
+  gstAmount   Float @default(0)
+  qstAmount   Float @default(0)
+  hstAmount   Float @default(0)
+  taxAmount   Float @default(0)
+  totalAmount Float @default(0)
 
   dueDate DateTime?
+  sentAt  DateTime?
   paidAt  DateTime?
+
+  // Reminder tracking for the sent->paid lifecycle. Andrew's Gmail isn't
+  // wired for sending mail from the CRM (only reading it), so a "reminder"
+  // is a drafted email surfaced on the invoice for Andrew to review and
+  // send himself — see src/lib/invoice-reminders.ts for why, and Contact.
+  // autoSendInvoiceReminders for the per-client choice of how prominently
+  // it's flagged.
+  lastReminderAt DateTime?
+  reminderCount  Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  lineItems InvoiceLineItem[]
+
   @@index([projectId])
+  @@index([proposalId])
   @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float   @default(1)
+  unitPrice   Float
+  order       Int     @default(0)
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
 }
 
 enum TaskStatus {

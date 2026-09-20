@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { updateInvoiceStatus, deleteInvoice } from "@/actions/invoices";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -33,7 +34,9 @@ export default function InvoiceRow({
 
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5">
-      <span className="flex-1 text-sm font-medium text-ink">{invoice.number || "—"}</span>
+      <Link href={`/projects/${projectId}/invoices/${invoice.id}`} className="flex-1 text-sm font-medium text-ink hover:underline">
+        {invoice.number || "—"}
+      </Link>
       <span className="text-sm text-soft">
         {invoice.amount} {invoice.currency}
       </span>

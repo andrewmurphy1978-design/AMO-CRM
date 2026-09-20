@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { updateProposalStatus, deleteProposal } from "@/actions/proposals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -25,7 +26,9 @@ export default function ProposalRow({
 
   return (
     <li className="flex flex-wrap items-center gap-3 py-2.5">
-      <span className="flex-1 text-sm font-medium text-ink">{proposal.title}</span>
+      <Link href={`/projects/${projectId}/proposals/${proposal.id}`} className="flex-1 text-sm font-medium text-ink hover:underline">
+        {proposal.title}
+      </Link>
       {proposal.amount != null && (
         <span className="text-sm text-soft">
           {proposal.amount} {proposal.currency}

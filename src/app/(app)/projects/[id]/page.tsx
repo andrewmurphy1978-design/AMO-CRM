@@ -148,7 +148,12 @@ export default async function ProjectDetailPage({
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.title}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.title}</h2>
+          <Link href={`/projects/${project.id}/proposals/new`} className="text-xs font-semibold text-amo-lime hover:underline">
+            {t.proposals.buildFull}
+          </Link>
+        </div>
         <div className="mt-3">
           <QuickAddProposal projectId={project.id} lang={lang} />
         </div>

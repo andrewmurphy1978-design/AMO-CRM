@@ -34,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/tasks", label: t.nav.tasks },
     { href: "/contacts", label: t.nav.contacts },
     { href: "/projects", label: t.nav.projects },
+    { href: "/invoices", label: t.nav.invoices },
     { href: "/marketing", label: t.nav.marketing },
     { href: "/bookings", label: t.nav.bookings },
     // Visible only on Andrew's own account — family emails/events have no
