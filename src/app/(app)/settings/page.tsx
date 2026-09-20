@@ -12,6 +12,8 @@ import TimeFormatForm from "./time-format-form";
 import PersonalWatchForm from "./personal-watch-form";
 import EmailScreeningForm from "./email-screening-form";
 import ApiKeyVaultForm from "./api-key-vault-form";
+import ServicePriceListForm from "./service-price-list-form";
+import BillingSettingsForm from "./billing-settings-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -40,8 +42,19 @@ export default async function SettingsPage({
   // equivalent block in src/app/(app)/page.tsx for why (each `prisma.x`
   // property access opens a brand-new client/connection, and enough of
   // those in one request risks Cloudflare's Error 1102).
-  const { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople, vaultEntries } =
-    await withScopedPrismaClient(async (db) => {
+  const {
+    currentUser,
+    integration,
+    makeIntegration,
+    anthropicIntegration,
+    bufferSettings,
+    googleConnection,
+    users,
+    watchedPeople,
+    vaultEntries,
+    serviceItems,
+    billingSettings,
+  } = await withScopedPrismaClient(async (db) => {
       const currentUser = session
         ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true, emailScreeningInstructions: true } })
         : null;
@@ -65,7 +78,23 @@ export default async function SettingsPage({
       const vaultEntries = isAdmin
         ? await db.apiKeyVaultEntry.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, label: true, notes: true } })
         : [];
-      return { currentUser, integration, makeIntegration, anthropicIntegration, bufferSettings, googleConnection, users, watchedPeople, vaultEntries };
+      const serviceItems = isAdmin ? await db.servicePriceListItem.findMany({ orderBy: { name: "asc" } }) : [];
+      const billingSettings = isAdmin
+        ? await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } })
+        : null;
+      return {
+        currentUser,
+        integration,
+        makeIntegration,
+        anthropicIntegration,
+        bufferSettings,
+        googleConnection,
+        users,
+        watchedPeople,
+        vaultEntries,
+        serviceItems,
+        billingSettings,
+      };
     });
   const hour12 = currentUser?.timeFormat === "HOUR12";
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
@@ -192,6 +221,29 @@ export default async function SettingsPage({
               </>
             )}
           </section>
+
+          {isAdmin && billingSettings && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.billingSettings.title}</h2>
+              <p className="mt-1 text-sm text-soft">{t.billingSettings.description}</p>
+              <div className="mt-4">
+                <BillingSettingsForm
+                  chargeCanadianTax={billingSettings.chargeCanadianTax}
+                  gstNumber={billingSettings.gstNumber}
+                  qstNumber={billingSettings.qstNumber}
+                  lang={lang}
+                />
+              </div>
+            </section>
+          )}
+
+          {isAdmin && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <ServicePriceListForm items={serviceItems} lang={lang} />
+            </section>
+          )}
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />

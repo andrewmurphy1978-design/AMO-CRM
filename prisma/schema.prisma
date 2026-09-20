@@ -931,3 +931,37 @@ model SyncLog {
 
   @@map("sync_logs")
 }
+
+// The catalog of services Andrew sells, picked from when building a
+// Proposal's line items — not client-facing on its own, managed from
+// Settings.
+model ServicePriceListItem {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  unitPrice   Float
+  currency    String   @default("CAD")
+  // Free text, e.g. "flat", "hour", "month" — shown next to the price, not
+  // used in any calculation.
+  unit        String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("service_price_list_items")
+}
+
+// Single-row table (always id "singleton") for billing-wide settings that
+// apply to every Proposal/Invoice rather than one Contact — currently just
+// the Canadian-tax gate: Andrew doesn't charge GST/QST/HST until his
+// revenue crosses the $30,000 registration threshold, so this stays off
+// until he flips it.
+model BillingSettings {
+  id                 String   @id @default("singleton")
+  chargeCanadianTax  Boolean  @default(false)
+  gstNumber          String?
+  qstNumber          String?
+  updatedAt          DateTime @updatedAt
+
+  @@map("billing_settings")
+}
