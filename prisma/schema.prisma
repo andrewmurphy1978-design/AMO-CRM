@@ -151,6 +151,20 @@ model Contact {
   billingEmail       String?
   billingPhone       String?
 
+  // --- Tech stack info for done-for-you web/funnel/email/store services ---
+  websiteDomain          String?
+  websiteHostingProvider String?
+  websiteDesignApp       String?
+  funnelsDomain          String?
+  funnelsHostingProvider String?
+  funnelsDesignApp       String?
+  emailDomain            String?
+  emailHostingProvider   String?
+  emailMarketingApp      String?
+  storeDomain            String?
+  storeHostingProvider   String?
+  storeDesignApp         String?
+
   stage   ContactStage @default(LEAD)
   notes   String?      @db.Text
   ownerId String?
@@ -173,10 +187,26 @@ model Contact {
   emailLinks           EmailLink[]
   calendarEventLinks   CalendarEventLink[]
   bookings             Booking[]
+  socialLinks          ContactSocialLink[]
 
   @@index([stage])
   @@index([lastName, firstName])
   @@map("contacts")
+}
+
+// Unlimited social profile/page links per contact, added via the Contact
+// form's "+" button — e.g. a personal Facebook profile and a separate
+// business Facebook page both fit as two rows with the same platform.
+model ContactSocialLink {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  platform  String
+  url       String
+  createdAt DateTime @default(now())
+
+  @@index([contactId])
+  @@map("contact_social_links")
 }
 
 // --- Additional systeme.io data (subscriptions, courses, communities) ------

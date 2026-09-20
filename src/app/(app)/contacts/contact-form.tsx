@@ -38,8 +38,23 @@ type ContactFormValues = {
   billingContactName?: string | null;
   billingEmail?: string | null;
   billingPhone?: string | null;
+  websiteDomain?: string | null;
+  websiteHostingProvider?: string | null;
+  websiteDesignApp?: string | null;
+  funnelsDomain?: string | null;
+  funnelsHostingProvider?: string | null;
+  funnelsDesignApp?: string | null;
+  emailDomain?: string | null;
+  emailHostingProvider?: string | null;
+  emailMarketingApp?: string | null;
+  storeDomain?: string | null;
+  storeHostingProvider?: string | null;
+  storeDesignApp?: string | null;
+  socialLinks?: { platform: string; url: string }[] | null;
   notes?: string | null;
 };
+
+const SOCIAL_PLATFORMS = ["Facebook", "Instagram", "LinkedIn", "TikTok", "YouTube", "X", "Website", "Other"];
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -78,6 +93,11 @@ export default function ContactForm({
     (defaultValues?.extraPhones ?? []).map((value, id) => ({ id, value }))
   );
   const nextPhoneId = useRef(extraPhones.length);
+
+  const [socialLinks, setSocialLinks] = useState(() =>
+    (defaultValues?.socialLinks ?? []).map((link, id) => ({ id, ...link }))
+  );
+  const nextSocialId = useRef(socialLinks.length);
 
   // Only seeds the phone fields' initial flag — each PhoneField's flag is
   // independently changeable afterward regardless of the address country.
@@ -233,6 +253,59 @@ export default function ContactForm({
         </AddressGroup>
       </div>
 
+      {/* Line 4: tech stack — Website, Funnels, Email, Store side by side */}
+      <div className="grid gap-4 lg:grid-cols-4">
+        <TechStackGroup title={t.contactForm.websiteGroupTitle} prefix="website" t={t} values={defaultValues} />
+        <TechStackGroup title={t.contactForm.funnelsGroupTitle} prefix="funnels" t={t} values={defaultValues} />
+        <TechStackGroup title={t.contactForm.emailGroupTitle} prefix="email" t={t} values={defaultValues} showMarketingApp />
+        <TechStackGroup title={t.contactForm.storeGroupTitle} prefix="store" t={t} values={defaultValues} />
+      </div>
+
+      {/* Social media links — unlimited rows, e.g. a personal profile and a
+          separate business page on the same platform */}
+      <div>
+        <label className={LABEL_CLASS}>{t.contactForm.socialLinksTitle}</label>
+        <div className="mt-1 space-y-1.5">
+          {socialLinks.map((row) => (
+            <div key={row.id} className="flex items-center gap-1.5">
+              <select
+                name="socialPlatform"
+                defaultValue={row.platform}
+                className={`${FIELD_CLASS} mt-0 w-40 shrink-0`}
+              >
+                {SOCIAL_PLATFORMS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="url"
+                name="socialUrl"
+                defaultValue={row.url}
+                placeholder="https://…"
+                className={`${FIELD_CLASS} mt-0 flex-1`}
+              />
+              <button
+                type="button"
+                onClick={() => setSocialLinks((rows) => rows.filter((r) => r.id !== row.id))}
+                className="rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                aria-label={t.contactForm.removeEntry}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setSocialLinks((rows) => [...rows, { id: nextSocialId.current++, platform: "Facebook", url: "" }])}
+            className="text-xs font-semibold text-amo-lime hover:underline"
+          >
+            + {t.contactForm.addSocialLink}
+          </button>
+        </div>
+      </div>
+
       <div>
         <label className={LABEL_CLASS}>{t.contactForm.notes}</label>
         <textarea
@@ -302,6 +375,38 @@ function AddressGroup({
           </div>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+function TechStackGroup({
+  title,
+  prefix,
+  t,
+  values,
+  showMarketingApp,
+}: {
+  title: string;
+  prefix: "website" | "funnels" | "email" | "store";
+  t: ReturnType<typeof getDict>;
+  values?: ContactFormValues;
+  showMarketingApp?: boolean;
+}) {
+  const field = (suffix: string) => `${prefix}${suffix}` as keyof ContactFormValues;
+  const get = (suffix: string): string => (values?.[field(suffix)] as string | null | undefined) ?? "";
+
+  return (
+    <div className="rounded-lg border border-card-border p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h3>
+      <div className="mt-3 grid gap-4">
+        <Field label={t.contactForm.domain} name={field("Domain")} defaultValue={get("Domain")} />
+        <Field label={t.contactForm.hostingProvider} name={field("HostingProvider")} defaultValue={get("HostingProvider")} />
+        {showMarketingApp ? (
+          <Field label={t.contactForm.marketingApp} name={field("MarketingApp")} defaultValue={get("MarketingApp")} />
+        ) : (
+          <Field label={t.contactForm.designApp} name={field("DesignApp")} defaultValue={get("DesignApp")} />
+        )}
       </div>
     </div>
   );

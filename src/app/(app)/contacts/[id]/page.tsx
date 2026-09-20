@@ -98,6 +98,41 @@ function AddressBlock({
   );
 }
 
+function TechStackBlock({
+  title,
+  domain,
+  hostingProvider,
+  appLabel,
+  app,
+  t,
+}: {
+  title: string;
+  domain?: string | null;
+  hostingProvider?: string | null;
+  appLabel: string;
+  app?: string | null;
+  t: ReturnType<typeof getDict>;
+}) {
+  if (!domain && !hostingProvider && !app) {
+    return (
+      <div>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h4>
+        <p className="mt-2 text-sm text-soft">—</p>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h4>
+      <div className="mt-2 space-y-1 text-sm text-ink">
+        {domain && <p>{domain}</p>}
+        {hostingProvider && <p className="text-soft">{t.contactForm.hostingProvider}: {hostingProvider}</p>}
+        {app && <p className="text-soft">{appLabel}: {app}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default async function ContactDetailPage({
   params,
 }: {
@@ -142,6 +177,7 @@ export default async function ContactDetailPage({
         courseEnrollments: { orderBy: { enrolledAt: "desc" } },
         communityMemberships: { orderBy: { joinedAt: "desc" } },
         emailLinks: { orderBy: { messageDate: "desc" }, take: 20 },
+        socialLinks: { orderBy: { createdAt: "asc" } },
       },
     });
     const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
@@ -156,6 +192,21 @@ export default async function ContactDetailPage({
   const otherFields = contact.fieldValues.filter((fv) => !DUPLICATE_FIELD_SLUGS.has(normalizeSlug(fv.fieldSlug)));
 
   const hasBillingContactInfo = contact.billingContactName || contact.billingEmail || contact.billingPhone;
+
+  const hasTechStack = Boolean(
+    contact.websiteDomain ||
+      contact.websiteHostingProvider ||
+      contact.websiteDesignApp ||
+      contact.funnelsDomain ||
+      contact.funnelsHostingProvider ||
+      contact.funnelsDesignApp ||
+      contact.emailDomain ||
+      contact.emailHostingProvider ||
+      contact.emailMarketingApp ||
+      contact.storeDomain ||
+      contact.storeHostingProvider ||
+      contact.storeDesignApp
+  );
 
   const billingItems = contact.projects
     .flatMap((project) => [
@@ -317,6 +368,67 @@ export default async function ContactDetailPage({
                 )}
               </div>
             </div>
+
+            {/* Tech stack: Website, Funnels, Email, Store — only shown once at least one is filled in */}
+            {hasTechStack && (
+              <div className="mt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.techStackTitle}</h3>
+                <div className="mt-2 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                  <TechStackBlock
+                    title={t.contactForm.websiteGroupTitle}
+                    domain={contact.websiteDomain}
+                    hostingProvider={contact.websiteHostingProvider}
+                    appLabel={t.contactForm.designApp}
+                    app={contact.websiteDesignApp}
+                    t={t}
+                  />
+                  <TechStackBlock
+                    title={t.contactForm.funnelsGroupTitle}
+                    domain={contact.funnelsDomain}
+                    hostingProvider={contact.funnelsHostingProvider}
+                    appLabel={t.contactForm.designApp}
+                    app={contact.funnelsDesignApp}
+                    t={t}
+                  />
+                  <TechStackBlock
+                    title={t.contactForm.emailGroupTitle}
+                    domain={contact.emailDomain}
+                    hostingProvider={contact.emailHostingProvider}
+                    appLabel={t.contactForm.marketingApp}
+                    app={contact.emailMarketingApp}
+                    t={t}
+                  />
+                  <TechStackBlock
+                    title={t.contactForm.storeGroupTitle}
+                    domain={contact.storeDomain}
+                    hostingProvider={contact.storeHostingProvider}
+                    appLabel={t.contactForm.designApp}
+                    app={contact.storeDesignApp}
+                    t={t}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Social media links */}
+            {contact.socialLinks.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.socialLinksTitle}</h3>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {contact.socialLinks.map((link) => (
+                    <a
+                      key={link.id}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-card-border bg-field-bg px-3 py-1 text-xs font-medium text-ink hover:border-amo-gold"
+                    >
+                      {link.platform}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Source (grouped) and other systeme.io fields */}
             <div className="mt-6 grid gap-6 sm:grid-cols-2">

@@ -40,6 +40,18 @@ const ContactSchema = z.object({
   billingContactName: z.string().trim().optional(),
   billingEmail: z.string().trim().optional(),
   billingPhone: z.string().trim().optional(),
+  websiteDomain: z.string().trim().optional(),
+  websiteHostingProvider: z.string().trim().optional(),
+  websiteDesignApp: z.string().trim().optional(),
+  funnelsDomain: z.string().trim().optional(),
+  funnelsHostingProvider: z.string().trim().optional(),
+  funnelsDesignApp: z.string().trim().optional(),
+  emailDomain: z.string().trim().optional(),
+  emailHostingProvider: z.string().trim().optional(),
+  emailMarketingApp: z.string().trim().optional(),
+  storeDomain: z.string().trim().optional(),
+  storeHostingProvider: z.string().trim().optional(),
+  storeDesignApp: z.string().trim().optional(),
   stage: z.enum(["LEAD", "PROSPECT", "CLIENT", "PAST_CLIENT", "UNSUBSCRIBED"]),
   notes: z.string().trim().optional(),
 });
@@ -71,8 +83,35 @@ const CONTACT_FORM_FIELDS = [
   "billingContactName",
   "billingEmail",
   "billingPhone",
+  "websiteDomain",
+  "websiteHostingProvider",
+  "websiteDesignApp",
+  "funnelsDomain",
+  "funnelsHostingProvider",
+  "funnelsDesignApp",
+  "emailDomain",
+  "emailHostingProvider",
+  "emailMarketingApp",
+  "storeDomain",
+  "storeHostingProvider",
+  "storeDesignApp",
   "notes",
 ] as const;
+
+// Parallel "socialPlatform"/"socialUrl" inputs (same index = same row),
+// submitted alongside the rest of the Contact form — rows with no URL are
+// dropped since the platform alone isn't a usable link.
+function readSocialLinks(formData: FormData): { platform: string; url: string }[] {
+  const platforms = formData.getAll("socialPlatform").map(String);
+  const urls = formData.getAll("socialUrl").map(String);
+  const links: { platform: string; url: string }[] = [];
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i].trim();
+    if (!url) continue;
+    links.push({ platform: (platforms[i] ?? "Other").trim() || "Other", url });
+  }
+  return links;
+}
 
 function readContactForm(formData: FormData) {
   const raw: Record<string, string | string[] | undefined> = {
@@ -202,6 +241,13 @@ export async function createContact(
       data: { ...data, source: "manual", ownerId: session.user.id },
     });
 
+    const socialLinks = readSocialLinks(formData);
+    if (socialLinks.length > 0) {
+      await db.contactSocialLink.createMany({
+        data: socialLinks.map((link) => ({ ...link, contactId: contact.id })),
+      });
+    }
+
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     for (const name of desiredTags) {
       await addTagToContactWith(db, contact.id, name);
@@ -259,6 +305,17 @@ export async function updateContact(
     }
 
     const updated = await db.contact.update({ where: { id: contactId }, data });
+
+    // Full replace, not a diff — simplest correct sync for a small,
+    // order-sensitive list with no other side effects (unlike tags, nothing
+    // else references a social link by id).
+    const socialLinks = readSocialLinks(formData);
+    await db.contactSocialLink.deleteMany({ where: { contactId } });
+    if (socialLinks.length > 0) {
+      await db.contactSocialLink.createMany({
+        data: socialLinks.map((link) => ({ ...link, contactId })),
+      });
+    }
 
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     await syncContactTagsWith(db, contactId, desiredTags);
