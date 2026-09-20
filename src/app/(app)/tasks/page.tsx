@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -39,8 +39,9 @@ export default async function TasksPage({
   if (status) where.status = status as Prisma.TaskWhereInput["status"];
   if (assigneeId) where.assigneeId = assigneeId;
 
-  const [tasks, users] = await Promise.all([
-    prisma.task.findMany({
+  // One shared client — see src/lib/prisma.ts for why.
+  const { tasks, users, hour12 } = await withScopedPrismaClient(async (db) => {
+    const tasks = await db.task.findMany({
       where,
       orderBy: [{ status: "asc" }, { dueDate: "asc" }],
       include: {
@@ -48,10 +49,11 @@ export default async function TasksPage({
         assignee: true,
         phase: true,
       },
-    }),
-    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-  ]);
-  const hour12 = await getHour12(session);
+    });
+    const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+    const hour12 = await getHour12(session, db);
+    return { tasks, users, hour12 };
+  });
 
   return (
     <div className="space-y-6">

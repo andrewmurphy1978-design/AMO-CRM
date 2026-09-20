@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -21,8 +21,12 @@ export default async function BookingsPage() {
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
-  const bookings = await prisma.booking.findMany({ orderBy: { scheduledFor: "desc" } });
-  const hour12 = await getHour12(session);
+  // One shared client — see src/lib/prisma.ts for why.
+  const { bookings, hour12 } = await withScopedPrismaClient(async (db) => {
+    const bookings = await db.booking.findMany({ orderBy: { scheduledFor: "desc" } });
+    const hour12 = await getHour12(session, db);
+    return { bookings, hour12 };
+  });
 
   return (
     <div className="space-y-6">

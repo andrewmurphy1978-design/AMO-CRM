@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -33,12 +33,16 @@ export default async function InvoicesPage({
   const where: Prisma.InvoiceWhereInput = {};
   if (status) where.status = status as Prisma.InvoiceWhereInput["status"];
 
-  const invoices = await prisma.invoice.findMany({
-    where,
-    orderBy: [{ status: "asc" }, { dueDate: "asc" }],
-    include: { project: { include: { contact: true } } },
+  // One shared client — see src/lib/prisma.ts for why.
+  const { invoices, hour12 } = await withScopedPrismaClient(async (db) => {
+    const invoices = await db.invoice.findMany({
+      where,
+      orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+      include: { project: { include: { contact: true } } },
+    });
+    const hour12 = await getHour12(session, db);
+    return { invoices, hour12 };
   });
-  const hour12 = await getHour12(session);
 
   const needingReminder = invoices.filter((inv) => needsReminder(inv));
 

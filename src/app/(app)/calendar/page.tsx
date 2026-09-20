@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getGoogleConnection } from "@/lib/google";
 import { getHour12 } from "@/lib/time-format";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -30,8 +31,12 @@ export default async function CalendarPage() {
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
-  const googleConnection = session ? await getGoogleConnection(session.user.id) : null;
-  const hour12 = await getHour12(session);
+  // One shared client — see src/lib/prisma.ts for why.
+  const { googleConnection, hour12 } = await withScopedPrismaClient(async (db) => {
+    const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
+    const hour12 = await getHour12(session, db);
+    return { googleConnection, hour12 };
+  });
 
   return (
     <div className="flex h-full flex-col">
