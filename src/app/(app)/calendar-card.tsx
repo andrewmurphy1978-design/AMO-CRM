@@ -505,6 +505,7 @@ export default function CalendarCard({
           projectId: (linkTarget && links[linkTarget.id]?.projectId) || "",
           taskId: (linkTarget && links[linkTarget.id]?.taskId) || "",
           bookingId: "",
+          affiliateProgramId: "",
         }}
         onSave={handleSaveLink}
         labels={linkDialogLabels}

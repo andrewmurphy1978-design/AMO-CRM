@@ -828,6 +828,9 @@ model EmailLink {
   taskId String?
   task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
+  affiliateProgramId String?
+  affiliateProgram   AffiliateProgram? @relation(fields: [affiliateProgramId], references: [id], onDelete: Cascade)
+
   // A snapshot taken at link time (subject/sender/date/Gmail url), not a
   // live reference — Gmail threads aren't otherwise queryable from here
   // without knowing which team member's account owns them (EmailLink has
@@ -844,7 +847,48 @@ model EmailLink {
   @@index([contactId])
   @@index([projectId])
   @@index([taskId])
+  @@index([affiliateProgramId])
   @@map("email_links")
+}
+
+// One row per program on the "AI Tools" / "Training Programs" / "Business
+// Opportunities" tabs of the "AMO Affiliate Link Tracker" Google Sheet
+// (https://docs.google.com/spreadsheets/d/1dJ9sZz6fHNvwK7I_nKH72Ai1VWt1x_mUh_XQ6g7YWkg) —
+// those three tabs share an identical 12-column schema. Synced periodically
+// (see src/lib/affiliate-sheet.ts) via the sheet's public CSV export, so
+// this needs no Google OAuth of its own — just the sheet being link-viewable.
+// (tab, name) is the natural key from the sheet, used to upsert on each sync
+// without disturbing the row's own id (which EmailLink links against).
+enum AffiliateProgramTab {
+  AI_TOOLS
+  TRAINING_PROGRAMS
+  BUSINESS_OPPORTUNITIES
+}
+
+model AffiliateProgram {
+  id   String              @id @default(cuid())
+  tab  AffiliateProgramTab
+  name String // "Tool / Program"
+
+  type            String? // "Type"
+  category        String? // "Category / Language"
+  shortioCreated  Boolean @default(false) // "Short.io Created?"
+  brandedLink     String? // "go.andrewmurphy.online Link"
+  destinationLink String? // "Real Destination Link"
+  affiliateStatus String? // "Affiliate Status"
+  frenchSlug      String? // "French go.andrewmurphy.online Slug"
+  frenchLink      String? // "French Affiliate/Fallback Link"
+  followUpNeeded  Boolean @default(false) // "Follow-up Needed?"
+  notes           String? @db.Text // "Notes"
+  accountPlan     String? // "Account / Plan / Trial End"
+
+  emailLinks EmailLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tab, name])
+  @@map("affiliate_programs")
 }
 
 enum EmailCategory {

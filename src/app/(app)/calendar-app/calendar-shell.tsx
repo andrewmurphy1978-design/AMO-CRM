@@ -208,9 +208,13 @@ export default function CalendarShell({
     setLinks((prev) => ({ ...prev, [linkTarget.id]: values }));
   }
 
-  const linkInitial: LinkValues = linkTarget
-    ? (links[linkTarget.id] ?? { contactId: "", projectId: "", taskId: "", bookingId: "" })
-    : { contactId: "", projectId: "", taskId: "", bookingId: "" };
+  // Calendar events never link to an affiliate program (that's an Email-page-
+  // only target — see LinkDialog's `affiliatePrograms` prop), so this is
+  // always blank here; still required to satisfy the shared LinkValues type.
+  const linkInitial: LinkValues = {
+    ...(linkTarget ? (links[linkTarget.id] ?? { contactId: "", projectId: "", taskId: "", bookingId: "" }) : { contactId: "", projectId: "", taskId: "", bookingId: "" }),
+    affiliateProgramId: "",
+  };
 
   return (
     // Height is measured against the container's real position (see the

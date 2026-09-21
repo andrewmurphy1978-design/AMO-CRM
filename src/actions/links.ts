@@ -11,7 +11,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 
 export async function saveEmailLink(
   gmailThreadId: string,
-  target: { contactId?: string; projectId?: string; taskId?: string },
+  target: { contactId?: string; projectId?: string; taskId?: string; affiliateProgramId?: string },
   // A snapshot taken at link time — Gmail threads aren't otherwise
   // queryable from a Contact/Project/Task page without knowing which team
   // member's account owns them (EmailLink has no userId), so this is what
@@ -24,9 +24,10 @@ export async function saveEmailLink(
   const contactId = target.contactId || null;
   const projectId = target.projectId || null;
   const taskId = target.taskId || null;
+  const affiliateProgramId = target.affiliateProgramId || null;
 
   await withScopedPrismaClient(async (db) => {
-    if (!contactId && !projectId && !taskId) {
+    if (!contactId && !projectId && !taskId && !affiliateProgramId) {
       await db.emailLink.deleteMany({ where: { gmailThreadId } });
     } else {
       const snapshot = {
@@ -37,14 +38,15 @@ export async function saveEmailLink(
       };
       await db.emailLink.upsert({
         where: { gmailThreadId },
-        update: { contactId, projectId, taskId, ...snapshot },
-        create: { gmailThreadId, contactId, projectId, taskId, ...snapshot },
+        update: { contactId, projectId, taskId, affiliateProgramId, ...snapshot },
+        create: { gmailThreadId, contactId, projectId, taskId, affiliateProgramId, ...snapshot },
       });
     }
   });
 
   revalidatePath("/email");
   revalidatePath("/contacts");
+  revalidatePath("/marketing");
 }
 
 export async function saveCalendarEventLink(

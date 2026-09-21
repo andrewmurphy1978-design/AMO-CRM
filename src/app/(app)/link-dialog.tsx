@@ -19,6 +19,7 @@ export interface LinkDialogLabels {
   project: string;
   task: string;
   booking: string;
+  affiliateProgram: string;
   none: string;
   save: string;
   saving: string;
@@ -31,6 +32,7 @@ export interface LinkValues {
   projectId: string;
   taskId: string;
   bookingId: string;
+  affiliateProgramId: string;
 }
 
 // Shared modal used by both the Email and Calendar pages to attach a
@@ -51,6 +53,7 @@ export default function LinkDialog({
   projects,
   tasks,
   bookings,
+  affiliatePrograms,
   initial,
   onSave,
   labels,
@@ -61,6 +64,7 @@ export default function LinkDialog({
   projects: LinkOption[];
   tasks: LinkOption[];
   bookings?: LinkOption[]; // omitted entirely on the Email page
+  affiliatePrograms?: LinkOption[]; // only passed on the Email page
   initial: LinkValues;
   onSave: (values: LinkValues) => Promise<void>;
   labels: LinkDialogLabels;
@@ -70,6 +74,10 @@ export default function LinkDialog({
   const [projectId, setProjectId] = useState(initial.projectId);
   const [taskId, setTaskId] = useState(initial.taskId);
   const [bookingId, setBookingId] = useState(initial.bookingId);
+  // Independent of the contact/project/task/booking hierarchy above — a
+  // program isn't nested under a client, so it gets its own flat select
+  // instead of a cascading one.
+  const [affiliateProgramId, setAffiliateProgramId] = useState(initial.affiliateProgramId);
   const [pending, startTransition] = useTransition();
 
   const filteredContacts = useMemo(() => {
@@ -207,6 +215,24 @@ export default function LinkDialog({
           </div>
         )}
 
+        {affiliatePrograms && (
+          <div className="mt-3">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{labels.affiliateProgram}</label>
+            <select
+              value={affiliateProgramId}
+              onChange={(e) => setAffiliateProgramId(e.target.value)}
+              className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm"
+            >
+              <option value="">{labels.none}</option>
+              {affiliatePrograms.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="mt-5 flex items-center justify-end gap-3">
           <button type="button" onClick={onClose} className="text-sm text-soft hover:underline">
             {labels.cancel}
@@ -216,7 +242,7 @@ export default function LinkDialog({
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
-                await onSave({ contactId, projectId, taskId, bookingId });
+                await onSave({ contactId, projectId, taskId, bookingId, affiliateProgramId });
                 onClose();
               })
             }

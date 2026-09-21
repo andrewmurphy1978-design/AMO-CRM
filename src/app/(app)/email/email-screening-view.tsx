@@ -150,6 +150,7 @@ function EmailRow({
   contactOptions,
   projectOptions,
   taskOptions,
+  programOptions,
   linkLabels,
   quickActionLabels,
   dateIso,
@@ -180,6 +181,7 @@ function EmailRow({
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
+  programOptions: LinkOption[];
   linkLabels: LinkDialogLabels;
   quickActionLabels: { reply: string; replyAll: string; forward: string };
   dateIso: string;
@@ -233,9 +235,11 @@ function EmailRow({
           contacts={contactOptions}
           projects={projectOptions}
           tasks={taskOptions}
+          programs={programOptions}
           initialContactId={linkInfo?.contactId ?? ""}
           initialProjectId={linkInfo?.projectId ?? ""}
           initialTaskId={linkInfo?.taskId ?? ""}
+          initialProgramId={linkInfo?.affiliateProgramId ?? ""}
           summary={linkSummaryText}
           labels={linkLabels}
           onSaved={onLinkSaved}
@@ -264,6 +268,7 @@ export default function EmailScreeningView({
   contactOptions,
   projectOptions,
   taskOptions,
+  programOptions,
   hour12,
   lang,
 }: {
@@ -272,6 +277,7 @@ export default function EmailScreeningView({
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
+  programOptions: LinkOption[];
   hour12: boolean;
   lang: Lang;
 }) {
@@ -363,11 +369,12 @@ export default function EmailScreeningView({
     project: t.linkPicker.project,
     task: t.linkPicker.task,
     booking: t.linkPicker.booking,
+    affiliateProgram: t.linkPicker.affiliateProgram,
     save: t.linkPicker.save,
     saving: t.linkPicker.saving,
     cancel: t.linkPicker.cancel,
     clear: t.linkPicker.clear,
-    title: t.linkPicker.title,
+    title: t.linkPicker.titleWithAffiliateProgram,
     searchPlaceholder: t.linkPicker.searchPlaceholder,
     noResults: t.linkPicker.noResults,
   };
@@ -381,7 +388,7 @@ export default function EmailScreeningView({
 
   function linkSummaryText(link: EmailLinkInfo | undefined): string | null {
     if (!link) return null;
-    const name = link.contactName || link.projectName || link.taskName;
+    const name = link.contactName || link.projectName || link.taskName || link.affiliateProgramName;
     return name ? t.linkPicker.linkedTo(name) : null;
   }
 
@@ -389,6 +396,7 @@ export default function EmailScreeningView({
     if (!link) return null;
     if (link.contactName) return { name: link.contactName, href: `/contacts/${link.contactId}` };
     if (link.projectName) return { name: link.projectName, href: `/projects/${link.projectId}` };
+    if (link.affiliateProgramName) return { name: link.affiliateProgramName, href: `/marketing#${link.affiliateProgramId}` };
     if (link.taskName) return { name: link.taskName, href: `/projects/${link.projectId}/tasks/${link.taskId}/edit` };
     return null;
   }
@@ -474,6 +482,7 @@ export default function EmailScreeningView({
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}
+        programOptions={programOptions}
         linkLabels={linkLabels}
         quickActionLabels={quickActionLabels}
         dateIso={email.date}
@@ -509,6 +518,7 @@ export default function EmailScreeningView({
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}
+        programOptions={programOptions}
         linkLabels={linkLabels}
         quickActionLabels={quickActionLabels}
         dateIso={s.date}

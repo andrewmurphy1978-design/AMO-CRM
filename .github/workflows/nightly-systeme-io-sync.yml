@@ -33,3 +33,7 @@ jobs:
         run: |
           curl -sS -f -X GET "https://crm.andrewmurphy.online/api/cron/invoice-status-check" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - name: Trigger affiliate link tracker sheet sync
+        run: |
+          curl -sS -f -X GET "https://crm.andrewmurphy.online/api/cron/affiliate-sheet-sync" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

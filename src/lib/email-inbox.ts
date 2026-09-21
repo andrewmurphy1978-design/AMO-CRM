@@ -45,13 +45,34 @@ async function autoLinkToContacts(db: PrismaClient, candidates: AutoLinkCandidat
   const unlinked = candidates.filter((c) => !alreadyLinked.has(c.threadId));
   if (unlinked.length === 0) return;
 
+  // A contact can have several email addresses (email, email2, and any
+  // number of extraEmails) — every one of them should match an incoming/
+  // outgoing thread, not just the primary. Prisma's `mode: "insensitive"`
+  // isn't supported on array-contains filters, so `extraEmails` is matched
+  // in JS below instead of in the query.
   const addresses = [...new Set(unlinked.map((c) => c.email.toLowerCase()))];
   const contacts = await db.contact.findMany({
-    where: { email: { in: addresses, mode: "insensitive" } },
-    select: { id: true, email: true },
+    where: {
+      OR: [
+        { email: { in: addresses, mode: "insensitive" } },
+        { email2: { in: addresses, mode: "insensitive" } },
+        { extraEmails: { isEmpty: false } },
+      ],
+    },
+    select: { id: true, email: true, email2: true, extraEmails: true },
   });
   if (contacts.length === 0) return;
-  const contactByEmail = new Map(contacts.map((c) => [c.email.toLowerCase(), c.id]));
+  const addressSet = new Set(addresses);
+  const contactByEmail = new Map<string, string>();
+  for (const c of contacts) {
+    for (const addr of [c.email, c.email2, ...c.extraEmails]) {
+      if (!addr) continue;
+      const normalized = addr.toLowerCase();
+      if (addressSet.has(normalized) && !contactByEmail.has(normalized)) {
+        contactByEmail.set(normalized, c.id);
+      }
+    }
+  }
 
   // One thread might appear twice in `unlinked` (e.g. several sent
   // messages before a reply) — dedupe so each thread is only upserted once.
@@ -123,9 +144,11 @@ export interface EmailLinkInfo {
   contactId: string;
   projectId: string;
   taskId: string;
+  affiliateProgramId: string;
   contactName: string;
   projectName: string;
   taskName: string;
+  affiliateProgramName: string;
 }
 
 function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
@@ -137,7 +160,7 @@ export async function getEmailLinksByThread(db: PrismaClient, threadIds: string[
   if (threadIds.length === 0) return {};
   const links = await db.emailLink.findMany({
     where: { gmailThreadId: { in: threadIds } },
-    include: { contact: true, project: true, task: true },
+    include: { contact: true, project: true, task: true, affiliateProgram: true },
   });
   const result: Record<string, EmailLinkInfo> = {};
   for (const link of links) {
@@ -145,9 +168,11 @@ export async function getEmailLinksByThread(db: PrismaClient, threadIds: string[
       contactId: link.contactId ?? "",
       projectId: link.projectId ?? "",
       taskId: link.taskId ?? "",
+      affiliateProgramId: link.affiliateProgramId ?? "",
       contactName: link.contact ? contactLabel(link.contact) : "",
       projectName: link.project?.name ?? "",
       taskName: link.task?.title ?? "",
+      affiliateProgramName: link.affiliateProgram?.name ?? "",
     };
   }
   return result;

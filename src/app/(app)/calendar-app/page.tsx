@@ -94,6 +94,7 @@ export default async function CalendarAppPage() {
     project: t.linkPicker.project,
     task: t.linkPicker.task,
     booking: t.linkPicker.booking,
+    affiliateProgram: t.linkPicker.affiliateProgram,
     save: t.linkPicker.save,
     saving: t.linkPicker.saving,
     cancel: t.linkPicker.cancel,

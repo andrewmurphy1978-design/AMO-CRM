@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
 import { runSystemeIoSync } from "@/lib/sync";
+import { syncAffiliateSheet } from "@/lib/affiliate-sheet";
 import { disconnectGoogle } from "@/lib/google";
 import { getDict } from "@/lib/i18n/dictionaries";
 
@@ -100,6 +101,22 @@ export async function triggerSystemeIoSync(): Promise<{
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : t.actions.systemeioSyncFailed;
+    return { error: message };
+  }
+}
+
+export async function triggerAffiliateSheetSync(): Promise<{ error?: string; success?: string }> {
+  const session = await requireAdmin();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+  try {
+    const result = await withScopedPrismaClient((db) => syncAffiliateSheet(db));
+    revalidatePath("/marketing");
+    if (result.errors.length > 0) {
+      return { error: result.errors.join(" ") };
+    }
+    return { success: t.marketing.affiliateSynced(result.synced) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t.marketing.affiliateSyncFailed;
     return { error: message };
   }
 }

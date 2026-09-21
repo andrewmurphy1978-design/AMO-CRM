@@ -15,9 +15,11 @@ export default function EmailLinkPicker({
   contacts,
   projects,
   tasks,
+  programs,
   initialContactId,
   initialProjectId,
   initialTaskId,
+  initialProgramId,
   summary,
   labels,
   onSaved,
@@ -30,9 +32,11 @@ export default function EmailLinkPicker({
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
+  programs: LinkOption[];
   initialContactId: string;
   initialProjectId: string;
   initialTaskId: string;
+  initialProgramId: string;
   summary: string | null;
   labels: LinkDialogLabels;
   onSaved?: (values: LinkValues) => void;
@@ -44,10 +48,15 @@ export default function EmailLinkPicker({
     projectId: initialProjectId,
     taskId: initialTaskId,
     bookingId: "",
+    affiliateProgramId: initialProgramId,
   };
 
   async function handleSave(values: LinkValues) {
-    await saveEmailLink(threadId, { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId }, { subject, fromLabel, date, link });
+    await saveEmailLink(
+      threadId,
+      { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId, affiliateProgramId: values.affiliateProgramId },
+      { subject, fromLabel, date, link }
+    );
     onSaved?.(values);
   }
 
@@ -74,6 +83,7 @@ export default function EmailLinkPicker({
         contacts={contacts}
         projects={projects}
         tasks={tasks}
+        affiliatePrograms={programs}
         initial={initial}
         onSave={handleSave}
         labels={labels}

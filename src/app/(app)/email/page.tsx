@@ -25,7 +25,7 @@ export default async function EmailPage() {
   // page load; only the client-side Refresh button (or a first-ever visit
   // with no cache row yet) spends a live Gmail/Claude call, via
   // /api/email/inbox.
-  const { connected, hour12, contacts, projects, tasks, initialData } = await withScopedPrismaClient(async (db) => {
+  const { connected, hour12, contacts, projects, tasks, affiliatePrograms, initialData } = await withScopedPrismaClient(async (db) => {
     const accessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
     const contacts = await db.contact.findMany({
@@ -44,6 +44,10 @@ export default async function EmailPage() {
       take: 300,
       select: { id: true, title: true, projectId: true },
     });
+    const affiliatePrograms = await db.affiliateProgram.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
 
     let initialData: EmailScreeningPayload | null = null;
     if (accessToken && session) {
@@ -54,12 +58,13 @@ export default async function EmailPage() {
       }
     }
 
-    return { connected: accessToken !== null, hour12, contacts, projects, tasks, initialData };
+    return { connected: accessToken !== null, hour12, contacts, projects, tasks, affiliatePrograms, initialData };
   });
 
   const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c) }));
   const projectOptions = projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId }));
   const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId }));
+  const programOptions = affiliatePrograms.map((p) => ({ id: p.id, label: p.name }));
 
   return (
     <div className="space-y-6">
@@ -95,6 +100,7 @@ export default async function EmailPage() {
         contactOptions={contactOptions}
         projectOptions={projectOptions}
         taskOptions={taskOptions}
+        programOptions={programOptions}
         hour12={hour12}
         lang={lang}
       />
