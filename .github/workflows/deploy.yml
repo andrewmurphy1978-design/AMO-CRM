@@ -34,8 +34,14 @@ jobs:
 
       - run: npm ci
 
-      - run: npx tsc --noEmit
-
+      # Not `npx tsc --noEmit`: Next.js 16 generates a `.next/types` ambient
+      # module (e.g. the `LayoutProps` type layout.tsx relies on) as part of
+      # its own build, which a bare `tsc` run never triggers on a fresh
+      # checkout — it fails with a false-positive "Cannot find name
+      # 'LayoutProps'" every time, which is exactly what broke every deploy
+      # on this branch so far. `next build` (via cf:deploy below) already
+      # runs its own equivalent TypeScript check in the right order, so
+      # there's nothing to duplicate here — only lint needs its own step.
       - run: npx eslint src
 
       - name: Deploy to Cloudflare Workers
