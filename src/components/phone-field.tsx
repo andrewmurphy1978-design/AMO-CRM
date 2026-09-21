@@ -58,14 +58,21 @@ export default function PhoneField({
     <div>
       {!hideLabel && <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{label}</label>}
       <div className={`flex items-center gap-1.5 ${hideLabel ? "" : "mt-1"}`}>
-        <PhoneInput
-          international
-          flags={flags}
-          defaultCountry={defaultCountry as Country}
-          value={value}
-          onChange={setValue}
-          className="amo-phone-input min-w-0 flex-1"
-        />
+        {/* Fixed width, not flex-1 — so the number field is always the same
+            size across every row in a column regardless of whether that
+            particular row also has an extension field and/or a remove
+            button; the extension field (flex-1 below) is the one that
+            shrinks to make room for those instead. */}
+        <div className={hideExtension ? "min-w-0 flex-1" : "w-52 shrink-0"}>
+          <PhoneInput
+            international
+            flags={flags}
+            defaultCountry={defaultCountry as Country}
+            value={value}
+            onChange={setValue}
+            className="amo-phone-input"
+          />
+        </div>
         {!hideExtension && (
           <input
             type="text"
@@ -74,7 +81,7 @@ export default function PhoneField({
             onChange={(e) => setExt(e.target.value.replace(/[^\d]/g, ""))}
             placeholder="ext."
             aria-label="Extension"
-            className="w-24 shrink-0 rounded-md border border-card-border bg-field-bg px-2 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+            className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-2 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           />
         )}
         {onRemove && (

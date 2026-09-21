@@ -12,6 +12,7 @@ import { normalizeFieldSlug, SERVICES_REQUIRED_DEFAULT_SLUG, PROJECT_GOAL_DEFAUL
 import { COMPANY_TYPES } from "@/lib/company-types";
 import { stateLabelForCountry, zipLabelForCountry } from "@/lib/address-labels";
 import { INDUSTRIES } from "@/lib/industries";
+import { CURRENCIES, PAYMENT_TERMS, PAYMENT_SCHEDULES } from "@/lib/currencies";
 import PhoneField from "@/components/phone-field";
 import PlatformIcon from "@/components/platform-icon";
 import ContactTimezoneCard from "@/components/contact-timezone-card";
@@ -34,6 +35,8 @@ type ContactFormValues = {
   extraPhones?: string[] | null;
   company?: string | null;
   companyType?: string | null;
+  jurisdictionCountry?: string | null;
+  jurisdictionRegion?: string | null;
   industry?: string | null;
   locale?: string | null;
   timeZone?: string | null;
@@ -53,6 +56,10 @@ type ContactFormValues = {
   billingEmail?: string | null;
   billingPhone?: string | null;
   autoSendInvoiceReminders?: boolean;
+  preferredCurrency?: string | null;
+  paymentTerms?: string | null;
+  paymentSchedule?: string | null;
+  defaultDiscount?: number | null;
   websiteDomain?: string | null;
   websiteHostingProvider?: string | null;
   websiteDesignApp?: string | null;
@@ -138,10 +145,17 @@ export default function ContactForm({
   const t = getDict(lang);
   const [selectedTags, setSelectedTags] = useState<string[]>(currentTags ?? []);
   const [timeZone, setTimeZone] = useState(defaultValues?.timeZone ?? "");
+  // Tracked separately from the contact's own mailing address country — a
+  // company can be incorporated somewhere other than where its owner does
+  // business — so the jurisdiction region's label can react to it.
+  const [jurisdictionCountry, setJurisdictionCountry] = useState(defaultValues?.jurisdictionCountry ?? "");
 
   // Every world timezone, sorted west to east — computed once (deterministic
   // given a fixed reference date, so no server/client hydration mismatch).
   const [timeZoneOptions] = useState(() => getWorldTimeZoneOptions());
+  // Just the city/region part (e.g. "Toronto"), stripped of the leading
+  // "(UTC-04:00) " offset prefix, for the small live-clock card's own label.
+  const timeZoneCityName = timeZoneOptions.find((opt) => opt.value === timeZone)?.label.replace(/^\([^)]*\)\s*/, "") ?? "";
 
   // Language tags first (matching the Contacts list page's own ordering),
   // then everything else, each colored the same way it is there.
@@ -254,7 +268,7 @@ export default function ContactForm({
           <Field label={t.contactForm.firstName} name="firstName" defaultValue={defaultValues?.firstName ?? ""} />
           <Field label={t.contactForm.lastName} name="lastName" defaultValue={defaultValues?.lastName ?? ""} />
           <Field label={t.contactForm.company} name="company" defaultValue={defaultValues?.company ?? ""} />
-          <div className="flex flex-col lg:row-span-3">
+          <div className="flex flex-col lg:row-span-4">
             <label className={LABEL_CLASS}>{t.contactForm.tags}</label>
             <div className="mt-1 max-h-[28rem] flex-1 overflow-y-auto rounded-md border border-card-border bg-field-bg p-2">
               {sortedTags.length === 0 && <p className="px-1 py-1 text-sm text-soft">—</p>}
@@ -284,13 +298,38 @@ export default function ContactForm({
             </div>
           </div>
 
-          {/* Row 2 */}
+          {/* Row 2 — Type of company, plus where that company is legally
+              registered (separate from the contact's own mailing country). */}
           <Field
             label={t.contactForm.companyType}
             name="companyType"
             defaultValue={defaultValues?.companyType ?? ""}
             list="companyTypeOptions"
           />
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.jurisdictionCountry}</label>
+            <select
+              name="jurisdictionCountry"
+              value={jurisdictionCountry}
+              onChange={(e) => setJurisdictionCountry(e.target.value)}
+              className={FIELD_CLASS}
+            >
+              <option value="">—</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Field
+            label={`${stateLabelForCountry(jurisdictionCountry, lang)} ${t.contactForm.ofJurisdiction}`}
+            name="jurisdictionRegion"
+            defaultValue={defaultValues?.jurisdictionRegion ?? ""}
+          />
+
+          {/* Row 3 — nothing in the 3rd column on purpose, so the Language
+              radio buttons have room to grow if more languages are added. */}
           <Field label={t.contactForm.industry} name="industry" defaultValue={defaultValues?.industry ?? ""} list="industryOptions" />
           <div>
             <label className={LABEL_CLASS}>{t.contactForm.language}</label>
@@ -317,8 +356,10 @@ export default function ContactForm({
               </label>
             </div>
           </div>
+          <div aria-hidden="true" />
 
-          {/* Row 3 */}
+          {/* Row 4 — Time Zone and its live local-time preview get their own
+              columns (each with its own label) so the two labels line up. */}
           <Field
             label={t.contactForm.stage}
             name="stage"
@@ -326,28 +367,95 @@ export default function ContactForm({
             defaultValue={defaultValues?.stage ?? "LEAD"}
             options={STAGES}
           />
-          <div aria-hidden="true" />
           <div>
             <label className={LABEL_CLASS}>{t.contactForm.timeZone}</label>
-            <div className="mt-1 flex items-start gap-2">
-              <select
-                name="timeZone"
-                value={timeZone}
-                onChange={(e) => setTimeZone(e.target.value)}
-                className={`${FIELD_CLASS} mt-0 flex-1`}
-              >
-                <option value="">—</option>
-                {timeZoneOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              {timeZone && (
-                <div className="w-36 shrink-0">
-                  <ContactTimezoneCard timeZone={timeZone} locationLabel={t.contactForm.timeZoneNow} hour12={hour12} lang={lang} />
-                </div>
+            <select
+              name="timeZone"
+              value={timeZone}
+              onChange={(e) => setTimeZone(e.target.value)}
+              className={FIELD_CLASS}
+            >
+              <option value="">—</option>
+              {timeZoneOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.timeZoneNow}</label>
+            <div className="mt-1">
+              {timeZone ? (
+                <ContactTimezoneCard timeZone={timeZone} locationLabel={timeZoneCityName} hour12={hour12} lang={lang} />
+              ) : (
+                <p className="text-sm text-soft">—</p>
               )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">
+          <h3 className={LABEL_CLASS}>{t.contactForm.cardInvoice}</h3>
+          <div className="mt-3 space-y-4">
+            <div>
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  name="autoSendInvoiceReminders"
+                  defaultChecked={defaultValues?.autoSendInvoiceReminders ?? false}
+                  className="accent-amo-lime"
+                />
+                {t.contactForm.autoSendInvoiceReminders}
+              </label>
+              <p className="mt-1 text-xs text-soft">{t.contactForm.autoSendInvoiceRemindersHelp}</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className={LABEL_CLASS}>{t.contactForm.preferredCurrency}</label>
+                <select name="preferredCurrency" defaultValue={defaultValues?.preferredCurrency ?? ""} className={FIELD_CLASS}>
+                  <option value="">—</option>
+                  {CURRENCIES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>{t.contactForm.paymentTerms}</label>
+                <select name="paymentTerms" defaultValue={defaultValues?.paymentTerms ?? ""} className={FIELD_CLASS}>
+                  <option value="">—</option>
+                  {PAYMENT_TERMS.map((term) => (
+                    <option key={term} value={term}>
+                      {term}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>{t.contactForm.paymentSchedule}</label>
+                <select name="paymentSchedule" defaultValue={defaultValues?.paymentSchedule ?? ""} className={FIELD_CLASS}>
+                  <option value="">—</option>
+                  {PAYMENT_SCHEDULES.map((schedule) => (
+                    <option key={schedule} value={schedule}>
+                      {schedule}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>{t.contactForm.defaultDiscount}</label>
+                <input
+                  type="number"
+                  name="defaultDiscount"
+                  min={0}
+                  max={100}
+                  step="0.1"
+                  defaultValue={defaultValues?.defaultDiscount ?? ""}
+                  className={FIELD_CLASS}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -355,42 +463,50 @@ export default function ContactForm({
 
       <Card color="contact" title={t.contactForm.cardContactInfo}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
-          <div className="sm:col-span-2 lg:col-span-1 space-y-1.5">
-            <Field label={t.contactForm.email} name="email" type="email" required defaultValue={defaultValues?.email} />
-            <input
-              type="email"
-              name="email2"
-              defaultValue={defaultValues?.email2 ?? ""}
-              aria-label={t.contactForm.email2}
-              className={FIELD_CLASS}
-            />
-            {extraEmails.map((row) => (
-              <div key={row.id} className="flex items-end gap-1.5">
-                <div className="flex-1">
+          <div className="sm:col-span-2 lg:col-span-1">
+            <label className={LABEL_CLASS}>{t.contactForm.emails}</label>
+            <div className="mt-1 space-y-1.5">
+              <input
+                type="email"
+                name="email"
+                required
+                defaultValue={defaultValues?.email}
+                aria-label={t.contactForm.email}
+                className={`${FIELD_CLASS} mt-0`}
+              />
+              <input
+                type="email"
+                name="email2"
+                defaultValue={defaultValues?.email2 ?? ""}
+                aria-label={t.contactForm.email2}
+                className={`${FIELD_CLASS} mt-0`}
+              />
+              {extraEmails.map((row) => (
+                <div key={row.id} className="flex items-center gap-1.5">
                   <input
                     type="email"
                     name="extraEmails"
                     defaultValue={row.value}
-                    className={FIELD_CLASS}
+                    className={`${FIELD_CLASS} mt-0 flex-1`}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setExtraEmails((rows) => rows.filter((r) => r.id !== row.id))}
+                    className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                    aria-label={t.contactForm.removeEntry}
+                  >
+                    ✕
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setExtraEmails((rows) => rows.filter((r) => r.id !== row.id))}
-                  className="mb-0.5 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
-                  aria-label={t.contactForm.removeEntry}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => setExtraEmails((rows) => [...rows, { id: nextEmailId.current++, value: "" }])}
-              className="text-xs font-semibold text-amo-lime hover:underline"
-            >
-              + {t.contactForm.addEmail}
-            </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setExtraEmails((rows) => [...rows, { id: nextEmailId.current++, value: "" }])}
+                className="text-xs font-semibold text-amo-lime hover:underline"
+              >
+                + {t.contactForm.addEmail}
+              </button>
+            </div>
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</label>
@@ -586,20 +702,6 @@ export default function ContactForm({
         </Card>
       </div>
 
-      <Card color="invoice" title={t.contactForm.cardInvoice}>
-        <div>
-          <label className="flex items-center gap-2 text-sm text-ink">
-            <input
-              type="checkbox"
-              name="autoSendInvoiceReminders"
-              defaultChecked={defaultValues?.autoSendInvoiceReminders ?? false}
-              className="accent-amo-lime"
-            />
-            {t.contactForm.autoSendInvoiceReminders}
-          </label>
-          <p className="mt-1 text-xs text-soft">{t.contactForm.autoSendInvoiceRemindersHelp}</p>
-        </div>
-      </Card>
 
       <Card color="other" title={t.contactForm.cardOtherInfo}>
         <div className="grid gap-4 sm:grid-cols-3">

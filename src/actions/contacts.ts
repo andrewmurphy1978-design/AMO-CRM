@@ -22,6 +22,8 @@ const ContactSchema = z.object({
   extraPhones: z.array(z.string().trim()).optional(),
   company: z.string().trim().optional(),
   companyType: z.string().trim().optional(),
+  jurisdictionCountry: z.string().trim().optional(),
+  jurisdictionRegion: z.string().trim().optional(),
   industry: z.string().trim().optional(),
   locale: z.string().trim().optional(),
   timeZone: z.string().trim().optional(),
@@ -55,6 +57,10 @@ const ContactSchema = z.object({
   storeHostingProvider: z.string().trim().optional(),
   storeDesignApp: z.string().trim().optional(),
   autoSendInvoiceReminders: z.boolean(),
+  preferredCurrency: z.string().trim().optional(),
+  paymentTerms: z.string().trim().optional(),
+  paymentSchedule: z.string().trim().optional(),
+  defaultDiscount: z.number().optional(),
   stage: z.enum(["LEAD", "PROSPECT", "CLIENT", "PAST_CLIENT", "UNSUBSCRIBED"]),
   notes: z.string().trim().optional(),
 });
@@ -67,10 +73,15 @@ const CONTACT_FORM_FIELDS = [
   "phone2",
   "company",
   "companyType",
+  "jurisdictionCountry",
+  "jurisdictionRegion",
   "industry",
   "locale",
   "timeZone",
   "source",
+  "preferredCurrency",
+  "paymentTerms",
+  "paymentSchedule",
   "address",
   "city",
   "state",
@@ -228,7 +239,7 @@ function readTechStackItems(formData: FormData) {
 }
 
 function readContactForm(formData: FormData) {
-  const raw: Record<string, string | string[] | boolean | undefined> = {
+  const raw: Record<string, string | string[] | boolean | number | undefined> = {
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
     stage: String(formData.get("stage") ?? "LEAD"),
     extraEmails: formData.getAll("extraEmails").map(String).map((v) => v.trim()).filter(Boolean),
@@ -238,6 +249,9 @@ function readContactForm(formData: FormData) {
   for (const field of CONTACT_FORM_FIELDS) {
     raw[field] = String(formData.get(field) ?? "").trim() || undefined;
   }
+  const discountRaw = String(formData.get("defaultDiscount") ?? "").trim();
+  raw.defaultDiscount = discountRaw ? Number(discountRaw) : undefined;
+  if (Number.isNaN(raw.defaultDiscount)) raw.defaultDiscount = undefined;
   // Belt-and-suspenders: the edit form's region dropdown already submits a
   // canonical code when the country has one, but this keeps state/province
   // correct for any older data or a direct API call too.

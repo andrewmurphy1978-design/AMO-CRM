@@ -231,6 +231,7 @@ export const dictionaries = {
     },
     contactForm: {
       email: "Email",
+      emails: "Emails",
       email2: "Second email",
       addEmail: "Add another email",
       phone: "Phone number",
@@ -243,6 +244,11 @@ export const dictionaries = {
       lastName: "Last name",
       company: "Company",
       companyType: "Type of company",
+      jurisdictionCountry: "Country of jurisdiction",
+      // The region label itself (Province/State/Department/etc) is derived
+      // per-country the same way as the address fields — this is just the
+      // suffix appended to it, e.g. "Province of jurisdiction".
+      ofJurisdiction: "of jurisdiction",
       industry: "Industry",
       language: "Language",
       timeZone: "Time zone",
@@ -255,6 +261,10 @@ export const dictionaries = {
       cardInvoice: "Invoice",
       cardOtherInfo: "Other info",
       cardNotes: "Notes",
+      preferredCurrency: "Preferred currency",
+      paymentTerms: "Payment terms",
+      paymentSchedule: "Payment schedule",
+      defaultDiscount: "Default discount (%)",
       mainAddressTitle: "Main address",
       additionalAddressTitle: "Additional address",
       addAddress: "Add another address",
@@ -1077,6 +1087,7 @@ export const dictionaries = {
     },
     contactForm: {
       email: "Courriel",
+      emails: "Courriels",
       email2: "Second courriel",
       addEmail: "Ajouter un autre courriel",
       phone: "Numéro de téléphone",
@@ -1089,6 +1100,8 @@ export const dictionaries = {
       lastName: "Nom",
       company: "Entreprise",
       companyType: "Type d'entreprise",
+      jurisdictionCountry: "Pays de juridiction",
+      ofJurisdiction: "de juridiction",
       industry: "Secteur d'activité",
       language: "Langue",
       timeZone: "Fuseau horaire",
@@ -1101,6 +1114,10 @@ export const dictionaries = {
       cardInvoice: "Facturation",
       cardOtherInfo: "Autres infos",
       cardNotes: "Notes",
+      preferredCurrency: "Devise préférée",
+      paymentTerms: "Conditions de paiement",
+      paymentSchedule: "Échéancier de paiement",
+      defaultDiscount: "Rabais par défaut (%)",
       mainAddressTitle: "Adresse principale",
       additionalAddressTitle: "Adresse additionnelle",
       addAddress: "Ajouter une autre adresse",

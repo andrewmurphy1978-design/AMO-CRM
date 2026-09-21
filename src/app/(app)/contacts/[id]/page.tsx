@@ -16,6 +16,8 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { countryFullName } from "@/lib/country-flag";
 import { getTimezoneForCountryState, utcOffsetLabel } from "@/lib/timezone";
+import { stateLabelForCountry } from "@/lib/address-labels";
+import { CURRENCIES } from "@/lib/currencies";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import ContactTimezoneCard from "@/components/contact-timezone-card";
@@ -354,6 +356,21 @@ export default async function ContactDetailPage({
               </div>
             </dl>
 
+            {(contact.jurisdictionCountry || contact.jurisdictionRegion) && (
+              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.jurisdictionCountry}</dt>
+                  <dd className="text-ink">{contact.jurisdictionCountry ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-soft">
+                    {stateLabelForCountry(contact.jurisdictionCountry ?? undefined, lang)} {t.contactForm.ofJurisdiction}
+                  </dt>
+                  <dd className="text-ink">{contact.jurisdictionRegion ?? "—"}</dd>
+                </div>
+              </dl>
+            )}
+
             {/* Addresses: Main (plus any extra addresses, below it), Billing */}
             <div className="mt-6 grid gap-6 sm:grid-cols-3">
               <div className="space-y-4 sm:col-span-2">
@@ -410,6 +427,26 @@ export default async function ContactDetailPage({
                 <p className="mt-3 text-xs text-soft">
                   {contact.autoSendInvoiceReminders ? t.contactDetail.invoiceRemindersAuto : t.contactDetail.invoiceRemindersManual}
                 </p>
+                {(contact.preferredCurrency || contact.paymentTerms || contact.paymentSchedule || contact.defaultDiscount != null) && (
+                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.preferredCurrency}</dt>
+                      <dd className="text-ink">{CURRENCIES.find((c) => c.value === contact.preferredCurrency)?.label ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.paymentTerms}</dt>
+                      <dd className="text-ink">{contact.paymentTerms ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.paymentSchedule}</dt>
+                      <dd className="text-ink">{contact.paymentSchedule ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.defaultDiscount}</dt>
+                      <dd className="text-ink">{contact.defaultDiscount != null ? `${contact.defaultDiscount}%` : "—"}</dd>
+                    </div>
+                  </dl>
+                )}
               </div>
             </div>
 

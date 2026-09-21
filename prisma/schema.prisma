@@ -130,7 +130,12 @@ model Contact {
   // backed by a suggestion list on the form, not a rigid enum, since these
   // vary a lot by country.
   companyType String?
-  industry    String?
+  // Where the company is legally registered — separate from the contact's
+  // mailing address/country above (a company can be incorporated somewhere
+  // other than where its owner lives or does business).
+  jurisdictionCountry String?
+  jurisdictionRegion  String?
+  industry            String?
   // Only the core fields above (phone/address/city/state/zip/country) are
   // pushed back to systeme.io on save — everything below is CRM-only
   // enrichment with no systeme.io equivalent.
@@ -157,6 +162,12 @@ model Contact {
   // automatically on schedule; when false, they're drafted for manual
   // review/send instead — set per-contact rather than as one global choice.
   autoSendInvoiceReminders Boolean @default(false)
+  // e.g. "USD", "CAD" — ISO 4217 code, not the display label with symbol.
+  preferredCurrency        String?
+  paymentTerms             String? // e.g. "Net 30 days", "Immediately"
+  paymentSchedule          String? // e.g. "50% / 40% / 10%"
+  // Percentage (e.g. 10 for 10%), not a fraction.
+  defaultDiscount          Float?
 
   // --- Tech stack info for done-for-you web/funnel/email/store services ---
   websiteDomain          String?
