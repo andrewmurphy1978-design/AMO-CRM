@@ -1,13 +1,14 @@
 import { format } from "date-fns";
+import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
-import { getDict } from "@/lib/i18n/dictionaries";
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
 import type { AffiliateProgramTab } from "@prisma/client";
 import PageHeader from "../page-header";
-import AffiliateSyncButton from "./affiliate-sync-button";
+import DeleteAffiliateProgramButton from "./programs/delete-button";
 
 type AffiliateProgramRow = {
   id: string;
@@ -34,20 +35,29 @@ function tabSections(t: ReturnType<typeof getDict>): { tab: AffiliateProgramTab;
 }
 
 function AffiliateProgramCard({
+  tab,
   title,
   programs,
   t,
+  lang,
   dateLocale,
 }: {
+  tab: AffiliateProgramTab;
   title: string;
   programs: AffiliateProgramRow[];
   t: ReturnType<typeof getDict>;
+  lang: Lang;
   dateLocale: ReturnType<typeof getDateLocale>;
 }) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
+        <Link href={`/marketing/programs/new?tab=${tab}`} className="text-xs font-semibold text-amo-lime hover:underline">
+          + {t.marketing.newProgram}
+        </Link>
+      </div>
       {programs.length === 0 ? (
         <p className="mt-2 text-sm text-soft">{t.marketing.noAffiliateProgramsYet}</p>
       ) : (
@@ -111,6 +121,12 @@ function AffiliateProgramCard({
                             </ul>
                           )}
                         </div>
+                        <div className="flex items-center gap-3 pt-1">
+                          <Link href={`/marketing/programs/${p.id}/edit`} className="font-semibold text-amo-lime hover:underline">
+                            {t.common.edit}
+                          </Link>
+                          <DeleteAffiliateProgramButton programId={p.id} lang={lang} />
+                        </div>
                       </div>
                     </details>
                   </td>
@@ -146,7 +162,7 @@ export default async function MarketingPage() {
   // property access on the raw proxy opens a brand-new connection, and
   // the previous Promise.all opened two of them at once, which is worse
   // than sequential for Cloudflare's Error 1102 resource limit).
-  const { campaigns, automations, affiliatePrograms, hour12, isAdmin } = await withScopedPrismaClient(async (db) => {
+  const { campaigns, automations, affiliatePrograms, hour12 } = await withScopedPrismaClient(async (db) => {
     const campaigns = await db.emailCampaign.findMany({ orderBy: { systemeIoId: "desc" } });
     const automations = await db.automationWorkflow.findMany({ orderBy: { systemeIoId: "desc" } });
     const affiliatePrograms = await db.affiliateProgram.findMany({
@@ -154,7 +170,7 @@ export default async function MarketingPage() {
       include: { emailLinks: { orderBy: { messageDate: "desc" } } },
     });
     const hour12 = await getHour12(session, db);
-    return { campaigns, automations, affiliatePrograms, hour12, isAdmin: session?.user.role === "ADMIN" };
+    return { campaigns, automations, affiliatePrograms, hour12 };
   });
 
   const programsByTab = new Map<AffiliateProgramTab, AffiliateProgramRow[]>();
@@ -169,16 +185,13 @@ export default async function MarketingPage() {
       <PageHeader title={t.marketing.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
       <p className="text-sm text-soft">{t.marketing.subtitle}</p>
 
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-xl font-semibold text-ink">{t.marketing.affiliateProgramsTitle}</h1>
-          <p className="text-sm text-soft">{t.marketing.affiliateProgramsSubtitle}</p>
-        </div>
-        {isAdmin && <AffiliateSyncButton lang={lang} />}
+      <div>
+        <h1 className="font-display text-xl font-semibold text-ink">{t.marketing.affiliateProgramsTitle}</h1>
+        <p className="text-sm text-soft">{t.marketing.affiliateProgramsSubtitle}</p>
       </div>
 
       {tabSections(t).map(({ tab, title }) => (
-        <AffiliateProgramCard key={tab} title={title} programs={programsByTab.get(tab) ?? []} t={t} dateLocale={dateLocale} />
+        <AffiliateProgramCard key={tab} tab={tab} title={title} programs={programsByTab.get(tab) ?? []} t={t} lang={lang} dateLocale={dateLocale} />
       ))}
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
