@@ -241,22 +241,6 @@ export default async function ContactDetailPage({
 
   const hasBillingContactInfo = contact.billingContactName || contact.billingEmail || contact.billingPhone;
 
-  const hasTechStack = Boolean(
-    contact.websiteDomain ||
-      contact.websiteHostingProvider ||
-      contact.websiteDesignApp ||
-      contact.funnelsDomain ||
-      contact.funnelsHostingProvider ||
-      contact.funnelsDesignApp ||
-      contact.emailDomain ||
-      contact.emailHostingProvider ||
-      contact.emailMarketingApp ||
-      contact.storeDomain ||
-      contact.storeHostingProvider ||
-      contact.storeDesignApp ||
-      contact.techStackItems.length > 0
-  );
-
   const billingItems = contact.projects
     .flatMap((project) => [
       ...project.proposals.map((p) => ({
@@ -340,9 +324,9 @@ export default async function ContactDetailPage({
 
               <InfoField label={t.contactForm.industry} value={contact.industry} />
               <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
-              <div className="lg:row-span-2">
+              <div className="flex flex-col justify-end lg:row-span-2">
                 {contactTimeZone ? (
-                  <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} className="h-full" />
+                  <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} />
                 ) : null}
               </div>
 
@@ -472,55 +456,53 @@ export default async function ContactDetailPage({
             </div>
           </Card>
 
-          {hasTechStack && (
-            <Card color="techStack" title={t.contactForm.techStackTitle}>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Card color="techStack" title={t.contactForm.techStackTitle}>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              <TechStackBlock
+                title={t.contactForm.websiteGroupTitle}
+                domain={contact.websiteDomain}
+                hostingProvider={contact.websiteHostingProvider}
+                appLabel={t.contactForm.designApp}
+                app={contact.websiteDesignApp}
+                t={t}
+              />
+              <TechStackBlock
+                title={t.contactForm.funnelsGroupTitle}
+                domain={contact.funnelsDomain}
+                hostingProvider={contact.funnelsHostingProvider}
+                appLabel={t.contactForm.designApp}
+                app={contact.funnelsDesignApp}
+                t={t}
+              />
+              <TechStackBlock
+                title={t.contactForm.emailGroupTitle}
+                domain={contact.emailDomain}
+                hostingProvider={contact.emailHostingProvider}
+                appLabel={t.contactForm.marketingApp}
+                app={contact.emailMarketingApp}
+                t={t}
+              />
+              <TechStackBlock
+                title={t.contactForm.storeGroupTitle}
+                domain={contact.storeDomain}
+                hostingProvider={contact.storeHostingProvider}
+                appLabel={t.contactForm.designApp}
+                app={contact.storeDesignApp}
+                t={t}
+              />
+              {contact.techStackItems.map((item) => (
                 <TechStackBlock
-                  title={t.contactForm.websiteGroupTitle}
-                  domain={contact.websiteDomain}
-                  hostingProvider={contact.websiteHostingProvider}
-                  appLabel={t.contactForm.designApp}
-                  app={contact.websiteDesignApp}
+                  key={item.id}
+                  title={item.label}
+                  domain={item.domain}
+                  hostingProvider={item.hostingProvider}
+                  appLabel={t.contactForm.appColumn}
+                  app={item.app}
                   t={t}
                 />
-                <TechStackBlock
-                  title={t.contactForm.funnelsGroupTitle}
-                  domain={contact.funnelsDomain}
-                  hostingProvider={contact.funnelsHostingProvider}
-                  appLabel={t.contactForm.designApp}
-                  app={contact.funnelsDesignApp}
-                  t={t}
-                />
-                <TechStackBlock
-                  title={t.contactForm.emailGroupTitle}
-                  domain={contact.emailDomain}
-                  hostingProvider={contact.emailHostingProvider}
-                  appLabel={t.contactForm.marketingApp}
-                  app={contact.emailMarketingApp}
-                  t={t}
-                />
-                <TechStackBlock
-                  title={t.contactForm.storeGroupTitle}
-                  domain={contact.storeDomain}
-                  hostingProvider={contact.storeHostingProvider}
-                  appLabel={t.contactForm.designApp}
-                  app={contact.storeDesignApp}
-                  t={t}
-                />
-                {contact.techStackItems.map((item) => (
-                  <TechStackBlock
-                    key={item.id}
-                    title={item.label}
-                    domain={item.domain}
-                    hostingProvider={item.hostingProvider}
-                    appLabel={t.contactForm.appColumn}
-                    app={item.app}
-                    t={t}
-                  />
-                ))}
-              </div>
-            </Card>
-          )}
+              ))}
+            </div>
+          </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card color="social" title={t.contactForm.cardSocialMedia}>

@@ -31,7 +31,7 @@ export default function LocalTimeCard({
 
   return (
     <div
-      className={`relative flex flex-col justify-center overflow-hidden rounded-2xl border border-card-border bg-card-bg px-4 py-3 text-left shadow-sm ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-card-border bg-card-bg px-4 py-3 text-left shadow-sm ${className}`}
     >
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{label}</p>

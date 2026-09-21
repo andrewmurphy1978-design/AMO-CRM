@@ -474,10 +474,8 @@ export default function ContactForm({
               </label>
             </div>
           </div>
-          <div className="lg:row-span-2">
-            {timeZone ? (
-              <LocalTimeCard timeZone={timeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} className="h-full" />
-            ) : null}
+          <div className="flex flex-col justify-end lg:row-span-2">
+            {timeZone ? <LocalTimeCard timeZone={timeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} /> : null}
           </div>
 
           {/* Row 4 */}
