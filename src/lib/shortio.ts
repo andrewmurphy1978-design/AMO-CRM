@@ -26,32 +26,128 @@ export async function getShortIoConfig(db: PrismaClient): Promise<ShortIoConfig 
   return { apiKey, domain: metadata.domain, domainFr: metadata.domainFr ?? null };
 }
 
-// https://developers.short.io/reference/linkspost — POST /links with the
-// secret key in the Authorization header (no "Bearer" prefix) creates a
-// branded short link on one of the account's domains.
-export async function createShortIoLink(config: { apiKey: string; domain: string }, originalURL: string): Promise<string> {
-  const response = await fetch("https://api.short.io/links", {
-    method: "POST",
+async function shortIoRequest<T>(url: string, apiKey: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
     headers: {
-      Authorization: config.apiKey,
+      Authorization: apiKey,
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...init?.headers,
     },
-    body: JSON.stringify({ domain: config.domain, originalURL }),
   });
 
   const text = await response.text();
-  let data: { shortURL?: string; error?: string; message?: string } = {};
+  let data: unknown = {};
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
     // fall through — data stays {} and the generic error below fires
   }
 
-  if (!response.ok || !data.shortURL) {
-    const message = data.error || data.message || text.slice(0, 200) || `Short.io returned ${response.status}`;
+  if (!response.ok) {
+    const parsed = (data ?? {}) as { error?: string; message?: string };
+    const message = parsed.error || parsed.message || text.slice(0, 200) || `Short.io returned ${response.status}`;
     throw new Error(message);
   }
 
-  return data.shortURL;
+  return data as T;
+}
+
+// https://developers.short.io/reference/linkspost — POST /links with the
+// secret key in the Authorization header (no "Bearer" prefix) creates a
+// branded short link on one of the account's domains.
+export async function createShortIoLink(config: { apiKey: string; domain: string }, originalURL: string): Promise<{ id: string; shortURL: string }> {
+  const data = await shortIoRequest<{ id?: string; idString?: string; shortURL?: string }>("https://api.short.io/links", config.apiKey, {
+    method: "POST",
+    body: JSON.stringify({ domain: config.domain, originalURL }),
+  });
+  const id = data.id ?? data.idString;
+  if (!id || !data.shortURL) throw new Error("Short.io didn't return a link id/URL");
+  return { id, shortURL: data.shortURL };
+}
+
+// https://developers.short.io/reference/linksby-idpost — updates an
+// existing link's destination (and/or other fields) in place.
+export async function updateShortIoLink(apiKey: string, linkId: string, updates: { originalURL: string }): Promise<void> {
+  await shortIoRequest(`https://api.short.io/links/${linkId}`, apiKey, {
+    method: "POST",
+    body: JSON.stringify(updates),
+  });
+}
+
+export interface ShortIoDomain {
+  id: string;
+  hostname: string;
+}
+
+// https://developers.short.io/reference/domainsget — every domain on the account.
+export async function listShortIoDomains(apiKey: string): Promise<ShortIoDomain[]> {
+  const data = await shortIoRequest<unknown>("https://api.short.io/api/domains", apiKey);
+  const rows = Array.isArray(data) ? data : [];
+  return rows
+    .map((row) => {
+      const r = row as { id?: number | string; hostname?: string };
+      return r.id != null && r.hostname ? { id: String(r.id), hostname: r.hostname } : null;
+    })
+    .filter((r): r is ShortIoDomain => r !== null);
+}
+
+export interface ShortIoLink {
+  id: string;
+  path: string;
+  shortURL: string;
+  originalURL: string;
+}
+
+// https://developers.short.io/reference/linksget — paginated list of every
+// link on a domain. Short.io's own pagination cursor field has varied
+// across API versions, so this reads a couple of likely shapes and simply
+// stops once a page comes back empty or without a usable cursor, rather
+// than assuming one exact shape.
+export async function listShortIoLinks(apiKey: string, domainId: string): Promise<ShortIoLink[]> {
+  const links: ShortIoLink[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < 20; page++) {
+    const url = new URL("https://api.short.io/api/links");
+    url.searchParams.set("domain_id", domainId);
+    url.searchParams.set("limit", "150");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+
+    const data = await shortIoRequest<{ links?: unknown[]; nextPageToken?: string }>(url.toString(), apiKey);
+    const rows = Array.isArray(data.links) ? data.links : [];
+    for (const row of rows) {
+      const r = row as { id?: number | string; idString?: string; path?: string; shortURL?: string; originalURL?: string };
+      const id = r.idString ?? (r.id != null ? String(r.id) : undefined);
+      if (id && r.shortURL && r.originalURL) {
+        links.push({ id, path: r.path ?? "", shortURL: r.shortURL, originalURL: r.originalURL });
+      }
+    }
+
+    if (!data.nextPageToken || rows.length === 0) break;
+    pageToken = data.nextPageToken;
+  }
+
+  return links;
+}
+
+export interface ShortIoStats {
+  totalClicks: number | null;
+  humanClicks: number | null;
+  raw: unknown;
+}
+
+// https://developers.short.io/reference/statisticslinkget — click totals
+// for one link. Field names have differed slightly across Short.io's own
+// docs revisions, so this checks a few likely spots for the totals and
+// always keeps the full raw payload too (stored as-is in the DB) so
+// nothing is lost even if a specific field name has since changed.
+export async function getShortIoLinkStatistics(apiKey: string, linkId: string): Promise<ShortIoStats> {
+  const url = `https://api.short.io/statistics/link/${linkId}?period=total`;
+  const data = await shortIoRequest<Record<string, unknown>>(url, apiKey);
+  const totals = (data.totalClicks !== undefined ? data : (data.total as Record<string, unknown>) ?? data) as Record<string, unknown>;
+  const totalClicks = typeof totals.totalClicks === "number" ? totals.totalClicks : typeof totals.clicks === "number" ? totals.clicks : null;
+  const humanClicks = typeof totals.humanClicks === "number" ? totals.humanClicks : null;
+  return { totalClicks, humanClicks, raw: data };
 }

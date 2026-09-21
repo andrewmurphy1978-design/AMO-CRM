@@ -85,10 +85,84 @@ async function autoLinkToContacts(db: PrismaClient, candidates: AutoLinkCandidat
   for (const [gmailThreadId, { contactId, candidate }] of toLink) {
     await db.emailLink.upsert({
       where: { gmailThreadId },
-      update: {}, // never override a link that appeared since the check above
+      // Fills in contactId if the row didn't exist yet, or was just created
+      // a moment ago by the concurrent autoLinkToAffiliatePrograms call
+      // below for the same thread (a genuine "this company is both a
+      // contact and a program" case) — never touches any other field.
+      update: { contactId },
       create: {
         gmailThreadId,
         contactId,
+        subject: candidate.subject,
+        fromLabel: candidate.fromLabel,
+        messageDate: new Date(candidate.date),
+        gmailLink: candidate.link,
+      },
+    });
+  }
+}
+
+// Same "never second-guess an existing link" rule as autoLinkToContacts,
+// but matched on the *domain* of the program's own links (destinationLink/
+// brandedLink/frenchLink/frenchSlug) rather than fuzzy name matching — a
+// domain a program actually owns is a much safer signal to auto-link on
+// with zero human review than a substring match on the program's name
+// would be (which is why the one-time historical backfill used a stricter,
+// human-reviewed process instead of this).
+function hostnameOf(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+async function autoLinkToAffiliatePrograms(db: PrismaClient, candidates: AutoLinkCandidate[]): Promise<void> {
+  if (candidates.length === 0) return;
+
+  const threadIds = [...new Set(candidates.map((c) => c.threadId))];
+  const existing = await db.emailLink.findMany({
+    where: { gmailThreadId: { in: threadIds } },
+    select: { gmailThreadId: true },
+  });
+  const alreadyLinked = new Set(existing.map((l) => l.gmailThreadId));
+  const unlinked = candidates.filter((c) => !alreadyLinked.has(c.threadId));
+  if (unlinked.length === 0) return;
+
+  const programs = await db.affiliateProgram.findMany({
+    select: { id: true, brandedLink: true, destinationLink: true, frenchSlug: true, frenchLink: true },
+  });
+  if (programs.length === 0) return;
+
+  // A domain owned by more than one program can't be attributed safely —
+  // dropped from the map entirely rather than guessed.
+  const domainToProgram = new Map<string, string | null>();
+  for (const p of programs) {
+    for (const host of [hostnameOf(p.brandedLink), hostnameOf(p.destinationLink), hostnameOf(p.frenchSlug), hostnameOf(p.frenchLink)]) {
+      if (!host) continue;
+      domainToProgram.set(host, domainToProgram.has(host) && domainToProgram.get(host) !== p.id ? null : p.id);
+    }
+  }
+
+  const toLink = new Map<string, { programId: string; candidate: AutoLinkCandidate }>();
+  for (const c of unlinked) {
+    const domain = c.email.split("@")[1]?.toLowerCase();
+    const programId = domain ? domainToProgram.get(domain) : null;
+    if (programId && !toLink.has(c.threadId)) toLink.set(c.threadId, { programId, candidate: c });
+  }
+  if (toLink.size === 0) return;
+
+  for (const [gmailThreadId, { programId, candidate }] of toLink) {
+    await db.emailLink.upsert({
+      where: { gmailThreadId },
+      // See the matching comment in autoLinkToContacts — fills in
+      // affiliateProgramId even if the concurrent autoLinkToContacts call
+      // just created this same row a moment ago for the same thread.
+      update: { affiliateProgramId: programId },
+      create: {
+        gmailThreadId,
+        affiliateProgramId: programId,
         subject: candidate.subject,
         fromLabel: candidate.fromLabel,
         messageDate: new Date(candidate.date),
@@ -243,15 +317,28 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
   const emailList = emails ?? [];
   const sentList = sentAwaitingReply ?? [];
 
+  const receivedCandidates = emailList.map((e) => ({
+    threadId: e.threadId,
+    email: e.fromEmail,
+    subject: e.subject,
+    fromLabel: e.from,
+    date: e.date,
+    link: e.link,
+  }));
+  const sentCandidates = sentList.map((s) => ({
+    threadId: s.threadId,
+    email: s.toEmail,
+    subject: s.subject,
+    fromLabel: s.to,
+    date: s.date,
+    link: s.link,
+  }));
+
   await Promise.all([
-    autoLinkToContacts(
-      db,
-      emailList.map((e) => ({ threadId: e.threadId, email: e.fromEmail, subject: e.subject, fromLabel: e.from, date: e.date, link: e.link }))
-    ),
-    autoLinkToContacts(
-      db,
-      sentList.map((s) => ({ threadId: s.threadId, email: s.toEmail, subject: s.subject, fromLabel: s.to, date: s.date, link: s.link }))
-    ),
+    autoLinkToContacts(db, receivedCandidates),
+    autoLinkToContacts(db, sentCandidates),
+    autoLinkToAffiliatePrograms(db, receivedCandidates),
+    autoLinkToAffiliatePrograms(db, sentCandidates),
   ]);
 
   // Cache-aware — only classifies messages EmailClassification hasn't

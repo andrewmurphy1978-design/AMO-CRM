@@ -882,6 +882,26 @@ model AffiliateProgram {
   notes           String? @db.Text // "Notes"
   accountPlan     String? // "Account / Plan / Trial End"
 
+  // Where/how to apply, and whether the program exposes its own API for
+  // pulling stats (separate from the Short.io key in IntegrationSetting,
+  // which only manages the branded short link, not this program's own data).
+  applyUrl        String? // page to sign up for the affiliate program
+  applyPlatform   String? // "PartnerStack" | "Impact" | "Direct" | freeform
+  followUpDate    DateTime? @db.Date
+  hasApi          Boolean   @default(false)
+  apiKeyEncrypted String?   @db.Text
+
+  // Short.io's own link id + click stats, kept separately for the English
+  // (brandedLink) and French (frenchSlug) short links so each can be
+  // resynced/updated independently.
+  shortioLinkId        String?
+  shortioLinkIdFr      String?
+  shortioClicks        Int?
+  shortioClicksFr      Int?
+  shortioStats         Json?
+  shortioStatsFr       Json?
+  shortioStatsSyncedAt DateTime?
+
   emailLinks EmailLink[]
 
   createdAt DateTime @default(now())

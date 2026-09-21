@@ -28,6 +28,7 @@ export default async function EditAffiliateProgramPage({ params }: { params: Pro
     <AffiliateProgramForm
       action={boundUpdate}
       defaultValues={program}
+      hasApiKeySaved={Boolean(program.apiKeyEncrypted)}
       submitLabel={t.marketing.saveProgram}
       title={t.marketing.editProgram}
       lang={lang}

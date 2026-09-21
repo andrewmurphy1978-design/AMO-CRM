@@ -41,6 +41,15 @@ const STATUS_OPTIONS = [
   "Declined",
 ];
 
+const PLATFORM_OPTIONS = ["PartnerStack", "Impact", "Direct", "Other"];
+
+function toDateInputValue(value?: Date | string | null): string {
+  if (!value) return "";
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
 type AffiliateProgramFormValues = {
   tab?: string;
   name?: string;
@@ -55,6 +64,10 @@ type AffiliateProgramFormValues = {
   followUpNeeded?: boolean;
   notes?: string | null;
   accountPlan?: string | null;
+  applyUrl?: string | null;
+  applyPlatform?: string | null;
+  followUpDate?: Date | string | null;
+  hasApi?: boolean;
 };
 
 const FIELD_CLASS =
@@ -65,6 +78,7 @@ export default function AffiliateProgramForm({
   action,
   defaultValues,
   defaultTab,
+  hasApiKeySaved,
   submitLabel,
   title,
   lang,
@@ -75,6 +89,7 @@ export default function AffiliateProgramForm({
   action: (prevState: { error?: string } | undefined, formData: FormData) => Promise<{ error?: string }>;
   defaultValues?: AffiliateProgramFormValues;
   defaultTab?: string;
+  hasApiKeySaved?: boolean;
   submitLabel: string;
   title: string;
   lang: Lang;
@@ -195,6 +210,39 @@ export default function AffiliateProgramForm({
             <label htmlFor="followUpNeeded" className="text-sm text-ink">
               {t.marketing.colFollowUp}
             </label>
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.marketing.followUpDateLabel}</label>
+            <input type="date" name="followUpDate" defaultValue={toDateInputValue(defaultValues?.followUpDate)} className={FIELD_CLASS} />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.marketing.applyUrlLabel}</label>
+            <input type="url" name="applyUrl" defaultValue={defaultValues?.applyUrl ?? ""} className={FIELD_CLASS} />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.marketing.applyPlatformLabel}</label>
+            <input list="platformOptions" name="applyPlatform" defaultValue={defaultValues?.applyPlatform ?? ""} className={FIELD_CLASS} />
+            <datalist id="platformOptions">
+              {PLATFORM_OPTIONS.map((opt) => (
+                <option key={opt} value={opt} />
+              ))}
+            </datalist>
+          </div>
+          <div className="flex items-end gap-2 pb-2">
+            <input
+              type="checkbox"
+              id="hasApi"
+              name="hasApi"
+              defaultChecked={defaultValues?.hasApi ?? false}
+              className="h-4 w-4 rounded border-card-border accent-amo-lime"
+            />
+            <label htmlFor="hasApi" className="text-sm text-ink">
+              {t.marketing.hasApiLabel}
+            </label>
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.marketing.apiKeyLabel}</label>
+            <input type="password" name="apiKey" placeholder={hasApiKeySaved ? t.marketing.apiKeySavedPlaceholder : ""} className={FIELD_CLASS} />
           </div>
           <div className="sm:col-span-2 lg:col-span-3">
             <label className={LABEL_CLASS}>{t.marketing.notesLabel}</label>

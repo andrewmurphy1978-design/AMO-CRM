@@ -8,6 +8,7 @@ import { getHour12 } from "@/lib/time-format";
 import type { AffiliateProgramTab } from "@prisma/client";
 import { classifyAffiliateStatus, AFFILIATE_STATUS_BUCKETS, AFFILIATE_STATUS_STYLES, type AffiliateStatusBucket } from "@/lib/affiliate-status";
 import PageHeader from "../page-header";
+import SyncShortIoButton from "./programs/sync-shortio-button";
 
 type AffiliateProgramRow = {
   id: string;
@@ -205,9 +206,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       <PageHeader title={t.marketing.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
       <p className="text-sm text-soft">{t.marketing.subtitle}</p>
 
-      <div>
-        <h1 className="font-display text-xl font-semibold text-ink">{t.marketing.affiliateProgramsTitle}</h1>
-        <p className="text-sm text-soft">{t.marketing.affiliateProgramsSubtitle}</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-xl font-semibold text-ink">{t.marketing.affiliateProgramsTitle}</h1>
+          <p className="text-sm text-soft">{t.marketing.affiliateProgramsSubtitle}</p>
+        </div>
+        {session?.user.role === "ADMIN" && <SyncShortIoButton lang={lang} />}
       </div>
 
       <div className="flex items-center gap-5 border-b border-card-border">
