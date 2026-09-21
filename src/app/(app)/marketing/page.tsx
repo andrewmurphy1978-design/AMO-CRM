@@ -1,17 +1,17 @@
-import { format } from "date-fns";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
-import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
 import type { AffiliateProgramTab } from "@prisma/client";
+import { classifyAffiliateStatus, AFFILIATE_STATUS_BUCKETS, AFFILIATE_STATUS_STYLES, type AffiliateStatusBucket } from "@/lib/affiliate-status";
 import PageHeader from "../page-header";
-import DeleteAffiliateProgramButton from "./programs/delete-button";
 
 type AffiliateProgramRow = {
   id: string;
+  tab: AffiliateProgramTab;
   name: string;
   type: string | null;
   category: string | null;
@@ -22,6 +22,10 @@ type AffiliateProgramRow = {
   accountPlan: string | null;
   emailLinks: { id: string; subject: string | null; fromLabel: string | null; messageDate: Date | null; gmailLink: string | null }[];
 };
+
+type ProgramView = "category" | "status" | "followup";
+
+type ProgramGroup = { key: string; title: string; tab?: AffiliateProgramTab; programs: AffiliateProgramRow[] };
 
 // The three tabs on the "AMO Affiliate Link Tracker" sheet that hold actual
 // affiliate programs (see src/lib/affiliate-sheet.ts) — Link Tracker,
@@ -34,27 +38,77 @@ function tabSections(t: ReturnType<typeof getDict>): { tab: AffiliateProgramTab;
   ];
 }
 
+function tabTitle(tab: AffiliateProgramTab, t: ReturnType<typeof getDict>): string {
+  return tabSections(t).find((section) => section.tab === tab)?.title ?? tab;
+}
+
+function statusBucketLabel(bucket: AffiliateStatusBucket, t: ReturnType<typeof getDict>): string {
+  switch (bucket) {
+    case "APPROVED_LIVE":
+      return t.marketing.statusApprovedLive;
+    case "PENDING_APPROVAL":
+      return t.marketing.statusPendingApproval;
+    case "PARTNER_TO_VERIFY":
+      return t.marketing.statusPartnerToVerify;
+    case "FALLBACK_ACTIVE":
+      return t.marketing.statusFallbackActive;
+    case "FALLBACK_NO_PUBLIC_PROGRAM":
+      return t.marketing.statusFallbackNoPublicProgram;
+    case "DECLINED":
+      return t.marketing.statusDeclined;
+    case "OTHER":
+      return t.marketing.statusOther;
+  }
+}
+
+function groupProgramsForView(view: ProgramView, programs: AffiliateProgramRow[], t: ReturnType<typeof getDict>): ProgramGroup[] {
+  if (view === "status") {
+    const byBucket = new Map<AffiliateStatusBucket, AffiliateProgramRow[]>();
+    for (const p of programs) {
+      const bucket = classifyAffiliateStatus(p.affiliateStatus);
+      const list = byBucket.get(bucket) ?? [];
+      list.push(p);
+      byBucket.set(bucket, list);
+    }
+    return AFFILIATE_STATUS_BUCKETS.filter((bucket) => byBucket.has(bucket)).map((bucket) => ({
+      key: bucket,
+      title: statusBucketLabel(bucket, t),
+      programs: byBucket.get(bucket)!,
+    }));
+  }
+
+  if (view === "followup") {
+    return [
+      { key: "needed", title: t.marketing.followUpNeededTitle, programs: programs.filter((p) => p.followUpNeeded) },
+      { key: "not-needed", title: t.marketing.followUpNotNeededTitle, programs: programs.filter((p) => !p.followUpNeeded) },
+    ];
+  }
+
+  return tabSections(t).map(({ tab, title }) => ({ key: tab, title, tab, programs: programs.filter((p) => p.tab === tab) }));
+}
+
 function AffiliateProgramCard({
   tab,
   title,
   programs,
   t,
-  lang,
-  dateLocale,
+  showCategoryColumn,
 }: {
-  tab: AffiliateProgramTab;
+  tab?: AffiliateProgramTab;
   title: string;
   programs: AffiliateProgramRow[];
   t: ReturnType<typeof getDict>;
-  lang: Lang;
-  dateLocale: ReturnType<typeof getDateLocale>;
+  showCategoryColumn: boolean;
 }) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <div className="flex items-center justify-between gap-2">
         <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
-        <Link href={`/marketing/programs/new?tab=${tab}`} className="text-xs font-semibold text-amo-lime hover:underline">
+        <Link
+          href={tab ? `/marketing/programs/new?tab=${tab}` : "/marketing/programs/new"}
+          className="text-xs font-semibold text-amo-lime hover:underline"
+        >
           + {t.marketing.newProgram}
         </Link>
       </div>
@@ -66,6 +120,7 @@ function AffiliateProgramCard({
             <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
               <tr>
                 <th className="py-2 pr-4">{t.marketing.colProgram}</th>
+                {showCategoryColumn && <th className="py-2 pr-4">{t.marketing.categoryLabel}</th>}
                 <th className="py-2 pr-4">{t.marketing.colType}</th>
                 <th className="py-2 pr-4">{t.marketing.colStatus}</th>
                 <th className="py-2 pr-4">{t.marketing.colFollowUp}</th>
@@ -73,77 +128,40 @@ function AffiliateProgramCard({
               </tr>
             </thead>
             <tbody className="divide-y divide-card-border">
-              {programs.map((p) => (
-                <tr key={p.id} id={p.id} className="scroll-mt-24">
-                  <td className="py-2 pr-4 align-top font-medium text-ink">
-                    <details>
-                      <summary className="cursor-pointer select-none">
+              {programs.map((p) => {
+                const bucket = classifyAffiliateStatus(p.affiliateStatus);
+                const styles = AFFILIATE_STATUS_STYLES[bucket];
+                return (
+                  <tr key={p.id} id={p.id} className={`scroll-mt-24 ${styles.row} hover:brightness-95`}>
+                    <td className={`py-2 pr-4 pl-3 align-top font-medium border-l-4 ${styles.border}`}>
+                      <Link href={`/marketing/programs/${p.id}`} className="text-ink hover:underline">
                         {p.name}
-                        {p.emailLinks.length > 0 && (
-                          <span className="ml-2 text-xs font-normal text-emerald-700">{t.marketing.linkedEmails(p.emailLinks.length)}</span>
-                        )}
-                      </summary>
-                      <div className="mt-2 max-w-md space-y-2 text-xs font-normal text-ink/80">
-                        {p.notes && (
-                          <p>
-                            <span className="font-semibold text-soft">{t.marketing.notesLabel}: </span>
-                            {p.notes}
-                          </p>
-                        )}
-                        {p.accountPlan && (
-                          <p>
-                            <span className="font-semibold text-soft">{t.marketing.accountPlanLabel}: </span>
-                            {p.accountPlan}
-                          </p>
-                        )}
-                        <div>
-                          <p className="font-semibold text-soft">{t.contactDetail.linkedEmailsTitle}</p>
-                          {p.emailLinks.length === 0 ? (
-                            <p className="text-soft">{t.marketing.noLinkedEmailsYet}</p>
-                          ) : (
-                            <ul className="mt-1 space-y-1">
-                              {p.emailLinks.map((link) => (
-                                <li key={link.id}>
-                                  {link.gmailLink ? (
-                                    <a href={link.gmailLink} target="_blank" rel="noopener noreferrer" className="text-ink hover:underline">
-                                      {link.subject || "—"}
-                                    </a>
-                                  ) : (
-                                    <span>{link.subject || "—"}</span>
-                                  )}
-                                  <span className="text-soft">
-                                    {" "}
-                                    · {link.fromLabel}
-                                    {link.messageDate && ` · ${format(link.messageDate, "PP", { locale: dateLocale })}`}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 pt-1">
-                          <Link href={`/marketing/programs/${p.id}/edit`} className="font-semibold text-amo-lime hover:underline">
-                            {t.common.edit}
-                          </Link>
-                          <DeleteAffiliateProgramButton programId={p.id} lang={lang} />
-                        </div>
-                      </div>
-                    </details>
-                  </td>
-                  <td className="py-2 pr-4 align-top text-ink/70">{[p.type, p.category].filter(Boolean).join(" · ") || "—"}</td>
-                  <td className="py-2 pr-4 align-top text-ink/70">{p.affiliateStatus || "—"}</td>
-                  <td className="py-2 pr-4 align-top text-ink/70">{p.followUpNeeded ? t.marketing.followUpYes : t.marketing.followUpNo}</td>
-                  <td className="py-2 pr-4 align-top">
-                    {p.brandedLink ? (
-                      <a href={p.brandedLink} target="_blank" rel="noopener noreferrer" className="text-amo-lime hover:underline">
-                        {t.marketing.colLink}
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      </Link>
+                      {p.emailLinks.length > 0 && (
+                        <span className="ml-2 text-xs font-normal text-emerald-700">{t.marketing.linkedEmails(p.emailLinks.length)}</span>
+                      )}
+                    </td>
+                    {showCategoryColumn && <td className="py-2 pr-4 align-top text-ink/70">{tabTitle(p.tab, t)}</td>}
+                    <td className="py-2 pr-4 align-top text-ink/70">{[p.type, p.category].filter(Boolean).join(" · ") || "—"}</td>
+                    <td className="py-2 pr-4 align-top">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${styles.badge}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
+                        {p.affiliateStatus || "—"}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4 align-top text-ink/70">{p.followUpNeeded ? t.marketing.followUpYes : t.marketing.followUpNo}</td>
+                    <td className="py-2 pr-4 align-top">
+                      {p.brandedLink ? (
+                        <a href={p.brandedLink} target="_blank" rel="noopener noreferrer" className="text-amo-lime hover:underline">
+                          {t.marketing.colLink}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -152,11 +170,13 @@ function AffiliateProgramCard({
   );
 }
 
-export default async function MarketingPage() {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
+  const { view: rawView } = await searchParams;
+  const view: ProgramView = rawView === "status" || rawView === "followup" ? rawView : "category";
 
   // One shared client — see src/lib/prisma.ts for why (each `prisma.x`
   // property access on the raw proxy opens a brand-new connection, and
@@ -173,12 +193,12 @@ export default async function MarketingPage() {
     return { campaigns, automations, affiliatePrograms, hour12 };
   });
 
-  const programsByTab = new Map<AffiliateProgramTab, AffiliateProgramRow[]>();
-  for (const program of affiliatePrograms) {
-    const list = programsByTab.get(program.tab) ?? [];
-    list.push(program);
-    programsByTab.set(program.tab, list);
-  }
+  const groups = groupProgramsForView(view, affiliatePrograms, t);
+  const viewTabs: { key: ProgramView; label: string }[] = [
+    { key: "category", label: t.marketing.viewByCategory },
+    { key: "status", label: t.marketing.viewByStatus },
+    { key: "followup", label: t.marketing.viewByFollowUp },
+  ];
 
   return (
     <div className="space-y-6">
@@ -190,8 +210,22 @@ export default async function MarketingPage() {
         <p className="text-sm text-soft">{t.marketing.affiliateProgramsSubtitle}</p>
       </div>
 
-      {tabSections(t).map(({ tab, title }) => (
-        <AffiliateProgramCard key={tab} tab={tab} title={title} programs={programsByTab.get(tab) ?? []} t={t} lang={lang} dateLocale={dateLocale} />
+      <div className="flex items-center gap-5 border-b border-card-border">
+        {viewTabs.map((vt) => (
+          <Link
+            key={vt.key}
+            href={vt.key === "category" ? "/marketing" : `/marketing?view=${vt.key}`}
+            className={`-mb-px border-b-2 pb-2 text-sm font-semibold ${
+              view === vt.key ? "border-amo-lime text-ink" : "border-transparent text-soft hover:text-ink"
+            }`}
+          >
+            {vt.label}
+          </Link>
+        ))}
+      </div>
+
+      {groups.map((g) => (
+        <AffiliateProgramCard key={g.key} tab={g.tab} title={g.title} programs={g.programs} t={t} showCategoryColumn={view !== "category"} />
       ))}
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
