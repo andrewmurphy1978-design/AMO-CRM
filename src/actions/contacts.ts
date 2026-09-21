@@ -257,6 +257,8 @@ function readContactForm(formData: FormData) {
   // correct for any older data or a direct API call too.
   raw.state = normalizeRegionForCountry(raw.country as string | undefined, raw.state as string | undefined) || undefined;
   raw.billingState = normalizeRegionForCountry(raw.billingCountry as string | undefined, raw.billingState as string | undefined) || undefined;
+  raw.jurisdictionRegion =
+    normalizeRegionForCountry(raw.jurisdictionCountry as string | undefined, raw.jurisdictionRegion as string | undefined) || undefined;
   return ContactSchema.parse(raw);
 }
 

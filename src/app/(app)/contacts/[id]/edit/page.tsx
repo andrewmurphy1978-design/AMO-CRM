@@ -53,6 +53,7 @@ export default async function EditContactPage({
       hour12={hour12}
       dateLocale={dateLocale}
       location={t.dashboard.myLocation}
+      contactId={contact.id}
     />
   );
 }

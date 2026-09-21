@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useRef, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import type { Locale } from "date-fns";
 import { format, formatDistanceToNow } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -15,7 +16,6 @@ import { INDUSTRIES } from "@/lib/industries";
 import { CURRENCIES, PAYMENT_TERMS, PAYMENT_SCHEDULES } from "@/lib/currencies";
 import PhoneField from "@/components/phone-field";
 import PlatformIcon from "@/components/platform-icon";
-import ContactTimezoneCard from "@/components/contact-timezone-card";
 import { MESSAGING_APPS, VOIP_APPS } from "@/lib/platform-icons";
 import { getWorldTimeZoneOptions } from "@/lib/timezones";
 import PageHeader from "../page-header";
@@ -126,6 +126,7 @@ export default function ContactForm({
   hour12,
   dateLocale,
   location,
+  contactId,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -140,22 +141,50 @@ export default function ContactForm({
   hour12: boolean;
   dateLocale: Locale | undefined;
   location: string;
+  // Only set on the Edit form — on a successful save, the toast redirects
+  // to this contact's own info page once it's done showing. The New
+  // Contact form has no id yet (createContact redirects server-side
+  // instead, straight to the freshly created contact).
+  contactId?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const t = getDict(lang);
+  const router = useRouter();
+
+  // Resets `dismissed` the moment a new success message arrives, without an
+  // effect — comparing against the last-seen message during render (React's
+  // recommended way to "adjust state when a prop changes") instead of
+  // calling setState synchronously inside a useEffect body.
+  const [dismissed, setDismissed] = useState(false);
+  const [lastSuccess, setLastSuccess] = useState<string | undefined>(undefined);
+  if (state?.success !== lastSuccess) {
+    setLastSuccess(state?.success);
+    setDismissed(false);
+  }
+  const toast = state?.success && !dismissed ? state.success : null;
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setDismissed(true);
+      if (contactId) router.push(`/contacts/${contactId}`);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [toast, contactId, router]);
+
   const [selectedTags, setSelectedTags] = useState<string[]>(currentTags ?? []);
   const [timeZone, setTimeZone] = useState(defaultValues?.timeZone ?? "");
   // Tracked separately from the contact's own mailing address country — a
   // company can be incorporated somewhere other than where its owner does
   // business — so the jurisdiction region's label can react to it.
   const [jurisdictionCountry, setJurisdictionCountry] = useState(defaultValues?.jurisdictionCountry ?? "");
+  // Same dropdown-vs-free-text behavior as the address State/Province field.
+  const jurisdictionRegionOptions = regionOptionsForCountry(jurisdictionCountry);
+  const normalizedJurisdictionRegion = normalizeRegionForCountry(jurisdictionCountry, defaultValues?.jurisdictionRegion ?? "");
 
   // Every world timezone, sorted west to east — computed once (deterministic
   // given a fixed reference date, so no server/client hydration mismatch).
   const [timeZoneOptions] = useState(() => getWorldTimeZoneOptions());
-  // Just the city/region part (e.g. "Toronto"), stripped of the leading
-  // "(UTC-04:00) " offset prefix, for the small live-clock card's own label.
-  const timeZoneCityName = timeZoneOptions.find((opt) => opt.value === timeZone)?.label.replace(/^\([^)]*\)\s*/, "") ?? "";
 
   // Language tags first (matching the Contacts list page's own ordering),
   // then everything else, each colored the same way it is there.
@@ -245,7 +274,11 @@ export default function ContactForm({
       />
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-      {state?.success && <p className="text-sm text-emerald-700">{state.success}</p>}
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+          <div className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>
+        </div>
+      )}
 
       {selectedTags.map((name) => (
         <input key={name} type="hidden" name="tags" value={name} />
@@ -322,11 +355,27 @@ export default function ContactForm({
               ))}
             </select>
           </div>
-          <Field
-            label={`${stateLabelForCountry(jurisdictionCountry, lang)} ${t.contactForm.ofJurisdiction}`}
-            name="jurisdictionRegion"
-            defaultValue={defaultValues?.jurisdictionRegion ?? ""}
-          />
+          {jurisdictionRegionOptions ? (
+            <div>
+              <label className={LABEL_CLASS}>
+                {stateLabelForCountry(jurisdictionCountry, lang)} {t.contactForm.ofJurisdiction}
+              </label>
+              <select name="jurisdictionRegion" defaultValue={normalizedJurisdictionRegion} className={FIELD_CLASS}>
+                <option value="">—</option>
+                {jurisdictionRegionOptions.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name} ({opt.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <Field
+              label={`${stateLabelForCountry(jurisdictionCountry, lang)} ${t.contactForm.ofJurisdiction}`}
+              name="jurisdictionRegion"
+              defaultValue={defaultValues?.jurisdictionRegion ?? ""}
+            />
+          )}
 
           {/* Row 3 — nothing in the 3rd column on purpose, so the Language
               radio buttons have room to grow if more languages are added. */}
@@ -367,13 +416,13 @@ export default function ContactForm({
             defaultValue={defaultValues?.stage ?? "LEAD"}
             options={STAGES}
           />
-          <div>
+          <div className="flex h-full flex-col">
             <label className={LABEL_CLASS}>{t.contactForm.timeZone}</label>
             <select
               name="timeZone"
               value={timeZone}
               onChange={(e) => setTimeZone(e.target.value)}
-              className={FIELD_CLASS}
+              className={`${FIELD_CLASS} mt-auto`}
             >
               <option value="">—</option>
               {timeZoneOptions.map((opt) => (
@@ -383,16 +432,7 @@ export default function ContactForm({
               ))}
             </select>
           </div>
-          <div>
-            <label className={LABEL_CLASS}>{t.contactForm.timeZoneNow}</label>
-            <div className="mt-1">
-              {timeZone ? (
-                <ContactTimezoneCard timeZone={timeZone} locationLabel={timeZoneCityName} hour12={hour12} lang={lang} />
-              ) : (
-                <p className="text-sm text-soft">—</p>
-              )}
-            </div>
-          </div>
+          <div>{timeZone ? <LocalTimeCard timeZone={timeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} /> : null}</div>
         </div>
 
         <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">
@@ -575,16 +615,24 @@ export default function ContactForm({
               + {t.contactForm.addAddress}
             </button>
           </div>
-          <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} lang={lang} values={defaultValues}>
-            <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={defaultValues?.billingContactName ?? ""} />
-            <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={defaultValues?.billingEmail ?? ""} />
-            <PhoneField
-              name="billingPhone"
-              label={t.contactForm.billingPhone}
-              defaultCountry={billingPhoneCountry}
-              defaultValue={defaultValues?.billingPhone}
-            />
-          </AddressGroup>
+          <div className="self-start">
+            <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} lang={lang} values={defaultValues}>
+              <div className="grid grid-cols-2 gap-4">
+                <Field
+                  label={t.contactForm.billingContactName}
+                  name="billingContactName"
+                  defaultValue={defaultValues?.billingContactName ?? ""}
+                />
+                <PhoneField
+                  name="billingPhone"
+                  label={t.contactForm.billingPhone}
+                  defaultCountry={billingPhoneCountry}
+                  defaultValue={defaultValues?.billingPhone}
+                />
+              </div>
+              <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={defaultValues?.billingEmail ?? ""} />
+            </AddressGroup>
+          </div>
         </div>
       </Card>
 
@@ -744,6 +792,50 @@ export default function ContactForm({
         <textarea name="notes" rows={3} defaultValue={defaultValues?.notes ?? ""} className={FIELD_CLASS} />
       </Card>
     </form>
+  );
+}
+
+// A live clock for the selected Time Zone, distinct from the shared
+// ContactTimezoneCard used on the Contact detail page (that one shows a
+// real place name, right-aligned, with a short date + UTC offset — this one
+// is just a generic "current time there" preview: left-aligned, its own
+// label instead of a place name, full-length date, no offset line).
+function LocalTimeCard({
+  timeZone,
+  hour12,
+  lang,
+  label,
+}: {
+  timeZone: string;
+  hour12: boolean;
+  lang: Lang;
+  label: string;
+}) {
+  const [now, setNow] = useState<Date | null>(() => new Date());
+  const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg px-4 py-3 text-left shadow-sm">
+      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{label}</p>
+      <p className="font-display text-lg font-bold tabular-nums text-ink">
+        {now
+          ? new Intl.DateTimeFormat(intlLocale, { timeZone, hour: "2-digit", minute: "2-digit", hour12 }).format(now)
+          : "--:--"}
+      </p>
+      <p className="text-xs text-soft">
+        {now
+          ? new Intl.DateTimeFormat(intlLocale, { timeZone, weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(
+              now
+            )
+          : " "}
+      </p>
+    </div>
   );
 }
 
