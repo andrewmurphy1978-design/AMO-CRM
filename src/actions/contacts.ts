@@ -196,23 +196,25 @@ function readCustomFieldEdit(formData: FormData, valueField: string, slugField: 
   return { slug, value: String(formData.get(valueField) ?? "").trim() };
 }
 
-async function saveCustomFieldEdits(db: PrismaClient, contactId: string, formData: FormData) {
+// Returns the write(s) as unresolved Prisma operations instead of awaiting
+// them here, so the caller can fold them into one batched $transaction
+// alongside every other child-row replace below (see the comment on that
+// transaction in updateContact for why).
+function buildCustomFieldEditOps(db: PrismaClient, contactId: string, formData: FormData) {
   const edits = [
     readCustomFieldEdit(formData, "servicesRequired", "servicesRequiredSlug"),
     readCustomFieldEdit(formData, "projectGoalDescription", "projectGoalDescriptionSlug"),
   ].filter((edit): edit is { slug: string; value: string } => edit !== null);
 
-  for (const edit of edits) {
-    if (edit.value) {
-      await db.contactFieldValue.upsert({
-        where: { contactId_fieldSlug: { contactId, fieldSlug: edit.slug } },
-        update: { value: edit.value },
-        create: { contactId, fieldSlug: edit.slug, value: edit.value },
-      });
-    } else {
-      await db.contactFieldValue.deleteMany({ where: { contactId, fieldSlug: edit.slug } });
-    }
-  }
+  return edits.map((edit) =>
+    edit.value
+      ? db.contactFieldValue.upsert({
+          where: { contactId_fieldSlug: { contactId, fieldSlug: edit.slug } },
+          update: { value: edit.value },
+          create: { contactId, fieldSlug: edit.slug, value: edit.value },
+        })
+      : db.contactFieldValue.deleteMany({ where: { contactId, fieldSlug: edit.slug } })
+  );
 }
 
 // Parallel "techStack{Label,Domain,HostingProvider,App}" inputs (same
@@ -412,7 +414,10 @@ export async function createContact(
       });
     }
 
-    await saveCustomFieldEdits(db, contact.id, formData);
+    const customFieldOps = buildCustomFieldEditOps(db, contact.id, formData);
+    if (customFieldOps.length > 0) {
+      await db.$transaction(customFieldOps);
+    }
 
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     for (const name of desiredTags) {
@@ -461,7 +466,22 @@ export async function updateContact(
   // createContact above for why. This one used to open a connection for
   // the duplicate-email check, the update, syncContactTags's own queries
   // (findMany plus one upsert pair per changed tag), and the systeme.io
-  // push's own lookups — 15+ for a save with a couple of tag changes.
+  // push's own lookups — 15+ for a save with a couple of tag changes, and
+  // has only grown since (jurisdiction/billing fields, messaging accounts,
+  // VoIP accounts). Each of those extra round trips is real wall-clock time
+  // against Hyperdrive/Neon within the one Cloudflare Workers invocation
+  // handling this request — stack up enough of them (this used to be 10
+  // separate awaits just for the 5 child collections below, one deleteMany
+  // + createMany pair apiece) and the request risks the Workers CPU/time
+  // budget, which surfaces to the user as a plain "Error 1102" with no
+  // useful detail, and can leave this request's DB connection in-flight
+  // (never reaching the `finally` in withScopedPrismaClient that would
+  // close it) if the isolate gets killed mid-request — which then trips up
+  // unrelated requests too until Neon reaps the abandoned connection. The
+  // fix here isn't fewer statements (the full-replace-per-collection
+  // approach is unchanged) but fewer *round trips*: every child-row write
+  // below goes into one batched $transaction instead of 10+ sequential
+  // `await`s.
   const result = await withScopedPrismaClient(async (db) => {
     const existing = await db.contact.findFirst({
       where: { email: data.email, NOT: { id: contactId } },
@@ -476,46 +496,34 @@ export async function updateContact(
     // order-sensitive list with no other side effects (unlike tags, nothing
     // else references a social link by id).
     const socialLinks = readSocialLinks(formData);
-    await db.contactSocialLink.deleteMany({ where: { contactId } });
-    if (socialLinks.length > 0) {
-      await db.contactSocialLink.createMany({
-        data: socialLinks.map((link) => ({ ...link, contactId })),
-      });
-    }
-
     const extraAddresses = readExtraAddresses(formData);
-    await db.contactAddress.deleteMany({ where: { contactId } });
-    if (extraAddresses.length > 0) {
-      await db.contactAddress.createMany({
-        data: extraAddresses.map((addr) => ({ ...addr, contactId })),
-      });
-    }
-
     const messagingAccounts = readMessagingAccounts(formData);
-    await db.contactMessagingAccount.deleteMany({ where: { contactId } });
-    if (messagingAccounts.length > 0) {
-      await db.contactMessagingAccount.createMany({
-        data: messagingAccounts.map((row) => ({ ...row, contactId })),
-      });
-    }
-
     const voipAccounts = readVoipAccounts(formData);
-    await db.contactVoipAccount.deleteMany({ where: { contactId } });
-    if (voipAccounts.length > 0) {
-      await db.contactVoipAccount.createMany({
-        data: voipAccounts.map((row) => ({ ...row, contactId })),
-      });
-    }
-
     const techStackItems = readTechStackItems(formData);
-    await db.contactTechStackItem.deleteMany({ where: { contactId } });
-    if (techStackItems.length > 0) {
-      await db.contactTechStackItem.createMany({
-        data: techStackItems.map((row) => ({ ...row, contactId })),
-      });
-    }
 
-    await saveCustomFieldEdits(db, contactId, formData);
+    await db.$transaction([
+      db.contactSocialLink.deleteMany({ where: { contactId } }),
+      ...(socialLinks.length > 0
+        ? [db.contactSocialLink.createMany({ data: socialLinks.map((link) => ({ ...link, contactId })) })]
+        : []),
+      db.contactAddress.deleteMany({ where: { contactId } }),
+      ...(extraAddresses.length > 0
+        ? [db.contactAddress.createMany({ data: extraAddresses.map((addr) => ({ ...addr, contactId })) })]
+        : []),
+      db.contactMessagingAccount.deleteMany({ where: { contactId } }),
+      ...(messagingAccounts.length > 0
+        ? [db.contactMessagingAccount.createMany({ data: messagingAccounts.map((row) => ({ ...row, contactId })) })]
+        : []),
+      db.contactVoipAccount.deleteMany({ where: { contactId } }),
+      ...(voipAccounts.length > 0
+        ? [db.contactVoipAccount.createMany({ data: voipAccounts.map((row) => ({ ...row, contactId })) })]
+        : []),
+      db.contactTechStackItem.deleteMany({ where: { contactId } }),
+      ...(techStackItems.length > 0
+        ? [db.contactTechStackItem.createMany({ data: techStackItems.map((row) => ({ ...row, contactId })) })]
+        : []),
+      ...buildCustomFieldEditOps(db, contactId, formData),
+    ]);
 
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     await syncContactTagsWith(db, contactId, desiredTags);

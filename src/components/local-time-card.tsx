@@ -13,11 +13,13 @@ export default function LocalTimeCard({
   hour12,
   lang,
   label,
+  className = "",
 }: {
   timeZone: string;
   hour12: boolean;
   lang: "en" | "fr";
   label: string;
+  className?: string;
 }) {
   const [now, setNow] = useState<Date | null>(() => new Date());
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
@@ -28,7 +30,9 @@ export default function LocalTimeCard({
   }, []);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg px-4 py-3 text-left shadow-sm">
+    <div
+      className={`relative flex flex-col justify-center overflow-hidden rounded-2xl border border-card-border bg-card-bg px-4 py-3 text-left shadow-sm ${className}`}
+    >
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{label}</p>
       <p className="font-display text-lg font-bold tabular-nums text-ink">

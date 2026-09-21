@@ -306,6 +306,9 @@ export const dictionaries = {
       notes: "Notes",
       createContact: "Create contact",
       saveChanges: "Save changes",
+      unsavedChangesTitle: "Unsaved changes",
+      unsavedChangesBody: "You have unsaved changes that will be lost. Discard them and leave, or cancel and stay on this page?",
+      discardChanges: "Discard changes",
     },
     newContactPage: {
       title: "New contact",
@@ -1165,6 +1168,10 @@ export const dictionaries = {
       notes: "Notes",
       createContact: "Créer le contact",
       saveChanges: "Enregistrer les modifications",
+      unsavedChangesTitle: "Modifications non enregistrées",
+      unsavedChangesBody:
+        "Vous avez des modifications non enregistrées qui seront perdues. Les abandonner et quitter, ou annuler et rester sur cette page?",
+      discardChanges: "Abandonner les modifications",
     },
     newContactPage: {
       title: "Nouveau contact",

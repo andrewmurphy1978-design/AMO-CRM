@@ -306,10 +306,7 @@ export default async function ContactDetailPage({
         location={t.dashboard.myLocation}
         actions={
           <div className="flex gap-2">
-            <Link
-              href={`/contacts/${contact.id}/edit`}
-              className="rounded-md border border-white/30 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
-            >
+            <Link href={`/contacts/${contact.id}/edit`} className="btn-primary rounded-md px-4 py-2 text-sm font-semibold shadow-sm">
               {t.contactDetail.edit}
             </Link>
             <DeleteContactButton lang={lang} contactId={contact.id} />
@@ -343,14 +340,17 @@ export default async function ContactDetailPage({
 
               <InfoField label={t.contactForm.industry} value={contact.industry} />
               <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
-              <div aria-hidden="true" />
+              <div className="lg:row-span-2">
+                {contactTimeZone ? (
+                  <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} className="h-full" />
+                ) : null}
+              </div>
 
               <InfoField label={t.contactForm.stage} value={STAGE_LABELS[contact.stage]} />
               <InfoField
                 label={t.contactForm.timeZone}
                 value={contact.timeZone ? `(${utcOffsetLabel(contact.timeZone)}) ${contact.timeZone.replace(/_/g, " ")}` : undefined}
               />
-              <div>{contactTimeZone ? <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} /> : null}</div>
             </div>
 
             <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">

@@ -138,9 +138,13 @@ export default function ContactForm({
   // calling setState synchronously inside a useEffect body.
   const [dismissed, setDismissed] = useState(false);
   const [lastSuccess, setLastSuccess] = useState<string | undefined>(undefined);
+  // A successful save means there's nothing left unsaved, whether the user
+  // typed anything since mounting or not.
+  const [dirty, setDirty] = useState(false);
   if (state?.success !== lastSuccess) {
     setLastSuccess(state?.success);
     setDismissed(false);
+    if (state?.success) setDirty(false);
   }
   const toast = state?.success && !dismissed ? state.success : null;
 
@@ -152,6 +156,47 @@ export default function ContactForm({
     }, 5000);
     return () => clearTimeout(timer);
   }, [toast, contactId, router]);
+
+  // Warn on a full page unload (tab close, refresh, typed URL) while there
+  // are unsaved edits — the browser's own native dialog, not customizable.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  // Warn on in-app navigation (sidebar, breadcrumbs, any link anywhere in
+  // the document) while there are unsaved edits, with a custom Discard/
+  // Cancel choice instead of the browser's native dialog. A capturing
+  // listener on the document fires before Next's own Link click handler,
+  // so stopping propagation here keeps it from navigating.
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement | null)?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor || anchor.target === "_blank") return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      let url: URL;
+      try {
+        url = new URL(href, window.location.href);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPendingHref(url.pathname + url.search + url.hash);
+    };
+    document.addEventListener("click", handler, true);
+    return () => document.removeEventListener("click", handler, true);
+  }, [dirty]);
 
   const [selectedTags, setSelectedTags] = useState<string[]>(currentTags ?? []);
   const [timeZone, setTimeZone] = useState(defaultValues?.timeZone ?? "");
@@ -237,7 +282,49 @@ export default function ContactForm({
   const projectGoal = findFieldValue("projectgoaldescription");
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form
+      action={formAction}
+      onChange={() => setDirty(true)}
+      onClickCapture={(e) => {
+        // Every "+ Add"/"✕ remove" row button below is a plain
+        // type="button" click, not a native form "change" event, so it
+        // needs its own dirty signal — this single capture-phase listener
+        // covers all of them (emails/phones/addresses/tech stack/social/
+        // messaging/VoIP rows) without threading a callback through each
+        // one's own component.
+        if ((e.target as HTMLElement).closest('button[type="button"]')) setDirty(true);
+      }}
+      className="space-y-6"
+    >
+      {pendingHref && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-card-bg p-6 shadow-xl">
+            <p className="font-display text-base font-semibold text-ink">{t.contactForm.unsavedChangesTitle}</p>
+            <p className="mt-2 text-sm text-soft">{t.contactForm.unsavedChangesBody}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingHref(null)}
+                className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const href = pendingHref;
+                  setDirty(false);
+                  setPendingHref(null);
+                  if (href) router.push(href);
+                }}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+              >
+                {t.contactForm.discardChanges}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <PageHeader
         title={title}
         hour12={hour12}
@@ -358,8 +445,9 @@ export default function ContactForm({
             />
           )}
 
-          {/* Row 3 — nothing in the 3rd column on purpose, so the Language
-              radio buttons have room to grow if more languages are added. */}
+          {/* Row 3 — the 3rd column starts the Local Time There card, which
+              spans down into Row 4 so its bottom lines up with Stage/Time
+              Zone's bottom instead of just the Time Zone field's. */}
           <Field label={t.contactForm.industry} name="industry" defaultValue={defaultValues?.industry ?? ""} list="industryOptions" />
           <div>
             <label className={LABEL_CLASS}>{t.contactForm.language}</label>
@@ -386,10 +474,13 @@ export default function ContactForm({
               </label>
             </div>
           </div>
-          <div aria-hidden="true" />
+          <div className="lg:row-span-2">
+            {timeZone ? (
+              <LocalTimeCard timeZone={timeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} className="h-full" />
+            ) : null}
+          </div>
 
-          {/* Row 4 — Time Zone and its live local-time preview get their own
-              columns (each with its own label) so the two labels line up. */}
+          {/* Row 4 */}
           <Field
             label={t.contactForm.stage}
             name="stage"
@@ -397,13 +488,13 @@ export default function ContactForm({
             defaultValue={defaultValues?.stage ?? "LEAD"}
             options={STAGES}
           />
-          <div className="flex h-full flex-col">
+          <div>
             <label className={LABEL_CLASS}>{t.contactForm.timeZone}</label>
             <select
               name="timeZone"
               value={timeZone}
               onChange={(e) => setTimeZone(e.target.value)}
-              className={`${FIELD_CLASS} mt-auto`}
+              className={FIELD_CLASS}
             >
               <option value="">—</option>
               {timeZoneOptions.map((opt) => (
@@ -413,7 +504,6 @@ export default function ContactForm({
               ))}
             </select>
           </div>
-          <div>{timeZone ? <LocalTimeCard timeZone={timeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} /> : null}</div>
         </div>
 
         <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">
