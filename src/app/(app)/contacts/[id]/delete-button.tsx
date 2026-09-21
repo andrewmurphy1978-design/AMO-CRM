@@ -16,7 +16,7 @@ export default function DeleteContactButton({ contactId, lang }: { contactId: st
         if (!confirm(t.contactDetail.deleteConfirm)) return;
         startTransition(() => deleteContact(contactId));
       }}
-      className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+      className="rounded-md border border-white/30 px-4 py-2 text-sm font-medium text-white hover:bg-red-500/30 hover:border-red-300 disabled:opacity-60"
     >
       {t.common.delete}
     </button>

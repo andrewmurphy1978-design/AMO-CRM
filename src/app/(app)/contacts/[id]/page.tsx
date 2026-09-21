@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { formatDistanceToNow, format } from "date-fns";
-import TagManager from "./tag-manager";
 import NoteForm from "./note-form";
 import DeleteContactButton from "./delete-button";
 import InteractionLog from "../../interaction-log";
@@ -18,11 +17,15 @@ import { countryFullName } from "@/lib/country-flag";
 import { getTimezoneForCountryState, utcOffsetLabel } from "@/lib/timezone";
 import { stateLabelForCountry } from "@/lib/address-labels";
 import { CURRENCIES } from "@/lib/currencies";
+import { tagKind, TAG_KIND_COLORS, TAG_KIND_RANK } from "@/lib/tag-colors";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
-import ContactTimezoneCard from "@/components/contact-timezone-card";
 import PlatformIcon from "@/components/platform-icon";
 import PageHeader from "../../page-header";
+import Card from "@/components/section-card";
+import LocalTimeCard from "@/components/local-time-card";
+
+const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
 // Systeme.io custom field slugs that duplicate a real Contact column shown
 // elsewhere on this page — hidden from "Other systeme.io fields" so the
@@ -42,13 +45,13 @@ function fieldLabel(fv: { fieldSlug: string; definition: { label: string } | nul
 }
 
 function colonSep(lang: Lang): string {
-  return lang === "fr" ? " :  " : ": ";
+  return lang === "fr" ? " :  " : ": ";
 }
 
 function ColonLine({ label, value, lang }: { label: string; value: string; lang: Lang }) {
   return (
     <p className="text-sm">
-      <span className="text-xs font-semibold uppercase tracking-wide text-soft">{label}</span>
+      <span className={LABEL_CLASS}>{label}</span>
       <span className="text-ink">
         {colonSep(lang)}
         {value}
@@ -63,6 +66,42 @@ function languageDisplay(locale: string | null, t: ReturnType<typeof getDict>): 
   if (normalized.startsWith("en")) return t.contactDetail.languageEnglish;
   if (normalized.startsWith("fr")) return t.contactDetail.languageFrench;
   return locale;
+}
+
+// A read-only label+value pair matching the Edit form's own field label
+// styling, for the General info / Other info cards' plain-text fields.
+function InfoField({ label, value }: { label: string; value?: React.ReactNode }) {
+  return (
+    <div>
+      <p className={LABEL_CLASS}>{label}</p>
+      <p className="mt-1 text-sm text-ink">{value || "—"}</p>
+    </div>
+  );
+}
+
+// Icon + app/platform name + ID (handle, username, or link) — the shared
+// look for Instant messaging, Social media, and VoIP app rows.
+function AppIdChip({ platform, id, href }: { platform: string; id: string; href?: string }) {
+  const content = (
+    <>
+      <PlatformIcon platform={platform} className="h-4 w-4 shrink-0" />
+      <span className="font-semibold">{platform}</span>
+      <span className="min-w-0 truncate text-soft">{id}</span>
+    </>
+  );
+  const className =
+    "flex max-w-full items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink";
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" className={`${className} hover:border-amo-gold`}>
+      {content}
+    </a>
+  ) : (
+    <span className={className}>{content}</span>
+  );
+}
+
+function TagPill({ name }: { name: string }) {
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(name)]}`}>{name}</span>;
 }
 
 function AddressBlock({
@@ -84,7 +123,7 @@ function AddressBlock({
   const isEmpty = !address && !cityLine && !country;
   return (
     <div>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h3>
+      <h3 className={LABEL_CLASS}>{title}</h3>
       <div className="mt-2 text-sm text-ink">
         {isEmpty ? (
           <p className="text-soft">—</p>
@@ -122,14 +161,14 @@ function TechStackBlock({
   if (!domain && !hostingProvider && !app) {
     return (
       <div>
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h4>
+        <h4 className={LABEL_CLASS}>{title}</h4>
         <p className="mt-2 text-sm text-soft">—</p>
       </div>
     );
   }
   return (
     <div>
-      <h4 className="text-xs font-semibold uppercase tracking-wide text-soft">{title}</h4>
+      <h4 className={LABEL_CLASS}>{title}</h4>
       <div className="mt-2 space-y-1 text-sm text-ink">
         {domain && <p>{domain}</p>}
         {hostingProvider && <p className="text-soft">{t.contactForm.hostingProvider}: {hostingProvider}</p>}
@@ -156,9 +195,9 @@ export default async function ContactDetailPage({
   // One shared client for all the reads below — the plain `prisma` proxy
   // opens a brand-new connection on every property access, and this page
   // does several sequential reads (Google token, hour format, the contact
-  // itself, all tags, linked calendar events), which is exactly the
-  // pattern that risks Cloudflare Error 1102 without scoping.
-  const { contact, allTags, hour12, calendarEvents } = await withScopedPrismaClient(async (db) => {
+  // itself, linked calendar events), which is exactly the pattern that
+  // risks Cloudflare Error 1102 without scoping.
+  const { contact, hour12, calendarEvents } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
     const contact = await db.contact.findUnique({
@@ -190,9 +229,8 @@ export default async function ContactDetailPage({
         techStackItems: { orderBy: { order: "asc" } },
       },
     });
-    const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
     const calendarEvents = contact ? await getLinkedCalendarEvents(db, { contactId: contact.id }, googleAccessToken) : [];
-    return { contact, allTags, hour12, calendarEvents };
+    return { contact, hour12, calendarEvents };
   });
 
   if (!contact) notFound();
@@ -245,135 +283,143 @@ export default async function ContactDetailPage({
       })),
     ])
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const proposalItems = billingItems.filter((item) => item.kind === "proposal");
+  const invoiceItems = billingItems.filter((item) => item.kind === "invoice");
 
   // An explicitly-chosen Time Zone on the contact record wins over the
   // country/state-derived guess. Primary address only (not the "other"/
   // billing addresses) drives the fallback guess.
   const contactTimeZone = contact.timeZone || getTimezoneForCountryState(contact.country, contact.state);
-  const timeZoneLocationLabel =
-    [contact.city, contact.state ?? countryFullName(contact.country)].filter(Boolean).join(", ") ||
-    countryFullName(contact.country);
+
+  // Language tags first (matching the Edit form and the Contacts list
+  // page's own ordering), each colored the same way everywhere.
+  const sortedTagRows = [...contact.tags].sort(
+    (a, b) => TAG_KIND_RANK[tagKind(a.tag.name)] - TAG_KIND_RANK[tagKind(b.tag.name)] || a.tag.name.localeCompare(b.tag.name)
+  );
 
   return (
     <div className="space-y-6">
-      <PageHeader title={fullName} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm text-soft">
-            {STAGE_LABELS[contact.stage]}
-            {contact.systemeIoId && ` · systeme.io #${contact.systemeIoId}`}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {contactTimeZone && (
-            <ContactTimezoneCard
-              timeZone={contactTimeZone}
-              locationLabel={timeZoneLocationLabel}
-              hour12={hour12}
-              lang={lang}
-            />
-          )}
+      <PageHeader
+        title={fullName}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        location={t.dashboard.myLocation}
+        actions={
           <div className="flex gap-2">
             <Link
               href={`/contacts/${contact.id}/edit`}
-              className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
+              className="rounded-md border border-white/30 px-4 py-2 text-sm font-medium text-white hover:bg-white/10"
             >
               {t.contactDetail.edit}
             </Link>
-            <Link
-              href={`/projects/new?contactId=${contact.id}`}
-              className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
-            >
-              {t.contactDetail.newProject}
-            </Link>
             <DeleteContactButton lang={lang} contactId={contact.id} />
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.contactDetailsTitle}</h2>
-
-            {/* Line 1: Email (wide), Phone numbers */}
-            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
-              <div className="sm:col-span-2">
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldEmail}</dt>
-                <dd className="space-y-0.5 text-ink">
-                  <div>{contact.email}</div>
-                  {contact.email2 && <div>{contact.email2}</div>}
-                  {contact.extraEmails.map((email) => (
-                    <div key={email}>{email}</div>
+          <Card color="general" title={t.contactForm.cardGeneralInfo}>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <InfoField label={t.contactForm.firstName} value={contact.firstName} />
+              <InfoField label={t.contactForm.lastName} value={contact.lastName} />
+              <InfoField label={t.contactForm.company} value={contact.company} />
+              <div className="lg:row-span-4">
+                <p className={LABEL_CLASS}>{t.contactForm.tags}</p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {sortedTagRows.length === 0 && <p className="text-sm text-soft">—</p>}
+                  {sortedTagRows.map((ct) => (
+                    <TagPill key={ct.tagId} name={ct.tag.name} />
                   ))}
-                </dd>
+                </div>
+              </div>
+
+              <InfoField label={t.contactForm.companyType} value={contact.companyType} />
+              <InfoField label={t.contactForm.jurisdictionCountry} value={contact.jurisdictionCountry} />
+              <InfoField
+                label={`${stateLabelForCountry(contact.jurisdictionCountry ?? undefined, lang)} ${t.contactForm.ofJurisdiction}`}
+                value={contact.jurisdictionRegion}
+              />
+
+              <InfoField label={t.contactForm.industry} value={contact.industry} />
+              <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
+              <div aria-hidden="true" />
+
+              <InfoField label={t.contactForm.stage} value={STAGE_LABELS[contact.stage]} />
+              <InfoField
+                label={t.contactForm.timeZone}
+                value={contact.timeZone ? `(${utcOffsetLabel(contact.timeZone)}) ${contact.timeZone.replace(/_/g, " ")}` : undefined}
+              />
+              <div>{contactTimeZone ? <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} /> : null}</div>
+            </div>
+
+            <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">
+              <h3 className={LABEL_CLASS}>{t.contactForm.cardInvoice}</h3>
+              <div className="mt-3 space-y-4">
+                <p className="text-sm text-ink">
+                  {contact.autoSendInvoiceReminders ? t.contactDetail.invoiceRemindersAuto : t.contactDetail.invoiceRemindersManual}
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <InfoField
+                    label={t.contactForm.preferredCurrency}
+                    value={CURRENCIES.find((c) => c.value === contact.preferredCurrency)?.label}
+                  />
+                  <InfoField label={t.contactForm.paymentTerms} value={contact.paymentTerms} />
+                  <InfoField label={t.contactForm.paymentSchedule} value={contact.paymentSchedule} />
+                  <InfoField
+                    label={t.contactForm.defaultDiscount}
+                    value={contact.defaultDiscount != null ? `${contact.defaultDiscount}%` : undefined}
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card color="contact" title={t.contactForm.cardContactInfo}>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
+              <div>
+                <p className={LABEL_CLASS}>{t.contactForm.emails}</p>
+                <div className="mt-1 space-y-0.5 text-sm text-ink">
+                  <p>{contact.email}</p>
+                  {contact.email2 && <p>{contact.email2}</p>}
+                  {contact.extraEmails.map((email) => (
+                    <p key={email}>{email}</p>
+                  ))}
+                </div>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldPhones}</dt>
-                <dd className="space-y-0.5 text-ink">
-                  <div>
+                <p className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</p>
+                <div className="mt-1 space-y-0.5 text-sm text-ink">
+                  <p>
                     <PhoneDisplay value={contact.phone} country={contact.country} />
-                  </div>
+                  </p>
                   {contact.phone2 && (
-                    <div>
+                    <p>
                       <PhoneDisplay value={contact.phone2} country={contact.country} />
-                    </div>
+                    </p>
                   )}
                   {contact.extraPhones.map((phone) => (
-                    <div key={phone}>
+                    <p key={phone}>
                       <PhoneDisplay value={phone} country={contact.country} />
-                    </div>
+                    </p>
                   ))}
-                </dd>
-              </div>
-            </dl>
-
-            {/* Line 2: Company, Type of company, Industry, Language, Time zone */}
-            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldCompany}</dt>
-                <dd className="text-ink">{contact.company ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.companyType}</dt>
-                <dd className="text-ink">{contact.companyType ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.industry}</dt>
-                <dd className="text-ink">{contact.industry ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldLanguage}</dt>
-                <dd className="text-ink">{languageDisplay(contact.locale, t)}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-soft">{t.contactDetail.fieldTimeZone}</dt>
-                <dd className="text-ink">
-                  {contact.timeZone ? `(${utcOffsetLabel(contact.timeZone)}) ${contact.timeZone.replace(/_/g, " ")}` : "—"}
-                </dd>
-              </div>
-            </dl>
-
-            {(contact.jurisdictionCountry || contact.jurisdictionRegion) && (
-              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.jurisdictionCountry}</dt>
-                  <dd className="text-ink">{contact.jurisdictionCountry ?? "—"}</dd>
                 </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-soft">
-                    {stateLabelForCountry(contact.jurisdictionCountry ?? undefined, lang)} {t.contactForm.ofJurisdiction}
-                  </dt>
-                  <dd className="text-ink">{contact.jurisdictionRegion ?? "—"}</dd>
+              </div>
+              <div>
+                <p className={LABEL_CLASS}>{t.contactForm.messagingAppsTitle}</p>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {contact.messagingAccounts.length === 0 && <p className="text-sm text-soft">—</p>}
+                  {contact.messagingAccounts.map((row) => (
+                    <AppIdChip key={row.id} platform={row.app} id={row.handle} />
+                  ))}
                 </div>
-              </dl>
-            )}
+              </div>
+            </div>
+          </Card>
 
-            {/* Addresses: Main (plus any extra addresses, below it), Billing */}
-            <div className="mt-6 grid gap-6 sm:grid-cols-3">
-              <div className="space-y-4 sm:col-span-2">
+          <Card color="addresses" title={t.contactForm.cardAddresses}>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-4">
                 <AddressBlock
                   title={t.contactDetail.mainAddressTitle}
                   address={contact.address}
@@ -394,7 +440,7 @@ export default async function ContactDetailPage({
                   />
                 ))}
               </div>
-              <div>
+              <div className="self-start">
                 <AddressBlock
                   title={t.contactDetail.billingAddressTitle}
                   address={contact.billingAddress}
@@ -408,202 +454,182 @@ export default async function ContactDetailPage({
                     {contact.billingContactName && (
                       <ColonLine label={t.contactDetail.billingLabelContact} value={contact.billingContactName} lang={lang} />
                     )}
-                    {contact.billingEmail && (
-                      <ColonLine label={t.contactDetail.billingLabelEmail} value={contact.billingEmail} lang={lang} />
-                    )}
                     {contact.billingPhone && (
                       <p className="text-sm">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-soft">
-                          {t.contactDetail.billingLabelPhone}
-                        </span>
+                        <span className={LABEL_CLASS}>{t.contactDetail.billingLabelPhone}</span>
                         <span className="text-ink">
                           {colonSep(lang)}
                           <PhoneDisplay value={contact.billingPhone} country={contact.billingCountry} />
                         </span>
                       </p>
                     )}
+                    {contact.billingEmail && (
+                      <ColonLine label={t.contactDetail.billingLabelEmail} value={contact.billingEmail} lang={lang} />
+                    )}
                   </div>
                 )}
-                <p className="mt-3 text-xs text-soft">
-                  {contact.autoSendInvoiceReminders ? t.contactDetail.invoiceRemindersAuto : t.contactDetail.invoiceRemindersManual}
-                </p>
-                {(contact.preferredCurrency || contact.paymentTerms || contact.paymentSchedule || contact.defaultDiscount != null) && (
-                  <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div>
-                      <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.preferredCurrency}</dt>
-                      <dd className="text-ink">{CURRENCIES.find((c) => c.value === contact.preferredCurrency)?.label ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.paymentTerms}</dt>
-                      <dd className="text-ink">{contact.paymentTerms ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.paymentSchedule}</dt>
-                      <dd className="text-ink">{contact.paymentSchedule ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs uppercase tracking-wide text-soft">{t.contactForm.defaultDiscount}</dt>
-                      <dd className="text-ink">{contact.defaultDiscount != null ? `${contact.defaultDiscount}%` : "—"}</dd>
-                    </div>
-                  </dl>
-                )}
               </div>
             </div>
+          </Card>
 
-            {/* Tech stack: Website, Funnels, Email, Store — only shown once at least one is filled in */}
-            {hasTechStack && (
-              <div className="mt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.techStackTitle}</h3>
-                <div className="mt-2 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {hasTechStack && (
+            <Card color="techStack" title={t.contactForm.techStackTitle}>
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                <TechStackBlock
+                  title={t.contactForm.websiteGroupTitle}
+                  domain={contact.websiteDomain}
+                  hostingProvider={contact.websiteHostingProvider}
+                  appLabel={t.contactForm.designApp}
+                  app={contact.websiteDesignApp}
+                  t={t}
+                />
+                <TechStackBlock
+                  title={t.contactForm.funnelsGroupTitle}
+                  domain={contact.funnelsDomain}
+                  hostingProvider={contact.funnelsHostingProvider}
+                  appLabel={t.contactForm.designApp}
+                  app={contact.funnelsDesignApp}
+                  t={t}
+                />
+                <TechStackBlock
+                  title={t.contactForm.emailGroupTitle}
+                  domain={contact.emailDomain}
+                  hostingProvider={contact.emailHostingProvider}
+                  appLabel={t.contactForm.marketingApp}
+                  app={contact.emailMarketingApp}
+                  t={t}
+                />
+                <TechStackBlock
+                  title={t.contactForm.storeGroupTitle}
+                  domain={contact.storeDomain}
+                  hostingProvider={contact.storeHostingProvider}
+                  appLabel={t.contactForm.designApp}
+                  app={contact.storeDesignApp}
+                  t={t}
+                />
+                {contact.techStackItems.map((item) => (
                   <TechStackBlock
-                    title={t.contactForm.websiteGroupTitle}
-                    domain={contact.websiteDomain}
-                    hostingProvider={contact.websiteHostingProvider}
-                    appLabel={t.contactForm.designApp}
-                    app={contact.websiteDesignApp}
+                    key={item.id}
+                    title={item.label}
+                    domain={item.domain}
+                    hostingProvider={item.hostingProvider}
+                    appLabel={t.contactForm.appColumn}
+                    app={item.app}
                     t={t}
                   />
-                  <TechStackBlock
-                    title={t.contactForm.funnelsGroupTitle}
-                    domain={contact.funnelsDomain}
-                    hostingProvider={contact.funnelsHostingProvider}
-                    appLabel={t.contactForm.designApp}
-                    app={contact.funnelsDesignApp}
-                    t={t}
-                  />
-                  <TechStackBlock
-                    title={t.contactForm.emailGroupTitle}
-                    domain={contact.emailDomain}
-                    hostingProvider={contact.emailHostingProvider}
-                    appLabel={t.contactForm.marketingApp}
-                    app={contact.emailMarketingApp}
-                    t={t}
-                  />
-                  <TechStackBlock
-                    title={t.contactForm.storeGroupTitle}
-                    domain={contact.storeDomain}
-                    hostingProvider={contact.storeHostingProvider}
-                    appLabel={t.contactForm.designApp}
-                    app={contact.storeDesignApp}
-                    t={t}
-                  />
-                  {contact.techStackItems.map((item) => (
-                    <TechStackBlock
-                      key={item.id}
-                      title={item.label}
-                      domain={item.domain}
-                      hostingProvider={item.hostingProvider}
-                      appLabel={t.contactForm.appColumn}
-                      app={item.app}
-                      t={t}
-                    />
-                  ))}
-                </div>
+                ))}
               </div>
-            )}
+            </Card>
+          )}
 
-            {/* Social media links — real brand icon, whole card links out */}
-            {contact.socialLinks.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.socialLinksTitle}</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {contact.socialLinks.map((link) => (
-                    <a
-                      key={link.id}
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink hover:border-amo-gold"
-                    >
-                      <PlatformIcon platform={link.platform} className="h-4 w-4" />
-                      {link.platform}
-                    </a>
-                  ))}
-                </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card color="social" title={t.contactForm.cardSocialMedia}>
+              <div className="flex flex-wrap gap-1.5">
+                {contact.socialLinks.length === 0 && <p className="text-sm text-soft">—</p>}
+                {contact.socialLinks.map((link) => (
+                  <AppIdChip key={link.id} platform={link.platform} id={link.url} href={link.url} />
+                ))}
               </div>
-            )}
+            </Card>
+            <Card color="voip" title={t.contactForm.cardVoipApps}>
+              <div className="flex flex-wrap gap-1.5">
+                {contact.voipAccounts.length === 0 && <p className="text-sm text-soft">—</p>}
+                {contact.voipAccounts.map((row) => (
+                  <AppIdChip key={row.id} platform={row.app} id={row.handle} />
+                ))}
+              </div>
+            </Card>
+          </div>
 
-            {/* Instant messaging apps (WhatsApp, Telegram, Discord, etc.) */}
-            {contact.messagingAccounts.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.messagingAppsTitle}</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {contact.messagingAccounts.map((row) => (
-                    <span
-                      key={row.id}
-                      className="flex items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink"
-                    >
-                      <PlatformIcon platform={row.app} className="h-4 w-4" />
-                      {row.handle}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Preferred VoIP apps (Zoom, Google Meet, Teams, etc.) —
-                distinct from the instant-messaging list above */}
-            {contact.voipAccounts.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactForm.voipAppsTitle}</h3>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {contact.voipAccounts.map((row) => (
-                    <span
-                      key={row.id}
-                      className="flex items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink"
-                    >
-                      <PlatformIcon platform={row.app} className="h-4 w-4" />
-                      {row.handle}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Source (grouped) and other systeme.io fields */}
-            <div className="mt-6 grid gap-6 sm:grid-cols-2">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactDetail.fieldSource}</h3>
-                <div className="mt-2 space-y-1">
-                  <p className="text-sm text-ink">{contact.source ?? "—"}</p>
-                  {contact.systemeIoRegisteredAt && (
-                    <ColonLine
-                      label={t.contactDetail.registeredPrefix}
-                      value={format(contact.systemeIoRegisteredAt, "PP", { locale: dateLocale })}
-                      lang={lang}
-                    />
-                  )}
-                  {contact.lastSyncedAt && (
-                    <ColonLine
-                      label={t.contactDetail.lastSyncedPrefix}
-                      value={formatDistanceToNow(contact.lastSyncedAt, { addSuffix: true, locale: dateLocale })}
-                      lang={lang}
-                    />
-                  )}
-                </div>
-              </div>
-              {otherFields.length > 0 && (
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
-                    {t.contactDetail.otherFields}
-                  </h3>
-                  <dl className="mt-2 grid grid-cols-1 gap-3 text-sm">
-                    {otherFields.map((fv) => (
-                      <div key={fv.id}>
-                        <dt className="text-xs uppercase tracking-wide text-soft">{fieldLabel(fv, t)}</dt>
-                        <dd className="text-ink">{fv.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-              )}
+          <Card color="other" title={t.contactForm.cardOtherInfo}>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <InfoField label={t.contactDetail.fieldSource} value={contact.source} />
+              <InfoField
+                label={t.contactDetail.registeredPrefix}
+                value={
+                  contact.systemeIoRegisteredAt
+                    ? format(contact.systemeIoRegisteredAt, "PP", { locale: dateLocale })
+                    : !contact.systemeIoId && contact.createdAt
+                      ? format(contact.createdAt, "PP", { locale: dateLocale })
+                      : undefined
+                }
+              />
+              <InfoField
+                label={t.contactDetail.lastSyncedPrefix}
+                value={contact.lastSyncedAt ? formatDistanceToNow(contact.lastSyncedAt, { addSuffix: true, locale: dateLocale }) : undefined}
+              />
             </div>
-
-            {contact.notes && (
-              <div className="mt-6">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">{t.contactDetail.notes}</h3>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-ink">{contact.notes}</p>
+            {otherFields.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {otherFields.map((fv) => (
+                  <InfoField key={fv.id} label={fieldLabel(fv, t)} value={fv.value} />
+                ))}
               </div>
+            )}
+          </Card>
+
+          <Card color="notes" title={t.contactForm.cardNotes}>
+            <p className="whitespace-pre-wrap text-sm text-ink">{contact.notes || "—"}</p>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <section id="projects" className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.projectsTitle}</h2>
+              <Link href={`/projects/new?contactId=${contact.id}`} className="text-xs font-semibold text-amo-lime hover:underline">
+                + {t.contactDetail.newProject}
+              </Link>
+            </div>
+            {contact.projects.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.contactDetail.noProjectsYet}</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-card-border">
+                {contact.projects.map((project) => (
+                  <li key={project.id} className="py-2">
+                    <Link href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
+                      {project.name}
+                    </Link>
+                    <span className="ml-2 text-xs text-soft">{t.projectStatuses[project.status]}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <CalendarEventsCard
+            title={t.calendarApp.title}
+            events={calendarEvents}
+            noEventsLabel={t.calendarApp.noLinkedEvents}
+            hour12={hour12}
+            dateLocale={dateLocale}
+            intlLocale={intlLocale}
+          />
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.linkedEmailsTitle}</h2>
+            {contact.emailLinks.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.contactDetail.noLinkedEmails}</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {contact.emailLinks.map((link) => (
+                  <li key={link.id} className="text-sm">
+                    {link.gmailLink ? (
+                      <a href={link.gmailLink} target="_blank" rel="noopener noreferrer" className="text-ink hover:underline">
+                        {link.subject || "—"}
+                      </a>
+                    ) : (
+                      <p className="text-ink">{link.subject || "—"}</p>
+                    )}
+                    <p className="text-xs text-soft">
+                      {link.fromLabel}
+                      {link.messageDate && ` · ${format(link.messageDate, "PPp", { locale: dateLocale })}`}
+                    </p>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 
@@ -615,12 +641,10 @@ export default async function ContactDetailPage({
             contact.communityMemberships.length === 0 ? (
               <p className="mt-2 text-sm text-soft">{t.contactDetail.noPurchasesYet}</p>
             ) : (
-              <div className="mt-4 grid gap-6 sm:grid-cols-3">
+              <div className="mt-4 space-y-4">
                 {contact.subscriptions.length > 0 && (
                   <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
-                      {t.contactDetail.subscriptionsTitle}
-                    </h3>
+                    <h3 className={LABEL_CLASS}>{t.contactDetail.subscriptionsTitle}</h3>
                     <ul className="mt-2 space-y-2 text-sm text-ink">
                       {contact.subscriptions.map((sub) => (
                         <li key={sub.id}>
@@ -638,9 +662,7 @@ export default async function ContactDetailPage({
                 )}
                 {contact.courseEnrollments.length > 0 && (
                   <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
-                      {t.contactDetail.enrollmentsTitle}
-                    </h3>
+                    <h3 className={LABEL_CLASS}>{t.contactDetail.enrollmentsTitle}</h3>
                     <ul className="mt-2 space-y-2 text-sm text-ink">
                       {contact.courseEnrollments.map((enrollment) => (
                         <li key={enrollment.id}>
@@ -657,9 +679,7 @@ export default async function ContactDetailPage({
                 )}
                 {contact.communityMemberships.length > 0 && (
                   <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-soft">
-                      {t.contactDetail.membershipsTitle}
-                    </h3>
+                    <h3 className={LABEL_CLASS}>{t.contactDetail.membershipsTitle}</h3>
                     <ul className="mt-2 space-y-2 text-sm text-ink">
                       {contact.communityMemberships.map((membership) => (
                         <li key={membership.id}>
@@ -680,19 +700,28 @@ export default async function ContactDetailPage({
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <div className="flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.projectsTitle}</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.title}</h2>
+              <Link href="#projects" className="text-xs font-semibold text-amo-lime hover:underline">
+                + {t.contactDetail.newProposal}
+              </Link>
             </div>
-            {contact.projects.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.contactDetail.noProjectsYet}</p>
+            {proposalItems.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.contactDetail.noProposalsYet}</p>
             ) : (
               <ul className="mt-3 divide-y divide-card-border">
-                {contact.projects.map((project) => (
-                  <li key={project.id} className="py-2">
-                    <Link href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
-                      {project.name}
+                {proposalItems.map((item) => (
+                  <li key={item.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                    <span className="flex-1 font-medium text-ink">{item.label}</span>
+                    {item.amount != null && (
+                      <span className="text-soft">
+                        {item.amount} {item.currency}
+                      </span>
+                    )}
+                    <span className="text-xs text-soft">{t.proposals.statuses[item.status as keyof typeof t.proposals.statuses]}</span>
+                    <Link href={`/projects/${item.projectId}`} className="text-xs text-soft hover:underline">
+                      {item.projectName} · {t.contactDetail.viewProject}
                     </Link>
-                    <span className="ml-2 text-xs text-soft">{t.projectStatuses[project.status]}</span>
                   </li>
                 ))}
               </ul>
@@ -701,25 +730,25 @@ export default async function ContactDetailPage({
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.proposalsInvoicesTitle}</h2>
-            {billingItems.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.contactDetail.noProposalsInvoicesYet}</p>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-semibold text-ink">{t.invoices.title}</h2>
+              <Link href="#projects" className="text-xs font-semibold text-amo-lime hover:underline">
+                + {t.contactDetail.newInvoice}
+              </Link>
+            </div>
+            {invoiceItems.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.contactDetail.noInvoicesYet}</p>
             ) : (
               <ul className="mt-3 divide-y divide-card-border">
-                {billingItems.map((item) => (
-                  <li key={`${item.kind}-${item.id}`} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
-                    <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-soft">
-                      {item.kind === "proposal" ? t.proposals.title : t.invoices.title}
-                    </span>
+                {invoiceItems.map((item) => (
+                  <li key={item.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
                     <span className="flex-1 font-medium text-ink">{item.label}</span>
                     {item.amount != null && (
                       <span className="text-soft">
                         {item.amount} {item.currency}
                       </span>
                     )}
-                    <span className="text-xs text-soft">
-                      {item.kind === "proposal" ? t.proposals.statuses[item.status as keyof typeof t.proposals.statuses] : t.invoices.statuses[item.status as keyof typeof t.invoices.statuses]}
-                    </span>
+                    <span className="text-xs text-soft">{t.invoices.statuses[item.status as keyof typeof t.invoices.statuses]}</span>
                     <Link href={`/projects/${item.projectId}`} className="text-xs text-soft hover:underline">
                       {item.projectName} · {t.contactDetail.viewProject}
                     </Link>
@@ -763,54 +792,6 @@ export default async function ContactDetailPage({
                 </li>
               ))}
             </ul>
-          </section>
-        </div>
-
-        <div className="space-y-6">
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.tagsTitle}</h2>
-            <TagManager
-              lang={lang}
-              contactId={contact.id}
-              tags={contact.tags.map((ct) => ({ id: ct.tagId, name: ct.tag.name }))}
-              allTags={allTags}
-            />
-          </section>
-
-          <CalendarEventsCard
-            title={t.calendarApp.title}
-            events={calendarEvents}
-            noEventsLabel={t.calendarApp.noLinkedEvents}
-            hour12={hour12}
-            dateLocale={dateLocale}
-            intlLocale={intlLocale}
-          />
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.linkedEmailsTitle}</h2>
-            {contact.emailLinks.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.contactDetail.noLinkedEmails}</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {contact.emailLinks.map((link) => (
-                  <li key={link.id} className="text-sm">
-                    {link.gmailLink ? (
-                      <a href={link.gmailLink} target="_blank" rel="noopener noreferrer" className="text-ink hover:underline">
-                        {link.subject || "—"}
-                      </a>
-                    ) : (
-                      <p className="text-ink">{link.subject || "—"}</p>
-                    )}
-                    <p className="text-xs text-soft">
-                      {link.fromLabel}
-                      {link.messageDate && ` · ${format(link.messageDate, "PPp", { locale: dateLocale })}`}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
           </section>
         </div>
       </div>

@@ -19,6 +19,8 @@ import PlatformIcon from "@/components/platform-icon";
 import { MESSAGING_APPS, VOIP_APPS } from "@/lib/platform-icons";
 import { getWorldTimeZoneOptions } from "@/lib/timezones";
 import PageHeader from "../page-header";
+import Card from "@/components/section-card";
+import LocalTimeCard from "@/components/local-time-card";
 
 type ExtraAddress = { address?: string | null; city?: string | null; state?: string | null; zip?: string | null; country?: string | null };
 type AppHandleRow = { app: string; handle: string };
@@ -94,27 +96,6 @@ const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-so
 // One accent color per card — same "solid header bar" approach as the
 // Email page's category sections, so each group of fields is visually
 // distinct at a glance instead of the whole page being one long list.
-const CARD_COLORS: Record<string, string> = {
-  general: "bg-emerald-600",
-  contact: "bg-sky-600",
-  addresses: "bg-amber-500",
-  techStack: "bg-slate-600",
-  social: "bg-violet-600",
-  voip: "bg-indigo-600",
-  invoice: "bg-rose-600",
-  other: "bg-teal-600",
-  notes: "bg-stone-500",
-};
-
-function Card({ color, title, children }: { color: keyof typeof CARD_COLORS; title: string; children: ReactNode }) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm">
-      <div className={`px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white ${CARD_COLORS[color]}`}>{title}</div>
-      <div className="space-y-4 p-4">{children}</div>
-    </section>
-  );
-}
-
 export default function ContactForm({
   action,
   defaultValues,
@@ -792,50 +773,6 @@ export default function ContactForm({
         <textarea name="notes" rows={3} defaultValue={defaultValues?.notes ?? ""} className={FIELD_CLASS} />
       </Card>
     </form>
-  );
-}
-
-// A live clock for the selected Time Zone, distinct from the shared
-// ContactTimezoneCard used on the Contact detail page (that one shows a
-// real place name, right-aligned, with a short date + UTC offset — this one
-// is just a generic "current time there" preview: left-aligned, its own
-// label instead of a place name, full-length date, no offset line).
-function LocalTimeCard({
-  timeZone,
-  hour12,
-  lang,
-  label,
-}: {
-  timeZone: string;
-  hour12: boolean;
-  lang: Lang;
-  label: string;
-}) {
-  const [now, setNow] = useState<Date | null>(() => new Date());
-  const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg px-4 py-3 text-left shadow-sm">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{label}</p>
-      <p className="font-display text-lg font-bold tabular-nums text-ink">
-        {now
-          ? new Intl.DateTimeFormat(intlLocale, { timeZone, hour: "2-digit", minute: "2-digit", hour12 }).format(now)
-          : "--:--"}
-      </p>
-      <p className="text-xs text-soft">
-        {now
-          ? new Intl.DateTimeFormat(intlLocale, { timeZone, weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(
-              now
-            )
-          : " "}
-      </p>
-    </div>
   );
 }
 
