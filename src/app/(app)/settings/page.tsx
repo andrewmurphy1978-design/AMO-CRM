@@ -5,6 +5,7 @@ import { disconnectGoogleAccount } from "@/actions/integrations";
 import SystemeIoForm from "./systeme-io-form";
 import AnthropicKeyForm from "./anthropic-key-form";
 import MakeForm from "./make-form";
+import ShortIoForm from "./shortio-form";
 import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buffer-form";
 import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
@@ -23,6 +24,11 @@ import PageHeader from "../page-header";
 interface MakeMetadata {
   zone?: string;
   teamId?: string;
+}
+
+interface ShortIoMetadata {
+  domain?: string;
+  domainFr?: string;
 }
 
 export default async function SettingsPage({
@@ -47,6 +53,7 @@ export default async function SettingsPage({
     integration,
     makeIntegration,
     anthropicIntegration,
+    shortioIntegration,
     bufferSettings,
     googleConnection,
     users,
@@ -66,6 +73,9 @@ export default async function SettingsPage({
       });
       const anthropicIntegration = await db.integrationSetting.findUnique({
         where: { provider: "anthropic" },
+      });
+      const shortioIntegration = await db.integrationSetting.findUnique({
+        where: { provider: "shortio" },
       });
       const bufferSettings = await db.integrationSetting.findMany({
         where: { provider: { in: ["buffer_en", "buffer_fr", "buffer_fb", "buffer_li"] } },
@@ -87,6 +97,7 @@ export default async function SettingsPage({
         integration,
         makeIntegration,
         anthropicIntegration,
+        shortioIntegration,
         bufferSettings,
         googleConnection,
         users,
@@ -98,6 +109,7 @@ export default async function SettingsPage({
     });
   const hour12 = currentUser?.timeFormat === "HOUR12";
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
+  const shortioMetadata = (shortioIntegration?.metadata as ShortIoMetadata | null) ?? {};
   const bufferLabels: Record<BufferProvider, string> = {
     buffer_en: t.settings.bufferEnLabel,
     buffer_fr: t.settings.bufferFrLabel,
@@ -305,6 +317,23 @@ export default async function SettingsPage({
                   lastSyncedAt={makeIntegration?.lastSyncedAt?.toISOString() ?? null}
                   lastSyncStatus={makeIntegration?.lastSyncStatus ?? null}
                   lastSyncError={makeIntegration?.lastSyncError ?? null}
+                  lang={lang}
+                />
+              ) : (
+                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
+              )}
+            </div>
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.shortio.title}</h2>
+            <div className="mt-4">
+              {isAdmin ? (
+                <ShortIoForm
+                  connected={Boolean(shortioIntegration?.apiKeyEncrypted)}
+                  domain={shortioMetadata.domain ?? ""}
+                  domainFr={shortioMetadata.domainFr ?? ""}
                   lang={lang}
                 />
               ) : (

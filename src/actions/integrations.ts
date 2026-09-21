@@ -139,6 +139,34 @@ export async function saveAutoSyncTime(
   return { success: t.actions.scheduleSaved };
 }
 
+export async function saveShortIoApiKey(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await requireAdmin();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+  const apiKey = String(formData.get("apiKey") ?? "").trim();
+  const domain = String(formData.get("domain") ?? "").trim();
+  const domainFr = String(formData.get("domainFr") ?? "").trim();
+
+  if (!apiKey) return { error: t.shortio.keyRequired };
+  if (!domain) return { error: t.shortio.domainRequired };
+
+  const encrypted = await encryptSecret(apiKey);
+  const metadata = domainFr ? { domain, domainFr } : { domain };
+
+  await withScopedPrismaClient((db) =>
+    db.integrationSetting.upsert({
+      where: { provider: "shortio" },
+      update: { apiKeyEncrypted: encrypted, metadata },
+      create: { provider: "shortio", apiKeyEncrypted: encrypted, metadata },
+    })
+  );
+
+  revalidatePath("/settings");
+  return { success: t.shortio.keySaved };
+}
+
 // Google is a personal, per-user connection (unlike the org-wide
 // integrations above), so any signed-in user can disconnect their own —
 // no admin check.

@@ -11,6 +11,7 @@ import type { AffiliateProgramTab } from "@prisma/client";
 import { classifyAffiliateStatus, AFFILIATE_STATUS_STYLES } from "@/lib/affiliate-status";
 import PageHeader, { HeaderBreadcrumb } from "../../../page-header";
 import DeleteAffiliateProgramButton from "../delete-button";
+import CreateShortIoLinkButton from "../create-shortio-link-button";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -42,6 +43,7 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
   });
   if (!program) notFound();
 
+  const isAdmin = session?.user.role === "ADMIN";
   const bucket = classifyAffiliateStatus(program.affiliateStatus);
   const styles = AFFILIATE_STATUS_STYLES[bucket];
 
@@ -108,6 +110,9 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
                 <span className="text-ink">—</span>
               )}
             </p>
+            {isAdmin && program.destinationLink && (
+              <CreateShortIoLinkButton programId={program.id} variant="default" lang={lang} />
+            )}
           </div>
           <div>
             <p className={LABEL_CLASS}>{t.marketing.destinationLinkLabel}</p>
@@ -132,6 +137,7 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
                 <span className="text-ink">—</span>
               )}
             </p>
+            {isAdmin && program.frenchLink && <CreateShortIoLinkButton programId={program.id} variant="fr" lang={lang} />}
           </div>
           <div>
             <p className={LABEL_CLASS}>{t.marketing.frenchLinkLabel}</p>

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { getShortIoConfig, createShortIoLink } from "@/lib/shortio";
 
 const AffiliateProgramSchema = z.object({
   tab: z.enum(["AI_TOOLS", "TRAINING_PROGRAMS", "BUSINESS_OPPORTUNITIES"]),
@@ -98,4 +99,43 @@ export async function deleteAffiliateProgram(programId: string) {
   await withScopedPrismaClient((db) => db.affiliateProgram.delete({ where: { id: programId } }));
   revalidatePath("/marketing");
   redirect("/marketing");
+}
+
+// Admin-gated like the other integration-triggering actions (triggerSystemeIoSync,
+// triggerMakeSync) since it spends calls against a shared, paid Short.io account.
+export async function createAffiliateShortLink(programId: string, variant: "default" | "fr"): Promise<{ error?: string; shortURL?: string }> {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Only admins can create Short.io links" };
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const { program, config } = await withScopedPrismaClient(async (db) => {
+    const program = await db.affiliateProgram.findUnique({ where: { id: programId } });
+    const config = await getShortIoConfig(db);
+    return { program, config };
+  });
+  if (!program) return { error: "Program not found" };
+  if (!config) return { error: t.marketing.shortioNotConfigured };
+
+  const originalURL = variant === "fr" ? program.frenchLink : program.destinationLink;
+  if (!originalURL) return { error: t.marketing.shortioMissingSource };
+
+  const domain = variant === "fr" && config.domainFr ? config.domainFr : config.domain;
+
+  let shortURL: string;
+  try {
+    shortURL = await createShortIoLink({ apiKey: config.apiKey, domain }, originalURL);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Short.io request failed" };
+  }
+
+  await withScopedPrismaClient((db) =>
+    db.affiliateProgram.update({
+      where: { id: programId },
+      data: variant === "fr" ? { frenchSlug: shortURL } : { brandedLink: shortURL, shortioCreated: true },
+    })
+  );
+
+  revalidatePath("/marketing");
+  revalidatePath(`/marketing/programs/${programId}`);
+  return { shortURL };
 }

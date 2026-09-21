@@ -1,8 +1,45 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import PageHeader from "../../page-header";
+
+// Category options per tab. These mirror the groupings already used across
+// the real affiliate-programs data (which were pulled from the same source
+// as the andrewmurphy.online Services/Training/Business Opportunities
+// pages) — kept as suggestions in a combo-box (an <input> + <datalist>)
+// rather than a rigid <select>, so existing free-text values already in
+// the database (e.g. plain "AI") still display correctly.
+const TYPE_OPTIONS: Record<string, string[]> = {
+  AI_TOOLS: [
+    "AI Chat Assistants",
+    "AI Images & Design",
+    "AI Video Creation",
+    "AI-Powered SEO",
+    "Audio AI",
+    "Marketing & Automation",
+    "Social Media",
+    "Writing & Language Tools",
+  ],
+  TRAINING_PROGRAMS: ["AI & Business Programs", "Affiliate Marketing", "Social Media Programs"],
+  BUSINESS_OPPORTUNITIES: [
+    "Affiliate & Content Business",
+    "Buy / Sell Online Businesses",
+    "Digital Products",
+    "Dropshipping",
+    "Freelancing / Agencies",
+    "Print-on-Demand",
+  ],
+};
+
+const STATUS_OPTIONS = [
+  "Approved - affiliate link live",
+  "Pending approval",
+  "Partner/referral program to verify",
+  "Fallback active",
+  "Fallback active / No public affiliate program",
+  "Declined",
+];
 
 type AffiliateProgramFormValues = {
   tab?: string;
@@ -46,6 +83,7 @@ export default function AffiliateProgramForm({
   location: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  const [tab, setTab] = useState(defaultValues?.tab ?? defaultTab ?? "AI_TOOLS");
   const t = getDict(lang);
 
   const TABS = [
@@ -53,6 +91,7 @@ export default function AffiliateProgramForm({
     { value: "TRAINING_PROGRAMS", label: t.marketing.trainingProgramsTitle },
     { value: "BUSINESS_OPPORTUNITIES", label: t.marketing.businessOpportunitiesTitle },
   ];
+  const typeOptions = TYPE_OPTIONS[tab] ?? [];
 
   return (
     <form action={formAction} className="space-y-6">
@@ -83,7 +122,7 @@ export default function AffiliateProgramForm({
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.affiliateProgramsTitle}</label>
-            <select name="tab" defaultValue={defaultValues?.tab ?? defaultTab ?? "AI_TOOLS"} className={FIELD_CLASS}>
+            <select name="tab" value={tab} onChange={(e) => setTab(e.target.value)} className={FIELD_CLASS}>
               {TABS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -93,7 +132,12 @@ export default function AffiliateProgramForm({
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.colType}</label>
-            <input name="type" defaultValue={defaultValues?.type ?? ""} className={FIELD_CLASS} />
+            <input list="typeOptions" name="type" defaultValue={defaultValues?.type ?? ""} className={FIELD_CLASS} />
+            <datalist id="typeOptions">
+              {typeOptions.map((opt) => (
+                <option key={opt} value={opt} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.categoryLabel}</label>
@@ -101,7 +145,12 @@ export default function AffiliateProgramForm({
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.colStatus}</label>
-            <input name="affiliateStatus" defaultValue={defaultValues?.affiliateStatus ?? ""} className={FIELD_CLASS} />
+            <input list="statusOptions" name="affiliateStatus" defaultValue={defaultValues?.affiliateStatus ?? ""} className={FIELD_CLASS} />
+            <datalist id="statusOptions">
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt} value={opt} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.accountPlanLabel}</label>
