@@ -211,51 +211,6 @@ export async function deleteAffiliateProgram(programId: string) {
   redirect("/marketing");
 }
 
-// Google's public favicon endpoint — no key, no auth, and already the de
-// facto standard plenty of apps lean on for "give me a small icon for
-// this domain" without hosting a logo database of our own. destinationLink
-// is the program's real external site; brandedLink/frenchLink are only
-// this CRM's own go.andrewmurphy.online redirects and would just fetch
-// andrewmurphy.online's own favicon, so those are never used here.
-function faviconUrlForDomain(pageUrl: string): string | null {
-  try {
-    const hostname = new URL(pageUrl).hostname;
-    return `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(hostname)}`;
-  } catch {
-    return null;
-  }
-}
-
-// One-click backfill for programs missing an icon (each one only ever
-// gets one manually-uploaded via IconUploadField today) — run by hand
-// from the Marketing page since it's a data-quality pass, not something
-// that needs to happen on every save. Safe to re-run: only touches a
-// program whose iconUrl is still empty.
-export async function fetchMissingAffiliateIconsAction(): Promise<{ error?: string; success?: string; filled?: number }> {
-  const session = await auth();
-  if (!session || session.user.role !== "ADMIN") return { error: "Only admins can run this." };
-
-  return withScopedPrismaClient(async (db) => {
-    const programs = await db.affiliateProgram.findMany({
-      where: { OR: [{ iconUrl: null }, { iconUrl: "" }] },
-      select: { id: true, destinationLink: true, applyUrl: true },
-    });
-
-    let filled = 0;
-    for (const p of programs) {
-      const source = p.destinationLink || p.applyUrl;
-      if (!source) continue;
-      const icon = faviconUrlForDomain(source);
-      if (!icon) continue;
-      await db.affiliateProgram.update({ where: { id: p.id }, data: { iconUrl: icon } });
-      filled += 1;
-    }
-
-    revalidatePath("/marketing");
-    return { success: "done", filled };
-  });
-}
-
 // Admin-gated like the other integration-triggering actions (triggerSystemeIoSync,
 // triggerMakeSync) since it spends calls against a shared, paid Short.io account.
 export async function createAffiliateShortLink(programId: string, variant: "default" | "fr"): Promise<{ error?: string; shortURL?: string }> {

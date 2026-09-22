@@ -11,7 +11,6 @@ import { statusGroupOf, statusStyle, type AffiliateStatusGroup } from "@/lib/aff
 import PageHeader from "../page-header";
 import Card, { type CardColor } from "@/components/section-card";
 import SyncShortIoButton from "./programs/sync-shortio-button";
-import FetchIconsButton from "./programs/fetch-icons-button";
 import AffiliateProgramFilters from "./programs/filters";
 
 type AffiliateProgramRow = {
@@ -162,14 +161,17 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   // property access on the raw proxy opens a brand-new connection, and
   // the previous Promise.all opened two of them at once, which is worse
   // than sequential for Cloudflare's Error 1102 resource limit).
-  const { affiliatePrograms, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { affiliatePrograms, tabCounts, hour12 } = await withScopedPrismaClient(async (db) => {
     const affiliatePrograms = await db.affiliateProgram.findMany({
       where,
       orderBy: { name: "asc" },
       include: { emailLinks: { orderBy: { messageDate: "desc" } } },
     });
+    // Unfiltered by category/q so the pills always reflect true totals,
+    // not just what the current filter happens to show.
+    const tabCounts = await db.affiliateProgram.groupBy({ by: ["tab"], _count: { _all: true } });
     const hour12 = await getHour12(session, db);
-    return { affiliatePrograms, hour12 };
+    return { affiliatePrograms, tabCounts, hour12 };
   });
 
   const grouped: Record<AffiliateStatusGroup, AffiliateProgramRow[]> = { ACTIVE: [], PENDING: [], NO_PROGRAM_OR_DECLINED: [] };
@@ -177,7 +179,13 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     grouped[statusGroupOf(program.affiliateStatus)].push(program);
   }
 
-  const categoryOptions = TAB_TITLES.map((section) => ({ value: section.tab, label: tabTitle(section.tab, t) }));
+  const countByTab = new Map(tabCounts.map((row) => [row.tab, row._count._all]));
+  const categoryOptions = TAB_TITLES.map((section) => ({
+    value: section.tab,
+    label: tabTitle(section.tab, t),
+    count: countByTab.get(section.tab) ?? 0,
+  }));
+  const totalCount = tabCounts.reduce((sum, row) => sum + row._count._all, 0);
 
   return (
     <div className="space-y-6">
@@ -190,7 +198,6 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           session?.user.role === "ADMIN" ? (
             <div className="flex flex-wrap items-start gap-2">
               <SyncShortIoButton lang={lang} />
-              <FetchIconsButton lang={lang} />
             </div>
           ) : undefined
         }
@@ -200,6 +207,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         q={q ?? ""}
         category={category}
         categoryOptions={categoryOptions}
+        allCategoriesCount={totalCount}
         allCategoriesLabel={t.marketing.filterAll}
         searchPlaceholder={t.marketing.nameFilterPlaceholder}
         trailing={
