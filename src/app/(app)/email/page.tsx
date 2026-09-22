@@ -7,6 +7,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import EmailScreeningView from "./email-screening-view";
+import { GmailIcon, IonosIcon } from "./mail-brand-icons";
 
 function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
@@ -84,16 +85,18 @@ export default async function EmailPage() {
             href="https://mail.google.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+            className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
           >
+            <GmailIcon className="h-4 w-4 shrink-0" />
             {t.dashboard.openInGmail}
           </a>
           <a
             href="https://mail.ionos.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+            className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
           >
+            <IonosIcon className="h-4 w-4 shrink-0" />
             {t.dashboard.openIonosWebmail}
           </a>
         </>

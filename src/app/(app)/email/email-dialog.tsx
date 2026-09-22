@@ -6,6 +6,7 @@ import { formatClockTime } from "@/lib/calendar-time";
 import { fetchEmailDetail, type EmailDetail } from "@/actions/email-messages";
 import EmailBodyFrame from "./email-body-frame";
 import type { ComposeMode } from "./email-compose-dialog";
+import { GmailIcon, IonosIcon } from "./mail-brand-icons";
 
 export interface EmailDialogLabels {
   loading: string;
@@ -181,7 +182,13 @@ export default function EmailDialog({
         </div>
 
         <div className="flex shrink-0 items-center justify-between border-t border-card-border px-5 py-3">
-          <a href={target.link} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-700 hover:underline">
+          <a
+            href={target.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:underline"
+          >
+            {isIonos ? <IonosIcon className="h-3.5 w-3.5 shrink-0" /> : <GmailIcon className="h-3.5 w-3.5 shrink-0" />}
             {isIonos ? labels.openWebmail : labels.openInGmail} ↗
           </a>
           <div className="flex items-center gap-2">
