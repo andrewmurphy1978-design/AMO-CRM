@@ -104,27 +104,30 @@ export default async function CalendarAppPage() {
     noResults: t.linkPicker.noResults,
   };
 
+  const openInCalendarButton = (
+    <Link href="/calendar" className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm">
+      {t.dashboard.openInCalendar}
+    </Link>
+  );
+
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={t.calendarApp.title}
-        hour12={hour12}
-        dateLocale={dateLocale}
-        location={t.dashboard.myLocation}
-        actions={
-          <Link href="/calendar" className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm">
-            {t.dashboard.openInCalendar}
-          </Link>
-        }
-      />
-
       {!googleAccessToken ? (
-        <p className="text-sm text-soft">
-          {t.dashboard.calendarNotConnected}{" "}
-          <Link href="/settings" className="font-semibold text-emerald-700 underline">
-            {t.dashboard.emailConnectInSettings}
-          </Link>
-        </p>
+        <>
+          <PageHeader
+            title={t.calendarApp.title}
+            hour12={hour12}
+            dateLocale={dateLocale}
+            location={t.dashboard.myLocation}
+            actions={openInCalendarButton}
+          />
+          <p className="text-sm text-soft">
+            {t.dashboard.calendarNotConnected}{" "}
+            <Link href="/settings" className="font-semibold text-emerald-700 underline">
+              {t.dashboard.emailConnectInSettings}
+            </Link>
+          </p>
+        </>
       ) : (
         <CalendarShell
           initialEvents={events ?? []}
@@ -136,6 +139,11 @@ export default async function CalendarAppPage() {
           hour12={hour12}
           dateLocale={dateLocale}
           intlLocale={intlLocale}
+          title={t.calendarApp.title}
+          location={t.dashboard.myLocation}
+          headerActions={openInCalendarButton}
+          refreshLabel={t.dashboard.refresh}
+          refreshingLabel={t.dashboard.refreshing}
           labels={{
             today: t.calendarApp.today,
             addEvent: t.calendarApp.addEvent,

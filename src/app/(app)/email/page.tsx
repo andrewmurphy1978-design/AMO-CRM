@@ -6,7 +6,6 @@ import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
-import PageHeader from "../page-header";
 import EmailScreeningView from "./email-screening-view";
 
 function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
@@ -67,43 +66,38 @@ export default async function EmailPage() {
   const programOptions = affiliatePrograms.map((p) => ({ id: p.id, label: p.name }));
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t.email.title}
-        hour12={hour12}
-        dateLocale={dateLocale}
-        location={t.dashboard.myLocation}
-        actions={
-          <>
-            <a
-              href="https://mail.google.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
-            >
-              {t.dashboard.openInGmail}
-            </a>
-            <a
-              href="https://mail.ionos.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
-            >
-              {t.dashboard.openIonosWebmail}
-            </a>
-          </>
-        }
-      />
-      <EmailScreeningView
-        initialData={initialData}
-        connected={connected}
-        contactOptions={contactOptions}
-        projectOptions={projectOptions}
-        taskOptions={taskOptions}
-        programOptions={programOptions}
-        hour12={hour12}
-        lang={lang}
-      />
-    </div>
+    <EmailScreeningView
+      initialData={initialData}
+      connected={connected}
+      contactOptions={contactOptions}
+      projectOptions={projectOptions}
+      taskOptions={taskOptions}
+      programOptions={programOptions}
+      hour12={hour12}
+      lang={lang}
+      title={t.email.title}
+      dateLocale={dateLocale}
+      location={t.dashboard.myLocation}
+      headerActions={
+        <>
+          <a
+            href="https://mail.google.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+          >
+            {t.dashboard.openInGmail}
+          </a>
+          <a
+            href="https://mail.ionos.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+          >
+            {t.dashboard.openIonosWebmail}
+          </a>
+        </>
+      }
+    />
   );
 }

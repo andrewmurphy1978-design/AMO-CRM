@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import type { Locale } from "date-fns";
 import clsx from "@/lib/clsx";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { isOwnDomainEmail } from "@/lib/email-domain";
@@ -9,6 +10,7 @@ import { isStale } from "@/lib/staleness";
 import type { EmailSummary } from "@/lib/google";
 import type { EmailCategory } from "@/lib/email-classifier";
 import type { EmailLinkInfo, EmailScreeningPayload } from "@/lib/email-inbox";
+import PageHeader from "../page-header";
 import RefreshButton from "../refresh-button";
 import EmailLinkPicker, { type LinkOption } from "./email-link-picker";
 import EmailTime from "./email-time";
@@ -271,6 +273,10 @@ export default function EmailScreeningView({
   programOptions,
   hour12,
   lang,
+  title,
+  dateLocale,
+  location,
+  headerActions,
 }: {
   initialData: EmailScreeningPayload | null;
   connected: boolean;
@@ -280,6 +286,10 @@ export default function EmailScreeningView({
   programOptions: LinkOption[];
   hour12: boolean;
   lang: Lang;
+  title: string;
+  dateLocale: Locale | undefined;
+  location: string;
+  headerActions?: ReactNode;
 }) {
   const t = getDict(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
@@ -317,6 +327,27 @@ export default function EmailScreeningView({
     setLoading(true);
     await runScreening();
   }
+
+  const header = (
+    <PageHeader
+      title={title}
+      hour12={hour12}
+      dateLocale={dateLocale}
+      location={location}
+      actions={
+        <>
+          {headerActions}
+          {loading && (
+            <span className="inline-flex items-center gap-1.5 text-xs text-amo-white/80">
+              <Spinner className="h-3.5 w-3.5" />
+              {t.email.screening}
+            </span>
+          )}
+          <RefreshButton onClick={refresh} loading={loading} label={t.email.refresh} loadingLabel={t.email.refreshing} variant="header" />
+        </>
+      }
+    />
+  );
 
   useEffect(() => {
     // Runs once on mount: either there's no cache yet, or what's cached is
@@ -403,7 +434,8 @@ export default function EmailScreeningView({
 
   if (!connected) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-6">
+        {header}
         <p className="text-sm text-soft">
           {t.email.notConnected}{" "}
           <Link href="/settings" className="font-semibold text-emerald-700 underline">
@@ -416,9 +448,12 @@ export default function EmailScreeningView({
 
   if (loading && !data) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-card-border bg-card-bg px-5 py-8 text-sm text-soft shadow-sm">
-        <Spinner className="h-5 w-5" />
-        {t.email.screening}
+      <div className="space-y-6">
+        {header}
+        <div className="flex items-center gap-3 rounded-2xl border border-card-border bg-card-bg px-5 py-8 text-sm text-soft shadow-sm">
+          <Spinner className="h-5 w-5" />
+          {t.email.screening}
+        </div>
       </div>
     );
   }
@@ -589,16 +624,8 @@ export default function EmailScreeningView({
   ];
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-end gap-3">
-        {loading && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-soft">
-            <Spinner className="h-3.5 w-3.5" />
-            {t.email.screening}
-          </span>
-        )}
-        <RefreshButton onClick={refresh} loading={loading} label={t.email.refresh} loadingLabel={t.email.refreshing} />
-      </div>
+    <div className="space-y-6">
+      {header}
 
       {nothingToShow && <p className="text-sm text-soft">{t.email.noMessages}</p>}
 

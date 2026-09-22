@@ -61,7 +61,19 @@ function AffiliateProgramCard({
         <p className="text-sm text-soft">{t.marketing.noAffiliateProgramsYet}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-card-border text-sm">
+          {/* table-fixed + a shared colgroup (same widths in every card's own
+              table) is what actually keeps columns aligned card to card —
+              the default auto layout sizes each table's columns off its own
+              content, so two cards with different data drift out of sync. */}
+          <table className="w-full table-fixed divide-y divide-card-border text-sm">
+            <colgroup>
+              <col className="w-[26%]" />
+              <col className="w-[18%]" />
+              <col className="w-[14%]" />
+              <col className="w-[20%]" />
+              <col className="w-[10%]" />
+              <col className="w-[12%]" />
+            </colgroup>
             <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
               <tr>
                 <th className="py-2 pr-4">{t.marketing.colProgram}</th>
@@ -77,7 +89,7 @@ function AffiliateProgramCard({
                 const styles = statusStyle(p.affiliateStatus);
                 return (
                   <tr key={p.id} id={p.id} className={`scroll-mt-24 ${styles.row} hover:brightness-95`}>
-                    <td className={`py-2 pr-4 pl-3 align-top font-medium border-l-4 ${styles.border}`}>
+                    <td className={`truncate py-2 pr-4 pl-3 align-top font-medium border-l-4 ${styles.border}`}>
                       <Link href={`/marketing/programs/${p.id}`} className="text-ink hover:underline">
                         {p.name}
                       </Link>
@@ -85,16 +97,16 @@ function AffiliateProgramCard({
                         <span className="ml-2 text-xs font-normal text-emerald-700">{t.marketing.linkedEmails(p.emailLinks.length)}</span>
                       )}
                     </td>
-                    <td className="py-2 pr-4 align-top text-ink/70">{tabTitle(p.tab, t)}</td>
-                    <td className="py-2 pr-4 align-top text-ink/70">{[p.type, p.category].filter(Boolean).join(" · ") || "—"}</td>
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">{tabTitle(p.tab, t)}</td>
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">{[p.type, p.category].filter(Boolean).join(" · ") || "—"}</td>
                     <td className="py-2 pr-4 align-top">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${styles.badge}`}>
-                        <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
-                        {p.affiliateStatus || "—"}
+                      <span className={`inline-flex max-w-full items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-xs font-medium ${styles.badge}`}>
+                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${styles.dot}`} />
+                        <span className="truncate">{p.affiliateStatus || "—"}</span>
                       </span>
                     </td>
-                    <td className="py-2 pr-4 align-top text-ink/70">{p.followUpNeeded ? t.marketing.followUpYes : t.marketing.followUpNo}</td>
-                    <td className="py-2 pr-4 align-top">
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">{p.followUpNeeded ? t.marketing.followUpYes : t.marketing.followUpNo}</td>
+                    <td className="truncate py-2 pr-4 align-top">
                       {p.brandedLink ? (
                         <a href={p.brandedLink} target="_blank" rel="noopener noreferrer" className="text-amo-lime hover:underline">
                           {t.marketing.colLink}

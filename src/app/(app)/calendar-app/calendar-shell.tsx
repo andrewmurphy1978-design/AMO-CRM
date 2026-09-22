@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   addDays,
   addMonths,
@@ -14,6 +14,8 @@ import {
 import type { CalendarEventSummary } from "@/lib/google";
 import LinkDialog, { type LinkOption, type LinkDialogLabels, type LinkValues } from "../link-dialog";
 import { saveCalendarEventLink } from "@/actions/links";
+import PageHeader from "../page-header";
+import RefreshButton from "../refresh-button";
 import DayGridView from "./day-grid-view";
 import MonthView from "./month-view";
 import TableView from "./table-view";
@@ -105,6 +107,11 @@ export default function CalendarShell({
   dateLocale,
   intlLocale,
   labels,
+  title,
+  location,
+  headerActions,
+  refreshLabel,
+  refreshingLabel,
 }: {
   initialEvents: CalendarEventSummary[];
   initialLinks: Record<string, EventLinkValues>;
@@ -116,6 +123,11 @@ export default function CalendarShell({
   dateLocale: Locale | undefined;
   intlLocale: string;
   labels: CalendarShellLabels;
+  title: string;
+  location: string;
+  headerActions?: ReactNode;
+  refreshLabel: string;
+  refreshingLabel: string;
 }) {
   const [view, setView] = useState<ViewMode>("week");
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
@@ -155,32 +167,39 @@ export default function CalendarShell({
   const projectById = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p.label])), [projects]);
   const taskById = useMemo(() => Object.fromEntries(tasks.map((t) => [t.id, t.label])), [tasks]);
 
+  // Guards against an older request's response landing after a newer one
+  // (e.g. clicking Refresh right after switching views) and clobbering it.
+  const requestIdRef = useRef(0);
+
+  const fetchEvents = useCallback(async (start: Date, end: Date) => {
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() });
+      const res = await fetch(`/api/calendar/events?${params.toString()}`);
+      if (!res.ok || requestId !== requestIdRef.current) return;
+      const data = (await res.json()) as { events?: CalendarEventSummary[]; links?: Record<string, EventLinkValues> };
+      setEvents(data.events ?? []);
+      setLinks(data.links ?? {});
+    } catch {
+      // Keep showing the last known events rather than clearing them.
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
-    let cancelled = false;
-    setLoading(true);
-    const params = new URLSearchParams({ start: rangeStart.toISOString(), end: rangeEnd.toISOString() });
-    fetch(`/api/calendar/events?${params.toString()}`)
-      .then((res) => (res.ok ? (res.json() as Promise<{ events?: CalendarEventSummary[]; links?: Record<string, EventLinkValues> }>) : null))
-      .then((data) => {
-        if (cancelled || !data) return;
-        setEvents(data.events ?? []);
-        setLinks(data.links ?? {});
-      })
-      .catch(() => {
-        // Keep showing the last known events rather than clearing them.
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    fetchEvents(rangeStart, rangeEnd);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, rangeStart.getTime(), rangeEnd.getTime()]);
+
+  function refresh() {
+    fetchEvents(rangeStart, rangeEnd);
+  }
 
   const eventsByDay = days.map((day) => events.filter((e) => e.start && isSameDay(new Date(e.start), day)));
 
@@ -217,14 +236,27 @@ export default function CalendarShell({
   };
 
   return (
-    // Height is measured against the container's real position (see the
-    // effect above) rather than assumed — a hardcoded calc() silently drifts
-    // whenever the surrounding page chrome changes and leaves a gap under
-    // the grid. min-h-0 stays load-bearing on every flex link below: flex
-    // items default to min-height:auto, refusing to shrink below their
-    // content's natural size, which is what caused the grid to grow the
-    // whole page instead of scrolling internally before this was added.
-    <div ref={containerRef} className="flex flex-col" style={{ height }}>
+    <>
+      <PageHeader
+        title={title}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        location={location}
+        actions={
+          <>
+            {headerActions}
+            <RefreshButton onClick={refresh} loading={loading} label={refreshLabel} loadingLabel={refreshingLabel} variant="header" />
+          </>
+        }
+      />
+      {/* Height is measured against the container's real position (see the
+          effect above) rather than assumed — a hardcoded calc() silently drifts
+          whenever the surrounding page chrome changes and leaves a gap under
+          the grid. min-h-0 stays load-bearing on every flex link below: flex
+          items default to min-height:auto, refusing to shrink below their
+          content's natural size, which is what caused the grid to grow the
+          whole page instead of scrolling internally before this was added. */}
+      <div ref={containerRef} className="flex flex-col" style={{ height }}>
       <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -349,6 +381,7 @@ export default function CalendarShell({
         onSave={handleSaveLink}
         labels={labels.linkDialog}
       />
-    </div>
+      </div>
+    </>
   );
 }

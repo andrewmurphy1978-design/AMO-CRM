@@ -12,6 +12,7 @@ import { countryFullName } from "@/lib/country-flag";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import ContactFilters from "./filters";
+import ScrollableList from "./scrollable-list";
 
 const STAGE_COLORS: Record<string, string> = {
   LEAD: "bg-emerald-50 text-emerald-700",
@@ -137,6 +138,7 @@ export default async function ContactsPage({
         hour12={hour12}
         dateLocale={dateLocale}
         location={t.dashboard.myLocation}
+        centerActions
         actions={
           <Link href="/contacts/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
             {t.contacts.newContact}
@@ -162,7 +164,7 @@ export default async function ContactsPage({
       />
 
       {/* Mobile: stacked cards instead of a cramped multi-column table. */}
-      <div className="max-h-[calc(100vh-260px)] divide-y divide-card-border overflow-auto rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
+      <ScrollableList className="divide-y divide-card-border rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
         {contacts.map((contact, i) => {
           const languageTags = contact.tags.filter((ct) => isLanguageTag(ct.tag.name));
           const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
@@ -208,12 +210,13 @@ export default async function ContactsPage({
           );
         })}
         {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-soft">{t.contacts.noContactsFound}</p>}
-      </div>
+      </ScrollableList>
 
-      {/* Desktop/tablet: full table. Fixed max-height with its own scrollbar
-          (not the page) so the sticky header row stays visible while
-          scrolling through contacts. */}
-      <div className="hidden max-h-[calc(100vh-260px)] overflow-auto rounded-lg border border-card-border bg-card-bg shadow-sm sm:block">
+      {/* Desktop/tablet: full table. Its own scrollbar (not the page's)
+          reaches to the bottom of the screen, so the sticky header row
+          stays visible while scrolling through contacts. */}
+      <ScrollableList className="hidden rounded-lg border border-card-border bg-card-bg shadow-sm sm:block">
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-card-border text-sm">
           <thead
             className="sticky top-0 z-10 text-left text-xs font-medium uppercase tracking-wide"
@@ -305,7 +308,8 @@ export default async function ContactsPage({
             )}
           </tbody>
         </table>
-      </div>
+        </div>
+      </ScrollableList>
     </div>
   );
 }

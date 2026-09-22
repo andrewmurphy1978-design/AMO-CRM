@@ -73,7 +73,7 @@ export default function AppShell({
             </button>
           </form>
         </header>
-        <main className="relative z-10 flex-1 p-4 sm:p-8">{children}</main>
+        <main className="relative z-10 flex-1 overflow-x-hidden p-4 sm:p-8">{children}</main>
       </div>
     </div>
   );

@@ -7,19 +7,23 @@ export default function RefreshButton({
   loading,
   label,
   loadingLabel,
+  variant = "default",
 }: {
   onClick: () => void;
   loading: boolean;
   label: string;
   loadingLabel: string;
+  // "header" is for placement on the dark green PageHeader bar, where the
+  // default's soft-gray text (meant for light dashboard cards) is nearly
+  // invisible — matches the header's other gold/blue btn-primary actions.
+  variant?: "default" | "header";
 }) {
+  const className =
+    variant === "header"
+      ? "btn-primary inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm disabled:opacity-60 sm:text-sm"
+      : "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-soft transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-60";
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={loading}
-      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-soft transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-60"
-    >
+    <button type="button" onClick={onClick} disabled={loading} className={className}>
       <svg
         viewBox="0 0 24 24"
         fill="none"

@@ -44,6 +44,7 @@ export default function PageHeader({
   location,
   logoUrl,
   actions,
+  centerActions,
 }: {
   title: ReactNode;
   hour12: boolean;
@@ -51,6 +52,13 @@ export default function PageHeader({
   location: string;
   logoUrl?: string;
   actions?: ReactNode;
+  // Centers `actions` over the header bar instead of the default in-flow
+  // placement right after the title. Only safe for pages with a short,
+  // fixed title (e.g. "Contacts") — a long dynamic title (a breadcrumb
+  // with a record name in it) can grow into a centered button, which is
+  // exactly the overlap bug the default in-flow placement below exists
+  // to prevent.
+  centerActions?: boolean;
 }) {
   if (logoUrl) {
     return (
@@ -71,7 +79,12 @@ export default function PageHeader({
   return (
     <header className="sticky top-0 z-20 -mx-4 -mt-4 flex items-center gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
       <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:text-2xl">{title}</h1>
-      {actions && <div className="flex shrink-0 items-center gap-3">{actions}</div>}
+      {actions &&
+        (centerActions ? (
+          <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-3">{actions}</div>
+        ) : (
+          <div className="flex shrink-0 items-center gap-3">{actions}</div>
+        ))}
       <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={location} />
     </header>
   );
