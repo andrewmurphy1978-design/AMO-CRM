@@ -4,6 +4,7 @@ import { getGoogleConnection } from "@/lib/google";
 import { getIonosMailbox } from "@/lib/mail/ionos";
 import { disconnectGoogleAccount } from "@/actions/integrations";
 import GoogleContactsImportForm from "./google-contacts-import-form";
+import ContactDataFixesForm from "./contact-data-fixes-form";
 import IonosMailboxForm from "./ionos-mailbox-form";
 import SystemeIoForm from "./systeme-io-form";
 import AnthropicKeyForm from "./anthropic-key-form";
@@ -217,6 +218,16 @@ export default async function SettingsPage({
             </div>
             <GoogleContactsImportForm connected={Boolean(googleConnection)} lang={lang} />
           </section>
+
+          {isAdmin && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.contactDataFixes.title}</h2>
+              <div className="mt-4">
+                <ContactDataFixesForm lang={lang} />
+              </div>
+            </section>
+          )}
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />

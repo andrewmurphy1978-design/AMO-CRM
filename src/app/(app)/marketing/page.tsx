@@ -11,6 +11,7 @@ import { statusGroupOf, statusStyle, type AffiliateStatusGroup } from "@/lib/aff
 import PageHeader from "../page-header";
 import Card, { type CardColor } from "@/components/section-card";
 import SyncShortIoButton from "./programs/sync-shortio-button";
+import FetchIconsButton from "./programs/fetch-icons-button";
 import AffiliateProgramFilters from "./programs/filters";
 
 type AffiliateProgramRow = {
@@ -185,7 +186,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         hour12={hour12}
         dateLocale={dateLocale}
         location={t.dashboard.myLocation}
-        actions={session?.user.role === "ADMIN" ? <SyncShortIoButton lang={lang} /> : undefined}
+        actions={
+          session?.user.role === "ADMIN" ? (
+            <div className="flex flex-wrap items-start gap-2">
+              <SyncShortIoButton lang={lang} />
+              <FetchIconsButton lang={lang} />
+            </div>
+          ) : undefined
+        }
       />
 
       <AffiliateProgramFilters

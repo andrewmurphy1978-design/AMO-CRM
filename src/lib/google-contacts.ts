@@ -264,12 +264,25 @@ const PERSON_FIELDS = [
   "memberships",
 ].join(",");
 
+// Android/Samsung auto-creates a "USER_CONTACT_GROUP" every time contacts
+// are restored from a device backup (e.g. "Restaurés à partir de
+// l'appareil Samsung - SM-G955W", or the English "Restored from ...
+// device") — Google's groupType field can't tell this apart from a real
+// user-made label like "Family", so it's filtered out by name instead.
+// This is noise, not an organizational signal: it says which phone a
+// contact was once backed up from, not anything about the contact.
+function isDeviceRestoreGroupName(name: string): boolean {
+  return /restaur.*appareil|restored from.*device/i.test(name);
+}
+
 // contactGroups.list has no metadata to say "system vs. user-created" per
 // row beyond groupType — fetched once per import (a handful of requests
 // at most; nobody has thousands of contact group labels) and turned into
 // a resourceName -> name map, filtered to the labels the user actually
 // created (Family, Friends, etc.) rather than Google's built-in "My
-// Contacts"/"Starred"/"Blocked" groups, which carry no useful signal here.
+// Contacts"/"Starred"/"Blocked" groups (or an Android-generated device-
+// restore label — see isDeviceRestoreGroupName), which carry no useful
+// signal here.
 async function listUserContactGroupNames(accessToken: string): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   let pageToken: string | undefined;
@@ -284,7 +297,7 @@ async function listUserContactGroupNames(accessToken: string): Promise<Map<strin
     if (!res.ok) break; // group labels are a nice-to-have — never fail the whole import over this
     const data = (await res.json()) as RawContactGroupsResponse;
     for (const group of data.contactGroups ?? []) {
-      if (group.groupType === "USER_CONTACT_GROUP" && group.resourceName && group.name) {
+      if (group.groupType === "USER_CONTACT_GROUP" && group.resourceName && group.name && !isDeviceRestoreGroupName(group.name)) {
         result.set(group.resourceName, group.name);
       }
     }

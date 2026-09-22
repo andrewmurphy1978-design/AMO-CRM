@@ -723,6 +723,9 @@ export const dictionaries = {
       shortioSyncFailed: "Short.io sync failed",
       shortioStatsSyncedCount: (n: number) => (n > 0 ? ` Pulled stats for ${n} link${n === 1 ? "" : "s"}.` : ""),
       shortioStatsErrorBanner: (message: string) => `Links matched, but pulling stats failed: ${message}`,
+      fetchIconsButton: "Fetch missing icons",
+      fetchIconsFetching: "Fetching…",
+      fetchIconsResult: (n: number) => `Filled in ${n} icon${n === 1 ? "" : "s"}.`,
       programUpdated: "Program updated.",
       programUpdatedShortioSynced: " Short.io updated too.",
       programUpdatedShortioWarning: (message: string) => ` Short.io update failed: ${message}`,
@@ -856,6 +859,15 @@ export const dictionaries = {
       notConnected: "Connect Google first.",
       resultSummary: (imported: number, linked: number, enriched: number, total: number) =>
         `Imported ${imported} new contact${imported === 1 ? "" : "s"}, linked ${linked} existing contact${linked === 1 ? "" : "s"}, filled in new details on ${enriched} already-imported contact${enriched === 1 ? "" : "s"} (${total} checked).`,
+    },
+    contactDataFixes: {
+      title: "Contact data cleanup",
+      description:
+        "Adds a missing +1 to any phone number stored without a country code (safe here — every contact on file is North American), and fills in a still-empty time zone from the first phone number's area code. Never touches a number or time zone already set; safe to run more than once.",
+      fixButton: "Fix phone numbers & time zones",
+      fixing: "Fixing…",
+      resultSummary: (phoneNumbersFixed: number, timeZonesFilled: number) =>
+        `Added a country code to ${phoneNumbersFixed} phone number${phoneNumbersFixed === 1 ? "" : "s"}, filled in ${timeZonesFilled} time zone${timeZonesFilled === 1 ? "" : "s"}.`,
     },
     personal: {
       title: "Personal",
@@ -1864,6 +1876,9 @@ export const dictionaries = {
       shortioSyncFailed: "Échec de la synchronisation Short.io",
       shortioStatsSyncedCount: (n: number) => (n > 0 ? ` Statistiques récupérées pour ${n} lien${n === 1 ? "" : "s"}.` : ""),
       shortioStatsErrorBanner: (message: string) => `Liens associés, mais la récupération des statistiques a échoué : ${message}`,
+      fetchIconsButton: "Récupérer les icônes manquantes",
+      fetchIconsFetching: "Récupération…",
+      fetchIconsResult: (n: number) => `${n} icône${n === 1 ? "" : "s"} ajoutée${n === 1 ? "" : "s"}.`,
       programUpdated: "Programme mis à jour.",
       programUpdatedShortioSynced: " Short.io également mis à jour.",
       programUpdatedShortioWarning: (message: string) => ` La mise à jour de Short.io a échoué : ${message}`,
@@ -1999,6 +2014,15 @@ export const dictionaries = {
       notConnected: "Connectez d'abord Google.",
       resultSummary: (imported: number, linked: number, enriched: number, total: number) =>
         `${imported} nouveau${imported === 1 ? "" : "x"} contact${imported === 1 ? "" : "s"} importé${imported === 1 ? "" : "s"}, ${linked} contact${linked === 1 ? "" : "s"} existant${linked === 1 ? "" : "s"} lié${linked === 1 ? "" : "s"}, ${enriched} contact${enriched === 1 ? "" : "s"} déjà importé${enriched === 1 ? "" : "s"} complété${enriched === 1 ? "" : "s"} (${total} vérifié${total === 1 ? "" : "s"}).`,
+    },
+    contactDataFixes: {
+      title: "Nettoyage des données de contact",
+      description:
+        "Ajoute un +1 manquant à tout numéro de téléphone enregistré sans indicatif de pays (sans risque ici — tous les contacts sont nord-américains), et remplit un fuseau horaire encore vide à partir de l'indicatif régional du premier numéro de téléphone. Ne touche jamais à un numéro ou un fuseau horaire déjà défini; sans risque à relancer.",
+      fixButton: "Corriger les numéros et fuseaux horaires",
+      fixing: "Correction…",
+      resultSummary: (phoneNumbersFixed: number, timeZonesFilled: number) =>
+        `Indicatif de pays ajouté à ${phoneNumbersFixed} numéro${phoneNumbersFixed === 1 ? "" : "s"} de téléphone, ${timeZonesFilled} fuseau${timeZonesFilled === 1 ? "" : "x"} horaire${timeZonesFilled === 1 ? "" : "s"} rempli${timeZonesFilled === 1 ? "" : "s"}.`,
     },
     personal: {
       title: "Personnel",

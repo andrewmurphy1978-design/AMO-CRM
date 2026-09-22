@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getValidAccessToken } from "@/lib/google";
 import { listGoogleContacts, type GoogleContactSummary } from "@/lib/google-contacts";
+import { getTimezoneFromAreaCode } from "@/lib/timezone";
 
 export interface ImportGoogleContactsResult {
   error?: string;
@@ -51,6 +52,20 @@ async function ensureCustomFieldDefinition(db: PrismaClient, slug: string, label
   await db.customFieldDefinition.upsert({ where: { slug }, update: {}, create: { slug, label, type: "text" } });
 }
 
+// Pairs with the `locale: "fr"` default set on a freshly created Google
+// Contacts import (see its comment) — the same existing "Français"/
+// "English" language tags every systeme.io contact already uses (see
+// isLanguageTag in tag-colors.ts), so a new personal contact shows up in
+// the Contacts list the same way a French-speaking systeme.io lead does.
+async function assignFrenchTag(db: PrismaClient, contactId: string): Promise<void> {
+  const tag = await db.tag.upsert({ where: { name: "Français" }, update: {}, create: { name: "Français" } });
+  await db.contactTag.upsert({
+    where: { contactId_tagId: { contactId, tagId: tag.id } },
+    update: {},
+    create: { contactId, tagId: tag.id },
+  });
+}
+
 interface ExistingContactRow {
   id: string;
   address: string | null;
@@ -65,6 +80,7 @@ interface ExistingContactRow {
   avatarUrl: string | null;
   website: string | null;
   notes: string | null;
+  timeZone: string | null;
 }
 
 // Everything beyond the identity fields (name/email/phone, set once at
@@ -98,6 +114,14 @@ async function enrichContact(db: PrismaClient, contactId: string, existing: Exis
   const primaryWebsiteUsed = Boolean(existing?.website);
   if (gc.websites[0] && !existing?.website) scalarUpdates.website = gc.websites[0];
   if (gc.notes && !existing?.notes) scalarUpdates.notes = gc.notes;
+  // Google's own addresses (handled above) are the better signal when
+  // present, but a personal contact frequently has a phone with no
+  // address on file at all — the area code is often the only regional
+  // clue available (see getTimezoneFromAreaCode's comment).
+  if (!existing?.timeZone) {
+    const tz = getTimezoneFromAreaCode(gc.phones[0]);
+    if (tz) scalarUpdates.timeZone = tz;
+  }
 
   if (Object.keys(scalarUpdates).length > 0) {
     await db.contact.update({ where: { id: contactId }, data: scalarUpdates });
@@ -255,6 +279,7 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
         avatarUrl: true,
         website: true,
         notes: true,
+        timeZone: true,
       },
     });
 
@@ -340,11 +365,18 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
             extraPhones: restPhones,
             firstName,
             lastName,
+            // This CRM's own contacts are overwhelmingly Quebec-based, and a
+            // personal Google Contacts import (as opposed to a systeme.io
+            // lead, which already carries its own real locale) has no other
+            // language signal at all — French is the correct default here,
+            // never applied to a contact matched to an existing one below.
+            locale: "fr",
             stage: "PERSONAL",
             source: "google_contacts",
             googleContactId: gc.resourceName,
           },
         });
+        await assignFrenchTag(db, created.id);
         await enrichContact(db, created.id, null, gc);
         if (firstEmail) seenEmailsThisRun.add(firstEmail.toLowerCase());
         imported += 1;
