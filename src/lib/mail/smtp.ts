@@ -73,25 +73,38 @@ async function ehlo(sock: MailSocket, domain: string): Promise<string[]> {
   return response.lines.map((l) => l.toUpperCase());
 }
 
-async function authenticate(sock: MailSocket, capabilities: string[], username: string, password: string): Promise<void> {
-  const authLine = capabilities.find((c) => c.startsWith("AUTH "));
-  const mechanisms = authLine ? authLine.slice(5).split(/\s+/) : [];
-
-  if (mechanisms.includes("PLAIN")) {
-    await sock.write(`AUTH PLAIN ${base64(`\u0000${username}\u0000${password}`)}\r\n`);
-    expect(await readResponse(sock), [235], "AUTH PLAIN");
-    return;
-  }
-
-  // AUTH LOGIN (or no capability advertised at all, which some servers
-  // simply don't bother listing even though they accept it) — try it as
-  // the fallback either way.
+async function authLogin(sock: MailSocket, username: string, password: string): Promise<void> {
   await sock.write("AUTH LOGIN\r\n");
   expect(await readResponse(sock), [334], "AUTH LOGIN");
   await sock.write(`${base64(username)}\r\n`);
   expect(await readResponse(sock), [334], "AUTH LOGIN username");
   await sock.write(`${base64(password)}\r\n`);
   expect(await readResponse(sock), [235], "AUTH LOGIN password");
+}
+
+async function authenticate(sock: MailSocket, capabilities: string[], username: string, password: string): Promise<void> {
+  const authLine = capabilities.find((c) => c.startsWith("AUTH "));
+  const mechanisms = authLine ? authLine.slice(5).split(/\s+/) : [];
+
+  if (mechanisms.includes("PLAIN")) {
+    await sock.write(`AUTH PLAIN ${base64(`\u0000${username}\u0000${password}`)}\r\n`);
+    const response = await readResponse(sock);
+    if (response.code === 235) return;
+    // Some servers advertise PLAIN but reject it inconsistently (seen with
+    // IONOS's load-balanced SMTP frontends) while still accepting LOGIN
+    // with the exact same credentials — worth one more attempt with the
+    // same password before concluding the credentials themselves are bad.
+    if (mechanisms.includes("LOGIN")) {
+      await authLogin(sock, username, password);
+      return;
+    }
+    throw new Error(`SMTP AUTH PLAIN failed (${response.code}): ${response.lines.join(" ")}`);
+  }
+
+  // AUTH LOGIN (or no capability advertised at all, which some servers
+  // simply don't bother listing even though they accept it) — try it as
+  // the fallback either way.
+  await authLogin(sock, username, password);
 }
 
 async function connectAndLogin(cfg: SmtpConfig): Promise<MailSocket> {
