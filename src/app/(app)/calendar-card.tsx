@@ -474,11 +474,20 @@ export default function CalendarCard({
   return (
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <div className="flex items-center justify-between">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
-        {connected && (
-          <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
+        {connected ? (
+          <Link href="/calendar-app" className="text-xs font-medium text-emerald-700 hover:underline sm:text-sm">
+            {labels.openInCalendar}
+          </Link>
+        ) : (
+          <span />
         )}
+        <div className="justify-self-end">
+          {connected && (
+            <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
+          )}
+        </div>
       </div>
       {!connected ? (
         <p className="mt-3 text-sm text-soft">
@@ -510,16 +519,6 @@ export default function CalendarCard({
             onRequestEdit={(event) => setViewTarget(event.id)}
             onRequestCreate={requestCreate}
           />
-          <div className="mt-3 border-t border-card-border pt-3 text-xs">
-            <a
-              href="https://calendar.google.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-700 hover:underline"
-            >
-              {labels.openInCalendar}
-            </a>
-          </div>
         </div>
       )}
 

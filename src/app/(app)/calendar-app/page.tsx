@@ -15,6 +15,27 @@ function contactLabel(c: { firstName: string | null; lastName: string | null; em
   return name || c.email;
 }
 
+// Hand-drawn like PlatformIcon's FaceTimeIcon — Google doesn't publish a
+// Simple Icons mono mark that captures Google Calendar's actual multi-color
+// app icon, so this recreates its look (four colored corner tiles behind a
+// white face with a blue day number) instead of a single-color mask.
+function GoogleCalendarIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect x="3" y="3" width="8" height="8" rx="1.5" fill="#1a73e8" />
+      <rect x="13" y="3" width="8" height="8" rx="1.5" fill="#34a853" />
+      <rect x="3" y="13" width="8" height="8" rx="1.5" fill="#fbbc04" />
+      <rect x="13" y="13" width="8" height="8" rx="1.5" fill="#ea4335" />
+      <rect x="5" y="5" width="14" height="14" rx="2" fill="#fff" stroke="#dadce0" strokeWidth="0.5" />
+      <rect x="8" y="3" width="1.6" height="4" rx="0.8" fill="#4285f4" />
+      <rect x="14.4" y="3" width="1.6" height="4" rx="0.8" fill="#4285f4" />
+      <text x="12" y="16.5" textAnchor="middle" fontSize="8" fontWeight="700" fill="#1a73e8" fontFamily="Arial, sans-serif">
+        31
+      </text>
+    </svg>
+  );
+}
+
 export default async function CalendarAppPage() {
   const session = await auth();
   const lang = await getLang();
@@ -98,9 +119,15 @@ export default async function CalendarAppPage() {
   };
 
   const openInCalendarButton = (
-    <Link href="/calendar" className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm">
-      {t.dashboard.openInCalendar}
-    </Link>
+    <a
+      href="https://calendar.google.com/"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+    >
+      <GoogleCalendarIcon className="h-4 w-4 shrink-0" />
+      {t.calendarApp.openGoogleCalendar}
+    </a>
   );
 
   return (

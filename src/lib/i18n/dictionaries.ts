@@ -848,6 +848,7 @@ export const dictionaries = {
       viewTable: "Table",
       addEvent: "Add",
       noLinkedEvents: "No linked calendar events.",
+      openGoogleCalendar: "Open Google Calendar",
     },
     eventDialog: {
       createTitle: "New event",
@@ -1901,6 +1902,7 @@ export const dictionaries = {
       viewTable: "Tableau",
       addEvent: "Ajouter",
       noLinkedEvents: "Aucun événement de calendrier lié.",
+      openGoogleCalendar: "Ouvrir Google Agenda",
     },
     eventDialog: {
       createTitle: "Nouvel événement",
