@@ -3,11 +3,52 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getValidAccessToken, getGoogleConnection, fetchGmailMessageRaw, sendGmailMessage } from "@/lib/google";
-import { parseMessage, type AttachmentMeta } from "@/lib/mail/mime-parse";
+import { parseMessage, type AttachmentMeta, type ParsedMessage } from "@/lib/mail/mime-parse";
 import { buildMimeMessage } from "@/lib/mail/mime-build";
-import { resolveReplyIdentity, type MailIdentity } from "@/lib/mail/identity";
-import { getIonosMailbox, recordIonosResult } from "@/lib/mail/ionos";
+import { resolveReplyIdentity, type MailIdentity, type MailSource } from "@/lib/mail/identity";
+import { getIonosMailbox, recordIonosResult, type IonosMailbox } from "@/lib/mail/ionos";
 import { sendViaSmtp } from "@/lib/mail/smtp";
+import { fetchImapMessageRaw } from "@/lib/mail/imap";
+
+// "ionos:<uid>" ids (see EmailSummary's source/messageIdHeader comment in
+// google.ts) never collide with a bare Gmail id, which is exactly what
+// lets every id-keyed table (EmailClassification, EmailLink, etc.) accept
+// either source without a schema change or backfill.
+function parseIonosUid(id: string): number | null {
+  if (!id.startsWith("ionos:")) return null;
+  const uid = Number(id.slice("ionos:".length));
+  return Number.isFinite(uid) ? uid : null;
+}
+
+// Fetches and parses one message's full raw body, from whichever source
+// its id names — same ParsedMessage shape either way, since Gmail's
+// format=raw and IMAP's BODY.PEEK[] are both fed into the same
+// mime-parse.ts parser (see that file's header comment).
+async function fetchOriginal(
+  id: string,
+  accessToken: string,
+  mailbox: IonosMailbox | null
+): Promise<{ parsed: ParsedMessage; threadId: string; source: MailSource } | null> {
+  const uid = parseIonosUid(id);
+  if (uid !== null) {
+    if (!mailbox) return null;
+    const raw = await fetchImapMessageRaw(
+      {
+        host: mailbox.credentials.imapHost,
+        port: mailbox.credentials.imapPort,
+        security: mailbox.credentials.imapSecurity,
+        username: mailbox.credentials.username,
+        password: mailbox.credentials.password,
+      },
+      uid
+    );
+    if (!raw) return null;
+    return { parsed: parseMessage(raw), threadId: id, source: "ionos" };
+  }
+  const fetched = await fetchGmailMessageRaw(accessToken, id);
+  if (!fetched) return null;
+  return { parsed: parseMessage(fetched.raw), threadId: fetched.threadId, source: "gmail" };
+}
 
 export interface EmailDetail {
   id: string;
@@ -41,8 +82,8 @@ async function loadIdentities(userId: string, db: PrismaClient): Promise<MailIde
 // The Email Dialog's "open a message" call — fetches the full RFC 5322
 // body (see fetchGmailMessageRaw's comment in google.ts for why this is a
 // separate, more expensive call from the list view) and parses it with
-// the shared MIME parser, same one IMAP's fetch will use once that source
-// exists.
+// the shared MIME parser, whichever source the id names (see
+// fetchOriginal above).
 export async function fetchEmailDetail(id: string): Promise<EmailDetail | { error: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
@@ -51,19 +92,20 @@ export async function fetchEmailDetail(id: string): Promise<EmailDetail | { erro
     const accessToken = await getValidAccessToken(session.user.id, db);
     if (!accessToken) return { error: "not_connected" };
 
-    const [fetched, identities] = await Promise.all([fetchGmailMessageRaw(accessToken, id), loadIdentities(session.user.id, db)]);
-    if (!fetched) return { error: "not_found" };
+    const [mailbox, identities] = await Promise.all([getIonosMailbox(session.user.id, db), loadIdentities(session.user.id, db)]);
+    const original = await fetchOriginal(id, accessToken, mailbox);
+    if (!original) return { error: "not_found" };
 
-    const parsed = parseMessage(fetched.raw);
+    const { parsed, threadId, source } = original;
     const replyIdentity = resolveReplyIdentity(
       { to: parsed.to.map((a) => a.email), cc: parsed.cc.map((a) => a.email), deliveredTo: parsed.deliveredTo },
-      "gmail",
+      source,
       identities
     );
 
     return {
       id,
-      threadId: fetched.threadId,
+      threadId,
       subject: parsed.subject,
       from: parsed.from,
       to: parsed.to.map((a) => a.email),
@@ -103,19 +145,18 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
     const accessToken = await getValidAccessToken(session.user.id, db);
     if (!accessToken) return { error: "not_connected" };
 
-    const identities = await loadIdentities(session.user.id, db);
+    const [mailbox, identities] = await Promise.all([getIonosMailbox(session.user.id, db), loadIdentities(session.user.id, db)]);
     if (identities.length === 0) return { error: "not_connected" };
 
     // Re-derive the reply identity from the original message rather than
     // trusting anything the client sent about it.
     let replyIdentity = identities[0];
     if (input.inReplyToId) {
-      const fetched = await fetchGmailMessageRaw(accessToken, input.inReplyToId);
-      if (fetched) {
-        const original = parseMessage(fetched.raw);
+      const original = await fetchOriginal(input.inReplyToId, accessToken, mailbox);
+      if (original) {
         replyIdentity = resolveReplyIdentity(
-          { to: original.to.map((a) => a.email), cc: original.cc.map((a) => a.email), deliveredTo: original.deliveredTo },
-          "gmail",
+          { to: original.parsed.to.map((a) => a.email), cc: original.parsed.cc.map((a) => a.email), deliveredTo: original.parsed.deliveredTo },
+          original.source,
           identities
         );
       }
@@ -156,8 +197,8 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
       }
       await recordIonosResult(session.user.id, db, null);
       // The sent copy isn't filed into the mailbox's own Sent folder yet —
-      // that needs IMAP APPEND, which joins this once Phase 4's native
-      // IMAP client exists.
+      // that needs IMAP APPEND, which is Phase 5 polish, not core to
+      // sending working.
       return { success: true };
     }
 

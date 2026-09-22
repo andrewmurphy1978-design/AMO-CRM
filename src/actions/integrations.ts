@@ -9,6 +9,7 @@ import { disconnectGoogle } from "@/lib/google";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { saveIonosMailbox, getIonosMailbox, disconnectIonosMailbox, recordIonosResult } from "@/lib/mail/ionos";
 import { verifySmtp } from "@/lib/mail/smtp";
+import { verifyImap } from "@/lib/mail/imap";
 import type { MailSecurity } from "@/lib/mail/socket";
 
 async function requireAdmin() {
@@ -222,10 +223,14 @@ export async function saveIonosMailboxAction(
   return { success: t.ionosMailbox.saved };
 }
 
-// Logs into SMTP only (IMAP verification joins this once Phase 4's native
-// IMAP client exists) — lets a bad host/port/credential surface right
-// away from Settings instead of only being discovered on the first real
-// send, since protocol failures are otherwise invisible.
+// Logs into both SMTP and IMAP — lets a bad host/port/credential surface
+// right away from Settings instead of only being discovered on the first
+// real send or inbox refresh, since protocol failures are otherwise
+// invisible. Both are checked even though only one might be wrong, since
+// IONOS's SMTP/IMAP frontends have shown inconsistent auth behavior
+// before (see the AUTH PLAIN/LOGIN fallback in smtp.ts) — better to know
+// up front than have sending work while refreshing quietly fails, or the
+// reverse.
 export async function testIonosMailboxAction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
@@ -234,6 +239,9 @@ export async function testIonosMailboxAction(
   if (!session) throw new Error("Not signed in");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
+  const imapHost = String(formData.get("imapHost") ?? "").trim();
+  const imapPort = Number(formData.get("imapPort") ?? 993);
+  const imapSecurity = String(formData.get("imapSecurity") ?? "tls") as MailSecurity;
   const smtpHost = String(formData.get("smtpHost") ?? "").trim();
   const smtpPort = Number(formData.get("smtpPort") ?? 465);
   const smtpSecurity = String(formData.get("smtpSecurity") ?? "tls") as MailSecurity;
@@ -243,13 +251,20 @@ export async function testIonosMailboxAction(
   return withScopedPrismaClient(async (db) => {
     const existing = await getIonosMailbox(session.user.id, db);
     const password = formPassword || existing?.credentials.password;
-    if (!smtpHost || !username || !password) return { error: t.ionosMailbox.hostRequired };
+    if (!smtpHost || !imapHost || !username || !password) return { error: t.ionosMailbox.hostRequired };
 
     try {
       await verifySmtp({ host: smtpHost, port: smtpPort, security: smtpSecurity, username, password });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      await recordIonosResult(session.user.id, db, message);
+      await recordIonosResult(session.user.id, db, `SMTP: ${message}`);
+      return { error: message };
+    }
+    try {
+      await verifyImap({ host: imapHost, port: imapPort, security: imapSecurity, username, password });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      await recordIonosResult(session.user.id, db, `IMAP: ${message}`);
       return { error: message };
     }
     await recordIonosResult(session.user.id, db, null);

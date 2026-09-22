@@ -121,6 +121,14 @@ export interface EmailSummary {
   link: string; // opens this message's thread directly in Gmail's web UI
   hasAttachments: boolean;
   important: boolean; // the sender marked it Urgent/High priority
+  // Both optional so an EmailInboxCache snapshot cached before Phase 4
+  // (no IONOS mailbox existed yet) still parses with zero backfill —
+  // undefined here means "gmail" with no known Message-ID, same as every
+  // row already in a user's cache. messageIdHeader is what
+  // refreshEmailInboxCache's merge dedupes an IONOS-forwarded copy of a
+  // Gmail message against (see that function's comment).
+  source?: "gmail" | "ionos";
+  messageIdHeader?: string;
 }
 
 function extractHeader(headers: { name?: string; value?: string }[] | undefined, name: string): string {
@@ -216,6 +224,8 @@ async function fetchEmailSummary(accessToken: string, id: string): Promise<Email
     link: `https://mail.google.com/mail/u/0/#inbox/${threadId}`,
     hasAttachments: hasAttachmentPart(data.payload),
     important: isMarkedImportant(headers),
+    source: "gmail",
+    messageIdHeader: extractHeader(headers, "Message-ID").trim() || undefined,
   };
 }
 

@@ -2,6 +2,46 @@ import type { PrismaClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getRecentEmails, getSentAwaitingReplies, type EmailSummary, type SentEmailSummary } from "@/lib/google";
 import { getEmailClassifications, type EmailCategory } from "@/lib/email-classifier";
+import { getIonosMailbox, recordIonosResult } from "@/lib/mail/ionos";
+import { listRecentImapMessages, type ImapMessageSummary } from "@/lib/mail/imap";
+
+// Wraps one IMAP message into the same EmailSummary shape the rest of the
+// Email page already works with — "ionos:<uid>" keeps every id disjoint
+// from a bare Gmail id (see EmailSummary's source/messageIdHeader comment
+// in google.ts), and since IMAP has no native thread grouping the way
+// Gmail does, each message is simply its own thread for now.
+function ionosSummaryFromImap(m: ImapMessageSummary): EmailSummary {
+  const id = `ionos:${m.uid}`;
+  return {
+    id,
+    threadId: id,
+    from: m.from.name || m.from.email,
+    fromEmail: m.from.email,
+    toRaw: m.to.join(", "),
+    subject: m.subject,
+    snippet: "",
+    date: m.date ?? m.internalDate ?? new Date().toISOString(),
+    link: "https://mail.ionos.com/",
+    hasAttachments: m.hasAttachments,
+    important: m.important,
+    source: "ionos",
+    messageIdHeader: m.messageIdHeader ?? undefined,
+  };
+}
+
+// The same physical message can show up from both sources at once — IONOS
+// mail currently also forwards into Gmail — so a Gmail copy sharing a
+// Message-ID with an IONOS copy is dropped in favor of the IONOS one.
+// That's what makes "always reply from the address that received it"
+// work even for a message the CRM also sees via Gmail: once the IONOS
+// copy exists, resolveReplyIdentity sees an "ionos"-sourced original and
+// routes the reply over SMTP instead of Gmail's send API.
+function mergeEmailSources(gmailEmails: EmailSummary[], ionosEmails: EmailSummary[]): EmailSummary[] {
+  if (ionosEmails.length === 0) return gmailEmails;
+  const ionosMessageIds = new Set(ionosEmails.map((e) => e.messageIdHeader).filter((v): v is string => Boolean(v)));
+  const dedupedGmail = gmailEmails.filter((e) => !e.messageIdHeader || !ionosMessageIds.has(e.messageIdHeader));
+  return [...dedupedGmail, ...ionosEmails].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
 
 export interface EmailInboxSnapshot {
   emails: EmailSummary[];
@@ -281,8 +321,10 @@ export async function getScreeningExtras(
 export async function getCachedInbox(db: PrismaClient, userId: string): Promise<EmailInboxSnapshot | null> {
   const row = await db.emailInboxCache.findUnique({ where: { userId } });
   if (!row) return null;
+  const gmailEmails = row.emails as unknown as EmailSummary[];
+  const ionosEmails = (row.ionosEmails as unknown as EmailSummary[] | null) ?? [];
   return {
-    emails: row.emails as unknown as EmailSummary[],
+    emails: mergeEmailSources(gmailEmails, ionosEmails),
     sentAwaitingReply: (row.sentAwaitingReply as unknown as SentEmailSummary[] | null) ?? [],
     fetchedAt: row.fetchedAt.toISOString(),
   };
@@ -314,7 +356,45 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
   const emailList = emails ?? [];
   const sentList = sentAwaitingReply ?? [];
 
-  const receivedCandidates = emailList.map((e) => ({
+  // The IONOS leg runs after the Gmail calls above finish, not inside the
+  // same Promise.all — same subrequest-budget lesson getSentAwaitingReplies
+  // already forced once (see that function's own comment in google.ts): a
+  // Cloudflare Worker invocation has a hard cap on outgoing subrequests,
+  // and stacking every network call from both mail sources into one
+  // Promise.all makes that budget harder to reason about than paying the
+  // extra latency of doing this sequentially.
+  let ionosEmailList: EmailSummary[] = [];
+  let ionosFetchedAt: Date | null = null;
+  const mailbox = await getIonosMailbox(userId, db);
+  if (mailbox) {
+    try {
+      const messages = await listRecentImapMessages(
+        {
+          host: mailbox.credentials.imapHost,
+          port: mailbox.credentials.imapPort,
+          security: mailbox.credentials.imapSecurity,
+          username: mailbox.credentials.username,
+          password: mailbox.credentials.password,
+        },
+        20
+      );
+      ionosEmailList = messages.map(ionosSummaryFromImap);
+      ionosFetchedAt = new Date();
+      await recordIonosResult(userId, db, null);
+    } catch (e) {
+      // A bad password, a down host, a network hiccup — none of these
+      // should blank out an otherwise-good Gmail snapshot, so this falls
+      // back to whatever IONOS messages were cached from the last
+      // successful refresh instead of an empty list.
+      const message = e instanceof Error ? e.message : String(e);
+      await recordIonosResult(userId, db, message);
+      const existing = await db.emailInboxCache.findUnique({ where: { userId }, select: { ionosEmails: true, ionosFetchedAt: true } });
+      ionosEmailList = (existing?.ionosEmails as unknown as EmailSummary[] | null) ?? [];
+      ionosFetchedAt = existing?.ionosFetchedAt ?? null;
+    }
+  }
+
+  const receivedCandidates = [...emailList, ...ionosEmailList].map((e) => ({
     threadId: e.threadId,
     email: e.fromEmail,
     subject: e.subject,
@@ -338,21 +418,25 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
     autoLinkToAffiliatePrograms(db, sentCandidates),
   ]);
 
+  const mergedEmails = mergeEmailSources(emailList, ionosEmailList);
+
   // Cache-aware — only classifies messages EmailClassification hasn't
   // seen before, so a Refresh never re-spends a Claude call on an email
-  // it already screened.
-  await getEmailClassifications(db, emailList, userId);
+  // it already screened. Runs on the merged list so IONOS-sourced
+  // messages get triaged into a category too, not just Gmail's.
+  await getEmailClassifications(db, mergedEmails, userId);
 
   const fetchedAt = new Date();
   const emailsJson = emailList as unknown as Prisma.InputJsonValue;
   const sentJson = sentList as unknown as Prisma.InputJsonValue;
+  const ionosJson = ionosEmailList as unknown as Prisma.InputJsonValue;
   await db.emailInboxCache.upsert({
     where: { userId },
-    update: { emails: emailsJson, sentAwaitingReply: sentJson, fetchedAt },
-    create: { userId, emails: emailsJson, sentAwaitingReply: sentJson, fetchedAt },
+    update: { emails: emailsJson, sentAwaitingReply: sentJson, fetchedAt, ionosEmails: ionosJson, ionosFetchedAt },
+    create: { userId, emails: emailsJson, sentAwaitingReply: sentJson, fetchedAt, ionosEmails: ionosJson, ionosFetchedAt },
   });
 
-  return { emails: emailList, sentAwaitingReply: sentList, fetchedAt: fetchedAt.toISOString() };
+  return { emails: mergedEmails, sentAwaitingReply: sentList, fetchedAt: fetchedAt.toISOString() };
 }
 
 export type { EmailCategory };

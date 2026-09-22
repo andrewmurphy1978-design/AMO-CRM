@@ -18,6 +18,7 @@ export interface EmailDialogLabels {
   showRemoteImages: string;
   noContent: string;
   openInGmail: string;
+  openWebmail: string;
   attachments: string;
   reply: string;
   replyAll: string;
@@ -101,6 +102,12 @@ export default function EmailDialog({
 
   if (!target) return null;
 
+  // An "ionos:"-prefixed id (see EmailSummary's source comment in
+  // google.ts) has no Gmail thread to deep-link to — the row/dialog's
+  // own `link` for these already points at the generic IONOS webmail URL
+  // instead, so only the label needs to change to match.
+  const isIonos = target.id.startsWith("ionos:");
+
   const dateLabel = detail?.date
     ? `${format(new Date(detail.date), "EEEE, MMMM d, yyyy", { locale: dateLocale })} · ${formatClockTime(new Date(detail.date), hour12, intlLocale)}`
     : "";
@@ -175,7 +182,7 @@ export default function EmailDialog({
 
         <div className="flex shrink-0 items-center justify-between border-t border-card-border px-5 py-3">
           <a href={target.link} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-700 hover:underline">
-            {labels.openInGmail} ↗
+            {isIonos ? labels.openWebmail : labels.openInGmail} ↗
           </a>
           <div className="flex items-center gap-2">
             {detail && (

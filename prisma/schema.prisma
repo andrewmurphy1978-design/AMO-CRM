@@ -1020,6 +1020,14 @@ model EmailInboxCache {
   sentAwaitingReply Json?
   fetchedAt         DateTime @default(now())
 
+  // The IONOS mailbox's own recent-messages snapshot, refreshed and
+  // cached independently of the Gmail fields above (see
+  // refreshEmailInboxCache's comment) — nullable so a user with no IONOS
+  // mailbox connected, or an IMAP fetch that failed, never blanks out an
+  // otherwise-good Gmail snapshot.
+  ionosEmails    Json?
+  ionosFetchedAt DateTime?
+
   @@map("email_inbox_cache")
 }
 
