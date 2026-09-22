@@ -149,16 +149,14 @@ export interface ShortIoStats {
   matchedId: string;
 }
 
-// https://developers.short.io/reference/statisticslinkget — click totals
-// for one link. Two things about this endpoint have proven inconsistent
-// across Short.io's own docs revisions: whether it wants the link's
-// legacy numeric id or its newer "link_..." string id, and whether
-// `period=total` is a valid value or the endpoint wants no period at all
-// (defaulting to all-time). Rather than guess a single combination and
-// fail silently for every link (which is what happened before this),
-// this tries a short list of request variants and returns the first one
-// that succeeds — cheap since most links will hit on the first or second
-// try, and it only ever runs the extra attempts when the first one fails.
+// https://developers.short.io/docs/link-statistics-1 — click totals for one
+// link. This lives on a DIFFERENT subdomain than every other endpoint in
+// this file (api-v2.short.io, not api.short.io) — every stats request was
+// silently 404ing against the wrong host before this, which is why
+// shortioClicks never populated for a single program despite link matching
+// working fine. Kept as a short list of request variants (legacy numeric id
+// vs the newer "link_..." string id, with/without `period=total`) since
+// Short.io's own docs have been inconsistent about which one it wants.
 export async function getShortIoLinkStatistics(apiKey: string, candidateIds: string[]): Promise<ShortIoStats> {
   const ids = [...new Set(candidateIds.filter(Boolean))];
   let lastError: unknown = new Error("No Short.io link id to check stats for");
@@ -166,7 +164,7 @@ export async function getShortIoLinkStatistics(apiKey: string, candidateIds: str
   for (const linkId of ids) {
     for (const query of ["?period=total", ""]) {
       try {
-        const data = await shortIoRequest<Record<string, unknown>>(`https://api.short.io/statistics/link/${linkId}${query}`, apiKey);
+        const data = await shortIoRequest<Record<string, unknown>>(`https://api-v2.short.io/statistics/link/${linkId}${query}`, apiKey);
         const totals = (data.totalClicks !== undefined ? data : (data.total as Record<string, unknown>) ?? data) as Record<string, unknown>;
         const totalClicks = typeof totals.totalClicks === "number" ? totals.totalClicks : typeof totals.clicks === "number" ? totals.clicks : null;
         const humanClicks = typeof totals.humanClicks === "number" ? totals.humanClicks : null;
