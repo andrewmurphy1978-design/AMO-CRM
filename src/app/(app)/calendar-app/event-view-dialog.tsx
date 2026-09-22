@@ -20,8 +20,26 @@ export interface EventViewDialogLabels {
   allDay: string;
   reminderDefault: string;
   reminderNone: string;
-  reminderBefore: (n: number) => string;
+  reminderMinutesBefore: string;
+  reminderHourBefore: string;
+  reminderHoursBefore: string;
+  reminderDayBefore: string;
+  reminderDaysBefore: string;
   openInGoogleCalendar: string;
+}
+
+// Labels are plain data passed down from a Server Component (page.tsx),
+// which can't carry functions across that boundary — so the reminder text
+// is templated ("{n} minutes before") and formatted here on the client,
+// rather than via a formatter function baked into the dictionary.
+function formatReminder(n: number, labels: EventViewDialogLabels): string {
+  if (n < 60) return labels.reminderMinutesBefore.replace("{n}", String(n));
+  if (n < 1440) {
+    const hours = n / 60;
+    return (hours === 1 ? labels.reminderHourBefore : labels.reminderHoursBefore).replace("{n}", String(hours));
+  }
+  const days = n / 1440;
+  return (days === 1 ? labels.reminderDayBefore : labels.reminderDaysBefore).replace("{n}", String(days));
 }
 
 function IconRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
@@ -137,7 +155,7 @@ export default function EventViewDialog({
       ? labels.reminderDefault
       : detail.reminderMinutes == null
         ? labels.reminderNone
-        : labels.reminderBefore(detail.reminderMinutes);
+        : formatReminder(detail.reminderMinutes, labels);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
