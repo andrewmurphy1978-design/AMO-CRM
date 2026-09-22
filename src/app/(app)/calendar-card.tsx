@@ -53,6 +53,7 @@ function DayColumn({
   intlLocale,
   labels,
   onRequestEdit,
+  onRequestCreate,
 }: {
   day: Date;
   events: CalendarEventSummary[];
@@ -61,6 +62,7 @@ function DayColumn({
   intlLocale: string;
   labels: CalendarLabels;
   onRequestEdit: (event: CalendarEventSummary) => void;
+  onRequestCreate: (date: Date, allDay?: boolean) => void;
 }) {
   const timed: TimedEvent<CalendarEventSummary>[] = events
     .filter((e) => !e.allDay && e.start)
@@ -80,8 +82,22 @@ function DayColumn({
   const positioned = layoutDayEvents(timed);
   const hourMarks = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => GRID_START_HOUR + i);
 
+  // Same click-to-create idea as the full Calendar page's day-grid-view.tsx
+  // — clicking empty space opens Add Event preset to the clicked date/time,
+  // snapped to the nearest 30 minutes.
+  function handleClick(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const totalMinutes = (offsetY / ROW_HEIGHT) * 60;
+    const gridMinutes = (GRID_END_HOUR - GRID_START_HOUR) * 60;
+    const snapped = Math.min(Math.max(Math.round(totalMinutes / 30) * 30, 0), gridMinutes - 30);
+    const target = new Date(day);
+    target.setHours(GRID_START_HOUR, snapped, 0, 0);
+    onRequestCreate(target);
+  }
+
   return (
-    <div className="relative min-w-0 flex-1 border-l border-card-border first:border-l-0">
+    <div onClick={handleClick} className="relative min-w-0 flex-1 cursor-pointer border-l border-card-border first:border-l-0">
       {hourMarks.map((h) => (
         <div
           key={h}
@@ -108,7 +124,10 @@ function DayColumn({
               key={`${event.id}-${i}`}
               role="button"
               tabIndex={0}
-              onClick={() => onRequestEdit(event)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRequestEdit(event);
+              }}
               className={`absolute flex cursor-pointer flex-col overflow-hidden px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
               style={{
                 top,
@@ -179,6 +198,7 @@ function ThreeDayGrid({
   intlLocale,
   labels,
   onRequestEdit,
+  onRequestCreate,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
@@ -187,6 +207,7 @@ function ThreeDayGrid({
   hour12: boolean;
   intlLocale: string;
   onRequestEdit: (event: CalendarEventSummary) => void;
+  onRequestCreate: (date: Date, allDay?: boolean) => void;
   labels: CalendarLabels;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -240,14 +261,21 @@ function ThreeDayGrid({
           <div ref={allDayRef} className="sticky z-20 flex border-b border-card-border bg-card-bg" style={{ top: headerHeight }}>
             <div className="w-10 shrink-0" />
             {allDayByDay.map((list, i) => (
-              <div key={i} className="min-w-0 flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0">
+              <div
+                key={i}
+                onClick={() => onRequestCreate(days[i], true)}
+                className="min-w-0 flex-1 cursor-pointer space-y-0.5 border-l border-card-border p-1 first:border-l-0"
+              >
                 {list.map((event) => {
                   const color = eventColor(event.colorId);
                   return (
                     <button
                       key={event.id}
                       type="button"
-                      onClick={() => onRequestEdit(event)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRequestEdit(event);
+                      }}
                       className="w-full whitespace-normal break-words rounded px-1 py-0.5 text-left text-[10px] font-medium"
                       style={{ backgroundColor: color.bg, color: color.fg }}
                       title={event.title}
@@ -283,6 +311,7 @@ function ThreeDayGrid({
               intlLocale={intlLocale}
               labels={labels}
               onRequestEdit={onRequestEdit}
+              onRequestCreate={onRequestCreate}
             />
           ))}
         </div>
@@ -299,6 +328,7 @@ function UpcomingTable({
   intlLocale,
   labels,
   onRequestEdit,
+  onRequestCreate,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
@@ -307,13 +337,26 @@ function UpcomingTable({
   intlLocale: string;
   labels: CalendarLabels;
   onRequestEdit: (event: CalendarEventSummary) => void;
+  onRequestCreate: (date: Date) => void;
 }) {
+  // Clicking the date or anywhere else in the row (except an actual event)
+  // opens Add Event preset to that date, at the next half-hour from now —
+  // same idea as MonthView's whole-day-cell click-to-create.
+  function handleRowClick(day: Date) {
+    const now = new Date();
+    const target = new Date(day);
+    const minutes = now.getMinutes() < 30 ? 30 : 0;
+    const hours = now.getMinutes() < 30 ? now.getHours() : now.getHours() + 1;
+    target.setHours(hours, minutes, 0, 0);
+    onRequestCreate(target);
+  }
+
   return (
     <div className="mt-3 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-card-border">
       <table className="w-full border-collapse text-xs">
         <tbody>
           {days.map((day, i) => (
-            <tr key={i} className="border-b border-card-border last:border-b-0">
+            <tr key={i} onClick={() => handleRowClick(day)} className="cursor-pointer border-b border-card-border last:border-b-0 hover:bg-black/5">
               <td className="w-20 shrink-0 whitespace-nowrap border-r border-card-border bg-field-bg px-2 py-1.5 align-top font-medium text-ink">
                 {format(day, "EEE d MMM", { locale: dateLocale })}
               </td>
@@ -328,7 +371,10 @@ function UpcomingTable({
                         <button
                           key={event.id}
                           type="button"
-                          onClick={() => onRequestEdit(event)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRequestEdit(event);
+                          }}
                           className="flex w-full cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-left transition-opacity hover:opacity-90"
                           style={{ backgroundColor: color.bg, color: color.fg }}
                         >
@@ -413,6 +459,10 @@ export default function CalendarCard({
     }
   }
 
+  function requestCreate(presetStart: Date, presetAllDay?: boolean) {
+    setDialogTarget({ start: presetStart, allDay: presetAllDay });
+  }
+
   const today = startOfDay(new Date());
   const days = Array.from({ length: 14 }, (_, i) => addDays(today, i));
   const eventsByDay = days.map((day) => (events ?? []).filter((e) => e.start && isSameDay(new Date(e.start), day)));
@@ -448,6 +498,7 @@ export default function CalendarCard({
             intlLocale={intlLocale}
             labels={labels}
             onRequestEdit={(event) => setViewTarget(event.id)}
+            onRequestCreate={requestCreate}
           />
           <UpcomingTable
             days={tableDays}
@@ -457,6 +508,7 @@ export default function CalendarCard({
             intlLocale={intlLocale}
             labels={labels}
             onRequestEdit={(event) => setViewTarget(event.id)}
+            onRequestCreate={requestCreate}
           />
           <div className="mt-3 border-t border-card-border pt-3 text-xs">
             <a
