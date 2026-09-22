@@ -13,7 +13,7 @@ import InteractionLog from "../../interaction-log";
 import CalendarEventsCard from "../../calendar-events-card";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken } from "@/lib/google";
-import { getLinkedCalendarEvents } from "@/lib/calendar-links";
+import { getLinkedCalendarEvents, getEventLinkTargets } from "@/lib/calendar-links";
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -49,7 +49,16 @@ export default async function ProjectDetailPage({
   // equivalent block in contacts/[id]/page.tsx for why (Cloudflare Error
   // 1102 risk from the plain `prisma` proxy's fresh-connection-per-call
   // behavior across several sequential reads).
-  const { project, hour12, calendarEvents } = await withScopedPrismaClient(async (db) => {
+  const {
+    project,
+    hour12,
+    calendarEvents,
+    calendarEventLinks,
+    calendarContactOptions,
+    calendarProjectOptions,
+    calendarTaskOptions,
+    calendarBookingOptions,
+  } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
     const project = await db.project.findUnique({
@@ -71,10 +80,65 @@ export default async function ProjectDetailPage({
       },
     });
     const calendarEvents = project ? await getLinkedCalendarEvents(db, { projectId: project.id }, googleAccessToken) : [];
-    return { project, hour12, calendarEvents };
+    const calendarEventLinks = calendarEvents.length > 0 ? await getEventLinkTargets(db, calendarEvents.map((e) => e.id)) : {};
+
+    // The event edit dialog's own contact/project/task/booking pickers —
+    // same lists the full Calendar page and Dashboard card already ship,
+    // needed here too now that this card opens that same dialog instead of
+    // just linking out to Google Calendar.
+    const [allContacts, allProjects, allTasks, allBookings] = await Promise.all([
+      db.contact.findMany({
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+        take: 300,
+        select: { id: true, firstName: true, lastName: true, email: true },
+      }),
+      db.project.findMany({ orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, contactId: true } }),
+      db.task.findMany({
+        where: { status: { not: "DONE" } },
+        orderBy: { title: "asc" },
+        take: 300,
+        select: { id: true, title: true, projectId: true },
+      }),
+      db.booking.findMany({
+        orderBy: { scheduledFor: "desc" },
+        take: 100,
+        select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
+      }),
+    ]);
+
+    return {
+      project,
+      hour12,
+      calendarEvents,
+      calendarEventLinks,
+      calendarContactOptions: allContacts.map((c) => ({
+        id: c.id,
+        label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email,
+        email: c.email,
+      })),
+      calendarProjectOptions: allProjects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId })),
+      calendarTaskOptions: allTasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId })),
+      calendarBookingOptions: allBookings,
+    };
   });
 
   if (!project) notFound();
+
+  const calendarBookingLabelOptions = calendarBookingOptions.map((b) => ({
+    id: b.id,
+    label: `${b.eventName ?? t.linkPicker.booking} (${b.scheduledFor ? format(b.scheduledFor, "MMM d") : "?"})`,
+    contactId: b.contactId,
+  }));
+  const calendarLinkPickerLabels = {
+    contact: t.linkPicker.contact,
+    project: t.linkPicker.project,
+    task: t.linkPicker.task,
+    booking: t.linkPicker.booking,
+    none: t.linkPicker.none,
+    clear: t.linkPicker.clear,
+    searchPlaceholder: t.linkPicker.searchPlaceholder,
+    noResults: t.linkPicker.noResults,
+  };
 
   const openTasks = project.tasks.filter((t) => t.status !== "DONE");
   const doneTasks = project.tasks.filter((t) => t.status === "DONE");
@@ -187,10 +251,19 @@ export default async function ProjectDetailPage({
           <CalendarEventsCard
             title={t.calendarApp.title}
             events={calendarEvents}
+            links={calendarEventLinks}
+            contacts={calendarContactOptions}
+            projects={calendarProjectOptions}
+            tasks={calendarTaskOptions}
+            bookings={calendarBookingLabelOptions}
             noEventsLabel={t.calendarApp.noLinkedEvents}
             hour12={hour12}
             dateLocale={dateLocale}
             intlLocale={intlLocale}
+            lang={lang}
+            eventDialogLabels={t.eventDialog}
+            eventViewDialogLabels={t.eventViewDialog}
+            linkPickerLabels={calendarLinkPickerLabels}
           />
 
           <Card

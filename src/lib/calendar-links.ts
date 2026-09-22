@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { getCalendarEventsByIds, type CalendarEventSummary } from "@/lib/google";
+import type { EventLinkTargets } from "@/actions/calendar";
 
 function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
@@ -40,6 +41,29 @@ export async function getResolvedEventLinks(db: PrismaClient, eventIds: string[]
       projectName: link.project?.name ?? "",
       taskId: link.taskId ?? "",
       taskName: link.task?.title ?? "",
+      bookingId: link.bookingId ?? "",
+    };
+  }
+  return result;
+}
+
+// Raw link ids only (no display names) — what the event edit dialog needs
+// to prefill its contact/project/task/booking pickers, used by the
+// Contact/Project detail pages' Calendar card, which (unlike the
+// Dashboard's) has no need for pre-resolved names since it doesn't render
+// them inline.
+export async function getEventLinkTargets(db: PrismaClient, eventIds: string[]): Promise<Record<string, EventLinkTargets>> {
+  if (eventIds.length === 0) return {};
+  const links = await db.calendarEventLink.findMany({
+    where: { googleEventId: { in: eventIds } },
+    select: { googleEventId: true, contactId: true, projectId: true, taskId: true, bookingId: true },
+  });
+  const result: Record<string, EventLinkTargets> = {};
+  for (const link of links) {
+    result[link.googleEventId] = {
+      contactId: link.contactId ?? "",
+      projectId: link.projectId ?? "",
+      taskId: link.taskId ?? "",
       bookingId: link.bookingId ?? "",
     };
   }

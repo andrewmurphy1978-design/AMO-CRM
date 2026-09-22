@@ -814,6 +814,10 @@ export default function EventDialog({
             </div>
           )}
         </div>
+        {/* Always visible right under the header (never inside the
+            scrollable body below) — a save failure buried at the bottom of
+            a long, scrolled form is as good as invisible. */}
+        {error && <p className="shrink-0 bg-red-50 px-5 py-2 text-sm font-medium text-red-600">{error}</p>}
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
 
         {loading ? (
@@ -1036,8 +1040,6 @@ export default function EventDialog({
                 <label className={LABEL_CLASS}>{labels.description}</label>
                 <RichTextarea value={form.description} onChange={(html) => update("description", html)} className="mt-1" />
               </div>
-
-              {error && <p className="text-sm text-red-600">{error}</p>}
             </div>
 
             <div className="min-w-0 space-y-3 border-t border-card-border pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
