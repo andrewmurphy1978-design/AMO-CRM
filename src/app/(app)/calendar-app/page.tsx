@@ -77,7 +77,7 @@ export default async function CalendarAppPage() {
     ])
   );
 
-  const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c) }));
+  const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email }));
   const projectOptions = projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId }));
   const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId }));
   const bookingOptions = bookings.map((b) => ({

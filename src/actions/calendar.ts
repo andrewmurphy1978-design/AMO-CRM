@@ -9,6 +9,7 @@ import {
   updateCalendarEvent as gUpdateEvent,
   deleteCalendarEvent as gDeleteEvent,
   getCalendarEvent as gGetEvent,
+  getPrimaryCalendarDefaultReminders,
   type CalendarEventInput,
   type CalendarEventDetail,
 } from "@/lib/google";
@@ -47,6 +48,21 @@ export async function fetchCalendarEventDetail(eventId: string): Promise<Calenda
     const detail = await gGetEvent(accessToken, eventId, session.user.name ?? null);
     if (!detail) return { error: "not_found" };
     return detail;
+  });
+}
+
+// Used by both the view and edit dialogs to show what "Default
+// notification" actually means (the calendar's own reminders list) instead
+// of just that label — independent of any one event, so it's fetched on
+// its own rather than folded into fetchCalendarEventDetail.
+export async function fetchDefaultReminders(): Promise<{ minutes: number[] } | { error: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  return withScopedPrismaClient(async (db) => {
+    const accessToken = await getValidAccessToken(session.user.id, db);
+    if (!accessToken) return { error: "not_connected" };
+    return { minutes: await getPrimaryCalendarDefaultReminders(accessToken) };
   });
 }
 

@@ -493,7 +493,7 @@ export interface CalendarEventDetail {
   visibility: "default" | "public" | "private";
   transparency: "opaque" | "transparent"; // opaque = busy, transparent = free
   reminderUseDefault: boolean;
-  reminderMinutes: number | null; // first override's minutes, when useDefault is false
+  reminderOverrides: number[]; // custom override minutes, when useDefault is false (Google allows up to 5)
   timeZone: string | null; // IANA zone the event's own start carries, e.g. "America/Montreal"
   organizerName: string | null; // the connected Google account's own display name/email
 }
@@ -522,7 +522,7 @@ export interface CalendarEventInput {
   visibility: "default" | "public" | "private";
   transparency: "opaque" | "transparent";
   reminderUseDefault: boolean;
-  reminderMinutes: number | null;
+  reminderOverrides: number[]; // custom override minutes (Google allows up to 5); ignored when reminderUseDefault
 }
 
 interface RawGoogleEventDetail extends RawGoogleEvent {
@@ -538,7 +538,6 @@ interface RawGoogleEventDetail extends RawGoogleEvent {
 
 function mapGoogleEventDetail(item: RawGoogleEventDetail, organizerName: string | null): CalendarEventDetail {
   const summary = mapGoogleEvent(item);
-  const firstOverride = item.reminders?.overrides?.[0];
   return {
     ...summary,
     description: item.description ?? "",
@@ -553,10 +552,28 @@ function mapGoogleEventDetail(item: RawGoogleEventDetail, organizerName: string 
     visibility: (item.visibility as CalendarEventDetail["visibility"]) ?? "default",
     transparency: (item.transparency as CalendarEventDetail["transparency"]) ?? "opaque",
     reminderUseDefault: item.reminders?.useDefault ?? true,
-    reminderMinutes: firstOverride?.minutes ?? null,
+    reminderOverrides: (item.reminders?.overrides ?? []).map((o) => o.minutes).filter((m): m is number => typeof m === "number"),
     timeZone: item.start?.timeZone ?? null,
     organizerName,
   };
+}
+
+// The calendar's own default reminders (Settings > primary calendar's
+// notification list in Google Calendar's UI) — fetched separately from any
+// one event, since an event using `reminders.useDefault` doesn't carry
+// these minutes itself; the event/create dialogs need them to show what
+// "Default notification" actually means instead of just that label.
+export async function getPrimaryCalendarDefaultReminders(accessToken: string): Promise<number[]> {
+  try {
+    const res = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList/primary", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { defaultReminders?: { minutes?: number }[] };
+    return (data.defaultReminders ?? []).map((r) => r.minutes).filter((m): m is number => typeof m === "number");
+  } catch {
+    return [];
+  }
 }
 
 // Full single-event fetch for the edit dialog — the list/range endpoints
@@ -575,7 +592,27 @@ export async function getCalendarEvent(
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) return null;
-    return mapGoogleEventDetail((await res.json()) as RawGoogleEventDetail, organizerName);
+    const raw = (await res.json()) as RawGoogleEventDetail;
+
+    // A single occurrence of a recurring event carries recurringEventId but
+    // no recurrence array of its own — only the master event has the RRULE
+    // — so the view dialog's "Weekly on Thursday" description needs one
+    // extra fetch here rather than silently having nothing to describe.
+    if ((raw.recurrence?.length ?? 0) === 0 && raw.recurringEventId) {
+      try {
+        const masterRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${raw.recurringEventId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (masterRes.ok) {
+          const master = (await masterRes.json()) as { recurrence?: string[] };
+          raw.recurrence = master.recurrence ?? [];
+        }
+      } catch {
+        // Leave recurrence empty — the description just won't show.
+      }
+    }
+
+    return mapGoogleEventDetail(raw, organizerName);
   } catch {
     return null;
   }
@@ -599,7 +636,7 @@ function buildEventBody(input: CalendarEventInput): Record<string, unknown> {
       ? { useDefault: true }
       : {
           useDefault: false,
-          overrides: input.reminderMinutes != null ? [{ method: "popup", minutes: input.reminderMinutes }] : [],
+          overrides: input.reminderOverrides.map((minutes) => ({ method: "popup", minutes })),
         },
   };
 }

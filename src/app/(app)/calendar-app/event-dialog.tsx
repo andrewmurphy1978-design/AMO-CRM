@@ -1,13 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { format, type Locale } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { EVENT_COLOR_OPTIONS, GOOGLE_EVENT_COLORS, DEFAULT_EVENT_COLOR } from "@/lib/calendar-colors";
+import { EVENT_COLOR_OPTIONS, GOOGLE_EVENT_COLORS, DEFAULT_EVENT_COLOR, eventColor } from "@/lib/calendar-colors";
+import { formatClockTime } from "@/lib/calendar-time";
+import { formatReminderMinutes, REMINDER_MINUTE_PRESETS, MAX_REMINDER_OVERRIDES, type ReminderLabels } from "@/lib/calendar-reminders";
 import ColorSelect, { type ColorOption } from "@/components/color-select";
 import RichTextarea from "@/components/rich-textarea";
 import type { CalendarEventInput, CalendarEventDetail } from "@/lib/google";
 import {
   fetchCalendarEventDetail,
+  fetchDefaultReminders,
   createCalendarEventAction,
   updateCalendarEventAction,
   deleteCalendarEventAction,
@@ -18,7 +22,6 @@ import type { LinkOption } from "../link-dialog";
 export type EventDialogTarget = { id: string } | { start: Date };
 
 type RepeatPreset = "none" | "daily" | "weekly" | "monthly" | "yearly";
-type ReminderPreset = "default" | "none" | "10" | "30" | "60" | "1440";
 
 const REPEAT_RRULE: Record<Exclude<RepeatPreset, "none">, string> = {
   daily: "RRULE:FREQ=DAILY",
@@ -34,13 +37,6 @@ function repeatPresetFromRrule(recurrence: string[]): RepeatPreset {
   if (rule.includes("FREQ=WEEKLY")) return "weekly";
   if (rule.includes("FREQ=MONTHLY")) return "monthly";
   if (rule.includes("FREQ=YEARLY")) return "yearly";
-  return "none";
-}
-
-function reminderPresetFrom(useDefault: boolean, minutes: number | null): ReminderPreset {
-  if (useDefault) return "default";
-  if (minutes == null) return "none";
-  if (minutes === 10 || minutes === 30 || minutes === 60 || minutes === 1440) return String(minutes) as ReminderPreset;
   return "none";
 }
 
@@ -78,14 +74,45 @@ const FALLBACK_TIME_ZONES = [
   "Europe/Berlin",
 ];
 
-function listTimeZones(): string[] {
+// Current UTC offset of a zone, in minutes (e.g. -300 for America/New_York
+// in winter) — used only to sort/label the picker, so a wrong or zero
+// result on an environment without full Intl offset support just falls
+// back to alphabetical order rather than crashing.
+function tzOffsetMinutes(tz: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "shortOffset" }).formatToParts(new Date());
+    const name = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT+0";
+    const match = name.match(/GMT([+-])(\d+)(?::(\d+))?/);
+    if (!match) return 0;
+    const sign = match[1] === "-" ? -1 : 1;
+    const hours = Number(match[2]);
+    const minutes = match[3] ? Number(match[3]) : 0;
+    return sign * (hours * 60 + minutes);
+  } catch {
+    return 0;
+  }
+}
+
+function tzOffsetLabel(totalMinutes: number): string {
+  const sign = totalMinutes < 0 ? "-" : "+";
+  const abs = Math.abs(totalMinutes);
+  return `UTC${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+}
+
+// Ordered UTC-12 -> UTC+14, the way Google Calendar's own timezone picker
+// sorts (rather than the alphabetical order Intl.supportedValuesOf returns).
+function listTimeZoneOptions(): { tz: string; label: string }[] {
+  let zones: string[];
   try {
     const supportedValuesOf = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
-    if (typeof supportedValuesOf === "function") return supportedValuesOf("timeZone");
+    zones = typeof supportedValuesOf === "function" ? supportedValuesOf("timeZone") : FALLBACK_TIME_ZONES;
   } catch {
-    // fall through to the fallback list below
+    zones = FALLBACK_TIME_ZONES;
   }
-  return FALLBACK_TIME_ZONES;
+  return zones
+    .map((tz) => ({ tz, offset: tzOffsetMinutes(tz) }))
+    .sort((a, b) => a.offset - b.offset)
+    .map(({ tz, offset }) => ({ tz, label: `(${tzOffsetLabel(offset)}) ${tz}` }));
 }
 
 // Extracts the wall-clock date/time an instant reads as in a *specific*
@@ -122,7 +149,8 @@ interface FormState {
   timeZone: string;
   colorId: string;
   repeat: RepeatPreset;
-  reminder: ReminderPreset;
+  reminderUseDefault: boolean;
+  reminderOverrides: number[]; // minutes; only meaningful when reminderUseDefault is false
   transparency: "opaque" | "transparent";
   visibility: "default" | "public" | "private";
   attendeeEmails: string[];
@@ -146,7 +174,8 @@ function blankState(start: Date): FormState {
     timeZone: browserTimeZone(),
     colorId: "",
     repeat: "none",
-    reminder: "default",
+    reminderUseDefault: true,
+    reminderOverrides: [],
     transparency: "opaque",
     visibility: "default",
     attendeeEmails: [],
@@ -175,7 +204,8 @@ function stateFromDetail(detail: CalendarEventDetail, links: EventLinkTargets): 
     timeZone,
     colorId: detail.colorId ?? "",
     repeat: repeatPresetFromRrule(detail.recurrence),
-    reminder: reminderPresetFrom(detail.reminderUseDefault, detail.reminderMinutes),
+    reminderUseDefault: detail.reminderUseDefault,
+    reminderOverrides: detail.reminderOverrides,
     transparency: detail.transparency,
     visibility: detail.visibility,
     attendeeEmails: detail.attendees.map((a) => a.email).filter(Boolean),
@@ -186,7 +216,7 @@ function stateFromDetail(detail: CalendarEventDetail, links: EventLinkTargets): 
   };
 }
 
-export interface EventDialogLabels {
+export interface EventDialogLabels extends ReminderLabels {
   createTitle: string;
   editTitle: string;
   loading: string;
@@ -213,11 +243,9 @@ export interface EventDialogLabels {
   repeatLockedNotice: string;
   reminder: string;
   reminderDefault: string;
-  reminderNone: string;
-  reminderMinutes10: string;
-  reminderMinutes30: string;
-  reminderHours1: string;
-  reminderDay1: string;
+  addNotification: string;
+  useDefaultReminder: string;
+  removeReminder: string;
   busyFree: string;
   busy: string;
   free: string;
@@ -244,6 +272,95 @@ export interface EventDialogLabels {
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
+const COMPACT_FIELD_CLASS = "rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm";
+
+// Shows a long-form formatted date ("September 22, 2026" / "22 septembre
+// 2026") while unfocused; swaps to a native date input (calendar-icon
+// picker + typed entry) on focus, same pattern as the Project edit form's
+// own DateField.
+function DateDisplayField({
+  value,
+  onChange,
+  lang,
+  dateLocale,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  lang: Lang;
+  dateLocale: Locale | undefined;
+}) {
+  const [focused, setFocused] = useState(false);
+  const longFormat = lang === "fr" ? "d MMMM yyyy" : "MMMM d, yyyy";
+  const displayValue = (() => {
+    if (!value) return "";
+    const d = new Date(`${value}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? value : format(d, longFormat, { locale: dateLocale });
+  })();
+
+  return focused ? (
+    <input
+      type="date"
+      autoFocus
+      value={value}
+      onBlur={() => setFocused(false)}
+      onChange={(e) => onChange(e.target.value)}
+      className={COMPACT_FIELD_CLASS}
+    />
+  ) : (
+    <input
+      type="text"
+      readOnly
+      value={displayValue}
+      onFocus={() => setFocused(true)}
+      className={`${COMPACT_FIELD_CLASS} cursor-pointer`}
+    />
+  );
+}
+
+// Shows the time formatted per the viewer's 12h/24h setting while
+// unfocused; swaps to a native time input on focus. `step` limits the
+// native clock-face picker's minute list to 10-minute increments (typing
+// directly can still enter any value — browsers don't enforce `step` on
+// keyboard entry, only on the picker/spinner UI).
+function TimeDisplayField({
+  value,
+  onChange,
+  hour12,
+  intlLocale,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  hour12: boolean;
+  intlLocale: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const displayValue = (() => {
+    if (!value) return "";
+    const [h, m] = value.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return value;
+    return formatClockTime(new Date(2000, 0, 1, h, m), hour12, intlLocale);
+  })();
+
+  return focused ? (
+    <input
+      type="time"
+      step={600}
+      autoFocus
+      value={value}
+      onBlur={() => setFocused(false)}
+      onChange={(e) => onChange(e.target.value)}
+      className={COMPACT_FIELD_CLASS}
+    />
+  ) : (
+    <input
+      type="text"
+      readOnly
+      value={displayValue}
+      onFocus={() => setFocused(true)}
+      className={`${COMPACT_FIELD_CLASS} cursor-pointer`}
+    />
+  );
+}
 
 export default function EventDialog({
   target,
@@ -257,6 +374,9 @@ export default function EventDialog({
   tasks,
   bookings,
   lang,
+  hour12,
+  dateLocale,
+  intlLocale,
   labels,
   linkLabels,
 }: {
@@ -278,6 +398,9 @@ export default function EventDialog({
   tasks: LinkOption[];
   bookings: LinkOption[];
   lang: Lang;
+  hour12: boolean;
+  dateLocale: Locale | undefined;
+  intlLocale: string;
   labels: EventDialogLabels;
   linkLabels: { contact: string; project: string; task: string; booking: string; none: string; clear: string; searchPlaceholder: string; noResults: string };
 }) {
@@ -288,13 +411,26 @@ export default function EventDialog({
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<CalendarEventDetail | null>(null);
+  const [defaultReminders, setDefaultReminders] = useState<number[]>([]);
   const [form, setForm] = useState<FormState>(() => (target && "start" in target ? blankState(target.start) : blankState(new Date())));
   const [contactSearch, setContactSearch] = useState("");
   const [guestInput, setGuestInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const timeZones = useMemo(() => listTimeZones(), []);
+  const timeZoneOptions = useMemo(() => listTimeZoneOptions(), []);
+
+  useEffect(() => {
+    // Independent of create/edit — a brand new event still needs to show
+    // what its "default notification" would actually mean.
+    let cancelled = false;
+    fetchDefaultReminders().then((result) => {
+      if (!cancelled && !("error" in result)) setDefaultReminders(result.minutes);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!target || "start" in target) return;
@@ -325,6 +461,12 @@ export default function EventDialog({
     return list.slice(0, 20);
   }, [contactSearch, contacts]);
 
+  const filteredGuestContacts = useMemo(() => {
+    const q = guestInput.trim().toLowerCase();
+    if (!q) return [];
+    return contacts.filter((c) => c.email && c.label.toLowerCase().includes(q) && !form.attendeeEmails.includes(c.email)).slice(0, 8);
+  }, [guestInput, contacts, form.attendeeEmails]);
+
   const availableProjects = useMemo(
     () => (form.contactId ? projects.filter((p) => p.contactId === form.contactId) : []),
     [projects, form.contactId]
@@ -354,16 +496,49 @@ export default function EventDialog({
     update("allDay", checked);
   }
 
-  function addGuest() {
-    const email = guestInput.trim();
-    if (!email || form.attendeeEmails.includes(email)) return;
-    update("attendeeEmails", [...form.attendeeEmails, email]);
+  function addGuestEmail(email: string) {
+    const trimmed = email.trim();
+    if (!trimmed || form.attendeeEmails.includes(trimmed)) return;
+    update("attendeeEmails", [...form.attendeeEmails, trimmed]);
     setGuestInput("");
   }
 
+  // Mirrors Google Calendar's own behavior: adding a custom notification
+  // while still on the calendar's defaults converts to an explicit list
+  // seeded with those same defaults (the API can't represent "default plus
+  // one more" — reminders.useDefault and .overrides are mutually
+  // exclusive), so the visible list doesn't change, only how it's stored.
+  function addReminder() {
+    setForm((f) => {
+      if (f.reminderUseDefault) {
+        const seeded = [...defaultReminders, 30].slice(0, MAX_REMINDER_OVERRIDES);
+        return { ...f, reminderUseDefault: false, reminderOverrides: seeded };
+      }
+      if (f.reminderOverrides.length >= MAX_REMINDER_OVERRIDES) return f;
+      return { ...f, reminderOverrides: [...f.reminderOverrides, 30] };
+    });
+  }
+
+  function removeDefaultReminder() {
+    update("reminderUseDefault", false);
+    update("reminderOverrides", []);
+  }
+
+  function updateReminderAt(index: number, minutes: number) {
+    update(
+      "reminderOverrides",
+      form.reminderOverrides.map((m, i) => (i === index ? minutes : m))
+    );
+  }
+
+  function removeReminderAt(index: number) {
+    update(
+      "reminderOverrides",
+      form.reminderOverrides.filter((_, i) => i !== index)
+    );
+  }
+
   function buildInput(): CalendarEventInput {
-    const reminderUseDefault = form.reminder === "default";
-    const reminderMinutes = reminderUseDefault || form.reminder === "none" ? null : Number(form.reminder);
     const start = form.allDay ? form.startDate : `${form.startDate}T${form.startTime}:00`;
     const end = form.allDay ? form.endDate : `${form.endDate}T${form.endTime}:00`;
     return {
@@ -379,8 +554,8 @@ export default function EventDialog({
       recurrence: form.repeat === "none" ? [] : [REPEAT_RRULE[form.repeat]],
       visibility: form.visibility,
       transparency: form.transparency,
-      reminderUseDefault,
-      reminderMinutes,
+      reminderUseDefault: form.reminderUseDefault,
+      reminderOverrides: form.reminderOverrides,
     };
   }
 
@@ -418,13 +593,16 @@ export default function EventDialog({
 
   const isRecurringInstance = Boolean(detail?.recurringEventId);
   const mapsUrl = form.location.trim() ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.location.trim())}` : null;
+  const color = eventColor(form.colorId || null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-5 shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: color.bg }} />
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-display text-lg font-semibold text-ink">{isEdit ? labels.editTitle : labels.createTitle}</h3>
           {!loading && !loadError && (
@@ -464,22 +642,23 @@ export default function EventDialog({
                 className="w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-base font-medium text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
               />
 
-              {/* Date/time row + All day + Repeat, all grouped together like
-                  Google's own event editor keeps its date/time controls. */}
-              <div>
+              {/* Start row, then End row — each date always stays on the
+                  same line as its own time, the way Google Calendar's own
+                  editor groups them, rather than one shared row where a
+                  wrap could separate End's date from End's time. */}
+              <div className="space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <input type="date" value={form.startDate} onChange={(e) => update("startDate", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm" />
-                  {!form.allDay && (
-                    <input type="time" value={form.startTime} onChange={(e) => update("startTime", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm" />
-                  )}
-                  <span className="text-sm text-soft">{labels.to}</span>
-                  {!form.allDay && (
-                    <input type="time" value={form.endTime} onChange={(e) => update("endTime", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm" />
-                  )}
-                  <input type="date" value={form.endDate} onChange={(e) => update("endDate", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm" />
+                  <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.start}</span>
+                  <DateDisplayField value={form.startDate} onChange={(v) => update("startDate", v)} lang={lang} dateLocale={dateLocale} />
+                  {!form.allDay && <TimeDisplayField value={form.startTime} onChange={(v) => update("startTime", v)} hour12={hour12} intlLocale={intlLocale} />}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.end}</span>
+                  <DateDisplayField value={form.endDate} onChange={(v) => update("endDate", v)} lang={lang} dateLocale={dateLocale} />
+                  {!form.allDay && <TimeDisplayField value={form.endTime} onChange={(v) => update("endTime", v)} hour12={hour12} intlLocale={intlLocale} />}
                 </div>
 
-                <div className="mt-2 flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3 pt-1">
                   <label className="flex items-center gap-2 text-sm text-ink">
                     <input type="checkbox" checked={form.allDay} onChange={(e) => toggleAllDay(e.target.checked)} className="h-4 w-4 rounded border-card-border" />
                     {labels.allDay}
@@ -487,10 +666,10 @@ export default function EventDialog({
 
                   {!form.allDay && (
                     <select value={form.timeZone} onChange={(e) => update("timeZone", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-xs text-ink shadow-sm">
-                      {!timeZones.includes(form.timeZone) && <option value={form.timeZone}>{form.timeZone}</option>}
-                      {timeZones.map((tz) => (
-                        <option key={tz} value={tz}>
-                          {tz}
+                      {!timeZoneOptions.some((o) => o.tz === form.timeZone) && <option value={form.timeZone}>{form.timeZone}</option>}
+                      {timeZoneOptions.map((o) => (
+                        <option key={o.tz} value={o.tz}>
+                          {o.label}
                         </option>
                       ))}
                     </select>
@@ -507,15 +686,6 @@ export default function EventDialog({
                       <option value="yearly">{labels.repeatYearly}</option>
                     </select>
                   )}
-
-                  <select value={form.reminder} onChange={(e) => update("reminder", e.target.value as ReminderPreset)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm">
-                    <option value="default">{labels.reminderDefault}</option>
-                    <option value="none">{labels.reminderNone}</option>
-                    <option value="10">{labels.reminderMinutes10}</option>
-                    <option value="30">{labels.reminderMinutes30}</option>
-                    <option value="60">{labels.reminderHours1}</option>
-                    <option value="1440">{labels.reminderDay1}</option>
-                  </select>
                 </div>
               </div>
 
@@ -569,6 +739,54 @@ export default function EventDialog({
                 </div>
               </div>
 
+              {/* Notifications — Google Calendar allows either the
+                  calendar's own defaults, or up to 5 custom overrides, but
+                  never both at once; addReminder() below seeds the custom
+                  list from the current defaults so switching away from
+                  "default" doesn't visibly change anything. */}
+              <div>
+                <label className={LABEL_CLASS}>{labels.reminder}</label>
+                <div className="mt-1 space-y-1.5">
+                  {form.reminderUseDefault ? (
+                    <div className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
+                      <span>{defaultReminders.length > 0 ? defaultReminders.map((m) => formatReminderMinutes(m, labels)).join(", ") : labels.reminderDefault}</span>
+                      <button type="button" onClick={removeDefaultReminder} aria-label={labels.removeReminder} className="ml-2 shrink-0 text-xs text-soft hover:underline">
+                        {labels.removeReminder}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {form.reminderOverrides.map((minutes, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <select value={minutes} onChange={(e) => updateReminderAt(i, Number(e.target.value))} className={COMPACT_FIELD_CLASS}>
+                            {REMINDER_MINUTE_PRESETS.map((m) => (
+                              <option key={m} value={m}>
+                                {formatReminderMinutes(m, labels)}
+                              </option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => removeReminderAt(i)} aria-label={labels.removeReminder} className="text-soft hover:text-red-600">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                              <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                      {form.reminderOverrides.length === 0 && (
+                        <button type="button" onClick={() => update("reminderUseDefault", true)} className="text-xs text-soft hover:underline">
+                          {labels.useDefaultReminder}
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {(form.reminderUseDefault || form.reminderOverrides.length < MAX_REMINDER_OVERRIDES) && (
+                    <button type="button" onClick={addReminder} className="text-xs font-semibold text-amo-lime hover:underline">
+                      + {labels.addNotification}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <label className={LABEL_CLASS}>{labels.guests}</label>
                 {form.attendeeEmails.length > 0 && (
@@ -583,23 +801,39 @@ export default function EventDialog({
                     ))}
                   </ul>
                 )}
-                <div className="mt-1 flex gap-1.5">
-                  <input
-                    type="email"
-                    value={guestInput}
-                    onChange={(e) => setGuestInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addGuest();
-                      }
-                    }}
-                    placeholder={labels.guestEmailPlaceholder}
-                    className="flex-1 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-                  />
-                  <button type="button" onClick={addGuest} className="rounded-md border border-card-border px-3 py-2 text-xs font-medium text-ink hover:bg-black/5">
-                    {labels.addGuest}
-                  </button>
+                <div className="relative mt-1">
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={guestInput}
+                      onChange={(e) => setGuestInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addGuestEmail(guestInput);
+                        }
+                      }}
+                      placeholder={labels.guestEmailPlaceholder}
+                      className="flex-1 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+                    />
+                    <button type="button" onClick={() => addGuestEmail(guestInput)} className="rounded-md border border-card-border px-3 py-2 text-xs font-medium text-ink hover:bg-black/5">
+                      {labels.addGuest}
+                    </button>
+                  </div>
+                  {filteredGuestContacts.length > 0 && (
+                    <div className="absolute z-10 mt-1 max-h-32 w-full overflow-y-auto rounded-md border border-card-border bg-card-bg shadow-lg">
+                      {filteredGuestContacts.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => addGuestEmail(c.email!)}
+                          className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-amo-lime/10"
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -690,6 +924,7 @@ export default function EventDialog({
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

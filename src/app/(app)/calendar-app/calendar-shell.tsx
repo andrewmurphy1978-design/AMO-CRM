@@ -415,6 +415,9 @@ export default function CalendarShell({
         tasks={tasks}
         bookings={bookings}
         lang={lang}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
         labels={labels.eventDialog}
         linkLabels={labels.linkPicker}
       />

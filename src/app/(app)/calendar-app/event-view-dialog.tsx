@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { format, type Locale } from "date-fns";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatTimeRange } from "@/lib/calendar-time";
+import { formatReminderList, type ReminderLabels } from "@/lib/calendar-reminders";
 import type { CalendarEventDetail } from "@/lib/google";
-import { fetchCalendarEventDetail, deleteCalendarEventAction } from "@/actions/calendar";
+import { fetchCalendarEventDetail, fetchDefaultReminders, deleteCalendarEventAction } from "@/actions/calendar";
 
-export interface EventViewDialogLabels {
+export interface EventViewDialogLabels extends ReminderLabels {
   loading: string;
   loadFailed: string;
   notConnected: string;
@@ -18,28 +19,26 @@ export interface EventViewDialogLabels {
   busy: string;
   free: string;
   allDay: string;
-  reminderDefault: string;
-  reminderNone: string;
-  reminderMinutesBefore: string;
-  reminderHourBefore: string;
-  reminderHoursBefore: string;
-  reminderDayBefore: string;
-  reminderDaysBefore: string;
   openInGoogleCalendar: string;
+  repeatDaily: string;
+  repeatWeeklyOn: string; // "Weekly on {day}"
+  repeatMonthlyOn: string; // "Monthly on day {day}"
+  repeatYearlyOn: string; // "Yearly on {date}"
 }
 
-// Labels are plain data passed down from a Server Component (page.tsx),
-// which can't carry functions across that boundary — so the reminder text
-// is templated ("{n} minutes before") and formatted here on the client,
-// rather than via a formatter function baked into the dictionary.
-function formatReminder(n: number, labels: EventViewDialogLabels): string {
-  if (n < 60) return labels.reminderMinutesBefore.replace("{n}", String(n));
-  if (n < 1440) {
-    const hours = n / 60;
-    return (hours === 1 ? labels.reminderHourBefore : labels.reminderHoursBefore).replace("{n}", String(hours));
-  }
-  const days = n / 1440;
-  return (days === 1 ? labels.reminderDayBefore : labels.reminderDaysBefore).replace("{n}", String(days));
+// A short description of the event's own RRULE, the way Google Calendar's
+// popup shows it under the date/time line ("Weekly on Thursday"). Only
+// handles the plain FREQ cases this app's own Repeat picker can create —
+// good enough for events made in this app; an RRULE with BYDAY/INTERVAL/
+// COUNT from elsewhere just falls back to the FREQ-only phrasing.
+function describeRecurrence(recurrence: string[], start: Date | null, dateLocale: Locale | undefined, labels: EventViewDialogLabels): string | null {
+  const rule = recurrence.find((r) => r.startsWith("RRULE:"));
+  if (!rule || !start) return null;
+  if (rule.includes("FREQ=DAILY")) return labels.repeatDaily;
+  if (rule.includes("FREQ=WEEKLY")) return labels.repeatWeeklyOn.replace("{day}", format(start, "EEEE", { locale: dateLocale }));
+  if (rule.includes("FREQ=MONTHLY")) return labels.repeatMonthlyOn.replace("{day}", format(start, "d", { locale: dateLocale }));
+  if (rule.includes("FREQ=YEARLY")) return labels.repeatYearlyOn.replace("{date}", format(start, "MMMM d", { locale: dateLocale }));
+  return null;
 }
 
 function IconRow({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
@@ -102,6 +101,7 @@ export default function EventViewDialog({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<CalendarEventDetail | null>(null);
+  const [defaultReminders, setDefaultReminders] = useState<number[]>([]);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -119,6 +119,9 @@ export default function EventViewDialog({
         setDetail(result);
       }
       setLoading(false);
+    });
+    fetchDefaultReminders().then((result) => {
+      if (!cancelled && !("error" in result)) setDefaultReminders(result.minutes);
     });
     return () => {
       cancelled = true;
@@ -149,13 +152,8 @@ export default function EventViewDialog({
     return `${dayLabel} · ${timeLabel}`;
   })();
 
-  const reminderText = !detail
-    ? ""
-    : detail.reminderUseDefault
-      ? labels.reminderDefault
-      : detail.reminderMinutes == null
-        ? labels.reminderNone
-        : formatReminder(detail.reminderMinutes, labels);
+  const reminderText = !detail ? "" : formatReminderList(detail.reminderUseDefault ? defaultReminders : detail.reminderOverrides, labels);
+  const repeatText = detail ? describeRecurrence(detail.recurrence, start, dateLocale, labels) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -181,6 +179,7 @@ export default function EventViewDialog({
           ) : (
             <>
               <p className="mt-1 text-sm text-ink">{dateRange}</p>
+              {repeatText && <p className="text-sm text-ink">{repeatText}</p>}
 
               {detail?.location && (
                 <IconRow icon={<LocationIcon />}>
@@ -216,12 +215,14 @@ export default function EventViewDialog({
             </>
           )}
 
-          <div className="mt-5 flex items-center justify-end gap-4 border-t border-card-border pt-4">
-            <button type="button" disabled={deleting || loading} onClick={handleDelete} className="text-sm text-red-600 hover:underline disabled:opacity-60">
+          <div className="mt-5 flex items-center justify-between border-t border-card-border pt-4">
+            <button
+              type="button"
+              disabled={deleting || loading}
+              onClick={handleDelete}
+              className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+            >
               {labels.delete}
-            </button>
-            <button type="button" onClick={onClose} className="text-sm text-soft hover:underline">
-              {labels.close}
             </button>
             <button type="button" disabled={loading} onClick={onEdit} className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60">
               {labels.edit}
