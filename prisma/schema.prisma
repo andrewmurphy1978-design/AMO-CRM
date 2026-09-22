@@ -871,6 +871,7 @@ model AffiliateProgram {
   name String // "Tool / Program"
 
   type            String? // one of AFFILIATE_TYPE_OPTIONS[tab] (src/lib/affiliate-status.ts) — displayed to the user as "Category"
+  iconUrl         String? // small colored logo/icon shown beside the program name
   shortioCreated  Boolean @default(false) // "Short.io Created?"
   brandedLink     String? // "go.andrewmurphy.online Link"
   destinationLink String? // "Real Destination Link"

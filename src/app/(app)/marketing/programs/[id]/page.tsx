@@ -87,7 +87,16 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card color="general" title={t.contactForm.cardGeneralInfo}>
-            <h1 className="font-display text-xl font-semibold text-ink">{program.name}</h1>
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+              <h1 className="font-display text-xl font-semibold text-ink">{program.name}</h1>
+              {program.iconUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={program.iconUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-contain" />
+              ) : (
+                <span />
+              )}
+              <span />
+            </div>
 
             <div className="grid gap-4 lg:grid-cols-3">
               {/* Row 1: Type, Category, Status Details */}

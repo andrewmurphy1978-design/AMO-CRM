@@ -18,6 +18,7 @@ type AffiliateProgramRow = {
   tab: AffiliateProgramTab;
   name: string;
   type: string | null;
+  iconUrl: string | null;
   affiliateStatus: string | null;
   brandedLink: string | null;
   followUpNeeded: boolean;
@@ -72,7 +73,8 @@ function AffiliateProgramCard({
               content, so two cards with different data drift out of sync. */}
           <table className="w-full table-fixed divide-y divide-card-border text-sm">
             <colgroup>
-              <col className="w-[22%]" />
+              <col className="w-[5%]" />
+              <col className="w-[17%]" />
               <col className="w-[10%]" />
               <col className="w-[10%]" />
               <col className="w-[13%]" />
@@ -84,6 +86,7 @@ function AffiliateProgramCard({
             </colgroup>
             <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
               <tr>
+                <th className="py-2 pr-4"></th>
                 <th className="py-2 pr-4">{t.marketing.colProgram}</th>
                 <th className="py-2 pr-4">{t.marketing.colType}</th>
                 <th className="py-2 pr-4">{t.marketing.categoryLabel}</th>
@@ -101,7 +104,13 @@ function AffiliateProgramCard({
                 const clicks = p.shortioClicks == null && p.shortioClicksFr == null ? null : (p.shortioClicks ?? 0) + (p.shortioClicksFr ?? 0);
                 return (
                   <tr key={p.id} id={p.id} className={`scroll-mt-24 ${styles.row} hover:brightness-95`}>
-                    <td className={`truncate py-2 pr-4 pl-3 align-top font-medium border-l-4 ${styles.border}`}>
+                    <td className={`py-2 pr-2 pl-3 align-top border-l-4 ${styles.border}`}>
+                      {p.iconUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.iconUrl} alt="" className="h-6 w-6 rounded-full object-contain" />
+                      ) : null}
+                    </td>
+                    <td className="truncate py-2 pr-4 align-top font-medium">
                       <Link href={`/marketing/programs/${p.id}`} className="text-ink hover:underline">
                         {p.name}
                       </Link>

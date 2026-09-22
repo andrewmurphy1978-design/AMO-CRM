@@ -22,6 +22,7 @@ type AffiliateProgramFormValues = {
   tab?: string;
   name?: string;
   type?: string | null;
+  iconUrl?: string | null;
   shortioCreated?: boolean;
   brandedLink?: string | null;
   destinationLink?: string | null;
@@ -314,8 +315,10 @@ export default function AffiliateProgramForm({
             <label className={LABEL_CLASS}>{t.marketing.destinationLinkLabel}</label>
             <input type="url" name="destinationLink" defaultValue={defaultValues?.destinationLink ?? ""} className={FIELD_CLASS} />
           </div>
-          <div className="flex flex-col justify-end">
-            <div className="flex items-end gap-2 pb-2">
+          <div>
+            <label className={LABEL_CLASS}>{t.marketing.iconUrlLabel}</label>
+            <input type="url" name="iconUrl" defaultValue={defaultValues?.iconUrl ?? ""} className={FIELD_CLASS} />
+            <div className="mt-2 flex items-center gap-2">
               <input
                 type="checkbox"
                 id="shortioCreated"
