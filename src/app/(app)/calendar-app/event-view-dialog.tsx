@@ -165,7 +165,13 @@ export default function EventViewDialog({
         <div className="p-5">
           <div className="flex items-start justify-between gap-2">
             <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold text-ink">{detail?.title ?? ""}</h3>
-            <button type="button" onClick={onClose} aria-label={labels.close} className="shrink-0 rounded-full p-1 text-soft hover:bg-black/5">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={labels.close}
+              className="shrink-0 rounded-full p-1 hover:opacity-80"
+              style={{ backgroundColor: color.bg, color: color.fg }}
+            >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
                 <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
               </svg>
@@ -189,10 +195,11 @@ export default function EventViewDialog({
 
               {detail?.description && (
                 <IconRow icon={<DescriptionIcon />}>
-                  <div className="flex items-start gap-2">
-                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color.bg }} />
-                    <div className="min-w-0 flex-1 break-words" dangerouslySetInnerHTML={{ __html: detail.description }} />
-                  </div>
+                  <div
+                    className="min-w-0 flex-1 break-words rounded-r-md py-1 pl-3"
+                    style={{ borderLeft: `3px solid ${color.bg}` }}
+                    dangerouslySetInnerHTML={{ __html: detail.description }}
+                  />
                 </IconRow>
               )}
 

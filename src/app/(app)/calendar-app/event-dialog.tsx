@@ -678,6 +678,13 @@ export default function EventDialog({
   const isRecurringInstance = Boolean(detail?.recurringEventId);
   const mapsUrl = form.location.trim() ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.location.trim())}` : null;
   const color = eventColor(form.colorId || null);
+  // GOOGLE_EVENT_COLORS only ever pairs a bg with "#fff" or "#000" text —
+  // branching on that (rather than hardcoding white) is what keeps the
+  // header's own buttons/links readable against every event color,
+  // Banana's black-on-yellow included.
+  const headerIsDark = color.fg === "#000";
+  const headerBtnClass = headerIsDark ? "border-black/30 hover:bg-black/10" : "border-white/40 hover:bg-white/15";
+  const headerLinkClass = headerIsDark ? "opacity-80 hover:opacity-100" : "opacity-90 hover:opacity-100";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -685,14 +692,16 @@ export default function EventDialog({
         className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: color.bg }} />
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="font-display text-lg font-semibold text-ink">{isEdit ? labels.editTitle : labels.createTitle}</h3>
+        {/* Pulled out of the scrollable body below (not just `sticky`), so
+            it never moves as the form scrolls — same fix already applied
+            to the top color bar this replaces, just spread into a full
+            colored heading instead of a thin strip. */}
+        <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4" style={{ backgroundColor: color.bg, color: color.fg }}>
+          <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold">{isEdit ? labels.editTitle : labels.createTitle}</h3>
           {!loading && !loadError && (
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-3">
               {detail?.htmlLink && (
-                <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-amo-lime hover:underline">
+                <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" className={`text-xs font-semibold underline ${headerLinkClass}`}>
                   {labels.openInGoogleCalendar} ↗
                 </a>
               )}
@@ -701,12 +710,12 @@ export default function EventDialog({
                   type="button"
                   disabled={pending}
                   onClick={remove}
-                  className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                  className={`rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-60 ${headerBtnClass}`}
                 >
                   {labels.delete}
                 </button>
               )}
-              <button type="button" onClick={onClose} className="text-sm text-soft hover:underline">
+              <button type="button" onClick={onClose} className={`text-sm hover:underline ${headerLinkClass}`}>
                 {labels.cancel}
               </button>
               <button
@@ -720,6 +729,7 @@ export default function EventDialog({
             </div>
           )}
         </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
 
         {loading ? (
           <p className="mt-4 text-sm text-soft">{labels.loading}</p>
