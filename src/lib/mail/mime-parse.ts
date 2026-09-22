@@ -69,6 +69,12 @@ export function decodeBase64(input: string): Uint8Array {
   return base64ToBytes(input);
 }
 
+export function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
 // Gmail's `format=raw` body is base64url (RFC 4648 §5: "-"/"_", no
 // padding) — this is the one place that encoding shows up, so it's kept
 // separate from the plain base64 decoder MIME bodies use.
@@ -360,4 +366,33 @@ export function parseMessage(raw: string): ParsedMessage {
     html,
     attachments,
   };
+}
+
+// Re-walks the same message for one attachment's actual bytes — kept
+// separate from parseMessage/AttachmentMeta (metadata only) so opening a
+// message in the Email Dialog never ships attachment bytes to the client
+// it didn't ask for; this only runs when a download is actually clicked.
+// The isAttachment condition here must stay in sync with parseMessage's
+// own walk() above.
+export function extractAttachmentBytes(raw: string, attachmentIndex: number): { filename: string; mimeType: string; bytes: Uint8Array } | null {
+  const { headers, bodyOffset } = parseHeaderBlock(raw);
+  const root = parseMimeTree(raw, bodyOffset, headers);
+  let index = 0;
+  let found: { filename: string; mimeType: string; bytes: Uint8Array } | null = null;
+
+  function walk(node: MimeNode) {
+    if (found) return;
+    if (node.children.length > 0) {
+      for (const child of node.children) walk(child);
+      return;
+    }
+    const isAttachment = node.disposition === "attachment" || (node.filename !== null && !node.contentType.startsWith("text/"));
+    if (!isAttachment) return;
+    if (index === attachmentIndex) {
+      found = { filename: node.filename ?? "attachment", mimeType: node.contentType || "application/octet-stream", bytes: node.body ?? new Uint8Array(0) };
+    }
+    index++;
+  }
+  walk(root);
+  return found;
 }

@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getValidAccessToken, getGoogleConnection, fetchGmailMessageRaw, sendGmailMessage } from "@/lib/google";
-import { parseMessage, type AttachmentMeta, type ParsedMessage } from "@/lib/mail/mime-parse";
+import { parseMessage, extractAttachmentBytes, encodeBase64, type AttachmentMeta, type ParsedMessage } from "@/lib/mail/mime-parse";
 import { buildMimeMessage } from "@/lib/mail/mime-build";
 import { resolveReplyIdentity, type MailIdentity, type MailSource } from "@/lib/mail/identity";
 import { getIonosMailbox, recordIonosResult, type IonosMailbox } from "@/lib/mail/ionos";
@@ -29,7 +29,7 @@ async function fetchOriginal(
   id: string,
   accessToken: string,
   mailbox: IonosMailbox | null
-): Promise<{ parsed: ParsedMessage; threadId: string; source: MailSource } | null> {
+): Promise<{ raw: string; parsed: ParsedMessage; threadId: string; source: MailSource } | null> {
   const uid = parseIonosUid(id);
   if (uid !== null) {
     if (!mailbox) return null;
@@ -44,11 +44,11 @@ async function fetchOriginal(
       uid
     );
     if (!raw) return null;
-    return { parsed: parseMessage(raw), threadId: id, source: "ionos" };
+    return { raw, parsed: parseMessage(raw), threadId: id, source: "ionos" };
   }
   const fetched = await fetchGmailMessageRaw(accessToken, id);
   if (!fetched) return null;
-  return { parsed: parseMessage(fetched.raw), threadId: fetched.threadId, source: "gmail" };
+  return { raw: fetched.raw, parsed: parseMessage(fetched.raw), threadId: fetched.threadId, source: "gmail" };
 }
 
 export interface EmailDetail {
@@ -238,5 +238,36 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
     const result = await sendGmailMessage(accessToken, raw, input.threadId ?? undefined);
     if ("error" in result) return { error: result.error };
     return { success: true };
+  });
+}
+
+// The Email Dialog's attachment list shows only metadata (filename/size —
+// see AttachmentMeta) so opening a message never ships attachment bytes
+// down for something the user might not click — this re-fetches the same
+// raw message and pulls just the one attachment's bytes, only when a
+// download is actually requested.
+export async function downloadEmailAttachment(
+  id: string,
+  attachmentIndex: number
+): Promise<{ filename: string; mimeType: string; base64: string } | { error: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  return withScopedPrismaClient(async (db) => {
+    // An "ionos-sent:<id>" record has no raw message stored anywhere (see
+    // fetchEmailDetail's comment) — nothing to extract an attachment from.
+    if (parseIonosSentRecordId(id) !== null) return { error: "not_found" };
+
+    const accessToken = await getValidAccessToken(session.user.id, db);
+    if (!accessToken) return { error: "not_connected" };
+
+    const mailbox = await getIonosMailbox(session.user.id, db);
+    const original = await fetchOriginal(id, accessToken, mailbox);
+    if (!original) return { error: "not_found" };
+
+    const attachment = extractAttachmentBytes(original.raw, attachmentIndex);
+    if (!attachment) return { error: "not_found" };
+
+    return { filename: attachment.filename, mimeType: attachment.mimeType, base64: encodeBase64(attachment.bytes) };
   });
 }

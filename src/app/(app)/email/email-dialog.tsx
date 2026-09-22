@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
-import { fetchEmailDetail, type EmailDetail } from "@/actions/email-messages";
+import { fetchEmailDetail, downloadEmailAttachment, type EmailDetail } from "@/actions/email-messages";
 import EmailBodyFrame from "./email-body-frame";
 import type { ComposeMode } from "./email-compose-dialog";
 import { GmailIcon, IonosIcon } from "./mail-brand-icons";
@@ -47,6 +47,21 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Decodes the base64 payload downloadEmailAttachment returns into a Blob
+// and saves it via a throwaway link click — the standard way to trigger a
+// browser "Save As" from script-fetched bytes rather than a real <a href>.
+function saveBase64File(filename: string, mimeType: string, base64: string): void {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 // The Email page's "open a message" dialog — shell copied from
 // calendar-app/event-view-dialog.tsx (backdrop + inner panel + Escape-to-
 // close) for visual consistency with the rest of the app's dialogs.
@@ -70,6 +85,7 @@ export default function EmailDialog({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<EmailDetail | null>(null);
+  const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!target) return;
@@ -102,6 +118,13 @@ export default function EmailDialog({
   }, [target, onClose]);
 
   if (!target) return null;
+
+  async function handleDownload(id: string, index: number) {
+    setDownloadingIndex(index);
+    const result = await downloadEmailAttachment(id, index);
+    setDownloadingIndex(null);
+    if (!("error" in result)) saveBase64File(result.filename, result.mimeType, result.base64);
+  }
 
   // An "ionos:"-prefixed id (see EmailSummary's source comment in
   // google.ts) has no Gmail thread to deep-link to — the row/dialog's
@@ -158,14 +181,18 @@ export default function EmailDialog({
               {detail && detail.attachments.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {detail.attachments.map((a, i) => (
-                    <span
+                    <button
                       key={i}
-                      className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink"
+                      type="button"
+                      onClick={() => handleDownload(target.id, i)}
+                      disabled={downloadingIndex === i}
+                      title={a.filename}
+                      className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink hover:bg-black/5 disabled:opacity-60"
                     >
                       <AttachmentIcon />
                       <span className="max-w-[10rem] truncate">{a.filename}</span>
                       <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
