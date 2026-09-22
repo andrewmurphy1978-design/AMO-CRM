@@ -26,6 +26,37 @@ function toArray(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
+type SortField = "name" | "country" | "stage" | "source";
+const SORT_FIELDS: SortField[] = ["name", "country", "stage", "source"];
+
+function SortableHeader({
+  field,
+  label,
+  sortField,
+  sortDir,
+  baseParams,
+}: {
+  field: SortField;
+  label: string;
+  sortField: SortField | null;
+  sortDir: "asc" | "desc";
+  baseParams: URLSearchParams;
+}) {
+  const active = sortField === field;
+  const nextDir = active && sortDir === "asc" ? "desc" : "asc";
+  const params = new URLSearchParams(baseParams);
+  params.set("sort", field);
+  params.set("dir", nextDir);
+  return (
+    <th className="px-4 py-3">
+      <Link href={`/contacts?${params.toString()}`} className="inline-flex items-center gap-1 hover:underline">
+        {label}
+        <span className="text-[10px]">{active ? (sortDir === "asc" ? "▲" : "▼") : ""}</span>
+      </Link>
+    </th>
+  );
+}
+
 function TagPills({ tags, vertical }: { tags: { tagId: string; tag: { name: string } }[]; vertical?: boolean }) {
   return (
     <div className={vertical ? "flex flex-col items-start gap-1" : "flex flex-wrap gap-1"}>
@@ -44,11 +75,13 @@ function TagPills({ tags, vertical }: { tags: { tagId: string; tag: { name: stri
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string | string[]; tag?: string | string[] }>;
+  searchParams: Promise<{ q?: string; stage?: string | string[]; tag?: string | string[]; sort?: string; dir?: string }>;
 }) {
-  const { q, stage, tag } = await searchParams;
+  const { q, stage, tag, sort, dir } = await searchParams;
   const stages = toArray(stage);
   const selectedTags = toArray(tag);
+  const sortField: SortField | null = SORT_FIELDS.includes(sort as SortField) ? (sort as SortField) : null;
+  const sortDir: "asc" | "desc" = dir === "desc" ? "desc" : "asc";
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
@@ -67,6 +100,12 @@ export default async function ContactsPage({
     ];
   }
 
+  let orderBy: Prisma.ContactOrderByWithRelationInput | Prisma.ContactOrderByWithRelationInput[] = { createdAt: "desc" };
+  if (sortField === "name") orderBy = [{ firstName: sortDir }, { lastName: sortDir }];
+  else if (sortField === "country") orderBy = { country: sortDir };
+  else if (sortField === "stage") orderBy = { stage: sortDir };
+  else if (sortField === "source") orderBy = { source: sortDir };
+
   // One shared client for all three reads below — see src/lib/prisma.ts
   // for why (each `prisma.x` property access on the raw proxy opens a
   // brand-new connection; three of those on this frequently-visited page
@@ -74,7 +113,7 @@ export default async function ContactsPage({
   const { contacts, tags, hour12 } = await withScopedPrismaClient(async (db) => {
     const contacts = await db.contact.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy,
       take: 100,
       include: { tags: { include: { tag: true } } },
     });
@@ -85,6 +124,11 @@ export default async function ContactsPage({
 
   const stageOptions = Object.entries(STAGE_LABELS).map(([value, label]) => ({ value, label }));
   const tagOptions = tags.map((tg) => ({ value: tg.name, label: tg.name }));
+
+  const baseParams = new URLSearchParams();
+  if (q) baseParams.set("q", q);
+  for (const s of stages) baseParams.append("stage", s);
+  for (const tg of selectedTags) baseParams.append("tag", tg);
 
   return (
     <div className="space-y-6">
@@ -113,7 +157,7 @@ export default async function ContactsPage({
       />
 
       {/* Mobile: stacked cards instead of a cramped multi-column table. */}
-      <div className="divide-y divide-card-border rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
+      <div className="max-h-[calc(100vh-260px)] divide-y divide-card-border overflow-auto rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
         {contacts.map((contact, i) => {
           const languageTags = contact.tags.filter((ct) => isLanguageTag(ct.tag.name));
           const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
@@ -161,19 +205,24 @@ export default async function ContactsPage({
         {contacts.length === 0 && <p className="px-4 py-8 text-center text-sm text-soft">{t.contacts.noContactsFound}</p>}
       </div>
 
-      {/* Desktop/tablet: full table. */}
-      <div className="hidden overflow-x-auto rounded-lg border border-card-border bg-card-bg shadow-sm sm:block">
+      {/* Desktop/tablet: full table. Fixed max-height with its own scrollbar
+          (not the page) so the sticky header row stays visible while
+          scrolling through contacts. */}
+      <div className="hidden max-h-[calc(100vh-260px)] overflow-auto rounded-lg border border-card-border bg-card-bg shadow-sm sm:block">
         <table className="min-w-full divide-y divide-card-border text-sm">
-          <thead className="text-left text-xs font-medium uppercase tracking-wide" style={{ backgroundColor: "#1e4430", color: "#f4faf6" }}>
+          <thead
+            className="sticky top-0 z-10 text-left text-xs font-medium uppercase tracking-wide"
+            style={{ backgroundColor: "#1e4430", color: "#f4faf6" }}
+          >
             <tr>
-              <th className="px-4 py-3">{t.contacts.colName}</th>
+              <SortableHeader field="name" label={t.contacts.colName} sortField={sortField} sortDir={sortDir} baseParams={baseParams} />
               <th className="px-4 py-3">{t.contacts.colEmail}</th>
               <th className="px-4 py-3">{t.contacts.colPhone}</th>
-              <th className="px-4 py-3">{t.contacts.colCountry}</th>
-              <th className="px-4 py-3">{t.contacts.colStage}</th>
+              <SortableHeader field="country" label={t.contacts.colCountry} sortField={sortField} sortDir={sortDir} baseParams={baseParams} />
+              <SortableHeader field="stage" label={t.contacts.colStage} sortField={sortField} sortDir={sortDir} baseParams={baseParams} />
               <th className="px-4 py-3">{t.contacts.colLanguages}</th>
               <th className="px-4 py-3">{t.contacts.colTags}</th>
-              <th className="px-4 py-3">{t.contacts.colSource}</th>
+              <SortableHeader field="source" label={t.contacts.colSource} sortField={sortField} sortDir={sortDir} baseParams={baseParams} />
             </tr>
           </thead>
           <tbody className="divide-y divide-card-border">
