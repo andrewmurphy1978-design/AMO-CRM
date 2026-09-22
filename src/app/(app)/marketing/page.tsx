@@ -74,28 +74,28 @@ function AffiliateProgramCard({
           <table className="w-full table-fixed divide-y divide-card-border text-sm">
             <colgroup>
               <col className="w-[5%]" />
-              <col className="w-[17%]" />
-              <col className="w-[10%]" />
-              <col className="w-[10%]" />
+              <col className="w-[18%]" />
+              <col className="w-[14%]" />
               <col className="w-[13%]" />
-              <col className="w-[8%]" />
-              <col className="w-[7%]" />
-              <col className="w-[7%]" />
-              <col className="w-[10%]" />
               <col className="w-[13%]" />
+              <col className="w-[9%]" />
+              <col className="w-[7%]" />
+              <col className="w-[6%]" />
+              <col className="w-[9%]" />
+              <col className="w-[6%]" />
             </colgroup>
             <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
               <tr>
                 <th className="py-2 pr-4"></th>
                 <th className="py-2 pr-4">{t.marketing.colProgram}</th>
-                <th className="py-2 pr-4">{t.marketing.colType}</th>
+                <th className="py-2 pr-4 whitespace-nowrap">{t.marketing.colType}</th>
                 <th className="py-2 pr-4">{t.marketing.categoryLabel}</th>
-                <th className="py-2 pr-4">{t.marketing.colStatus}</th>
-                <th className="py-2 pr-4">{t.marketing.colFollowUp}</th>
+                <th className="py-2 pr-4 whitespace-nowrap">{t.marketing.colStatus}</th>
+                <th className="py-2 pr-4 whitespace-nowrap">{t.marketing.colFollowUp}</th>
                 <th className="py-2 pr-4">{t.marketing.colLink}</th>
-                <th className="py-2 pr-4">{t.marketing.colClicks}</th>
-                <th className="py-2 pr-4">{t.marketing.colConversions}</th>
-                <th className="py-2 pr-4">{t.marketing.colLinkedEmails}</th>
+                <th className="py-2 pr-2 whitespace-nowrap">{t.marketing.colClicks}</th>
+                <th className="py-2 pr-2 whitespace-nowrap">{t.marketing.colConversions}</th>
+                <th className="py-2 pr-2 whitespace-nowrap">{t.marketing.colLinkedEmails}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-card-border">
@@ -139,12 +139,12 @@ function AffiliateProgramCard({
                         "—"
                       )}
                     </td>
-                    <td className="truncate py-2 pr-4 align-top text-ink/70">{clicks ?? "—"}</td>
+                    <td className="truncate py-2 pr-2 align-top text-ink/70">{clicks ?? "—"}</td>
                     {/* Not tracked yet — Short.io reports clicks, not
                         conversions/sales, so there's no real number to show
                         here until a conversion source is wired up. */}
-                    <td className="truncate py-2 pr-4 align-top text-ink/70">—</td>
-                    <td className="truncate py-2 pr-4 align-top text-ink/70">{p.emailLinks.length > 0 ? p.emailLinks.length : "—"}</td>
+                    <td className="truncate py-2 pr-2 align-top text-ink/70">—</td>
+                    <td className="truncate py-2 pr-2 align-top text-ink/70">{p.emailLinks.length > 0 ? p.emailLinks.length : "—"}</td>
                   </tr>
                 );
               })}

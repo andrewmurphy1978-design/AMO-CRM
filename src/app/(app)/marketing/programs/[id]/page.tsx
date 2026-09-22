@@ -87,15 +87,20 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card color="general" title={t.contactForm.cardGeneralInfo}>
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+            <div className="grid items-center gap-3 lg:grid-cols-3">
               <h1 className="font-display text-xl font-semibold text-ink">{program.name}</h1>
-              {program.iconUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={program.iconUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-contain" />
-              ) : (
-                <span />
-              )}
-              <span />
+              <div className="flex justify-center">
+                {program.iconUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={program.iconUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-contain" />
+                )}
+              </div>
+              <div>
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${styles.badge}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
+                  {program.affiliateStatus || "—"}
+                </span>
+              </div>
             </div>
 
             <div className="grid gap-4 lg:grid-cols-3">
@@ -214,13 +219,6 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
         </div>
 
         <div className="space-y-6">
-          <Card color="general" title={t.marketing.colStatus}>
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${styles.badge}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
-              {program.affiliateStatus || "—"}
-            </span>
-          </Card>
-
           <Card color="linkedEmails" title={t.contactDetail.linkedEmailsTitle}>
             {program.emailLinks.length === 0 ? (
               <p className="text-sm text-soft">{t.marketing.noLinkedEmailsYet}</p>

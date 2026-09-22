@@ -111,6 +111,20 @@ function UncompleteButton({ onClick, title }: { onClick: () => void; title: stri
   );
 }
 
+// Same white-check-on-green look as UncompleteButton, but non-interactive —
+// used for a sent thread Gmail marked completed by detecting a reply. That
+// state isn't something this app can undo, so it gets the same "done"
+// marker without a click handler, rather than no icon at all.
+function CompletedBadge({ title }: { title: string }) {
+  return (
+    <span title={title} className="flex shrink-0 items-center justify-center rounded-full bg-emerald-600 p-1 text-white">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
+      </svg>
+    </span>
+  );
+}
+
 // The Recently Read section's "put it back" action — reopens the message
 // into whichever category it was in before it was opened.
 function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: string }) {
@@ -164,6 +178,7 @@ function EmailRow({
   onComplete,
   onUncomplete,
   onMarkUnread,
+  completedLocked,
   completeLabel,
   uncompleteLabel,
   markUnreadLabel,
@@ -195,6 +210,10 @@ function EmailRow({
   onComplete?: () => void;
   onUncomplete?: () => void;
   onMarkUnread?: () => void;
+  // True for a sent thread Gmail marked completed by detecting a reply —
+  // that state can't be undone from here, so it gets a static badge
+  // instead of the clickable UncompleteButton.
+  completedLocked?: boolean;
   completeLabel: string;
   uncompleteLabel: string;
   markUnreadLabel: string;
@@ -254,6 +273,7 @@ function EmailRow({
         <span className="flex w-6 shrink-0 justify-center">
           {onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}
           {onUncomplete && <UncompleteButton onClick={onUncomplete} title={uncompleteLabel} />}
+          {!onUncomplete && completedLocked && <CompletedBadge title={completeLabel} />}
         </span>
         <span className="flex w-6 shrink-0 justify-center">{onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}</span>
         <EmailQuickActions link={link} labels={quickActionLabels} onOpen={onOpen} />
@@ -567,6 +587,7 @@ export default function EmailScreeningView({
         // a thread manually completed while still "awaiting" gets an
         // uncomplete button.
         onUncomplete={opts.showUncomplete && s.status === "awaiting" ? () => markUncomplete(s.id) : undefined}
+        completedLocked={opts.showUncomplete && s.status === "completed"}
         completeLabel={t.email.markComplete}
         uncompleteLabel={t.email.markUncomplete}
         markUnreadLabel={t.email.markUnread}
