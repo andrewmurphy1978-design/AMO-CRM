@@ -173,6 +173,43 @@ export default async function AffiliateProgramDetailPage({
               </div>
             )}
           </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-semibold text-ink">{t.marketing.statsTitle}</h2>
+              {isAdmin && (program.shortioLinkId || program.shortioLinkIdFr) && (
+                <RefreshStatsButton programId={program.id} lang={lang} />
+              )}
+            </div>
+            {!hasStats ? (
+              <p className="mt-2 text-sm text-soft">{t.marketing.noStatsYet}</p>
+            ) : (
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                {program.shortioClicks != null && (
+                  <div>
+                    <p className={LABEL_CLASS}>
+                      {t.marketing.brandedLinkLabel} · {t.marketing.statsClicks}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-ink">{program.shortioClicks}</p>
+                  </div>
+                )}
+                {program.shortioClicksFr != null && (
+                  <div>
+                    <p className={LABEL_CLASS}>
+                      {t.marketing.frenchSlugLabel} · {t.marketing.statsClicks}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-ink">{program.shortioClicksFr}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            {program.shortioStatsSyncedAt && (
+              <p className="mt-3 text-xs text-soft">
+                {t.marketing.statsLastSynced(format(program.shortioStatsSyncedAt, "PPp", { locale: dateLocale }))}
+              </p>
+            )}
+          </section>
         </div>
 
         <div className="space-y-6">
@@ -208,43 +245,6 @@ export default async function AffiliateProgramDetailPage({
           </section>
         </div>
       </div>
-
-      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-semibold text-ink">{t.marketing.statsTitle}</h2>
-          {isAdmin && (program.shortioLinkId || program.shortioLinkIdFr) && (
-            <RefreshStatsButton programId={program.id} lang={lang} />
-          )}
-        </div>
-        {!hasStats ? (
-          <p className="mt-2 text-sm text-soft">{t.marketing.noStatsYet}</p>
-        ) : (
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            {program.shortioClicks != null && (
-              <div>
-                <p className={LABEL_CLASS}>
-                  {t.marketing.brandedLinkLabel} · {t.marketing.statsClicks}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-ink">{program.shortioClicks}</p>
-              </div>
-            )}
-            {program.shortioClicksFr != null && (
-              <div>
-                <p className={LABEL_CLASS}>
-                  {t.marketing.frenchSlugLabel} · {t.marketing.statsClicks}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-ink">{program.shortioClicksFr}</p>
-              </div>
-            )}
-          </div>
-        )}
-        {program.shortioStatsSyncedAt && (
-          <p className="mt-3 text-xs text-soft">
-            {t.marketing.statsLastSynced(format(program.shortioStatsSyncedAt, "PPp", { locale: dateLocale }))}
-          </p>
-        )}
-      </section>
     </div>
   );
 }

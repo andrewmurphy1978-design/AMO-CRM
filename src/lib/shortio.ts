@@ -94,7 +94,13 @@ export async function listShortIoDomains(apiKey: string): Promise<ShortIoDomain[
 }
 
 export interface ShortIoLink {
+  // Short.io's list-links response carries both a legacy numeric id and a
+  // newer "link_..." string id for the same link. Which one the
+  // statistics endpoint actually wants isn't consistent across their own
+  // docs revisions, so both are kept and getShortIoLinkStatistics below
+  // tries each rather than assuming one.
   id: string;
+  idString: string;
   path: string;
   shortURL: string;
   originalURL: string;
@@ -119,9 +125,10 @@ export async function listShortIoLinks(apiKey: string, domainId: string): Promis
     const rows = Array.isArray(data.links) ? data.links : [];
     for (const row of rows) {
       const r = row as { id?: number | string; idString?: string; path?: string; shortURL?: string; originalURL?: string };
-      const id = r.idString ?? (r.id != null ? String(r.id) : undefined);
-      if (id && r.shortURL && r.originalURL) {
-        links.push({ id, path: r.path ?? "", shortURL: r.shortURL, originalURL: r.originalURL });
+      const id = r.id != null ? String(r.id) : undefined;
+      const idString = r.idString ?? id;
+      if ((id || idString) && r.shortURL && r.originalURL) {
+        links.push({ id: id ?? idString!, idString: idString ?? id!, path: r.path ?? "", shortURL: r.shortURL, originalURL: r.originalURL });
       }
     }
 
@@ -136,18 +143,39 @@ export interface ShortIoStats {
   totalClicks: number | null;
   humanClicks: number | null;
   raw: unknown;
+  // Whichever id string actually worked — callers persist this back onto
+  // the program so a later single-link "Refresh stats" no longer has to
+  // rediscover it.
+  matchedId: string;
 }
 
 // https://developers.short.io/reference/statisticslinkget — click totals
-// for one link. Field names have differed slightly across Short.io's own
-// docs revisions, so this checks a few likely spots for the totals and
-// always keeps the full raw payload too (stored as-is in the DB) so
-// nothing is lost even if a specific field name has since changed.
-export async function getShortIoLinkStatistics(apiKey: string, linkId: string): Promise<ShortIoStats> {
-  const url = `https://api.short.io/statistics/link/${linkId}?period=total`;
-  const data = await shortIoRequest<Record<string, unknown>>(url, apiKey);
-  const totals = (data.totalClicks !== undefined ? data : (data.total as Record<string, unknown>) ?? data) as Record<string, unknown>;
-  const totalClicks = typeof totals.totalClicks === "number" ? totals.totalClicks : typeof totals.clicks === "number" ? totals.clicks : null;
-  const humanClicks = typeof totals.humanClicks === "number" ? totals.humanClicks : null;
-  return { totalClicks, humanClicks, raw: data };
+// for one link. Two things about this endpoint have proven inconsistent
+// across Short.io's own docs revisions: whether it wants the link's
+// legacy numeric id or its newer "link_..." string id, and whether
+// `period=total` is a valid value or the endpoint wants no period at all
+// (defaulting to all-time). Rather than guess a single combination and
+// fail silently for every link (which is what happened before this),
+// this tries a short list of request variants and returns the first one
+// that succeeds — cheap since most links will hit on the first or second
+// try, and it only ever runs the extra attempts when the first one fails.
+export async function getShortIoLinkStatistics(apiKey: string, candidateIds: string[]): Promise<ShortIoStats> {
+  const ids = [...new Set(candidateIds.filter(Boolean))];
+  let lastError: unknown = new Error("No Short.io link id to check stats for");
+
+  for (const linkId of ids) {
+    for (const query of ["?period=total", ""]) {
+      try {
+        const data = await shortIoRequest<Record<string, unknown>>(`https://api.short.io/statistics/link/${linkId}${query}`, apiKey);
+        const totals = (data.totalClicks !== undefined ? data : (data.total as Record<string, unknown>) ?? data) as Record<string, unknown>;
+        const totalClicks = typeof totals.totalClicks === "number" ? totals.totalClicks : typeof totals.clicks === "number" ? totals.clicks : null;
+        const humanClicks = typeof totals.humanClicks === "number" ? totals.humanClicks : null;
+        return { totalClicks, humanClicks, raw: data, matchedId: linkId };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Short.io statistics request failed");
 }

@@ -218,7 +218,13 @@ export async function createAffiliateShortLink(programId: string, variant: "defa
 // doesn't have a brandedLink/frenchSlug for yet. For every match it stores
 // the Short.io link id (for future updates) and pulls that link's click
 // stats in the same pass.
-export async function syncShortIoLinks(): Promise<{ error?: string; linked?: number; statsUpdated?: number; totalLinks?: number }> {
+export async function syncShortIoLinks(): Promise<{
+  error?: string;
+  linked?: number;
+  statsUpdated?: number;
+  totalLinks?: number;
+  statsError?: string;
+}> {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can sync Short.io" };
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -258,6 +264,7 @@ export async function syncShortIoLinks(): Promise<{ error?: string; linked?: num
 
     let linked = 0;
     let statsUpdated = 0;
+    let statsError: string | null = null;
 
     for (const program of programs) {
       const enLink =
@@ -270,40 +277,49 @@ export async function syncShortIoLinks(): Promise<{ error?: string; linked?: num
 
       const data: Record<string, unknown> = {};
       if (enLink) {
-        data.shortioLinkId = enLink.id;
+        data.shortioLinkId = enLink.idString;
         if (!program.brandedLink) data.brandedLink = enLink.shortURL;
         data.shortioCreated = true;
       }
       if (frLink) {
-        data.shortioLinkIdFr = frLink.id;
+        data.shortioLinkIdFr = frLink.idString;
         if (!program.frenchSlug) data.frenchSlug = frLink.shortURL;
       }
 
+      let sawStats = false;
       try {
         if (enLink) {
-          const stats = await getShortIoLinkStatistics(config.apiKey, enLink.id);
+          const stats = await getShortIoLinkStatistics(config.apiKey, [enLink.idString, enLink.id]);
           data.shortioClicks = stats.totalClicks;
           data.shortioStats = stats.raw as object;
+          data.shortioLinkId = stats.matchedId; // self-heal to whichever id form Short.io's stats endpoint actually accepted
           statsUpdated++;
+          sawStats = true;
         }
         if (frLink) {
-          const stats = await getShortIoLinkStatistics(config.apiKey, frLink.id);
+          const stats = await getShortIoLinkStatistics(config.apiKey, [frLink.idString, frLink.id]);
           data.shortioClicksFr = stats.totalClicks;
           data.shortioStatsFr = stats.raw as object;
+          data.shortioLinkIdFr = stats.matchedId;
           statsUpdated++;
+          sawStats = true;
         }
-        data.shortioStatsSyncedAt = new Date();
-      } catch {
+      } catch (error) {
         // Stats are a bonus on top of the link match — a failed stats call
-        // shouldn't stop the link itself from being recorded.
+        // shouldn't stop the link itself from being recorded. But it also
+        // shouldn't be invisible: the first failure is kept so the admin
+        // sees exactly why (this used to be swallowed entirely, which is
+        // why stats silently never populated).
+        if (!statsError) statsError = error instanceof Error ? error.message : "Short.io stats request failed";
       }
+      if (sawStats) data.shortioStatsSyncedAt = new Date();
 
       await db.affiliateProgram.update({ where: { id: program.id }, data });
       linked++;
     }
 
     revalidatePath("/marketing");
-    return { linked, statsUpdated, totalLinks: allLinks.length };
+    return { linked, statsUpdated, totalLinks: allLinks.length, statsError: statsError ?? undefined };
   });
 }
 
@@ -327,14 +343,16 @@ export async function refreshAffiliateProgramStats(programId: string): Promise<{
   const data: Record<string, unknown> = { shortioStatsSyncedAt: new Date() };
   try {
     if (program.shortioLinkId) {
-      const stats = await getShortIoLinkStatistics(config.apiKey, program.shortioLinkId);
+      const stats = await getShortIoLinkStatistics(config.apiKey, [program.shortioLinkId]);
       data.shortioClicks = stats.totalClicks;
       data.shortioStats = stats.raw as object;
+      data.shortioLinkId = stats.matchedId;
     }
     if (program.shortioLinkIdFr) {
-      const stats = await getShortIoLinkStatistics(config.apiKey, program.shortioLinkIdFr);
+      const stats = await getShortIoLinkStatistics(config.apiKey, [program.shortioLinkIdFr]);
       data.shortioClicksFr = stats.totalClicks;
       data.shortioStatsFr = stats.raw as object;
+      data.shortioLinkIdFr = stats.matchedId;
     }
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Short.io request failed" };

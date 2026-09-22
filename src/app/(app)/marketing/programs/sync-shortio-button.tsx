@@ -7,7 +7,7 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 export default function SyncShortIoButton({ lang }: { lang: Lang }) {
   const [pending, startTransition] = useTransition();
-  const [result, setResult] = useState<{ error?: string; linked?: number; totalLinks?: number } | null>(null);
+  const [result, setResult] = useState<{ error?: string; linked?: number; totalLinks?: number; statsError?: string } | null>(null);
   const router = useRouter();
   const t = getDict(lang);
 
@@ -30,7 +30,10 @@ export default function SyncShortIoButton({ lang }: { lang: Lang }) {
       </button>
       {result?.error && <p className="mt-1 text-sm text-red-600">{result.error}</p>}
       {result && !result.error && (
-        <p className="mt-1 text-sm text-emerald-700">{t.marketing.shortioSynced(result.linked ?? 0, result.totalLinks ?? 0)}</p>
+        <>
+          <p className="mt-1 text-sm text-emerald-700">{t.marketing.shortioSynced(result.linked ?? 0, result.totalLinks ?? 0)}</p>
+          {result.statsError && <p className="mt-1 text-sm text-red-600">{t.marketing.shortioStatsErrorBanner(result.statsError)}</p>}
+        </>
       )}
     </div>
   );
