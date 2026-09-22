@@ -197,10 +197,6 @@ function ApiKeyField({
   }
 
   function handleReveal() {
-    if (revealed !== null) {
-      setRevealed(null);
-      return;
-    }
     startTransition(async () => {
       const result = await revealAffiliateProgramApiKey(programId!);
       if (result.error) setMessage(result.error);
@@ -208,32 +204,48 @@ function ApiKeyField({
     });
   }
 
+  function handleCopy() {
+    if (revealed == null) return;
+    navigator.clipboard
+      .writeText(revealed)
+      .then(() => setMessage(t.marketing.apiKeyCopiedMessage))
+      .catch(() => setMessage(t.marketing.apiKeyEnterFirst));
+  }
+
+  // One link slot to the right of the field that cycles through whichever
+  // action makes sense right now: typing a new value always offers Save
+  // (so rotating an already-saved key doesn't need a separate mode); once
+  // saved with nothing being typed it offers Reveal; once revealed it
+  // switches to Copy instead of re-fetching the plaintext value again.
+  const linkAction: { label: string; onClick: () => void } | null = value.trim()
+    ? { label: pending ? t.common.saving : t.marketing.apiKeySaveLabel, onClick: handleSave }
+    : revealed !== null
+      ? { label: t.marketing.apiKeyCopyLabel, onClick: handleCopy }
+      : saved
+        ? { label: pending ? t.common.saving : t.apiVault.reveal, onClick: handleReveal }
+        : null;
+
   return (
     <div>
-      <input
-        type="password"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={saved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
-        className={FIELD_CLASS}
-      />
-      <div className="mt-1 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={pending}
-          className="text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-60"
-        >
-          {pending ? t.common.saving : t.marketing.apiKeySaveLabel}
-        </button>
-        {saved && (
+      <div className="flex items-center gap-2">
+        <input
+          type="password"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setRevealed(null);
+          }}
+          placeholder={saved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
+          className={`${FIELD_CLASS} flex-1`}
+        />
+        {linkAction && (
           <button
             type="button"
-            onClick={handleReveal}
+            onClick={linkAction.onClick}
             disabled={pending}
-            className="text-xs font-medium text-soft hover:underline disabled:opacity-60"
+            className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-60"
           >
-            {revealed !== null ? t.apiVault.hide : t.apiVault.reveal}
+            {linkAction.label}
           </button>
         )}
       </div>
@@ -415,17 +427,19 @@ export default function AffiliateProgramForm({
             <input type="url" name="frenchLink" defaultValue={defaultValues?.frenchLink ?? ""} className={FIELD_CLASS} />
           </div>
           <div className="flex flex-col justify-end">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="followUpNeeded"
-                name="followUpNeeded"
-                defaultChecked={defaultValues?.followUpNeeded ?? false}
-                className="h-4 w-4 rounded border-card-border accent-amo-lime"
-              />
-              <label htmlFor="followUpNeeded" className="text-sm text-ink">
+            <div>
+              <label htmlFor="followUpNeeded" className={LABEL_CLASS}>
                 {t.marketing.colFollowUp}
               </label>
+              <div className="mt-1 flex h-[38px] items-center">
+                <input
+                  type="checkbox"
+                  id="followUpNeeded"
+                  name="followUpNeeded"
+                  defaultChecked={defaultValues?.followUpNeeded ?? false}
+                  className="h-4 w-4 rounded border-card-border accent-amo-lime"
+                />
+              </div>
             </div>
             <DateField label={t.marketing.followUpDateLabel} name="followUpDate" defaultValue={defaultValues?.followUpDate} lang={lang} />
           </div>

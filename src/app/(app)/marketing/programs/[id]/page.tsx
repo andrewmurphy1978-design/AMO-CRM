@@ -21,6 +21,7 @@ import Card from "@/components/section-card";
 import DeleteAffiliateProgramButton from "../delete-button";
 import CreateShortIoLinkButton from "../create-shortio-link-button";
 import RefreshStatsButton from "../refresh-stats-button";
+import LastSynced from "./last-synced";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -53,8 +54,26 @@ function LinkField({ label, value, extra }: { label: string; value: string | nul
   );
 }
 
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Parses "yyyy-mm-dd..." straight out of the string rather than through a
+// `Date` — these are calendar-day buckets (midnight UTC), and going through
+// `new Date(...)` plus a local getter would shift the day backward for any
+// timezone behind UTC (all of North America), turning e.g. "Aug 17" into
+// "Aug 16". String slicing keeps the calendar date exactly as Short.io
+// reported it, no timezone involved.
+function shortDayLabel(isoDate: string): string {
+  const month = Number(isoDate.slice(5, 7));
+  const day = Number(isoDate.slice(8, 10));
+  return `${SHORT_MONTHS[month - 1] ?? ""} ${day}`;
+}
+
 function ShortIoStatBlock({ title, summary, t }: { title: string; summary: ShortIoStatsSummary; t: ReturnType<typeof getDict> }) {
   const maxDaily = Math.max(1, ...summary.dailyClicks.map((d) => d.count));
+  // Labels every ~5 bars (plus the last one) rather than under every bar —
+  // 30 individual labels side by side would just overlap into an unreadable
+  // smear at this width.
+  const labelEvery = Math.max(1, Math.ceil(summary.dailyClicks.length / 6));
   return (
     <div className="space-y-3">
       <p className="text-sm font-semibold text-ink">{title}</p>
@@ -77,11 +96,24 @@ function ShortIoStatBlock({ title, summary, t }: { title: string; summary: Short
             {summary.dailyClicks.map((d) => (
               <div
                 key={d.date}
-                title={`${d.date.slice(0, 10)}: ${d.count}`}
+                title={`${shortDayLabel(d.date)}: ${d.count}`}
                 className="min-h-1 flex-1 rounded-t bg-amo-lime/70"
                 style={{ height: `${Math.max(4, (d.count / maxDaily) * 100)}%` }}
               />
             ))}
+          </div>
+          <div className="mt-1 flex gap-0.5">
+            {summary.dailyClicks.map((d, i) => {
+              const isLast = i === summary.dailyClicks.length - 1;
+              const show = i % labelEvery === 0 || isLast;
+              return (
+                <div key={d.date} className="min-w-0 flex-1 text-center">
+                  {show && (
+                    <span className={`text-[9px] text-soft ${isLast ? "" : "whitespace-nowrap"}`}>{shortDayLabel(d.date)}</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -220,13 +252,14 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
         <div className="space-y-6 lg:col-span-2">
           <Card color="general" title={t.contactForm.cardGeneralInfo}>
             <div className="grid items-center gap-3 lg:grid-cols-3">
-              <h1 className="font-display text-xl font-semibold text-ink">{program.name}</h1>
-              <div className="flex justify-center">
+              <div className="flex items-center gap-3">
                 {program.iconUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={program.iconUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-contain" />
                 )}
+                <h1 className="font-display text-xl font-semibold text-ink">{program.name}</h1>
               </div>
+              <div />
               <div>
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${styles.badge}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
@@ -332,11 +365,7 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
                 )}
               </div>
             )}
-            {program.shortioStatsSyncedAt && (
-              <p className="text-xs text-soft">
-                {t.marketing.statsLastSynced(format(program.shortioStatsSyncedAt, "PPp", { locale: dateLocale }))}
-              </p>
-            )}
+            {program.shortioStatsSyncedAt && <LastSynced iso={program.shortioStatsSyncedAt.toISOString()} lang={lang} />}
           </Card>
         </div>
 

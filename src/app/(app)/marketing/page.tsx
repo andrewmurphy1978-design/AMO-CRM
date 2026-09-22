@@ -20,7 +20,6 @@ type AffiliateProgramRow = {
   type: string | null;
   iconUrl: string | null;
   affiliateStatus: string | null;
-  brandedLink: string | null;
   followUpNeeded: boolean;
   followUpDate: Date | null;
   notes: string | null;
@@ -74,12 +73,11 @@ function AffiliateProgramCard({
           <table className="w-full table-fixed divide-y divide-card-border text-sm">
             <colgroup>
               <col className="w-[5%]" />
-              <col className="w-[18%]" />
+              <col className="w-[25%]" />
               <col className="w-[14%]" />
               <col className="w-[13%]" />
               <col className="w-[13%]" />
               <col className="w-[9%]" />
-              <col className="w-[7%]" />
               <col className="w-[6%]" />
               <col className="w-[9%]" />
               <col className="w-[6%]" />
@@ -92,7 +90,6 @@ function AffiliateProgramCard({
                 <th className="py-2 pr-4">{t.marketing.categoryLabel}</th>
                 <th className="py-2 pr-4 whitespace-nowrap">{t.marketing.colStatus}</th>
                 <th className="py-2 pr-4 whitespace-nowrap">{t.marketing.colFollowUp}</th>
-                <th className="py-2 pr-4">{t.marketing.colLink}</th>
                 <th className="py-2 pr-2 whitespace-nowrap">{t.marketing.colClicks}</th>
                 <th className="py-2 pr-2 whitespace-nowrap">{t.marketing.colConversions}</th>
                 <th className="py-2 pr-2 whitespace-nowrap">{t.marketing.colLinkedEmails}</th>
@@ -129,15 +126,6 @@ function AffiliateProgramCard({
                           ? format(p.followUpDate, "PP", { locale: dateLocale })
                           : t.marketing.followUpYes
                         : t.marketing.followUpNo}
-                    </td>
-                    <td className="truncate py-2 pr-4 align-top">
-                      {p.brandedLink ? (
-                        <a href={p.brandedLink} target="_blank" rel="noopener noreferrer" className="text-amo-lime hover:underline">
-                          {t.marketing.colLink}
-                        </a>
-                      ) : (
-                        "—"
-                      )}
                     </td>
                     <td className="truncate py-2 pr-2 align-top text-ink/70">{clicks ?? "—"}</td>
                     {/* Not tracked yet — Short.io reports clicks, not
