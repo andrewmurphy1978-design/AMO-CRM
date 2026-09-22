@@ -47,18 +47,22 @@ export default function AffiliateProgramFilters({
         placeholder={searchPlaceholder}
         className="w-64 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
       />
-      <select
-        value={category ?? ""}
-        onChange={(e) => push(text, e.target.value || null)}
-        className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-      >
-        <option value="">{allCategoriesLabel}</option>
-        {categoryOptions.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+      <div className="flex flex-wrap gap-2">
+        {([{ value: null, label: allCategoriesLabel }, ...categoryOptions] as { value: string | null; label: string }[]).map((opt) => (
+          <button
+            key={opt.value ?? "ALL"}
+            type="button"
+            onClick={() => push(text, opt.value)}
+            className={
+              category === opt.value
+                ? "btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold shadow-sm"
+                : "rounded-lg border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5"
+            }
+          >
             {opt.label}
-          </option>
+          </button>
         ))}
-      </select>
+      </div>
       {trailing}
     </form>
   );

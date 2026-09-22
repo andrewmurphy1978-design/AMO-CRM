@@ -35,6 +35,7 @@ export default async function EditAffiliateProgramPage({ params }: { params: Pro
       hour12={hour12}
       dateLocale={dateLocale}
       location={t.dashboard.myLocation}
+      programId={program.id}
     />
   );
 }

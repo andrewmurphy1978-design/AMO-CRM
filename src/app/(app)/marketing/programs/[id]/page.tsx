@@ -46,15 +46,8 @@ function LinkField({ label, value, extra }: { label: string; value: string | nul
   );
 }
 
-export default async function AffiliateProgramDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ shortioError?: string }>;
-}) {
+export default async function AffiliateProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { shortioError } = await searchParams;
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
@@ -91,22 +84,15 @@ export default async function AffiliateProgramDetailPage({
         }
       />
 
-      {shortioError && <p className="text-sm text-red-600">{t.marketing.shortioErrorBanner(shortioError)}</p>}
-
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card color="general" title={t.contactForm.cardGeneralInfo}>
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="font-display text-xl font-semibold text-ink">{program.name}</h1>
-              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${styles.badge}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
-                {program.affiliateStatus || "—"}
-              </span>
-            </div>
+            <h1 className="font-display text-xl font-semibold text-ink">{program.name}</h1>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 lg:grid-cols-3">
+              {/* Row 1: Type, Category, Status Details */}
               <div>
-                <p className={LABEL_CLASS}>{t.marketing.affiliateProgramsTitle}</p>
+                <p className={LABEL_CLASS}>{t.marketing.colType}</p>
                 <p className="mt-1 text-sm text-ink">{tabTitle(program.tab, t)}</p>
               </div>
               <div>
@@ -114,22 +100,20 @@ export default async function AffiliateProgramDetailPage({
                 <p className="mt-1 text-sm text-ink">{program.type || "—"}</p>
               </div>
               <div>
-                <p className={LABEL_CLASS}>{t.marketing.accountPlanLabel}</p>
-                <p className="mt-1 text-sm text-ink">{program.accountPlan || "—"}</p>
-              </div>
-              <div className="sm:col-span-2 lg:col-span-3">
                 <p className={LABEL_CLASS}>{t.marketing.statusDetailsLabel}</p>
                 <p className="mt-1 text-sm text-ink">{program.statusDetails || "—"}</p>
               </div>
-              <div>
-                <p className={LABEL_CLASS}>{t.marketing.colFollowUp}</p>
-                <p className="mt-1 text-sm text-ink">{program.followUpNeeded ? t.marketing.followUpYes : t.marketing.followUpNo}</p>
-              </div>
-              <div>
-                <p className={LABEL_CLASS}>{t.marketing.followUpDateLabel}</p>
-                <p className="mt-1 text-sm text-ink">{program.followUpDate ? format(program.followUpDate, "PP", { locale: dateLocale }) : "—"}</p>
-              </div>
 
+              {/* Row 2 shifts to Account/Plan alone since Status moved to the
+                  right column — keep it its own row for visual grouping. */}
+              <div>
+                <p className={LABEL_CLASS}>{t.marketing.accountPlanLabel}</p>
+                <p className="mt-1 text-sm text-ink">{program.accountPlan || "—"}</p>
+              </div>
+              <div />
+              <div />
+
+              {/* Row 3: English links + Short.io Link Created */}
               <LinkField
                 label={t.marketing.brandedLinkLabel}
                 value={program.brandedLink}
@@ -141,14 +125,22 @@ export default async function AffiliateProgramDetailPage({
                 <p className="mt-1 text-sm text-ink">{program.shortioCreated ? t.marketing.yes : t.marketing.no}</p>
               </div>
 
+              {/* Row 4: French links + Follow-up info */}
               <LinkField
                 label={t.marketing.frenchSlugLabel}
                 value={program.frenchSlug}
                 extra={isAdmin && program.frenchLink && <CreateShortIoLinkButton programId={program.id} variant="fr" lang={lang} />}
               />
               <LinkField label={t.marketing.frenchLinkLabel} value={program.frenchLink} />
-              <div />
+              <div>
+                <p className={LABEL_CLASS}>{t.marketing.colFollowUp}</p>
+                <p className="mt-1 text-sm text-ink">{program.followUpNeeded ? t.marketing.followUpYes : t.marketing.followUpNo}</p>
+                <p className="mt-1 text-sm text-ink">
+                  {program.followUpDate ? format(program.followUpDate, "PP", { locale: dateLocale }) : "—"}
+                </p>
+              </div>
 
+              {/* Row 5: Where to apply, Application platform, Has its own API */}
               <LinkField label={t.marketing.applyUrlLabel} value={program.applyUrl} />
               <div>
                 <p className={LABEL_CLASS}>{t.marketing.applyPlatformLabel}</p>
@@ -213,6 +205,13 @@ export default async function AffiliateProgramDetailPage({
         </div>
 
         <div className="space-y-6">
+          <Card color="general" title={t.marketing.colStatus}>
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${styles.badge}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${styles.dot}`} />
+              {program.affiliateStatus || "—"}
+            </span>
+          </Card>
+
           <Card color="linkedEmails" title={t.contactDetail.linkedEmailsTitle}>
             {program.emailLinks.length === 0 ? (
               <p className="text-sm text-soft">{t.marketing.noLinkedEmailsYet}</p>

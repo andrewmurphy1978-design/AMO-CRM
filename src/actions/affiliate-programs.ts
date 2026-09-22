@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { encryptSecret } from "@/lib/crypto";
+import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { AFFILIATE_STATUS_VALUES } from "@/lib/affiliate-status";
 import {
   getShortIoConfig,
@@ -111,9 +111,9 @@ export async function createAffiliateProgram(
 
 export async function updateAffiliateProgram(
   programId: string,
-  _prevState: { error?: string } | undefined,
+  _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; success?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -136,13 +136,25 @@ export async function updateAffiliateProgram(
   });
   if (!existing) return { error: "Program not found" };
 
-  let shortioError: string | null = null;
+  // Best-effort: the CRM record is the source of truth, so a Short.io push
+  // failure here never blocks the save — it's just reported alongside the
+  // "saved" toast instead. Only pushed when a link's destination actually
+  // changed, since that's the one field Short.io needs to know about
+  // (path/domain aren't editable through this form).
+  let shortioStatus = "";
   if (config) {
+    let shortioError: string | null = null;
+    let pushed = false;
     if (data.destinationLink !== existing.destinationLink) {
+      pushed = true;
       shortioError ||= await pushDestinationToShortIo(config.apiKey, existing.shortioLinkId, data.destinationLink);
     }
     if (data.frenchLink !== existing.frenchLink) {
+      pushed = true;
       shortioError ||= await pushDestinationToShortIo(config.apiKey, existing.shortioLinkIdFr, data.frenchLink);
+    }
+    if (pushed) {
+      shortioStatus = shortioError ? t.marketing.programUpdatedShortioWarning(shortioError) : t.marketing.programUpdatedShortioSynced;
     }
   }
 
@@ -157,7 +169,35 @@ export async function updateAffiliateProgram(
 
   revalidatePath("/marketing");
   revalidatePath(`/marketing/programs/${programId}`);
-  redirect(`/marketing/programs/${programId}${shortioError ? `?shortioError=${encodeURIComponent(shortioError)}` : ""}`);
+  return { success: `${t.marketing.programUpdated}${shortioStatus}` };
+}
+
+// Saved independently of the main form (its own Save button) so the API
+// key is encrypted and stored the moment it's entered, rather than only
+// on the next full "Save changes" — and so leaving the field blank on a
+// later full-form save can never accidentally clear it.
+export async function saveAffiliateProgramApiKey(programId: string, apiKey: string): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Only admins can manage this" };
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+  const trimmed = apiKey.trim();
+  if (!trimmed) return { error: t.marketing.apiKeyEnterFirst };
+
+  const apiKeyEncrypted = await encryptSecret(trimmed);
+  await withScopedPrismaClient((db) => db.affiliateProgram.update({ where: { id: programId }, data: { apiKeyEncrypted, hasApi: true } }));
+  revalidatePath(`/marketing/programs/${programId}`);
+  return { success: t.marketing.apiKeySaved };
+}
+
+// Admin-gated, same reason as the API key vault's own reveal action.
+export async function revealAffiliateProgramApiKey(programId: string): Promise<{ value?: string; error?: string }> {
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Only admins can view this" };
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+  const program = await withScopedPrismaClient((db) => db.affiliateProgram.findUnique({ where: { id: programId } }));
+  if (!program?.apiKeyEncrypted) return { error: t.marketing.apiKeyNoneSaved };
+  const value = await decryptSecret(program.apiKeyEncrypted);
+  return { value };
 }
 
 export async function deleteAffiliateProgram(programId: string) {
@@ -219,12 +259,24 @@ export async function createAffiliateShortLink(programId: string, variant: "defa
 // doesn't have a brandedLink/frenchSlug for yet. For every match it stores
 // the Short.io link id (for future updates) and pulls that link's click
 // stats in the same pass.
+// Cloudflare caps how many outgoing fetches ("subrequests") a single
+// Worker invocation can make — the Workers Free plan's default is 50. With
+// ~90 matched programs each needing up to 2 stats calls (English + French),
+// fetching stats for every match in one pass reliably blows past that (this
+// is exactly the "Too many subrequests by single Worker invocation" error
+// this used to surface). Splitting stats-fetching into a small batch per
+// invocation, prioritizing programs that have never been synced, keeps each
+// call safely under the cap; the client re-invokes automatically while
+// `remainingForStats` is nonzero, so one click still finishes the job.
+const STATS_BATCH_SIZE = 20;
+
 export async function syncShortIoLinks(): Promise<{
   error?: string;
   linked?: number;
   statsUpdated?: number;
   totalLinks?: number;
   statsError?: string;
+  remainingForStats?: number;
 }> {
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can sync Short.io" };
@@ -242,7 +294,14 @@ export async function syncShortIoLinks(): Promise<{
   // (there's no bulk-stats endpoint) but don't touch Postgres at all.
   return withScopedPrismaClient(async (db) => {
     const programs = await db.affiliateProgram.findMany({
-      select: { id: true, brandedLink: true, frenchSlug: true, destinationLink: true, frenchLink: true },
+      select: {
+        id: true,
+        brandedLink: true,
+        frenchSlug: true,
+        destinationLink: true,
+        frenchLink: true,
+        shortioStatsSyncedAt: true,
+      },
     });
     const config = await getShortIoConfig(db);
     if (!config) return { error: t.marketing.shortioNotConfigured };
@@ -263,17 +322,21 @@ export async function syncShortIoLinks(): Promise<{
     const byOriginalUrl = new Map(allLinks.map((l) => [l.originalURL.replace(/\/$/, ""), l]));
     const norm = (url: string | null) => (url ? url.replace(/\/$/, "") : null);
 
+    // Pass 1: record every link match — cheap, no Short.io calls beyond the
+    // listing already done above, so this always completes for every
+    // program regardless of the stats budget below.
+    type Program = (typeof programs)[number];
+    const matches: { program: Program; enLink?: (typeof allLinks)[number]; frLink?: (typeof allLinks)[number] }[] = [];
     let linked = 0;
-    let statsUpdated = 0;
-    let statsError: string | null = null;
-
     for (const program of programs) {
       const enLink =
         (program.brandedLink && byShortUrl.get(norm(program.brandedLink)!)) ||
-        (program.destinationLink && byOriginalUrl.get(norm(program.destinationLink)!));
+        (program.destinationLink && byOriginalUrl.get(norm(program.destinationLink)!)) ||
+        undefined;
       const frLink =
         (program.frenchSlug && byShortUrl.get(norm(program.frenchSlug)!)) ||
-        (program.frenchLink && byOriginalUrl.get(norm(program.frenchLink)!));
+        (program.frenchLink && byOriginalUrl.get(norm(program.frenchLink)!)) ||
+        undefined;
       if (!enLink && !frLink) continue;
 
       const data: Record<string, unknown> = {};
@@ -286,7 +349,29 @@ export async function syncShortIoLinks(): Promise<{
         data.shortioLinkIdFr = frLink.idString;
         if (!program.frenchSlug) data.frenchSlug = frLink.shortURL;
       }
+      await db.affiliateProgram.update({ where: { id: program.id }, data });
+      linked++;
+      matches.push({ program, enLink, frLink });
+    }
 
+    // Pass 2: fetch stats for a limited batch, never-synced programs first.
+    const statsOrder = [...matches].sort((a, b) => {
+      const aSynced = a.program.shortioStatsSyncedAt ? 1 : 0;
+      const bSynced = b.program.shortioStatsSyncedAt ? 1 : 0;
+      return aSynced - bSynced;
+    });
+
+    let statsUpdated = 0;
+    let statsError: string | null = null;
+    let budget = STATS_BATCH_SIZE;
+    let remainingForStats = 0;
+
+    for (const { program, enLink, frLink } of statsOrder) {
+      if (budget <= 0) {
+        remainingForStats++;
+        continue;
+      }
+      const data: Record<string, unknown> = {};
       let sawStats = false;
       try {
         if (enLink) {
@@ -313,14 +398,15 @@ export async function syncShortIoLinks(): Promise<{
         // why stats silently never populated).
         if (!statsError) statsError = error instanceof Error ? error.message : "Short.io stats request failed";
       }
-      if (sawStats) data.shortioStatsSyncedAt = new Date();
-
-      await db.affiliateProgram.update({ where: { id: program.id }, data });
-      linked++;
+      budget -= (enLink ? 1 : 0) + (frLink ? 1 : 0);
+      if (sawStats) {
+        data.shortioStatsSyncedAt = new Date();
+        await db.affiliateProgram.update({ where: { id: program.id }, data });
+      }
     }
 
     revalidatePath("/marketing");
-    return { linked, statsUpdated, totalLinks: allLinks.length, statsError: statsError ?? undefined };
+    return { linked, statsUpdated, totalLinks: allLinks.length, statsError: statsError ?? undefined, remainingForStats };
   });
 }
 

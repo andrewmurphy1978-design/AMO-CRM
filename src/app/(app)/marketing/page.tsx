@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { format, type Locale } from "date-fns";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import type { AffiliateProgramTab, Prisma } from "@prisma/client";
@@ -20,8 +21,11 @@ type AffiliateProgramRow = {
   affiliateStatus: string | null;
   brandedLink: string | null;
   followUpNeeded: boolean;
+  followUpDate: Date | null;
   notes: string | null;
   accountPlan: string | null;
+  shortioClicks: number | null;
+  shortioClicksFr: number | null;
   emailLinks: { id: string; subject: string | null; fromLabel: string | null; messageDate: Date | null; gmailLink: string | null }[];
 };
 
@@ -40,11 +44,13 @@ function AffiliateProgramCard({
   title,
   programs,
   t,
+  dateLocale,
 }: {
   color: CardColor;
   title: string;
   programs: AffiliateProgramRow[];
   t: ReturnType<typeof getDict>;
+  dateLocale: Locale | undefined;
 }) {
   return (
     <Card
@@ -67,27 +73,32 @@ function AffiliateProgramCard({
           <table className="w-full table-fixed divide-y divide-card-border text-sm">
             <colgroup>
               <col className="w-[22%]" />
-              <col className="w-[16%]" />
-              <col className="w-[12%]" />
-              <col className="w-[18%]" />
-              <col className="w-[9%]" />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
+              <col className="w-[13%]" />
+              <col className="w-[8%]" />
+              <col className="w-[7%]" />
+              <col className="w-[7%]" />
               <col className="w-[10%]" />
               <col className="w-[13%]" />
             </colgroup>
             <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
               <tr>
                 <th className="py-2 pr-4">{t.marketing.colProgram}</th>
-                <th className="py-2 pr-4">{t.marketing.categoryLabel}</th>
                 <th className="py-2 pr-4">{t.marketing.colType}</th>
+                <th className="py-2 pr-4">{t.marketing.categoryLabel}</th>
                 <th className="py-2 pr-4">{t.marketing.colStatus}</th>
                 <th className="py-2 pr-4">{t.marketing.colFollowUp}</th>
                 <th className="py-2 pr-4">{t.marketing.colLink}</th>
+                <th className="py-2 pr-4">{t.marketing.colClicks}</th>
+                <th className="py-2 pr-4">{t.marketing.colConversions}</th>
                 <th className="py-2 pr-4">{t.marketing.colLinkedEmails}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-card-border">
               {programs.map((p) => {
                 const styles = statusStyle(p.affiliateStatus);
+                const clicks = p.shortioClicks == null && p.shortioClicksFr == null ? null : (p.shortioClicks ?? 0) + (p.shortioClicksFr ?? 0);
                 return (
                   <tr key={p.id} id={p.id} className={`scroll-mt-24 ${styles.row} hover:brightness-95`}>
                     <td className={`truncate py-2 pr-4 pl-3 align-top font-medium border-l-4 ${styles.border}`}>
@@ -103,7 +114,13 @@ function AffiliateProgramCard({
                         <span className="truncate">{p.affiliateStatus || "—"}</span>
                       </span>
                     </td>
-                    <td className="truncate py-2 pr-4 align-top text-ink/70">{p.followUpNeeded ? t.marketing.followUpYes : t.marketing.followUpNo}</td>
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">
+                      {p.followUpNeeded
+                        ? p.followUpDate
+                          ? format(p.followUpDate, "PP", { locale: dateLocale })
+                          : t.marketing.followUpYes
+                        : t.marketing.followUpNo}
+                    </td>
                     <td className="truncate py-2 pr-4 align-top">
                       {p.brandedLink ? (
                         <a href={p.brandedLink} target="_blank" rel="noopener noreferrer" className="text-amo-lime hover:underline">
@@ -113,9 +130,12 @@ function AffiliateProgramCard({
                         "—"
                       )}
                     </td>
-                    <td className="truncate py-2 pr-4 align-top text-ink/70">
-                      {p.emailLinks.length > 0 ? t.marketing.linkedEmails(p.emailLinks.length) : "—"}
-                    </td>
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">{clicks ?? "—"}</td>
+                    {/* Not tracked yet — Short.io reports clicks, not
+                        conversions/sales, so there's no real number to show
+                        here until a conversion source is wired up. */}
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">—</td>
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">{p.emailLinks.length > 0 ? p.emailLinks.length : "—"}</td>
                   </tr>
                 );
               })}
@@ -184,13 +204,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         }
       />
 
-      <AffiliateProgramCard color="marketingActive" title={t.marketing.activeLinksTitle} programs={grouped.ACTIVE} t={t} />
-      <AffiliateProgramCard color="marketingPending" title={t.marketing.pendingLinksTitle} programs={grouped.PENDING} t={t} />
+      <AffiliateProgramCard color="marketingActive" title={t.marketing.activeLinksTitle} programs={grouped.ACTIVE} t={t} dateLocale={dateLocale} />
+      <AffiliateProgramCard color="marketingPending" title={t.marketing.pendingLinksTitle} programs={grouped.PENDING} t={t} dateLocale={dateLocale} />
       <AffiliateProgramCard
         color="marketingNoProgram"
         title={t.marketing.noProgramOrDeclinedTitle}
         programs={grouped.NO_PROGRAM_OR_DECLINED}
         t={t}
+        dateLocale={dateLocale}
       />
     </div>
   );

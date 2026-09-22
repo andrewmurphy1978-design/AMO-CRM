@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
+import { saveAffiliateProgramApiKey, revealAffiliateProgramApiKey } from "@/actions/affiliate-programs";
 import PageHeader from "../../page-header";
 import { AFFILIATE_STATUS_VALUES, AFFILIATE_TYPE_OPTIONS } from "@/lib/affiliate-status";
 
@@ -60,7 +62,7 @@ function DateField({ label, name, defaultValue, lang }: { label: string; name: s
   })();
 
   return (
-    <div className="flex-1">
+    <div>
       <label className={LABEL_CLASS}>{label}</label>
       <input
         type="text"
@@ -76,6 +78,99 @@ function DateField({ label, name, defaultValue, lang }: { label: string; name: s
   );
 }
 
+// On the New Program form (no programId yet) this is just a plain field
+// submitted with the rest of the form. On the Edit form it gets its own
+// Save button — encrypted and stored the moment it's entered instead of
+// only on the next full "Save changes" — plus a Reveal button to check
+// the currently saved value.
+function ApiKeyField({
+  programId,
+  hasApiKeySaved,
+  t,
+}: {
+  programId?: string;
+  hasApiKeySaved?: boolean;
+  t: ReturnType<typeof getDict>;
+}) {
+  const [value, setValue] = useState("");
+  const [saved, setSaved] = useState(hasApiKeySaved ?? false);
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (!programId) {
+    return (
+      <input
+        type="password"
+        name="apiKey"
+        placeholder={hasApiKeySaved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
+        className={FIELD_CLASS}
+      />
+    );
+  }
+
+  function handleSave() {
+    if (!value.trim()) {
+      setMessage(t.marketing.apiKeyEnterFirst);
+      return;
+    }
+    startTransition(async () => {
+      const result = await saveAffiliateProgramApiKey(programId!, value);
+      setMessage(result.error ?? result.success ?? null);
+      if (!result.error) {
+        setSaved(true);
+        setValue("");
+      }
+    });
+  }
+
+  function handleReveal() {
+    if (revealed !== null) {
+      setRevealed(null);
+      return;
+    }
+    startTransition(async () => {
+      const result = await revealAffiliateProgramApiKey(programId!);
+      if (result.error) setMessage(result.error);
+      else setRevealed(result.value ?? "");
+    });
+  }
+
+  return (
+    <div>
+      <input
+        type="password"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={saved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
+        className={FIELD_CLASS}
+      />
+      <div className="mt-1 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={pending}
+          className="text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-60"
+        >
+          {pending ? t.common.saving : t.marketing.apiKeySaveLabel}
+        </button>
+        {saved && (
+          <button
+            type="button"
+            onClick={handleReveal}
+            disabled={pending}
+            className="text-xs font-medium text-soft hover:underline disabled:opacity-60"
+          >
+            {revealed !== null ? t.apiVault.hide : t.apiVault.reveal}
+          </button>
+        )}
+      </div>
+      {revealed !== null && <code className="mt-1 block break-all rounded bg-field-bg px-2 py-1 text-xs text-ink">{revealed}</code>}
+      {message && <p className="mt-1 text-xs text-soft">{message}</p>}
+    </div>
+  );
+}
+
 export default function AffiliateProgramForm({
   action,
   defaultValues,
@@ -87,8 +182,9 @@ export default function AffiliateProgramForm({
   hour12,
   dateLocale,
   location,
+  programId,
 }: {
-  action: (prevState: { error?: string } | undefined, formData: FormData) => Promise<{ error?: string }>;
+  action: (prevState: { error?: string; success?: string } | undefined, formData: FormData) => Promise<{ error?: string; success?: string }>;
   defaultValues?: AffiliateProgramFormValues;
   defaultTab?: string;
   hasApiKeySaved?: boolean;
@@ -98,10 +194,33 @@ export default function AffiliateProgramForm({
   hour12: boolean;
   dateLocale: Parameters<typeof PageHeader>[0]["dateLocale"];
   location: string;
+  // Only set on the Edit form — on a successful save, the toast redirects
+  // to this program's own info page once it's done showing. The New
+  // Program form has no id yet (createAffiliateProgram redirects
+  // server-side instead, straight to the freshly created program).
+  programId?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [tab, setTab] = useState(defaultValues?.tab ?? defaultTab ?? "AI_TOOLS");
   const t = getDict(lang);
+  const router = useRouter();
+
+  const [dismissed, setDismissed] = useState(false);
+  const [lastSuccess, setLastSuccess] = useState<string | undefined>(undefined);
+  if (state?.success !== lastSuccess) {
+    setLastSuccess(state?.success);
+    setDismissed(false);
+  }
+  const toast = state?.success && !dismissed ? state.success : null;
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setDismissed(true);
+      if (programId) router.push(`/marketing/programs/${programId}`);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [toast, programId, router]);
 
   const TABS = [
     { value: "AI_TOOLS", label: t.marketing.aiToolsTitle },
@@ -129,17 +248,22 @@ export default function AffiliateProgramForm({
       />
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+          <div className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>
+        </div>
+      )}
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
         <div className="grid gap-4 lg:grid-cols-3">
-          {/* Row 1: Program, Affiliate Programs, Category */}
+          {/* Row 1: Program, Type, Category */}
           <div>
             <label className={LABEL_CLASS}>{t.marketing.colProgram}</label>
             <input name="name" required defaultValue={defaultValues?.name ?? ""} className={FIELD_CLASS} />
           </div>
           <div>
-            <label className={LABEL_CLASS}>{t.marketing.affiliateProgramsTitle}</label>
+            <label className={LABEL_CLASS}>{t.marketing.colType}</label>
             <select name="tab" value={tab} onChange={(e) => setTab(e.target.value)} className={FIELD_CLASS}>
               {TABS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -190,30 +314,35 @@ export default function AffiliateProgramForm({
             <label className={LABEL_CLASS}>{t.marketing.destinationLinkLabel}</label>
             <input type="url" name="destinationLink" defaultValue={defaultValues?.destinationLink ?? ""} className={FIELD_CLASS} />
           </div>
-          <div className="flex items-end gap-2 pb-2">
-            <input
-              type="checkbox"
-              id="shortioCreated"
-              name="shortioCreated"
-              defaultChecked={defaultValues?.shortioCreated ?? false}
-              className="h-4 w-4 rounded border-card-border accent-amo-lime"
-            />
-            <label htmlFor="shortioCreated" className="text-sm text-ink">
-              {t.marketing.shortioCreatedLabel}
-            </label>
+          <div className="flex flex-col justify-end">
+            <div className="flex items-end gap-2 pb-2">
+              <input
+                type="checkbox"
+                id="shortioCreated"
+                name="shortioCreated"
+                defaultChecked={defaultValues?.shortioCreated ?? false}
+                className="h-4 w-4 rounded border-card-border accent-amo-lime"
+              />
+              <label htmlFor="shortioCreated" className="text-sm text-ink">
+                {t.marketing.shortioCreatedLabel}
+              </label>
+            </div>
           </div>
 
-          {/* Row 4: French links + Follow-up needed / Follow-up date */}
-          <div>
+          {/* Row 4: French links + Follow-up needed / Follow-up date — all
+              three cells push their content to the bottom so the input
+              boxes line up across the row despite the third cell having
+              extra content (the checkbox line) above its date field. */}
+          <div className="flex flex-col justify-end">
             <label className={LABEL_CLASS}>{t.marketing.frenchSlugLabel}</label>
             <input name="frenchSlug" defaultValue={defaultValues?.frenchSlug ?? ""} className={FIELD_CLASS} />
           </div>
-          <div>
+          <div className="flex flex-col justify-end">
             <label className={LABEL_CLASS}>{t.marketing.frenchLinkLabel}</label>
             <input type="url" name="frenchLink" defaultValue={defaultValues?.frenchLink ?? ""} className={FIELD_CLASS} />
           </div>
-          <div className="flex items-end gap-3">
-            <div className="flex items-end gap-2 pb-2">
+          <div className="flex flex-col justify-end">
+            <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 id="followUpNeeded"
@@ -228,12 +357,13 @@ export default function AffiliateProgramForm({
             <DateField label={t.marketing.followUpDateLabel} name="followUpDate" defaultValue={defaultValues?.followUpDate} lang={lang} />
           </div>
 
-          {/* Row 5: Where to apply, App Platform, has-own-API + API key */}
-          <div>
+          {/* Row 5: Where to apply, App Platform, has-own-API + API key —
+              same bottom-alignment treatment as row 4. */}
+          <div className="flex flex-col justify-end">
             <label className={LABEL_CLASS}>{t.marketing.applyUrlLabel}</label>
             <input type="url" name="applyUrl" defaultValue={defaultValues?.applyUrl ?? ""} className={FIELD_CLASS} />
           </div>
-          <div>
+          <div className="flex flex-col justify-end">
             <label className={LABEL_CLASS}>{t.marketing.applyPlatformLabel}</label>
             <input list="platformOptions" name="applyPlatform" defaultValue={defaultValues?.applyPlatform ?? ""} className={FIELD_CLASS} />
             <datalist id="platformOptions">
@@ -242,7 +372,7 @@ export default function AffiliateProgramForm({
               ))}
             </datalist>
           </div>
-          <div>
+          <div className="flex flex-col justify-end">
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -255,12 +385,7 @@ export default function AffiliateProgramForm({
                 {t.marketing.hasApiLabel}
               </label>
             </div>
-            <input
-              type="password"
-              name="apiKey"
-              placeholder={hasApiKeySaved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
-              className={FIELD_CLASS}
-            />
+            <ApiKeyField programId={programId} hasApiKeySaved={hasApiKeySaved} t={t} />
           </div>
 
           {/* Notes */}
