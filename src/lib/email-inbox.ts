@@ -273,10 +273,7 @@ export async function getScreeningExtras(
       snapshot.emails.map((e) => e.id)
     ),
     getEmailLinksByThread(db, allThreadIds),
-    getCompletions(
-      db,
-      snapshot.emails.map((e) => e.id)
-    ),
+    getCompletions(db, [...snapshot.emails.map((e) => e.id), ...snapshot.sentAwaitingReply.map((s) => s.id)]),
   ]);
   return { classifications, readStates, linksByThread, completions };
 }
