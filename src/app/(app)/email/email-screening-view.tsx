@@ -149,7 +149,7 @@ function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: stri
 // between rows — a variable-width date string ("19:58" vs "Sep 12, 3:15
 // PM") was previously the last flex child, so its own width change shifted
 // where every fixed-width icon before it landed.
-const PRIMARY_LABEL_WIDTH = "w-64";
+const PRIMARY_LABEL_WIDTH = "w-56";
 const LINKED_TO_WIDTH = "w-44";
 const DATE_WIDTH = "w-24";
 
@@ -243,7 +243,7 @@ function EmailRow({
         <button
           type="button"
           onClick={openDialog}
-          className="flex min-w-0 flex-1 items-center gap-1 truncate text-left text-sm text-soft hover:opacity-80"
+          className="flex min-w-0 max-w-xl flex-1 items-center gap-1 truncate text-left text-sm text-soft hover:opacity-80"
         >
           {hasAttachments && <AttachmentIcon className="h-3.5 w-3.5 shrink-0" title={attachmentLabel} />}
           {important && <ImportantIcon className="h-3.5 w-3.5 shrink-0 text-red-600" title={importantLabel} />}
