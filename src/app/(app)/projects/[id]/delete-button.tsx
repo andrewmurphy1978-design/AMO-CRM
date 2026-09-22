@@ -16,7 +16,7 @@ export default function DeleteProjectButton({ projectId, lang }: { projectId: st
         if (!confirm(t.projectDetail.deleteConfirm)) return;
         startTransition(() => deleteProject(projectId));
       }}
-      className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+      className="rounded-md border border-white/30 px-4 py-2 text-sm font-medium text-white hover:border-red-300 hover:bg-red-500/30 disabled:opacity-60"
     >
       {t.common.delete}
     </button>
