@@ -83,6 +83,20 @@ function mapPerson(person: RawPerson): GoogleContactSummary | null {
   };
 }
 
+// Google's error body carries the actually useful message (e.g. "Google
+// People API has not been used in project ... or it is disabled. Enable
+// it by visiting ...") — a bare HTTP status code tells the user nothing
+// they can act on, so this is worth the extra parse.
+async function describeError(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { error?: { message?: string } };
+    if (body.error?.message) return body.error.message;
+  } catch {
+    // fall through to the generic message below
+  }
+  return `Google Contacts request failed (${res.status})`;
+}
+
 // Capped well above any personal address book's realistic size — guards
 // against looping forever if Google ever returned a page token that never
 // terminates, at the cost of at most 20 subrequests (well inside a
@@ -111,7 +125,7 @@ export async function listGoogleContacts(accessToken: string): Promise<GoogleCon
 
     const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!res.ok) {
-      if (page === 0) throw new Error(`Google Contacts request failed (${res.status})`);
+      if (page === 0) throw new Error(await describeError(res));
       break;
     }
     const data = (await res.json()) as RawPeopleConnectionsResponse;
