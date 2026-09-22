@@ -234,13 +234,13 @@ export default function CalendarShell({
     setViewTarget(event.id);
   }
 
-  function requestCreate(presetStart?: Date) {
+  function requestCreate(presetStart?: Date, presetAllDay?: boolean) {
     // Clicking an empty slot in the grid/month views passes the exact
     // date/time to preset (see DayGridView/MonthView's onRequestCreate) —
     // otherwise (the header's Add button) default to "now" rounded up to
     // the next half hour.
     if (presetStart) {
-      setDialogTarget({ start: presetStart });
+      setDialogTarget({ start: presetStart, allDay: presetAllDay });
       return;
     }
     const now = new Date();

@@ -19,7 +19,7 @@ import {
 } from "@/actions/calendar";
 import type { LinkOption } from "../link-dialog";
 
-export type EventDialogTarget = { id: string } | { start: Date };
+export type EventDialogTarget = { id: string } | { start: Date; allDay?: boolean };
 
 type RepeatPreset = "none" | "daily" | "weekly" | "monthly" | "yearly";
 
@@ -160,13 +160,13 @@ interface FormState {
   bookingId: string;
 }
 
-function blankState(start: Date): FormState {
+function blankState(start: Date, allDay = false): FormState {
   const end = new Date(start.getTime() + 30 * 60 * 1000);
   return {
     title: "",
     description: "",
     location: "",
-    allDay: false,
+    allDay,
     startDate: toDateInput(start),
     startTime: toTimeInput(start),
     endDate: toDateInput(end),
@@ -560,7 +560,7 @@ export default function EventDialog({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<CalendarEventDetail | null>(null);
   const [defaultReminders, setDefaultReminders] = useState<number[]>([]);
-  const [form, setForm] = useState<FormState>(() => (target && "start" in target ? blankState(target.start) : blankState(new Date())));
+  const [form, setForm] = useState<FormState>(() => (target && "start" in target ? blankState(target.start, target.allDay) : blankState(new Date())));
   const [contactSearch, setContactSearch] = useState("");
   const [contactFieldOpen, setContactFieldOpen] = useState(false);
   const contactFieldRef = useRef<HTMLDivElement>(null);
@@ -612,6 +612,15 @@ export default function EventDialog({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target && "id" in target ? target.id : target && "start" in target ? target.start.getTime() : null]);
+
+  useEffect(() => {
+    if (!target) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [target, onClose]);
 
   const filteredContacts = useMemo(() => {
     const q = contactSearch.trim().toLowerCase();

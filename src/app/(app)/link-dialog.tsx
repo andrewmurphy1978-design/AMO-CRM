@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 export interface LinkOption {
   id: string;
@@ -96,6 +96,15 @@ export default function LinkDialog({
     () => (bookings && contactId ? bookings.filter((b) => b.contactId === contactId) : []),
     [bookings, contactId]
   );
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 

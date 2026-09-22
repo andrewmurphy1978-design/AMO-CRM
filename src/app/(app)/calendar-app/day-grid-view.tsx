@@ -119,7 +119,7 @@ function DayColumn({
   taskById: Record<string, string>;
   noEventsLabel: string;
   onRequestEdit: (event: CalendarEventSummary) => void;
-  onRequestCreate: (date: Date) => void;
+  onRequestCreate: (date: Date, allDay?: boolean) => void;
 }) {
   const timed: TimedEvent<CalendarEventSummary>[] = events
     .filter((e) => !e.allDay && e.start)
@@ -230,7 +230,7 @@ export default function DayGridView({
   tomorrowLabel: string;
   noEventsLabel: string;
   onRequestEdit: (event: CalendarEventSummary) => void;
-  onRequestCreate: (date: Date) => void;
+  onRequestCreate: (date: Date, allDay?: boolean) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -285,7 +285,11 @@ export default function DayGridView({
           <div className="sticky z-20 flex border-b border-card-border" style={{ top: headerHeight }}>
             <div className="w-14 shrink-0 bg-field-bg" />
             {allDayByDay.map((list, i) => (
-              <div key={i} className={`min-w-0 flex-1 space-y-0.5 border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(days[i], i)}`}>
+              <div
+                key={i}
+                onClick={() => onRequestCreate(days[i], true)}
+                className={`min-w-0 flex-1 cursor-pointer space-y-0.5 border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(days[i], i)}`}
+              >
                 {list.map((event) => {
                   const color = eventColor(event.colorId);
                   return (

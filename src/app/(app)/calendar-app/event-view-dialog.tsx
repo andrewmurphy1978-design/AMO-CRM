@@ -166,6 +166,15 @@ export default function EventViewDialog({
     };
   }, [eventId]);
 
+  useEffect(() => {
+    if (!eventId) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [eventId, onClose]);
+
   if (!eventId) return null;
 
   async function handleDelete() {
