@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import clsx from "@/lib/clsx";
 import RefreshButton from "./refresh-button";
-import EmailQuickActions from "./email-quick-actions";
 import { isOwnDomainEmail } from "@/lib/email-domain";
 import { isStale } from "@/lib/staleness";
 import type { EmailSummary, SentEmailSummary } from "@/lib/google";
 import type { EmailScreeningPayload } from "@/lib/email-inbox";
+import { EMAIL_SECTION_COLORS } from "./email-section-colors";
 
 export interface EmailLabels {
   title: string;
@@ -20,9 +20,6 @@ export interface EmailLabels {
   noItems: string;
   openInGmail: string;
   openIonosWebmail: string;
-  reply: string;
-  replyAll: string;
-  forward: string;
   categoryNeedsReply: string;
   categoryNeedsAttention: string;
   awaitingResponse: string;
@@ -125,28 +122,27 @@ export default function EmailCard({
   const needsAttention = emails.filter((e) => !isRead(e.id) && data?.classifications[e.id] === "NEEDS_ATTENTION");
   const nothingToShow = needsReply.length === 0 && awaitingSent.length === 0 && needsAttention.length === 0;
 
+  // Name/Object stacked (Object smaller, right below) plus the date on
+  // the right — no action icons here; opening the row is the only action,
+  // same as clicking a row on the full Email page's own dialog would do.
   function emailRow(email: EmailSummary, i: number) {
     return (
       <li key={email.id}>
-        <div
-          className={`flex min-w-0 items-start gap-2 px-2 py-1.5 ${
+        <a
+          href={email.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => markRead(email.id)}
+          className={`flex min-w-0 items-start gap-2 px-2 py-1.5 hover:opacity-80 ${
             isOwnDomainEmail(email.fromEmail) ? "bg-amo-gold/20" : i % 2 === 1 ? "bg-black/[0.03]" : ""
           }`}
         >
-          <a href={email.link} target="_blank" rel="noopener noreferrer" onClick={() => markRead(email.id)} className="min-w-0 flex-1 hover:opacity-80">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-ink">{email.from}</p>
             <p className="truncate text-xs text-soft">{email.subject}</p>
-          </a>
-          <EmailQuickActions
-            labels={{ reply: labels.reply, replyAll: labels.replyAll, forward: labels.forward }}
-            onOpen={() => markRead(email.id)}
-            // The Dashboard card doesn't have the full Email Dialog/compose
-            // UI yet (that's a later phase) — every quick action falls back
-            // to Gmail's own thread the same way the whole row already does.
-            onAction={() => window.open(email.link, "_blank", "noopener,noreferrer")}
-          />
+          </div>
           <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">{formatEmailDate(email.date, hour12, intlLocale)}</span>
-        </div>
+        </a>
       </li>
     );
   }
@@ -154,17 +150,18 @@ export default function EmailCard({
   function sentRow(item: SentEmailSummary, i: number) {
     return (
       <li key={item.id}>
-        <div className={`flex min-w-0 items-start gap-2 px-2 py-1.5 ${i % 2 === 1 ? "bg-black/[0.03]" : ""}`}>
-          <a href={item.link} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 hover:opacity-80">
+        <a
+          href={item.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex min-w-0 items-start gap-2 px-2 py-1.5 hover:opacity-80 ${i % 2 === 1 ? "bg-black/[0.03]" : ""}`}
+        >
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-ink">{item.to}</p>
             <p className="truncate text-xs text-soft">{item.subject}</p>
-          </a>
-          <EmailQuickActions
-            labels={{ reply: labels.reply, replyAll: labels.replyAll, forward: labels.forward }}
-            onAction={() => window.open(item.link, "_blank", "noopener,noreferrer")}
-          />
+          </div>
           <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">{formatEmailDate(item.date, hour12, intlLocale)}</span>
-        </div>
+        </a>
       </li>
     );
   }
@@ -194,30 +191,51 @@ export default function EmailCard({
           {nothingToShow && <p className="text-sm text-soft">{labels.noItems}</p>}
 
           {needsReply.length > 0 && (
-            <div className="shrink-0">
-              <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-soft">
-                {labels.categoryNeedsReply} <span className="font-normal normal-case text-soft/70">({needsReply.length})</span>
-              </h3>
-              <ul className="-mx-2 overflow-hidden rounded-lg">{needsReply.map((e, i) => emailRow(e, i))}</ul>
-            </div>
+            <section className="shrink-0 overflow-hidden rounded-xl border border-card-border">
+              <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerBg}`}>
+                <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerText}`}>
+                  {labels.categoryNeedsReply}
+                </h3>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.NEEDS_REPLY.badgeBg} ${EMAIL_SECTION_COLORS.NEEDS_REPLY.badgeText}`}
+                >
+                  {needsReply.length}
+                </span>
+              </div>
+              <ul className="bg-card-bg">{needsReply.map((e, i) => emailRow(e, i))}</ul>
+            </section>
           )}
 
           {awaitingSent.length > 0 && (
-            <div className="shrink-0">
-              <h3 className="mb-1 text-sm font-semibold uppercase tracking-wide text-soft">
-                {labels.awaitingResponse} <span className="font-normal normal-case text-soft/70">({awaitingSent.length})</span>
-              </h3>
-              <ul className="-mx-2 overflow-hidden rounded-lg">{awaitingSent.map((s, i) => sentRow(s, i))}</ul>
-            </div>
+            <section className="shrink-0 overflow-hidden rounded-xl border border-card-border">
+              <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerBg}`}>
+                <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerText}`}>
+                  {labels.awaitingResponse}
+                </h3>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.badgeBg} ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.badgeText}`}
+                >
+                  {awaitingSent.length}
+                </span>
+              </div>
+              <ul className="bg-card-bg">{awaitingSent.map((s, i) => sentRow(s, i))}</ul>
+            </section>
           )}
 
           {needsAttention.length > 0 && (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <h3 className="mb-1 shrink-0 text-sm font-semibold uppercase tracking-wide text-soft">
-                {labels.categoryNeedsAttention} <span className="font-normal normal-case text-soft/70">({needsAttention.length})</span>
-              </h3>
-              <ul className="-mx-2 min-h-0 flex-1 overflow-y-auto overflow-x-hidden rounded-lg">{needsAttention.map((e, i) => emailRow(e, i))}</ul>
-            </div>
+            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-card-border">
+              <div className={`flex shrink-0 items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg}`}>
+                <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerText}`}>
+                  {labels.categoryNeedsAttention}
+                </h3>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.badgeBg} ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.badgeText}`}
+                >
+                  {needsAttention.length}
+                </span>
+              </div>
+              <ul className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-card-bg">{needsAttention.map((e, i) => emailRow(e, i))}</ul>
+            </section>
           )}
 
           <div className="mt-auto flex shrink-0 flex-wrap gap-x-4 gap-y-1 border-t border-card-border pt-3 text-xs">

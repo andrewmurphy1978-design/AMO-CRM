@@ -19,6 +19,7 @@ import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./e
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email-compose-dialog";
 import { fetchEmailDetail, type EmailDetail } from "@/actions/email-messages";
 import type { LinkValues, LinkDialogLabels } from "../link-dialog";
+import { EMAIL_SECTION_COLORS } from "../email-section-colors";
 
 export type { EmailScreeningPayload };
 
@@ -27,20 +28,6 @@ const CATEGORY_ORDER: EmailCategory[] = ["NEEDS_REPLY", "NEEDS_ATTENTION", "CAN_
 // still needs linking to a client/project/task), then drops out of view —
 // sooner if it gets linked before that.
 const RECENTLY_READ_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-
-// One accent color per section, keyed by the same `key` used to build
-// orderedSections below — the whole card header (not just a thin bar) uses
-// the category color, with the row list underneath kept plain so the
-// messages themselves always look the same regardless of category.
-const SECTION_COLORS: Record<string, { headerBg: string; headerText: string; badgeBg: string; badgeText: string }> = {
-  NEEDS_REPLY: { headerBg: "bg-rose-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
-  SENT_AWAITING_REPLY: { headerBg: "bg-amber-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
-  NEEDS_ATTENTION: { headerBg: "bg-blue-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
-  CAN_WAIT: { headerBg: "bg-violet-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
-  LOW_PRIORITY: { headerBg: "bg-slate-300", headerText: "text-slate-800", badgeBg: "bg-white/60", badgeText: "text-slate-800" },
-  RECENTLY_READ: { headerBg: "bg-gray-200", headerText: "text-gray-700", badgeBg: "bg-white/70", badgeText: "text-gray-700" },
-  COMPLETED: { headerBg: "bg-emerald-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
-};
 
 function Spinner({ className }: { className?: string }) {
   return (
@@ -305,8 +292,14 @@ function EmailRow({
           {onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}
           {onUncomplete && <UncompleteButton onClick={onUncomplete} title={uncompleteLabel} />}
           {!onUncomplete && completedLocked && <CompletedBadge title={completeLabel} />}
-          {onMarkRead && <MarkReadButton onClick={onMarkRead} title={markReadLabel} />}
-          {onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}
+          {/* A fixed-width slot even when neither action applies to this
+              section (e.g. Sent — awaiting reply, Completed) — otherwise
+              the reply/forward icons after it would shift left/right
+              depending on which section a row belongs to. */}
+          <span className="flex w-6 shrink-0 justify-center">
+            {onMarkRead && <MarkReadButton onClick={onMarkRead} title={markReadLabel} />}
+            {onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}
+          </span>
           <EmailQuickActions labels={quickActionLabels} onOpen={onOpen} onAction={onQuickAction} />
         </div>
         <span className="whitespace-nowrap text-right text-xs text-soft">
@@ -716,7 +709,7 @@ export default function EmailScreeningView({
       {nothingToShow && <p className="text-sm text-soft">{t.email.noMessages}</p>}
 
       {orderedSections.map((section) => {
-        const color = SECTION_COLORS[section.key] ?? SECTION_COLORS.LOW_PRIORITY;
+        const color = EMAIL_SECTION_COLORS[section.key] ?? EMAIL_SECTION_COLORS.LOW_PRIORITY;
         return (
           <section key={section.key} className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
             <div className={`flex items-center gap-2 px-4 py-2.5 ${color.headerBg}`}>
