@@ -19,6 +19,9 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader, { HeaderBreadcrumb } from "../../page-header";
+import Card from "@/components/section-card";
+
+const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
 export default async function ProjectDetailPage({
   params,
@@ -69,6 +72,7 @@ export default async function ProjectDetailPage({
   const doneTasks = project.tasks.filter((t) => t.status === "DONE");
   const clientName =
     [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.email;
+  const teamNames = project.teamMembers.map((tm) => tm.user.name);
 
   return (
     <div className="space-y-6">
@@ -81,132 +85,165 @@ export default async function ProjectDetailPage({
         hour12={hour12}
         dateLocale={dateLocale}
         location={t.dashboard.myLocation}
-      />
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm text-soft">
-            {STATUS_LABELS[project.status]}
-            {` · ${t.projectTypes[project.type]}`}
-            {project.owner && ` · ${t.projectDetail.owner}: ${project.owner.name}`}
-            {project.dueDate && ` · ${t.projectDetail.due} ${format(project.dueDate, "MMMM d, yyyy", { locale: dateLocale })}`}
-          </p>
-          {project.teamMembers.length > 0 && (
-            <p className="mt-1 text-sm text-soft">
-              {t.projectForm.teamMembers}: {project.teamMembers.map((tm) => tm.user.name).join(", ")}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Link
-            href={`/projects/${project.id}/edit`}
-            className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
-          >
-            {t.projectDetail.edit}
-          </Link>
-          <DeleteProjectButton projectId={project.id} lang={lang} />
-        </div>
-      </div>
-
-      {project.description && (
-        <p className="max-w-3xl whitespace-pre-wrap text-sm text-ink">{project.description}</p>
-      )}
-
-      <CalendarEventsCard
-        title={t.calendarApp.title}
-        events={calendarEvents}
-        noEventsLabel={t.calendarApp.noLinkedEvents}
-        hour12={hour12}
-        dateLocale={dateLocale}
-        intlLocale={intlLocale}
-      />
-
-      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <h2 className="font-display text-lg font-semibold text-ink">{t.projectDetail.tasksTitle}</h2>
-        <div className="mt-3">
-          <QuickAddTask projectId={project.id} lang={lang} />
-        </div>
-
-        {openTasks.length === 0 && doneTasks.length === 0 ? (
-          <p className="mt-4 text-sm text-soft">{t.projectDetail.noTasksYet}</p>
-        ) : (
+        actions={
           <>
-            <ul className="mt-2 divide-y divide-card-border">
-              {openTasks.map((task) => (
-                <TaskRow key={task.id} task={task} projectId={project.id} lang={lang} />
-              ))}
-            </ul>
-            {doneTasks.length > 0 && (
-              <details className="mt-3">
-                <summary className="cursor-pointer text-xs font-medium text-soft">
-                  {t.projectDetail.completed(doneTasks.length)}
-                </summary>
+            <Link
+              href={`/projects/${project.id}/edit`}
+              className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
+            >
+              {t.projectDetail.edit}
+            </Link>
+            <DeleteProjectButton projectId={project.id} lang={lang} />
+          </>
+        }
+      />
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <Card color="general" title={t.contactForm.cardGeneralInfo}>
+            <h1 className="font-display text-xl font-semibold text-ink">{project.name}</h1>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div>
+                <p className={LABEL_CLASS}>{t.projects.colStatus}</p>
+                <p className="mt-1 text-sm text-ink">{STATUS_LABELS[project.status]}</p>
+              </div>
+              <div>
+                <p className={LABEL_CLASS}>{t.projects.colType}</p>
+                <p className="mt-1 text-sm text-ink">{t.projectTypes[project.type]}</p>
+              </div>
+              <div>
+                <p className={LABEL_CLASS}>{t.projects.colClient}</p>
+                <p className="mt-1 text-sm">
+                  <Link href={`/contacts/${project.contact.id}`} className="text-amo-lime hover:underline">
+                    {clientName}
+                  </Link>
+                </p>
+              </div>
+
+              <div>
+                <p className={LABEL_CLASS}>{t.projects.colOwner}</p>
+                <p className="mt-1 text-sm text-ink">{project.owner?.name ?? t.common.unassigned}</p>
+              </div>
+              <div>
+                <p className={LABEL_CLASS}>{t.projects.colTeam}</p>
+                <p className="mt-1 text-sm text-ink">{teamNames.length > 0 ? teamNames.join(", ") : "—"}</p>
+              </div>
+              <div />
+
+              <div>
+                <p className={LABEL_CLASS}>{t.projects.colStart}</p>
+                <p className="mt-1 text-sm text-ink">
+                  {project.startDate ? format(project.startDate, "PP", { locale: dateLocale }) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className={LABEL_CLASS}>{t.projects.colDue}</p>
+                <p className="mt-1 text-sm text-ink">
+                  {project.dueDate ? format(project.dueDate, "PP", { locale: dateLocale }) : "—"}
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.projectDetail.tasksTitle}</h2>
+            <div className="mt-3">
+              <QuickAddTask projectId={project.id} lang={lang} />
+            </div>
+
+            {openTasks.length === 0 && doneTasks.length === 0 ? (
+              <p className="mt-4 text-sm text-soft">{t.projectDetail.noTasksYet}</p>
+            ) : (
+              <>
                 <ul className="mt-2 divide-y divide-card-border">
-                  {doneTasks.map((task) => (
+                  {openTasks.map((task) => (
                     <TaskRow key={task.id} task={task} projectId={project.id} lang={lang} />
                   ))}
                 </ul>
-              </details>
+                {doneTasks.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-xs font-medium text-soft">
+                      {t.projectDetail.completed(doneTasks.length)}
+                    </summary>
+                    <ul className="mt-2 divide-y divide-card-border">
+                      {doneTasks.map((task) => (
+                        <TaskRow key={task.id} task={task} projectId={project.id} lang={lang} />
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </>
             )}
-          </>
-        )}
-      </section>
-
-      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.title}</h2>
-          <Link href={`/projects/${project.id}/proposals/new`} className="text-xs font-semibold text-amo-lime hover:underline">
-            {t.proposals.buildFull}
-          </Link>
+          </section>
         </div>
-        <div className="mt-3">
-          <QuickAddProposal projectId={project.id} lang={lang} />
-        </div>
-        {project.proposals.length > 0 && (
-          <ul className="mt-2 divide-y divide-card-border">
-            {project.proposals.map((proposal) => (
-              <ProposalRow key={proposal.id} proposal={proposal} projectId={project.id} lang={lang} />
-            ))}
-          </ul>
-        )}
-      </section>
 
-      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <h2 className="font-display text-lg font-semibold text-ink">{t.invoices.title}</h2>
-        <div className="mt-3">
-          <QuickAddInvoice projectId={project.id} lang={lang} />
-        </div>
-        {project.invoices.length > 0 && (
-          <ul className="mt-2 divide-y divide-card-border">
-            {project.invoices.map((invoice) => (
-              <InvoiceRow key={invoice.id} invoice={invoice} projectId={project.id} lang={lang} />
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-        <h2 className="font-display text-lg font-semibold text-ink">{t.projectDetail.callsEmails}</h2>
-        <div className="mt-3">
-          <InteractionLog
-            lang={lang}
-            contactId={project.contactId}
-            projectId={project.id}
-            interactions={project.interactions.map((i) => ({
-              id: i.id,
-              type: i.type,
-              subject: i.subject,
-              notes: i.notes,
-              occurredAt: i.occurredAt.toISOString(),
-              loggedBy: i.loggedBy ? { name: i.loggedBy.name } : null,
-            }))}
+        <div className="space-y-6">
+          <CalendarEventsCard
+            title={t.calendarApp.title}
+            events={calendarEvents}
+            noEventsLabel={t.calendarApp.noLinkedEvents}
+            hour12={hour12}
+            dateLocale={dateLocale}
+            intlLocale={intlLocale}
           />
+
+          <Card
+            color="proposals"
+            title={t.proposals.title}
+            actions={
+              <Link href={`/projects/${project.id}/proposals/new`} className="text-xs font-semibold text-white hover:underline">
+                {t.proposals.buildFull}
+              </Link>
+            }
+          >
+            <QuickAddProposal projectId={project.id} lang={lang} />
+            {project.proposals.length > 0 && (
+              <ul className="divide-y divide-card-border">
+                {project.proposals.map((proposal) => (
+                  <ProposalRow key={proposal.id} proposal={proposal} projectId={project.id} lang={lang} />
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card color="invoices" title={t.invoices.title}>
+            <QuickAddInvoice projectId={project.id} lang={lang} />
+            {project.invoices.length > 0 && (
+              <ul className="divide-y divide-card-border">
+                {project.invoices.map((invoice) => (
+                  <InvoiceRow key={invoice.id} invoice={invoice} projectId={project.id} lang={lang} />
+                ))}
+              </ul>
+            )}
+          </Card>
+
+          <Card color="interactions" title={t.projectDetail.callsEmails}>
+            <InteractionLog
+              lang={lang}
+              contactId={project.contactId}
+              projectId={project.id}
+              interactions={project.interactions.map((i) => ({
+                id: i.id,
+                type: i.type,
+                subject: i.subject,
+                notes: i.notes,
+                occurredAt: i.occurredAt.toISOString(),
+                loggedBy: i.loggedBy ? { name: i.loggedBy.name } : null,
+              }))}
+            />
+          </Card>
+
+          <Card color="notes" title={t.projectDetail.notesTitle}>
+            {project.description ? (
+              <p className="whitespace-pre-wrap text-sm text-ink">{project.description}</p>
+            ) : (
+              <p className="text-sm text-soft">{t.projectDetail.noNotesYet}</p>
+            )}
+          </Card>
         </div>
-      </section>
+      </div>
     </div>
   );
 }

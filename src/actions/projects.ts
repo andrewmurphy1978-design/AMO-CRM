@@ -34,18 +34,94 @@ function readProjectForm(formData: FormData) {
   return ProjectSchema.parse(raw);
 }
 
-// Parallel "phaseId" (empty for a new row)/"phaseName" inputs, same index =
-// same row — mirrors readSocialLinks in actions/contacts.ts.
-function readPhases(formData: FormData): { id: string; name: string }[] {
-  const ids = formData.getAll("phaseId").map(String);
-  const names = formData.getAll("phaseName").map(String);
-  const phases: { id: string; name: string }[] = [];
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i].trim();
-    if (!name) continue;
-    phases.push({ id: ids[i] ?? "", name });
+export interface PhaseValues {
+  name: string;
+  status: "PLANNING" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+  phaseType: string;
+  teamMemberIds: string[];
+  startDate: string;
+  dueDate: string;
+  description: string;
+}
+
+const PhaseSchema = z.object({
+  name: z.string().trim().min(1, "Phase name is required"),
+  status: z.enum(["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"]),
+  phaseType: z.string().trim().optional(),
+  teamMemberIds: z.array(z.string()),
+  startDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  description: z.string().trim().optional(),
+});
+
+function phaseData(values: PhaseValues) {
+  const data = PhaseSchema.parse(values);
+  return {
+    name: data.name,
+    status: data.status,
+    phaseType: data.phaseType || null,
+    teamMemberIds: data.teamMemberIds,
+    startDate: data.startDate ? new Date(data.startDate) : null,
+    dueDate: data.dueDate ? new Date(data.dueDate) : null,
+    description: data.description || null,
+  };
+}
+
+// Phases are edited through their own dialog (see phase-dialog.tsx) and
+// saved immediately via these actions, independent of the main project
+// form's submit — same reasoning as Tasks' quick-add/inline-edit rather
+// than a bulk resync on project save.
+export async function createPhase(
+  projectId: string,
+  order: number,
+  values: PhaseValues
+): Promise<{ id?: string; error?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  let data;
+  try {
+    data = phaseData(values);
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid input" };
+    throw error;
   }
-  return phases;
+
+  const phase = await withScopedPrismaClient((db) => db.projectPhase.create({ data: { projectId, order, ...data } }));
+  revalidatePath(`/projects/${projectId}/edit`);
+  revalidatePath(`/projects/${projectId}`);
+  return { id: phase.id };
+}
+
+export async function updatePhase(
+  phaseId: string,
+  projectId: string,
+  values: PhaseValues
+): Promise<{ error?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  let data;
+  try {
+    data = phaseData(values);
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid input" };
+    throw error;
+  }
+
+  await withScopedPrismaClient((db) => db.projectPhase.update({ where: { id: phaseId }, data }));
+  revalidatePath(`/projects/${projectId}/edit`);
+  revalidatePath(`/projects/${projectId}`);
+  return {};
+}
+
+export async function deletePhase(phaseId: string, projectId: string) {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  await withScopedPrismaClient((db) => db.projectPhase.delete({ where: { id: phaseId } }));
+  revalidatePath(`/projects/${projectId}/edit`);
+  revalidatePath(`/projects/${projectId}`);
 }
 
 export async function createProject(
@@ -122,10 +198,8 @@ export async function updateProject(
     throw error;
   }
 
-  const phases = readPhases(formData);
-
-  // One shared client — the update, team-member resync, and phase
-  // add/rename/delete would otherwise each open their own connection.
+  // One shared client — the update and team-member resync would
+  // otherwise each open their own connection.
   await withScopedPrismaClient(async (db) => {
     await db.project.update({
       where: { id: projectId },
@@ -148,25 +222,6 @@ export async function updateProject(
       await db.projectTeamMember.createMany({
         data: data.teamMemberIds.map((userId) => ({ projectId, userId })),
       });
-    }
-
-    // Phases: update rows that carried an existing id, create the rest,
-    // and drop any existing phase the submission no longer lists (its
-    // tasks fall back to no phase via the FK's ON DELETE SET NULL).
-    const existingPhases = await db.projectPhase.findMany({ where: { projectId } });
-    const submittedIds = new Set(phases.filter((p) => p.id).map((p) => p.id));
-    for (const existing of existingPhases) {
-      if (!submittedIds.has(existing.id)) {
-        await db.projectPhase.delete({ where: { id: existing.id } });
-      }
-    }
-    for (let i = 0; i < phases.length; i++) {
-      const phase = phases[i];
-      if (phase.id) {
-        await db.projectPhase.update({ where: { id: phase.id }, data: { name: phase.name, order: i } });
-      } else {
-        await db.projectPhase.create({ data: { projectId, name: phase.name, order: i } });
-      }
     }
   });
 

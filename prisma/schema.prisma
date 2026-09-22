@@ -574,14 +574,25 @@ model ProjectTeamMember {
 
 // Sub-projects/steps within a Project — a lightweight grouping that existing
 // Tasks opt into (via Task.phaseId) rather than a separate work-item type of
-// their own.
+// their own. Edited through its own dialog (like a mini Project): its own
+// status/type/team/dates/description, defaulting the team to the parent
+// Project's own team members on creation.
 model ProjectPhase {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
+  order     Int           @default(0)
+  status    ProjectStatus @default(PLANNING)
+  phaseType String?
+  // Plain array of User ids rather than a join table — a phase's team is a
+  // simple, non-relational snapshot (no addedAt/unique-constraint needs),
+  // same pattern as Contact.extraPhones/extraEmails.
+  teamMemberIds String[]  @default([])
+  startDate     DateTime?
+  dueDate       DateTime?
+  description   String?   @db.Text
+  createdAt     DateTime  @default(now())
 
   tasks Task[]
 

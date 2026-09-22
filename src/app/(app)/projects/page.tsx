@@ -84,34 +84,19 @@ export default async function ProjectsPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.projects.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-soft">{t.projects.shown(projects.length)}</p>
-        <div className="flex items-center gap-3">
-          <div className="flex overflow-hidden rounded-md border border-card-border text-sm font-medium">
-            <Link
-              href={viewHref("cards")}
-              className={`px-3 py-1.5 ${activeView === "cards" ? "bg-amo-green text-white" : "bg-card-bg text-ink hover:bg-black/5"}`}
-            >
-              {t.projects.viewCards}
-            </Link>
-            <Link
-              href={viewHref("table")}
-              className={`px-3 py-1.5 ${activeView === "table" ? "bg-amo-green text-white" : "bg-card-bg text-ink hover:bg-black/5"}`}
-            >
-              {t.projects.viewTable}
-            </Link>
-          </div>
-          <Link
-            href="/projects/new"
-            className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
-          >
+      <PageHeader
+        title={t.projects.title}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        location={t.dashboard.myLocation}
+        actions={
+          <Link href="/projects/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
             {t.projects.newProject}
           </Link>
-        </div>
-      </div>
+        }
+      />
 
-      <form className="flex gap-3" method="get">
+      <form className="flex flex-wrap items-center gap-3" method="get">
         {activeView === "table" && <input type="hidden" name="view" value="table" />}
         <select
           name="status"
@@ -131,6 +116,25 @@ export default async function ProjectsPage({
         >
           {t.common.filter}
         </button>
+
+        <span className="ml-auto rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
+          {t.projects.shown(projects.length)}
+        </span>
+
+        <div className="flex overflow-hidden rounded-md border border-card-border text-sm font-medium">
+          <Link
+            href={viewHref("cards")}
+            className={`px-3 py-1.5 ${activeView === "cards" ? "bg-amo-green text-white" : "bg-card-bg text-ink hover:bg-black/5"}`}
+          >
+            {t.projects.viewCards}
+          </Link>
+          <Link
+            href={viewHref("table")}
+            className={`px-3 py-1.5 ${activeView === "table" ? "bg-amo-green text-white" : "bg-card-bg text-ink hover:bg-black/5"}`}
+          >
+            {t.projects.viewTable}
+          </Link>
+        </div>
       </form>
 
       {activeView === "cards" ? (
