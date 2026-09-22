@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { addDays, format, isSameDay, isToday, isTomorrow, startOfDay, type Locale } from "date-fns";
 import RefreshButton from "./refresh-button";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -10,8 +9,11 @@ import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatClockTime, formatHourMark, formatTimeRange } from "@/lib/calendar-time";
 import { layoutDayEvents, type TimedEvent } from "@/lib/calendar-layout";
-import { saveCalendarEventLink } from "@/actions/links";
-import LinkDialog, { type LinkOption, type LinkDialogLabels, type LinkValues } from "./link-dialog";
+import type { ResolvedEventLink } from "@/lib/calendar-links";
+import type { EventLinkTargets } from "@/actions/calendar";
+import EventViewDialog, { type EventViewDialogLabels } from "./calendar-app/event-view-dialog";
+import EventDialog, { type EventDialogLabels, type EventDialogTarget } from "./calendar-app/event-dialog";
+import type { LinkOption } from "./link-dialog";
 
 export interface CalendarLabels {
   title: string;
@@ -25,18 +27,6 @@ export interface CalendarLabels {
   openInCalendar: string;
 }
 
-// Pre-resolved (not raw ids) since the Dashboard card, unlike the full
-// Calendar page, doesn't ship full contacts/projects/tasks lists to the
-// client just to look three names up — the server resolves them once.
-export interface ResolvedEventLink {
-  contactId: string;
-  contactName: string;
-  projectId: string;
-  projectName: string;
-  taskId: string;
-  taskName: string;
-}
-
 const GRID_START_HOUR = 6; // grid content starts at 6 AM...
 const GRID_END_HOUR = 22; // ...through 10 PM, scrollable
 const VISIBLE_HOURS = 8; // ...but only ~9 AM-5 PM is visible without scrolling
@@ -48,6 +38,13 @@ function minutesSinceGridStart(date: Date): number {
   return (hours - GRID_START_HOUR) * 60;
 }
 
+// The dialogs only need the four raw ids to prefill their selections —
+// ResolvedEventLink also carries display-ready names for the inline
+// contact/project/task links shown in the grid boxes below.
+function toLinkTargets(link: ResolvedEventLink | undefined): EventLinkTargets {
+  return { contactId: link?.contactId ?? "", projectId: link?.projectId ?? "", taskId: link?.taskId ?? "", bookingId: link?.bookingId ?? "" };
+}
+
 function DayColumn({
   day,
   events,
@@ -55,7 +52,7 @@ function DayColumn({
   hour12,
   intlLocale,
   labels,
-  onRequestLink,
+  onRequestEdit,
 }: {
   day: Date;
   events: CalendarEventSummary[];
@@ -63,9 +60,8 @@ function DayColumn({
   hour12: boolean;
   intlLocale: string;
   labels: CalendarLabels;
-  onRequestLink: (event: CalendarEventSummary) => void;
+  onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
-  const router = useRouter();
   const timed: TimedEvent<CalendarEventSummary>[] = events
     .filter((e) => !e.allDay && e.start)
     .map((e) => {
@@ -103,8 +99,8 @@ function DayColumn({
           const color = eventColor(event.colorId);
           const top = (seg.startMin / 60) * ROW_HEIGHT;
           const natural = ((seg.endMin - seg.startMin) / 60) * ROW_HEIGHT - (isLast ? 1 : 0);
-          // Only the first/last segment need room for the title or the
-          // link button — see the same pattern in day-grid-view.tsx.
+          // Only the first/last segment need room for the title — see the
+          // same pattern in day-grid-view.tsx.
           const height = isFirst || isLast ? Math.max(MIN_BLOCK_HEIGHT, natural) : natural;
           const link = links[event.id];
           return (
@@ -112,8 +108,8 @@ function DayColumn({
               key={`${event.id}-${i}`}
               role="button"
               tabIndex={0}
-              onClick={() => router.push("/calendar")}
-              className={`absolute flex cursor-pointer flex-col overflow-hidden px-1 py-0.5 pr-4 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
+              onClick={() => onRequestEdit(event)}
+              className={`absolute flex cursor-pointer flex-col overflow-hidden px-1 py-0.5 text-[10px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
               style={{
                 top,
                 height,
@@ -163,26 +159,6 @@ function DayColumn({
                   )}
                 </>
               )}
-              {isLast && (
-                // Absolutely positioned (not a flow child) so it always shows
-                // in the box's corner regardless of how short the box is —
-                // same fix as the full Calendar page's event boxes.
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRequestLink(event);
-                  }}
-                  className="absolute bottom-0.5 right-0.5 shrink-0 rounded-full bg-black/15 p-0.5 hover:bg-black/30"
-                  title="Link"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-3 w-3">
-                    <circle cx="8" cy="16" r="4" />
-                    <circle cx="16" cy="8" r="4" />
-                    <path strokeLinecap="round" d="M10.8 13.2 13.2 10.8" />
-                  </svg>
-                </button>
-              )}
             </div>
           );
         })
@@ -202,7 +178,7 @@ function ThreeDayGrid({
   hour12,
   intlLocale,
   labels,
-  onRequestLink,
+  onRequestEdit,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
@@ -210,7 +186,7 @@ function ThreeDayGrid({
   dateLocale: Locale | undefined;
   hour12: boolean;
   intlLocale: string;
-  onRequestLink: (event: CalendarEventSummary) => void;
+  onRequestEdit: (event: CalendarEventSummary) => void;
   labels: CalendarLabels;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -268,14 +244,16 @@ function ThreeDayGrid({
                 {list.map((event) => {
                   const color = eventColor(event.colorId);
                   return (
-                    <div
+                    <button
                       key={event.id}
-                      className="w-full whitespace-normal break-words rounded px-1 py-0.5 text-[10px] font-medium"
+                      type="button"
+                      onClick={() => onRequestEdit(event)}
+                      className="w-full whitespace-normal break-words rounded px-1 py-0.5 text-left text-[10px] font-medium"
                       style={{ backgroundColor: color.bg, color: color.fg }}
                       title={event.title}
                     >
                       {event.title}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -304,7 +282,7 @@ function ThreeDayGrid({
               hour12={hour12}
               intlLocale={intlLocale}
               labels={labels}
-              onRequestLink={onRequestLink}
+              onRequestEdit={onRequestEdit}
             />
           ))}
         </div>
@@ -320,6 +298,7 @@ function UpcomingTable({
   hour12,
   intlLocale,
   labels,
+  onRequestEdit,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
@@ -327,6 +306,7 @@ function UpcomingTable({
   hour12: boolean;
   intlLocale: string;
   labels: CalendarLabels;
+  onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
   return (
     <div className="mt-3 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-card-border">
@@ -345,10 +325,11 @@ function UpcomingTable({
                     {eventsByDay[i].map((event) => {
                       const color = eventColor(event.colorId);
                       return (
-                        <Link
+                        <button
                           key={event.id}
-                          href="/calendar"
-                          className="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 transition-opacity hover:opacity-90"
+                          type="button"
+                          onClick={() => onRequestEdit(event)}
+                          className="flex w-full cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-left transition-opacity hover:opacity-90"
                           style={{ backgroundColor: color.bg, color: color.fg }}
                         >
                           <span className="w-16 shrink-0 font-bold">
@@ -358,7 +339,7 @@ function UpcomingTable({
                           <span className="shrink-0 text-[10px] opacity-90">
                             {!event.allDay && event.end ? formatClockTime(new Date(event.end), hour12, intlLocale) : ""}
                           </span>
-                        </Link>
+                        </button>
                       );
                     })}
                   </div>
@@ -379,10 +360,14 @@ export default function CalendarCard({
   lang,
   hour12,
   labels,
+  calendarName,
   contactOptions,
   projectOptions,
   taskOptions,
-  linkDialogLabels,
+  bookingOptions,
+  eventDialogLabels,
+  eventViewDialogLabels,
+  linkPickerLabels,
 }: {
   initial: CalendarEventSummary[] | null;
   links: Record<string, ResolvedEventLink>;
@@ -390,36 +375,29 @@ export default function CalendarCard({
   lang: "en" | "fr";
   hour12: boolean;
   labels: CalendarLabels;
+  calendarName?: string | null;
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
-  linkDialogLabels: LinkDialogLabels;
+  bookingOptions: LinkOption[];
+  eventDialogLabels: EventDialogLabels;
+  eventViewDialogLabels: EventViewDialogLabels;
+  linkPickerLabels: { contact: string; project: string; task: string; booking: string; none: string; clear: string; searchPlaceholder: string; noResults: string };
 }) {
   const [events, setEvents] = useState(initial);
   const [links, setLinks] = useState(initialLinks);
   const [loading, setLoading] = useState(false);
-  const [linkTarget, setLinkTarget] = useState<CalendarEventSummary | null>(null);
+  const [viewTarget, setViewTarget] = useState<string | null>(null);
+  const [dialogTarget, setDialogTarget] = useState<EventDialogTarget | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
 
-  async function handleSaveLink(values: LinkValues) {
-    if (!linkTarget) return;
-    await saveCalendarEventLink(linkTarget.id, { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId });
-    const contactName = contactOptions.find((c) => c.id === values.contactId)?.label ?? "";
-    const projectName = projectOptions.find((p) => p.id === values.projectId)?.label ?? "";
-    const taskName = taskOptions.find((t) => t.id === values.taskId)?.label ?? "";
-    setLinks((prev) => ({
-      ...prev,
-      [linkTarget.id]: {
-        contactId: values.contactId,
-        contactName,
-        projectId: values.projectId,
-        projectName,
-        taskId: values.taskId,
-        taskName,
-      },
-    }));
-  }
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   async function refresh() {
     setLoading(true);
@@ -471,7 +449,7 @@ export default function CalendarCard({
             hour12={hour12}
             intlLocale={intlLocale}
             labels={labels}
-            onRequestLink={setLinkTarget}
+            onRequestEdit={(event) => setViewTarget(event.id)}
           />
           <UpcomingTable
             days={tableDays}
@@ -480,6 +458,7 @@ export default function CalendarCard({
             hour12={hour12}
             intlLocale={intlLocale}
             labels={labels}
+            onRequestEdit={(event) => setViewTarget(event.id)}
           />
           <div className="mt-3 border-t border-card-border pt-3 text-xs">
             <a
@@ -493,23 +472,57 @@ export default function CalendarCard({
           </div>
         </div>
       )}
-      <LinkDialog
-        key={linkTarget?.id}
-        open={linkTarget !== null}
-        onClose={() => setLinkTarget(null)}
+
+      <EventViewDialog
+        eventId={viewTarget}
+        onClose={() => setViewTarget(null)}
+        onEdit={() => {
+          const id = viewTarget;
+          setViewTarget(null);
+          if (id) setDialogTarget({ id });
+        }}
+        onDeleted={() => {
+          setViewTarget(null);
+          refresh();
+          setToast(eventDialogLabels.deleted);
+        }}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+        labels={eventViewDialogLabels}
+      />
+
+      <EventDialog
+        key={dialogTarget ? ("id" in dialogTarget ? dialogTarget.id : dialogTarget.start.getTime()) : "none"}
+        target={dialogTarget}
+        initialLinks={dialogTarget && "id" in dialogTarget ? toLinkTargets(links[dialogTarget.id]) : undefined}
+        calendarName={calendarName}
+        onClose={() => setDialogTarget(null)}
+        onSaved={() => {
+          refresh();
+          setToast(eventDialogLabels.saved);
+        }}
+        onDeleted={() => {
+          refresh();
+          setToast(eventDialogLabels.deleted);
+        }}
         contacts={contactOptions}
         projects={projectOptions}
         tasks={taskOptions}
-        initial={{
-          contactId: (linkTarget && links[linkTarget.id]?.contactId) || "",
-          projectId: (linkTarget && links[linkTarget.id]?.projectId) || "",
-          taskId: (linkTarget && links[linkTarget.id]?.taskId) || "",
-          bookingId: "",
-          affiliateProgramId: "",
-        }}
-        onSave={handleSaveLink}
-        labels={linkDialogLabels}
+        bookings={bookingOptions}
+        lang={lang}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+        labels={eventDialogLabels}
+        linkLabels={linkPickerLabels}
       />
+
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-[60] flex justify-center px-4">
+          <div className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>
+        </div>
+      )}
     </div>
   );
 }

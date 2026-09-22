@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { format, type Locale } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { EVENT_COLOR_OPTIONS, GOOGLE_EVENT_COLORS, DEFAULT_EVENT_COLOR, eventColor } from "@/lib/calendar-colors";
@@ -317,11 +317,42 @@ function DateDisplayField({
   );
 }
 
-// Shows the time formatted per the viewer's 12h/24h setting while
-// unfocused; swaps to a native time input on focus. `step` limits the
-// native clock-face picker's minute list to 10-minute increments (typing
-// directly can still enter any value — browsers don't enforce `step` on
-// keyboard entry, only on the picker/spinner UI).
+// Native <input type="time"> can't be forced into a fixed 12h/24h display —
+// Chrome renders it per the browser/OS locale regardless of any HTML
+// attribute, which is exactly why an earlier version of this field kept
+// reverting to 12-hour even for 24h-setting users. This renders the time
+// itself (always via formatClockTime, so it always matches the app's own
+// setting), typable directly for an exact value, with a dropdown of
+// 5-minute-interval presets for quick picking — the same combo-box pattern
+// Google Calendar's own time field uses.
+function timeDisplay(value: string, hour12: boolean, intlLocale: string): string {
+  if (!value) return "";
+  const [h, m] = value.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return value;
+  return formatClockTime(new Date(2000, 0, 1, h, m), hour12, intlLocale);
+}
+
+// Lenient parse of a typed time — accepts 12h ("9:00 am", "9am", "9 pm") and
+// 24h ("21:00", "9:00") forms so manual entry works regardless of the
+// viewer's own display setting. Returns null (and the field reverts to the
+// last valid value) when it can't make sense of the input.
+function parseTimeText(raw: string): string | null {
+  const s = raw.trim().toLowerCase().replace(/\./g, "");
+  const m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = m[2] ? Number(m[2]) : 0;
+  const meridiem = m[3];
+  if (minute > 59) return null;
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    hour = meridiem === "am" ? (hour === 12 ? 0 : hour) : hour === 12 ? 12 : hour + 12;
+  } else if (hour > 23) {
+    return null;
+  }
+  return `${pad(hour)}:${pad(minute)}`;
+}
+
 function TimeDisplayField({
   value,
   onChange,
@@ -333,32 +364,81 @@ function TimeDisplayField({
   hour12: boolean;
   intlLocale: string;
 }) {
-  const [focused, setFocused] = useState(false);
-  const displayValue = (() => {
-    if (!value) return "";
-    const [h, m] = value.split(":").map(Number);
-    if (Number.isNaN(h) || Number.isNaN(m)) return value;
-    return formatClockTime(new Date(2000, 0, 1, h, m), hour12, intlLocale);
-  })();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(() => timeDisplay(value, hour12, intlLocale));
+  const ref = useRef<HTMLDivElement>(null);
 
-  return focused ? (
-    <input
-      type="time"
-      step={600}
-      autoFocus
-      value={value}
-      onBlur={() => setFocused(false)}
-      onChange={(e) => onChange(e.target.value)}
-      className={COMPACT_FIELD_CLASS}
-    />
-  ) : (
-    <input
-      type="text"
-      readOnly
-      value={displayValue}
-      onFocus={() => setFocused(true)}
-      className={`${COMPACT_FIELD_CLASS} cursor-pointer`}
-    />
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setText(timeDisplay(value, hour12, intlLocale));
+  }, [value, hour12, intlLocale]);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const presets = useMemo(
+    () =>
+      Array.from({ length: (24 * 60) / 5 }, (_, i) => {
+        const v = `${pad(Math.floor((i * 5) / 60))}:${pad((i * 5) % 60)}`;
+        return { value: v, label: timeDisplay(v, hour12, intlLocale) };
+      }),
+    [hour12, intlLocale]
+  );
+
+  function commit(raw: string) {
+    const parsed = parseTimeText(raw);
+    if (parsed) {
+      onChange(parsed);
+      setText(timeDisplay(parsed, hour12, intlLocale));
+    } else {
+      setText(timeDisplay(value, hour12, intlLocale));
+    }
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        type="text"
+        value={text}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => commit(text)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            commit(text);
+            setOpen(false);
+            e.currentTarget.blur();
+          } else if (e.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        className={COMPACT_FIELD_CLASS}
+      />
+      {open && (
+        <div className="absolute z-30 mt-1 max-h-48 w-28 overflow-y-auto rounded-md border border-card-border bg-card-bg shadow-lg">
+          {presets.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(p.value);
+                setText(p.label);
+                setOpen(false);
+              }}
+              className={`block w-full px-3 py-1 text-left text-sm hover:bg-amo-lime/10 ${p.value === value ? "bg-amo-lime/10 font-semibold text-ink" : "text-ink"}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -519,9 +599,13 @@ export default function EventDialog({
     });
   }
 
-  function removeDefaultReminder() {
+  // Removing one of the calendar's own default reminders means "keep the
+  // other defaults, minus this one" — since Google's API only knows
+  // useDefault-or-overrides (never a subset of the defaults), that has to
+  // become an explicit override list seeded with whatever's left.
+  function removeDefaultReminderAt(index: number) {
     update("reminderUseDefault", false);
-    update("reminderOverrides", []);
+    update("reminderOverrides", defaultReminders.filter((_, i) => i !== index));
   }
 
   function updateReminderAt(index: number, minutes: number) {
@@ -607,8 +691,18 @@ export default function EventDialog({
           <h3 className="font-display text-lg font-semibold text-ink">{isEdit ? labels.editTitle : labels.createTitle}</h3>
           {!loading && !loadError && (
             <div className="flex items-center gap-3">
+              {detail?.htmlLink && (
+                <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-amo-lime hover:underline">
+                  {labels.openInGoogleCalendar} ↗
+                </a>
+              )}
               {isEdit && (
-                <button type="button" disabled={pending} onClick={remove} className="text-sm text-red-600 hover:underline disabled:opacity-60">
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={remove}
+                  className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                >
                   {labels.delete}
                 </button>
               )}
@@ -632,63 +726,68 @@ export default function EventDialog({
         ) : loadError ? (
           <p className="mt-4 text-sm text-red-600">{loadError === "not_connected" ? labels.notConnected : labels.loadFailed}</p>
         ) : (
-          <div className="mt-4 grid gap-6 lg:grid-cols-[2fr_1fr]">
-            <div className="min-w-0 space-y-4">
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => update("title", e.target.value)}
-                placeholder={labels.titlePlaceholder}
-                className="w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-base font-medium text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-              />
+          <div className="mt-4 space-y-4">
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => update("title", e.target.value)}
+              placeholder={labels.titlePlaceholder}
+              className="w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-base font-medium text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+            />
 
-              {/* Start row, then End row — each date always stays on the
-                  same line as its own time, the way Google Calendar's own
-                  editor groups them, rather than one shared row where a
-                  wrap could separate End's date from End's time. */}
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.start}</span>
-                  <DateDisplayField value={form.startDate} onChange={(v) => update("startDate", v)} lang={lang} dateLocale={dateLocale} />
-                  {!form.allDay && <TimeDisplayField value={form.startTime} onChange={(v) => update("startTime", v)} hour12={hour12} intlLocale={intlLocale} />}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.end}</span>
-                  <DateDisplayField value={form.endDate} onChange={(v) => update("endDate", v)} lang={lang} dateLocale={dateLocale} />
-                  {!form.allDay && <TimeDisplayField value={form.endTime} onChange={(v) => update("endTime", v)} hour12={hour12} intlLocale={intlLocale} />}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <label className="flex items-center gap-2 text-sm text-ink">
-                    <input type="checkbox" checked={form.allDay} onChange={(e) => toggleAllDay(e.target.checked)} className="h-4 w-4 rounded border-card-border" />
-                    {labels.allDay}
-                  </label>
-
-                  {!form.allDay && (
-                    <select value={form.timeZone} onChange={(e) => update("timeZone", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-xs text-ink shadow-sm">
-                      {!timeZoneOptions.some((o) => o.tz === form.timeZone) && <option value={form.timeZone}>{form.timeZone}</option>}
-                      {timeZoneOptions.map((o) => (
-                        <option key={o.tz} value={o.tz}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  {isRecurringInstance ? (
-                    <span className="rounded-md border border-card-border bg-black/[0.02] px-2.5 py-1.5 text-xs text-soft">{labels.repeatLockedNotice}</span>
-                  ) : (
-                    <select value={form.repeat} onChange={(e) => update("repeat", e.target.value as RepeatPreset)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm">
-                      <option value="none">{labels.repeatNone}</option>
-                      <option value="daily">{labels.repeatDaily}</option>
-                      <option value="weekly">{labels.repeatWeekly}</option>
-                      <option value="monthly">{labels.repeatMonthly}</option>
-                      <option value="yearly">{labels.repeatYearly}</option>
-                    </select>
-                  )}
-                </div>
+            {/* Full-width, above the two-column split below — start/end
+                date+time, all-day, timezone, and repeat all get the whole
+                dialog's width to spread out in, rather than being squeezed
+                into a 2/3 column beside the Link-to section. Start row,
+                then End row — each date always stays on the same line as
+                its own time, the way Google Calendar's own editor groups
+                them, rather than one shared row where a wrap could
+                separate End's date from End's time. */}
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.start}</span>
+                <DateDisplayField value={form.startDate} onChange={(v) => update("startDate", v)} lang={lang} dateLocale={dateLocale} />
+                {!form.allDay && <TimeDisplayField value={form.startTime} onChange={(v) => update("startTime", v)} hour12={hour12} intlLocale={intlLocale} />}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.end}</span>
+                <DateDisplayField value={form.endDate} onChange={(v) => update("endDate", v)} lang={lang} dateLocale={dateLocale} />
+                {!form.allDay && <TimeDisplayField value={form.endTime} onChange={(v) => update("endTime", v)} hour12={hour12} intlLocale={intlLocale} />}
               </div>
 
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <label className="flex items-center gap-2 text-sm text-ink">
+                  <input type="checkbox" checked={form.allDay} onChange={(e) => toggleAllDay(e.target.checked)} className="h-4 w-4 rounded border-card-border" />
+                  {labels.allDay}
+                </label>
+
+                {!form.allDay && (
+                  <select value={form.timeZone} onChange={(e) => update("timeZone", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-xs text-ink shadow-sm">
+                    {!timeZoneOptions.some((o) => o.tz === form.timeZone) && <option value={form.timeZone}>{form.timeZone}</option>}
+                    {timeZoneOptions.map((o) => (
+                      <option key={o.tz} value={o.tz}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {isRecurringInstance ? (
+                  <span className="rounded-md border border-card-border bg-black/[0.02] px-2.5 py-1.5 text-xs text-soft">{labels.repeatLockedNotice}</span>
+                ) : (
+                  <select value={form.repeat} onChange={(e) => update("repeat", e.target.value as RepeatPreset)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm">
+                    <option value="none">{labels.repeatNone}</option>
+                    <option value="daily">{labels.repeatDaily}</option>
+                    <option value="weekly">{labels.repeatWeekly}</option>
+                    <option value="monthly">{labels.repeatMonthly}</option>
+                    <option value="yearly">{labels.repeatYearly}</option>
+                  </select>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+            <div className="min-w-0 space-y-4">
               <div>
                 <label className={LABEL_CLASS}>{labels.location}</label>
                 <div className="mt-1 flex items-center gap-2">
@@ -748,12 +847,18 @@ export default function EventDialog({
                 <label className={LABEL_CLASS}>{labels.reminder}</label>
                 <div className="mt-1 space-y-1.5">
                   {form.reminderUseDefault ? (
-                    <div className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
-                      <span>{defaultReminders.length > 0 ? defaultReminders.map((m) => formatReminderMinutes(m, labels)).join(", ") : labels.reminderDefault}</span>
-                      <button type="button" onClick={removeDefaultReminder} aria-label={labels.removeReminder} className="ml-2 shrink-0 text-xs text-soft hover:underline">
-                        {labels.removeReminder}
-                      </button>
-                    </div>
+                    defaultReminders.length > 0 ? (
+                      defaultReminders.map((m, i) => (
+                        <div key={i} className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
+                          <span>{formatReminderMinutes(m, labels)}</span>
+                          <button type="button" onClick={() => removeDefaultReminderAt(i)} aria-label={labels.removeReminder} className="ml-2 shrink-0 text-xs text-soft hover:underline">
+                            {labels.removeReminder}
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">{labels.reminderDefault}</div>
+                    )
                   ) : (
                     <>
                       {form.reminderOverrides.map((minutes, i) => (
@@ -842,12 +947,6 @@ export default function EventDialog({
                 <RichTextarea value={form.description} onChange={(html) => update("description", html)} className="mt-1" />
               </div>
 
-              {detail?.htmlLink && (
-                <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-amo-lime hover:underline">
-                  {labels.openInGoogleCalendar} ↗
-                </a>
-              )}
-
               {error && <p className="text-sm text-red-600">{error}</p>}
             </div>
 
@@ -922,6 +1021,7 @@ export default function EventDialog({
                 </select>
               </div>
             </div>
+          </div>
           </div>
         )}
         </div>

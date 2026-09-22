@@ -13,6 +13,12 @@ export interface ResolvedEventLink {
   projectName: string;
   taskId: string;
   taskName: string;
+  // Not shown inline on the Dashboard card (no booking display there), but
+  // carried through so the Dashboard's event edit dialog can prefill it —
+  // without this, opening Edit from the Dashboard would silently wipe an
+  // event's existing booking link on save, the same bug already fixed once
+  // for contact/project/task links on the full Calendar page.
+  bookingId: string;
 }
 
 // Resolves each event's link to display-ready names in one query, rather
@@ -34,6 +40,7 @@ export async function getResolvedEventLinks(db: PrismaClient, eventIds: string[]
       projectName: link.project?.name ?? "",
       taskId: link.taskId ?? "",
       taskName: link.task?.title ?? "",
+      bookingId: link.bookingId ?? "",
     };
   }
   return result;
