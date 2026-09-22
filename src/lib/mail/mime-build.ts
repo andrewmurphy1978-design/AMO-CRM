@@ -5,6 +5,12 @@
 
 import type { ParsedMessage } from "./mime-parse";
 
+export interface OutgoingAttachment {
+  filename: string;
+  mimeType: string;
+  base64: string; // already base64-encoded by the client (see email-compose-dialog.tsx's file picker)
+}
+
 export interface OutgoingMessage {
   fromName: string | null;
   fromEmail: string;
@@ -16,6 +22,7 @@ export interface OutgoingMessage {
   inReplyTo?: string | null; // Message-ID of the message being replied to
   references?: string[];
   messageIdDomain?: string; // domain used to generate a fresh Message-ID, e.g. "andrewmurphy.online"
+  attachments?: OutgoingAttachment[];
 }
 
 function base64ToBinary(bytes: Uint8Array): string {
@@ -133,6 +140,43 @@ export function buildMimeMessage(msg: OutgoingMessage): { raw: string; messageId
     chunkBase64(encodeUtf8ToBase64(msg.html)),
   ].join("\r\n");
 
-  const raw = [headers.join("\r\n"), "", textPart, htmlPart, `--${boundary}--`, ""].join("\r\n");
+  const alternativeBody = [textPart, htmlPart, `--${boundary}--`].join("\r\n");
+
+  const attachments = msg.attachments ?? [];
+  if (attachments.length === 0) {
+    const raw = [headers.join("\r\n"), "", alternativeBody, ""].join("\r\n");
+    return { raw, messageId };
+  }
+
+  // With attachments, the multipart/alternative body built above becomes
+  // one part inside an outer multipart/mixed — the top-level Content-Type
+  // header set earlier is replaced with the mixed one, and that
+  // alternative part gets its own nested boundary line reusing the same
+  // headers/body already assembled.
+  const mixedBoundary = `----=_Mixed_${Math.random().toString(36).slice(2)}`;
+  headers[headers.length - 1] = `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`;
+
+  const alternativePart = [`--${mixedBoundary}`, `Content-Type: multipart/alternative; boundary="${boundary}"`, "", alternativeBody].join(
+    "\r\n"
+  );
+
+  const attachmentParts = attachments.map((a) => {
+    // Content-Disposition's filename param is only formally allowed
+    // RFC 2231 encoding for non-ASCII, not RFC 2047 — but most clients
+    // tolerate the latter, and a plain quoted name covers the common case.
+    const isAscii = /^[\x00-\x7F]*$/.test(a.filename);
+    const safeName = a.filename.replace(/"/g, "");
+    const filenameParam = isAscii ? `"${safeName}"` : `"${encodeHeaderValue(a.filename)}"`;
+    return [
+      `--${mixedBoundary}`,
+      `Content-Type: ${a.mimeType || "application/octet-stream"}; name=${filenameParam}`,
+      `Content-Disposition: attachment; filename=${filenameParam}`,
+      "Content-Transfer-Encoding: base64",
+      "",
+      chunkBase64(a.base64.replace(/[\r\n\s]/g, "")),
+    ].join("\r\n");
+  });
+
+  const raw = [headers.join("\r\n"), "", alternativePart, ...attachmentParts, `--${mixedBoundary}--`, ""].join("\r\n");
   return { raw, messageId };
 }

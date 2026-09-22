@@ -28,6 +28,40 @@ export interface EmailComposeLabels {
   recipientRequired: string;
   quotedHeader: string; // "{sender} wrote:" — {sender} filled in by this component
   sentToast: string;
+  attach: string;
+  attachmentTooLarge: string; // "{name}" filled in by this component
+  removeAttachment: string; // "{name}" filled in by this component
+}
+
+interface ComposeAttachment {
+  filename: string;
+  mimeType: string;
+  base64: string;
+  sizeBytes: number;
+}
+
+// Comfortably under next.config.ts's 10mb Server Action body cap, leaving
+// room for base64's ~33% overhead plus the rest of the request payload.
+const MAX_ATTACHMENT_BYTES = 7 * 1024 * 1024;
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // dataURL is "data:<mime>;base64,<data>" — only the part after the
+      // comma is the actual base64 payload buildMimeMessage wants.
+      const result = reader.result as string;
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 function parseAddressField(value: string): string[] {
@@ -63,6 +97,7 @@ export default function EmailComposeDialog({
   const [html, setHtml] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
 
   useEffect(() => {
     if (!target) return;
@@ -89,6 +124,7 @@ export default function EmailComposeDialog({
     setSubject(subjectWithPrefix(message.subject, mode === "forward" ? "Fwd" : "Re"));
     setError(null);
     setHtml(`<p></p>${quoted}`);
+    setAttachments([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
 
@@ -108,6 +144,22 @@ export default function EmailComposeDialog({
 
   if (!target) return null;
 
+  async function handleFilesSelected(files: FileList | null) {
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        setError(labels.attachmentTooLarge.replace("{name}", file.name));
+        continue;
+      }
+      const base64 = await fileToBase64(file);
+      setAttachments((prev) => [...prev, { filename: file.name, mimeType: file.type || "application/octet-stream", base64, sizeBytes: file.size }]);
+    }
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function handleSend() {
     if (!target) return;
     const toList = parseAddressField(to);
@@ -126,6 +178,7 @@ export default function EmailComposeDialog({
       cc: parseAddressField(cc),
       subject,
       html,
+      attachments: attachments.map(({ filename, mimeType, base64 }) => ({ filename, mimeType, base64 })),
     });
     setSending(false);
     if ("error" in result) {
@@ -202,21 +255,55 @@ export default function EmailComposeDialog({
 
           <RichTextarea value={html} onChange={setHtml} className="min-h-[220px]" />
 
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {attachments.map((a, i) => (
+                <span key={i} className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink">
+                  <span className="max-w-[10rem] truncate">{a.filename}</span>
+                  <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(i)}
+                    title={labels.removeAttachment.replace("{name}", a.filename)}
+                    className="ml-0.5 rounded-full p-0.5 text-soft hover:bg-black/10 hover:text-ink"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
+                      <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
+                    </svg>
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-card-border px-5 py-3">
-          <button type="button" onClick={onClose} className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5">
-            {labels.discard}
-          </button>
-          <button
-            type="button"
-            disabled={sending}
-            onClick={handleSend}
-            className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
-          >
-            {sending ? labels.sending : labels.send}
-          </button>
+        <div className="flex shrink-0 items-center justify-between border-t border-card-border px-5 py-3">
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94a3 3 0 1 1 4.243 4.242L9.564 17.31a1.5 1.5 0 0 1-2.122-2.12l8.485-8.486"
+              />
+            </svg>
+            {labels.attach}
+            <input type="file" multiple className="hidden" onChange={(e) => handleFilesSelected(e.target.files)} />
+          </label>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5">
+              {labels.discard}
+            </button>
+            <button
+              type="button"
+              disabled={sending}
+              onClick={handleSend}
+              className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
+            >
+              {sending ? labels.sending : labels.send}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -158,6 +158,7 @@ export interface SendEmailInput {
   cc: string[];
   subject: string;
   html: string;
+  attachments: { filename: string; mimeType: string; base64: string }[];
 }
 
 // Sends a reply/forward composed in the Email Dialog. The From address is
@@ -202,6 +203,7 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
       html: input.html,
       inReplyTo: input.messageIdHeader,
       references: input.references,
+      attachments: input.attachments,
     });
 
     if (replyIdentity.source === "ionos") {

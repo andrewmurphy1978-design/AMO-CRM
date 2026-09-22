@@ -805,6 +805,9 @@ export const dictionaries = {
       recipientRequired: "Add at least one recipient.",
       quotedHeader: "{sender} wrote:",
       sentToast: "Message sent.",
+      attach: "Attach",
+      attachmentTooLarge: "\"{name}\" is too large to attach (max 7 MB).",
+      removeAttachment: "Remove {name}",
     },
     ionosMailbox: {
       title: "IONOS mailbox",
@@ -1925,6 +1928,9 @@ export const dictionaries = {
       recipientRequired: "Ajoutez au moins un destinataire.",
       quotedHeader: "{sender} a écrit :",
       sentToast: "Message envoyé.",
+      attach: "Joindre",
+      attachmentTooLarge: "« {name} » est trop volumineux pour être joint (7 Mo max).",
+      removeAttachment: "Retirer {name}",
     },
     ionosMailbox: {
       title: "Boîte courriel IONOS",
