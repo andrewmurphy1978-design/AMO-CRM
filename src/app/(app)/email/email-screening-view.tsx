@@ -130,6 +130,25 @@ function CompletedBadge({ title }: { title: string }) {
 
 // The Recently Read section's "put it back" action — reopens the message
 // into whichever category it was in before it was opened.
+// A one-click "I've seen this, no need to open it" action on an unread
+// row — same envelope glyph as MarkUnreadButton below (its opposite
+// action), with a checkmark added so the two read at a glance as a pair
+// rather than as unrelated icons.
+function MarkReadButton({ onClick, title }: { onClick: () => void; title: string }) {
+  return (
+    <button type="button" onClick={onClick} title={title} className="shrink-0 rounded p-1 text-soft hover:bg-black/10 hover:text-ink">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 6.75c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125H3.375A1.125 1.125 0 0 1 2.25 17.25V6.75Zm0 0 9.75 6.75 9.75-6.75"
+        />
+        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 12 2.25 2.25L15.75 9" />
+      </svg>
+    </button>
+  );
+}
+
 function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: string }) {
   return (
     <button type="button" onClick={onClick} title={title} className="shrink-0 rounded p-1 text-soft hover:bg-black/10 hover:text-ink">
@@ -185,10 +204,12 @@ function EmailRow({
   onLinkSaved,
   onComplete,
   onUncomplete,
+  onMarkRead,
   onMarkUnread,
   completedLocked,
   completeLabel,
   uncompleteLabel,
+  markReadLabel,
   markUnreadLabel,
 }: {
   index: number;
@@ -219,6 +240,7 @@ function EmailRow({
   onLinkSaved: (values: LinkValues) => void;
   onComplete?: () => void;
   onUncomplete?: () => void;
+  onMarkRead?: () => void;
   onMarkUnread?: () => void;
   // True for a sent thread Gmail marked completed by detecting a reply —
   // that state can't be undone from here, so it gets a static badge
@@ -226,6 +248,7 @@ function EmailRow({
   completedLocked?: boolean;
   completeLabel: string;
   uncompleteLabel: string;
+  markReadLabel: string;
   markUnreadLabel: string;
 }) {
   function openDialog() {
@@ -282,6 +305,7 @@ function EmailRow({
           {onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}
           {onUncomplete && <UncompleteButton onClick={onUncomplete} title={uncompleteLabel} />}
           {!onUncomplete && completedLocked && <CompletedBadge title={completeLabel} />}
+          {onMarkRead && <MarkReadButton onClick={onMarkRead} title={markReadLabel} />}
           {onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}
           <EmailQuickActions labels={quickActionLabels} onOpen={onOpen} onAction={onQuickAction} />
         </div>
@@ -579,9 +603,15 @@ export default function EmailScreeningView({
         onLinkSaved={() => markLinked(email.threadId)}
         onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
         onUncomplete={opts.showUncomplete ? () => markUncomplete(email.id) : undefined}
+        // Only the still-unread categorized sections (the ones markAsRead
+        // also applies to) get a one-click "mark as read" — Recently Read
+        // is already read and shows the opposite (mark as unread) action
+        // instead, and Completed has no Complete/read pairing to fit into.
+        onMarkRead={opts.markAsRead ? () => markRead(email.id) : undefined}
         onMarkUnread={opts.showMarkUnread ? () => markUnread(email.id) : undefined}
         completeLabel={t.email.markComplete}
         uncompleteLabel={t.email.markUncomplete}
+        markReadLabel={t.email.markRead}
         markUnreadLabel={t.email.markUnread}
       />
     ));
@@ -623,6 +653,7 @@ export default function EmailScreeningView({
         completedLocked={opts.showUncomplete && s.status === "completed"}
         completeLabel={t.email.markComplete}
         uncompleteLabel={t.email.markUncomplete}
+        markReadLabel={t.email.markRead}
         markUnreadLabel={t.email.markUnread}
       />
     ));
