@@ -223,75 +223,88 @@ export async function syncShortIoLinks(): Promise<{ error?: string; linked?: num
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can sync Short.io" };
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
-  const { programs, config } = await withScopedPrismaClient(async (db) => {
+  // Everything below — the initial read, every per-program update, all of
+  // it — shares this ONE Postgres connection. The first version of this
+  // function opened a fresh withScopedPrismaClient (i.e. a fresh Hyperdrive
+  // connection) per matched program; with up to 92 programs to walk and a
+  // Short.io stats fetch in between each one, that's exactly the pattern
+  // documented in src/lib/prisma.ts as the root cause of Error 1102 —
+  // opening far more connections/subrequests in one Worker invocation than
+  // it can sustain. A single connection held for the whole sync avoids that
+  // entirely; the external Short.io fetches in the loop are unavoidable
+  // (there's no bulk-stats endpoint) but don't touch Postgres at all.
+  return withScopedPrismaClient(async (db) => {
     const programs = await db.affiliateProgram.findMany({
       select: { id: true, brandedLink: true, frenchSlug: true, destinationLink: true, frenchLink: true },
     });
     const config = await getShortIoConfig(db);
-    return { programs, config };
-  });
-  if (!config) return { error: t.marketing.shortioNotConfigured };
+    if (!config) return { error: t.marketing.shortioNotConfigured };
 
-  let allLinks: Awaited<ReturnType<typeof listShortIoLinks>> = [];
-  try {
-    const domains = await listShortIoDomains(config.apiKey);
-    for (const domain of domains) {
-      if (domain.hostname !== config.domain && domain.hostname !== config.domainFr) continue;
-      const links = await listShortIoLinks(config.apiKey, domain.id);
-      allLinks = allLinks.concat(links);
-    }
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : "Short.io request failed" };
-  }
-
-  const byShortUrl = new Map(allLinks.map((l) => [l.shortURL.replace(/\/$/, ""), l]));
-  const byOriginalUrl = new Map(allLinks.map((l) => [l.originalURL.replace(/\/$/, ""), l]));
-  const norm = (url: string | null) => (url ? url.replace(/\/$/, "") : null);
-
-  let linked = 0;
-  let statsUpdated = 0;
-
-  for (const program of programs) {
-    const enLink = (program.brandedLink && byShortUrl.get(norm(program.brandedLink)!)) || (program.destinationLink && byOriginalUrl.get(norm(program.destinationLink)!));
-    const frLink = (program.frenchSlug && byShortUrl.get(norm(program.frenchSlug)!)) || (program.frenchLink && byOriginalUrl.get(norm(program.frenchLink)!));
-    if (!enLink && !frLink) continue;
-
-    const data: Record<string, unknown> = {};
-    if (enLink) {
-      data.shortioLinkId = enLink.id;
-      if (!program.brandedLink) data.brandedLink = enLink.shortURL;
-      data.shortioCreated = true;
-    }
-    if (frLink) {
-      data.shortioLinkIdFr = frLink.id;
-      if (!program.frenchSlug) data.frenchSlug = frLink.shortURL;
-    }
-
+    let allLinks: Awaited<ReturnType<typeof listShortIoLinks>> = [];
     try {
+      const domains = await listShortIoDomains(config.apiKey);
+      for (const domain of domains) {
+        if (domain.hostname !== config.domain && domain.hostname !== config.domainFr) continue;
+        const links = await listShortIoLinks(config.apiKey, domain.id);
+        allLinks = allLinks.concat(links);
+      }
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Short.io request failed" };
+    }
+
+    const byShortUrl = new Map(allLinks.map((l) => [l.shortURL.replace(/\/$/, ""), l]));
+    const byOriginalUrl = new Map(allLinks.map((l) => [l.originalURL.replace(/\/$/, ""), l]));
+    const norm = (url: string | null) => (url ? url.replace(/\/$/, "") : null);
+
+    let linked = 0;
+    let statsUpdated = 0;
+
+    for (const program of programs) {
+      const enLink =
+        (program.brandedLink && byShortUrl.get(norm(program.brandedLink)!)) ||
+        (program.destinationLink && byOriginalUrl.get(norm(program.destinationLink)!));
+      const frLink =
+        (program.frenchSlug && byShortUrl.get(norm(program.frenchSlug)!)) ||
+        (program.frenchLink && byOriginalUrl.get(norm(program.frenchLink)!));
+      if (!enLink && !frLink) continue;
+
+      const data: Record<string, unknown> = {};
       if (enLink) {
-        const stats = await getShortIoLinkStatistics(config.apiKey, enLink.id);
-        data.shortioClicks = stats.totalClicks;
-        data.shortioStats = stats.raw as object;
-        statsUpdated++;
+        data.shortioLinkId = enLink.id;
+        if (!program.brandedLink) data.brandedLink = enLink.shortURL;
+        data.shortioCreated = true;
       }
       if (frLink) {
-        const stats = await getShortIoLinkStatistics(config.apiKey, frLink.id);
-        data.shortioClicksFr = stats.totalClicks;
-        data.shortioStatsFr = stats.raw as object;
-        statsUpdated++;
+        data.shortioLinkIdFr = frLink.id;
+        if (!program.frenchSlug) data.frenchSlug = frLink.shortURL;
       }
-      data.shortioStatsSyncedAt = new Date();
-    } catch {
-      // Stats are a bonus on top of the link match — a failed stats call
-      // shouldn't stop the link itself from being recorded.
+
+      try {
+        if (enLink) {
+          const stats = await getShortIoLinkStatistics(config.apiKey, enLink.id);
+          data.shortioClicks = stats.totalClicks;
+          data.shortioStats = stats.raw as object;
+          statsUpdated++;
+        }
+        if (frLink) {
+          const stats = await getShortIoLinkStatistics(config.apiKey, frLink.id);
+          data.shortioClicksFr = stats.totalClicks;
+          data.shortioStatsFr = stats.raw as object;
+          statsUpdated++;
+        }
+        data.shortioStatsSyncedAt = new Date();
+      } catch {
+        // Stats are a bonus on top of the link match — a failed stats call
+        // shouldn't stop the link itself from being recorded.
+      }
+
+      await db.affiliateProgram.update({ where: { id: program.id }, data });
+      linked++;
     }
 
-    await withScopedPrismaClient((db) => db.affiliateProgram.update({ where: { id: program.id }, data }));
-    linked++;
-  }
-
-  revalidatePath("/marketing");
-  return { linked, statsUpdated, totalLinks: allLinks.length };
+    revalidatePath("/marketing");
+    return { linked, statsUpdated, totalLinks: allLinks.length };
+  });
 }
 
 // Per-program equivalent of the stats half of syncShortIoLinks, for a
