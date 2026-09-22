@@ -110,12 +110,8 @@ export default async function AffiliateProgramDetailPage({
                 <p className="mt-1 text-sm text-ink">{tabTitle(program.tab, t)}</p>
               </div>
               <div>
-                <p className={LABEL_CLASS}>{t.marketing.colType}</p>
-                <p className="mt-1 text-sm text-ink">{program.type || "—"}</p>
-              </div>
-              <div>
                 <p className={LABEL_CLASS}>{t.marketing.categoryLabel}</p>
-                <p className="mt-1 text-sm text-ink">{program.category || "—"}</p>
+                <p className="mt-1 text-sm text-ink">{program.type || "—"}</p>
               </div>
               <div>
                 <p className={LABEL_CLASS}>{t.marketing.accountPlanLabel}</p>

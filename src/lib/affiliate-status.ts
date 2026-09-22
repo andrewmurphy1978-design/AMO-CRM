@@ -107,8 +107,18 @@ export function statusStyle(status: string | null | undefined): { badge: string;
 }
 
 // Type options depend on which of the 3 tabs a program is filed under.
+// Training Programs' categories are bilingual (a separate French program
+// often exists alongside the English one), so each of its 3 base types
+// gets an English and a French option instead of one shared value.
 export const AFFILIATE_TYPE_OPTIONS: Record<string, string[]> = {
   AI_TOOLS: ["Chat Assistants", "Image & Design", "Video", "Audio", "Automation", "Writing", "Social Media", "SEO"],
-  TRAINING_PROGRAMS: ["AI Training", "Affiliate Marketing", "Social Media"],
+  TRAINING_PROGRAMS: [
+    "AI Training (English)",
+    "AI Training (French)",
+    "Affiliate Marketing (English)",
+    "Affiliate Marketing (French)",
+    "Social Media (English)",
+    "Social Media (French)",
+  ],
   BUSINESS_OPPORTUNITIES: ["Print-On-Demand", "Drop shipping", "Digital products", "Freelancing", "Online Businesses", "Affiliate Business"],
 };

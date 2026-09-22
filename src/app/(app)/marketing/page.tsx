@@ -17,7 +17,6 @@ type AffiliateProgramRow = {
   tab: AffiliateProgramTab;
   name: string;
   type: string | null;
-  category: string | null;
   affiliateStatus: string | null;
   brandedLink: string | null;
   followUpNeeded: boolean;
@@ -97,7 +96,7 @@ function AffiliateProgramCard({
                       </Link>
                     </td>
                     <td className="truncate py-2 pr-4 align-top text-ink/70">{tabTitle(p.tab, t)}</td>
-                    <td className="truncate py-2 pr-4 align-top text-ink/70">{[p.type, p.category].filter(Boolean).join(" · ") || "—"}</td>
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">{p.type || "—"}</td>
                     <td className="py-2 pr-4 align-top">
                       <span className={`inline-flex max-w-full items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-xs font-medium ${styles.badge}`}>
                         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${styles.dot}`} />
