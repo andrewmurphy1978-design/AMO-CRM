@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { format } from "date-fns";
+import { format, type Locale } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import TaskRow from "./task-row";
 import QuickAddTask from "./quick-add-task";
@@ -22,6 +22,14 @@ import PageHeader, { HeaderBreadcrumb } from "../../page-header";
 import Card from "@/components/section-card";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
+
+// Full month-name date, e.g. "September 26, 2026" / "26 septembre 2026" —
+// date-fns' locale only translates the month name, not the token order, so
+// a fixed "MMMM d, yyyy" pattern would read wrong in French; French wants
+// day before month and no comma.
+function longDate(date: Date, lang: "en" | "fr", dateLocale: Locale | undefined): string {
+  return format(date, lang === "fr" ? "d MMMM yyyy" : "MMMM d, yyyy", { locale: dateLocale });
+}
 
 export default async function ProjectDetailPage({
   params,
@@ -133,15 +141,11 @@ export default async function ProjectDetailPage({
 
               <div>
                 <p className={LABEL_CLASS}>{t.projects.colStart}</p>
-                <p className="mt-1 text-sm text-ink">
-                  {project.startDate ? format(project.startDate, "PP", { locale: dateLocale }) : "—"}
-                </p>
+                <p className="mt-1 text-sm text-ink">{project.startDate ? longDate(project.startDate, lang, dateLocale) : "—"}</p>
               </div>
               <div>
                 <p className={LABEL_CLASS}>{t.projects.colDue}</p>
-                <p className="mt-1 text-sm text-ink">
-                  {project.dueDate ? format(project.dueDate, "PP", { locale: dateLocale }) : "—"}
-                </p>
+                <p className="mt-1 text-sm text-ink">{project.dueDate ? longDate(project.dueDate, lang, dateLocale) : "—"}</p>
               </div>
             </div>
           </Card>

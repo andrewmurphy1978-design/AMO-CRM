@@ -73,14 +73,14 @@ function AffiliateProgramCard({
           <table className="w-full table-fixed divide-y divide-card-border text-sm">
             <colgroup>
               <col className="w-[5%]" />
-              <col className="w-[25%]" />
-              <col className="w-[14%]" />
+              <col className="w-[17%]" />
               <col className="w-[13%]" />
-              <col className="w-[13%]" />
+              <col className="w-[12%]" />
+              <col className="w-[21%]" />
               <col className="w-[9%]" />
               <col className="w-[6%]" />
               <col className="w-[9%]" />
-              <col className="w-[6%]" />
+              <col className="w-[8%]" />
             </colgroup>
             <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
               <tr>

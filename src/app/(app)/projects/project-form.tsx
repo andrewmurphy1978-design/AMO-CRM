@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -35,7 +36,10 @@ export default function ProjectForm({
   dateLocale,
   location,
 }: {
-  action: (prevState: { error?: string } | undefined, formData: FormData) => Promise<{ error?: string }>;
+  action: (
+    prevState: { error?: string; success?: string } | undefined,
+    formData: FormData
+  ) => Promise<{ error?: string; success?: string }>;
   defaultValues?: ProjectFormValues;
   contacts: { id: string; label: string }[];
   users: { id: string; name: string }[];
@@ -48,10 +52,32 @@ export default function ProjectForm({
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const t = getDict(lang);
+  const router = useRouter();
 
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>(
     () => defaultValues?.teamMembers?.map((tm) => tm.userId) ?? []
   );
+  const teamNames = users.filter((u) => teamMemberIds.includes(u.id)).map((u) => u.name);
+
+  // Same success-toast-then-redirect pattern as Contact/Affiliate Program
+  // edit — the action returns {success} without redirecting itself so the
+  // toast has something to show before this component sends the user on.
+  const [dismissed, setDismissed] = useState(false);
+  const [lastSuccess, setLastSuccess] = useState<string | undefined>(undefined);
+  if (state?.success !== lastSuccess) {
+    setLastSuccess(state?.success);
+    setDismissed(false);
+  }
+  const toast = state?.success && !dismissed ? state.success : null;
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => {
+      setDismissed(true);
+      if (defaultValues?.id) router.push(`/projects/${defaultValues.id}`);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [toast, defaultValues?.id, router]);
 
   const STATUSES = [
     { value: "PLANNING", label: t.projectStatuses.PLANNING },
@@ -89,6 +115,11 @@ export default function ProjectForm({
       />
 
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
+          <div className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>
+        </div>
+      )}
 
       <div className="space-y-4 rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
       <div>
@@ -168,13 +199,14 @@ export default function ProjectForm({
           {teamMemberIds.map((id) => (
             <input key={id} type="hidden" name="teamMemberIds" value={id} />
           ))}
-          <div className="mt-1">
+          <div className="mt-1 flex flex-wrap items-center gap-2">
             <MultiSelect
               options={users.map((u) => ({ value: u.id, label: u.name }))}
               selected={teamMemberIds}
               placeholder={t.projectForm.selectTeamMembers}
               onChange={setTeamMemberIds}
             />
+            {teamNames.length > 0 && <span className="text-sm text-ink">{teamNames.join(", ")}</span>}
           </div>
         </div>
         <DateField label={t.projectForm.startDate} name="startDate" defaultValue={defaultValues?.startDate} lang={lang} />
@@ -244,15 +276,27 @@ function DateField({
   return (
     <div>
       <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{label}</label>
-      <input
-        type="text"
-        value={focused ? value : displayValue}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={focused ? "yyyy-mm-dd" : undefined}
-        className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-      />
+      {focused ? (
+        // Native date input while editing — gives a calendar-icon picker
+        // as well as typed manual entry, without building either one from
+        // scratch. Swaps back to the plain formatted-text display on blur.
+        <input
+          type="date"
+          autoFocus
+          value={value}
+          onBlur={() => setFocused(false)}
+          onChange={(e) => setValue(e.target.value)}
+          className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+        />
+      ) : (
+        <input
+          type="text"
+          value={displayValue}
+          onFocus={() => setFocused(true)}
+          readOnly
+          className="mt-1 w-full cursor-pointer rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+        />
+      )}
       <input type="hidden" name={name} value={value} />
     </div>
   );

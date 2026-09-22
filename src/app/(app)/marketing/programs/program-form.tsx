@@ -49,7 +49,22 @@ const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-so
 // hidden input alongside the visible one always carries the canonical
 // yyyy-mm-dd value, so what actually gets submitted never depends on the
 // locale-formatted display string being parseable.
-function DateField({ label, name, defaultValue, lang }: { label: string; name: string; defaultValue?: Date | string | null; lang: Lang }) {
+function DateField({
+  label,
+  name,
+  defaultValue,
+  lang,
+  leading,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: Date | string | null;
+  lang: Lang;
+  // An optional control (e.g. a checkbox) rendered to the left of the
+  // label, on the same line — for a date that's conditional on something
+  // else (Follow-up date on whether follow-up is needed at all).
+  leading?: React.ReactNode;
+}) {
   const [value, setValue] = useState(() => toDateInputValue(defaultValue));
   const [focused, setFocused] = useState(false);
   const dateLocale = getDateLocale(lang);
@@ -64,7 +79,10 @@ function DateField({ label, name, defaultValue, lang }: { label: string; name: s
 
   return (
     <div>
-      <label className={LABEL_CLASS}>{label}</label>
+      <div className="flex items-center gap-2">
+        {leading}
+        <label className={LABEL_CLASS}>{label}</label>
+      </div>
       <input
         type="text"
         value={focused ? value : displayValue}
@@ -155,39 +173,24 @@ function IconUploadField({ name, defaultValue, label }: { name: string; defaultV
 // Save button — encrypted and stored the moment it's entered instead of
 // only on the next full "Save changes" — plus a Reveal button to check
 // the currently saved value.
-function ApiKeyField({
-  programId,
-  hasApiKeySaved,
-  t,
-}: {
-  programId?: string;
-  hasApiKeySaved?: boolean;
-  t: ReturnType<typeof getDict>;
-}) {
+//
+// State lives in this hook rather than inside a single field component so
+// the input+action-link (which must stay inside Row 5's bottom-aligned
+// grid cell) and the revealed key/message (which must NOT — it needs to
+// push the Notes section below it down instead of stretching that one
+// cell taller than its row siblings) can render in two different places
+// in the grid while sharing the same state.
+function useApiKeyField(programId: string | undefined, hasApiKeySaved: boolean | undefined, t: ReturnType<typeof getDict>) {
   const [value, setValue] = useState("");
   const [saved, setSaved] = useState(hasApiKeySaved ?? false);
   const [revealed, setRevealed] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  if (!programId) {
-    return (
-      <input
-        type="password"
-        name="apiKey"
-        placeholder={hasApiKeySaved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
-        className={FIELD_CLASS}
-      />
-    );
-  }
-
   function handleSave() {
-    if (!value.trim()) {
-      setMessage(t.marketing.apiKeyEnterFirst);
-      return;
-    }
+    if (!programId || !value.trim()) return;
     startTransition(async () => {
-      const result = await saveAffiliateProgramApiKey(programId!, value);
+      const result = await saveAffiliateProgramApiKey(programId, value);
       setMessage(result.error ?? result.success ?? null);
       if (!result.error) {
         setSaved(true);
@@ -197,8 +200,9 @@ function ApiKeyField({
   }
 
   function handleReveal() {
+    if (!programId) return;
     startTransition(async () => {
-      const result = await revealAffiliateProgramApiKey(programId!);
+      const result = await revealAffiliateProgramApiKey(programId);
       if (result.error) setMessage(result.error);
       else setRevealed(result.value ?? "");
     });
@@ -217,40 +221,75 @@ function ApiKeyField({
   // (so rotating an already-saved key doesn't need a separate mode); once
   // saved with nothing being typed it offers Reveal; once revealed it
   // switches to Copy instead of re-fetching the plaintext value again.
-  const linkAction: { label: string; onClick: () => void } | null = value.trim()
-    ? { label: pending ? t.common.saving : t.marketing.apiKeySaveLabel, onClick: handleSave }
-    : revealed !== null
-      ? { label: t.marketing.apiKeyCopyLabel, onClick: handleCopy }
-      : saved
-        ? { label: pending ? t.common.saving : t.apiVault.reveal, onClick: handleReveal }
-        : null;
+  const linkAction: { label: string; onClick: () => void } | null = !programId
+    ? null
+    : value.trim()
+      ? { label: pending ? t.common.saving : t.marketing.apiKeySaveLabel, onClick: handleSave }
+      : revealed !== null
+        ? { label: t.marketing.apiKeyCopyLabel, onClick: handleCopy }
+        : saved
+          ? { label: pending ? t.common.saving : t.apiVault.reveal, onClick: handleReveal }
+          : null;
+
+  return { value, setValue, setRevealed, revealed, message, saved, pending, linkAction };
+}
+
+type ApiKeyFieldState = ReturnType<typeof useApiKeyField>;
+
+function ApiKeyInput({
+  programId,
+  hasApiKeySaved,
+  t,
+  api,
+}: {
+  programId?: string;
+  hasApiKeySaved?: boolean;
+  t: ReturnType<typeof getDict>;
+  api: ApiKeyFieldState;
+}) {
+  if (!programId) {
+    return (
+      <input
+        type="password"
+        name="apiKey"
+        placeholder={hasApiKeySaved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
+        className={FIELD_CLASS}
+      />
+    );
+  }
 
   return (
-    <div>
-      <div className="flex items-center gap-2">
-        <input
-          type="password"
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setRevealed(null);
-          }}
-          placeholder={saved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
-          className={`${FIELD_CLASS} flex-1`}
-        />
-        {linkAction && (
-          <button
-            type="button"
-            onClick={linkAction.onClick}
-            disabled={pending}
-            className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-60"
-          >
-            {linkAction.label}
-          </button>
-        )}
-      </div>
-      {revealed !== null && <code className="mt-1 block break-all rounded bg-field-bg px-2 py-1 text-xs text-ink">{revealed}</code>}
-      {message && <p className="mt-1 text-xs text-soft">{message}</p>}
+    <div className="flex items-center gap-2">
+      <input
+        type="password"
+        value={api.value}
+        onChange={(e) => {
+          api.setValue(e.target.value);
+          api.setRevealed(null);
+        }}
+        placeholder={api.saved ? t.marketing.apiKeySavedPlaceholder : t.marketing.apiKeyLabel}
+        className={`${FIELD_CLASS} flex-1`}
+      />
+      {api.linkAction && (
+        <button
+          type="button"
+          onClick={api.linkAction.onClick}
+          disabled={api.pending}
+          className="shrink-0 text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-60"
+        >
+          {api.linkAction.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ApiKeyRevealPanel({ api }: { api: ApiKeyFieldState }) {
+  if (api.revealed === null && !api.message) return null;
+  return (
+    <div className="lg:col-start-3">
+      {api.revealed !== null && <code className="block break-all rounded bg-field-bg px-2 py-1 text-xs text-ink">{api.revealed}</code>}
+      {api.message && <p className="mt-1 text-xs text-soft">{api.message}</p>}
     </div>
   );
 }
@@ -288,6 +327,7 @@ export default function AffiliateProgramForm({
   const [tab, setTab] = useState(defaultValues?.tab ?? defaultTab ?? "AI_TOOLS");
   const t = getDict(lang);
   const router = useRouter();
+  const apiKey = useApiKeyField(programId, hasApiKeySaved, t);
 
   const [dismissed, setDismissed] = useState(false);
   const [lastSuccess, setLastSuccess] = useState<string | undefined>(undefined);
@@ -414,10 +454,10 @@ export default function AffiliateProgramForm({
             <IconUploadField name="iconUrl" defaultValue={defaultValues?.iconUrl} label={t.marketing.iconUrlLabel} />
           </div>
 
-          {/* Row 4: French links + Follow-up needed / Follow-up date — all
-              three cells push their content to the bottom so the input
-              boxes line up across the row despite the third cell having
-              extra content (the checkbox line) above its date field. */}
+          {/* Row 4: French links + Follow-up date (with its own "needed"
+              checkbox to the left of its label) — all three cells push
+              their content to the bottom so the input boxes line up
+              across the row. */}
           <div className="flex flex-col justify-end">
             <label className={LABEL_CLASS}>{t.marketing.frenchSlugLabel}</label>
             <input name="frenchSlug" defaultValue={defaultValues?.frenchSlug ?? ""} className={FIELD_CLASS} />
@@ -427,11 +467,12 @@ export default function AffiliateProgramForm({
             <input type="url" name="frenchLink" defaultValue={defaultValues?.frenchLink ?? ""} className={FIELD_CLASS} />
           </div>
           <div className="flex flex-col justify-end">
-            <div>
-              <label htmlFor="followUpNeeded" className={LABEL_CLASS}>
-                {t.marketing.colFollowUp}
-              </label>
-              <div className="mt-1 flex h-[38px] items-center">
+            <DateField
+              label={t.marketing.followUpDateLabel}
+              name="followUpDate"
+              defaultValue={defaultValues?.followUpDate}
+              lang={lang}
+              leading={
                 <input
                   type="checkbox"
                   id="followUpNeeded"
@@ -439,9 +480,8 @@ export default function AffiliateProgramForm({
                   defaultChecked={defaultValues?.followUpNeeded ?? false}
                   className="h-4 w-4 rounded border-card-border accent-amo-lime"
                 />
-              </div>
-            </div>
-            <DateField label={t.marketing.followUpDateLabel} name="followUpDate" defaultValue={defaultValues?.followUpDate} lang={lang} />
+              }
+            />
           </div>
 
           {/* Row 5: Where to apply, App Platform, has-own-API + API key —
@@ -472,8 +512,13 @@ export default function AffiliateProgramForm({
                 {t.marketing.hasApiLabel}
               </label>
             </div>
-            <ApiKeyField programId={programId} hasApiKeySaved={hasApiKeySaved} t={t} />
+            <ApiKeyInput programId={programId} hasApiKeySaved={hasApiKeySaved} t={t} api={apiKey} />
           </div>
+
+          {/* Sits under the API key column, outside Row 5's own cells, so a
+              revealed key or a save/copy message pushes Notes down instead
+              of stretching Row 5's cell taller than its siblings. */}
+          <ApiKeyRevealPanel api={apiKey} />
 
           {/* Notes */}
           <div className="lg:col-span-3">
