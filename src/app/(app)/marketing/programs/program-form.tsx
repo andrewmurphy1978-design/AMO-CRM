@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -73,6 +73,77 @@ function DateField({ label, name, defaultValue, lang }: { label: string; name: s
         onChange={(e) => setValue(e.target.value)}
         placeholder={focused ? "yyyy-mm-dd" : undefined}
         className={FIELD_CLASS}
+      />
+      <input type="hidden" name={name} value={value} />
+    </div>
+  );
+}
+
+// The icon field's only input is the circle itself — click it to open the
+// browser's native file picker, then the chosen image is cropped to a
+// square and downscaled client-side (canvas) before being stored as a data
+// URI in the same hidden field a plain text URL would have used. That
+// keeps the stored value small and avoids standing up separate file/blob
+// storage just for a handful of small program logos.
+const ICON_MAX_DIM = 128;
+
+function IconUploadField({ name, defaultValue, label }: { name: string; defaultValue?: string | null; label: string }) {
+  const [value, setValue] = useState(defaultValue ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = ICON_MAX_DIM;
+        canvas.height = ICON_MAX_DIM;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const scale = Math.max(ICON_MAX_DIM / img.width, ICON_MAX_DIM / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (ICON_MAX_DIM - w) / 2, (ICON_MAX_DIM - h) / 2, w, h);
+        setValue(canvas.toDataURL("image/png"));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        title={label}
+        aria-label={label}
+        className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-card-border bg-field-bg text-soft hover:border-amo-gold hover:text-amo-gold"
+      >
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-5 w-5">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 7.5A1.5 1.5 0 0 1 5.5 6H7l1-1.5h8L17 6h1.5A1.5 1.5 0 0 1 20 7.5v9A1.5 1.5 0 0 1 18.5 18h-13A1.5 1.5 0 0 1 4 16.5v-9Z"
+            />
+            <circle cx="12" cy="12" r="3.25" />
+          </svg>
+        )}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+        }}
       />
       <input type="hidden" name={name} value={value} />
     </div>
@@ -315,10 +386,8 @@ export default function AffiliateProgramForm({
             <label className={LABEL_CLASS}>{t.marketing.destinationLinkLabel}</label>
             <input type="url" name="destinationLink" defaultValue={defaultValues?.destinationLink ?? ""} className={FIELD_CLASS} />
           </div>
-          <div>
-            <label className={LABEL_CLASS}>{t.marketing.iconUrlLabel}</label>
-            <input type="url" name="iconUrl" defaultValue={defaultValues?.iconUrl ?? ""} className={FIELD_CLASS} />
-            <div className="mt-2 flex items-center gap-2">
+          <div className="flex items-end justify-between gap-3">
+            <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 id="shortioCreated"
@@ -330,6 +399,7 @@ export default function AffiliateProgramForm({
                 {t.marketing.shortioCreatedLabel}
               </label>
             </div>
+            <IconUploadField name="iconUrl" defaultValue={defaultValues?.iconUrl} label={t.marketing.iconUrlLabel} />
           </div>
 
           {/* Row 4: French links + Follow-up needed / Follow-up date — all
