@@ -244,26 +244,28 @@ export default async function ContactDetailPage({
     // The event edit dialog's own contact/project/task/booking pickers —
     // same lists the full Calendar page and Dashboard card already ship,
     // needed here too now that this card opens that same dialog instead of
-    // just linking out to Google Calendar.
-    const [allContacts, allProjects, allTasks, allBookings] = await Promise.all([
-      db.contact.findMany({
-        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-        take: 300,
-        select: { id: true, firstName: true, lastName: true, email: true },
-      }),
-      db.project.findMany({ orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, contactId: true } }),
-      db.task.findMany({
-        where: { status: { not: "DONE" } },
-        orderBy: { title: "asc" },
-        take: 300,
-        select: { id: true, title: true, projectId: true },
-      }),
-      db.booking.findMany({
-        orderBy: { scheduledFor: "desc" },
-        take: 100,
-        select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
-      }),
-    ]);
+    // just linking out to Google Calendar. Sequential, not Promise.all —
+    // running these concurrently against the same Hyperdrive connection is
+    // exactly the pattern that trips Cloudflare's Error 1102 resource limit
+    // (same lesson as the comment above this function), and it only gets
+    // more likely to fire the bigger the contacts table grows.
+    const allContacts = await db.contact.findMany({
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      take: 300,
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
+    const allProjects = await db.project.findMany({ orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, contactId: true } });
+    const allTasks = await db.task.findMany({
+      where: { status: { not: "DONE" } },
+      orderBy: { title: "asc" },
+      take: 300,
+      select: { id: true, title: true, projectId: true },
+    });
+    const allBookings = await db.booking.findMany({
+      orderBy: { scheduledFor: "desc" },
+      take: 100,
+      select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
+    });
 
     return {
       contact,
