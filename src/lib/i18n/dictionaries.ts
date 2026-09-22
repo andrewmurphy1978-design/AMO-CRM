@@ -854,8 +854,8 @@ export const dictionaries = {
       importButton: "Import from Google Contacts",
       importing: "Importing…",
       notConnected: "Connect Google first.",
-      resultSummary: (imported: number, linked: number, total: number) =>
-        `Imported ${imported} new contact${imported === 1 ? "" : "s"}, linked ${linked} existing contact${linked === 1 ? "" : "s"} (${total} checked).`,
+      resultSummary: (imported: number, linked: number, enriched: number, total: number) =>
+        `Imported ${imported} new contact${imported === 1 ? "" : "s"}, linked ${linked} existing contact${linked === 1 ? "" : "s"}, filled in new details on ${enriched} already-imported contact${enriched === 1 ? "" : "s"} (${total} checked).`,
     },
     personal: {
       title: "Personal",
@@ -1997,8 +1997,8 @@ export const dictionaries = {
       importButton: "Importer depuis Google Contacts",
       importing: "Importation en cours…",
       notConnected: "Connectez d'abord Google.",
-      resultSummary: (imported: number, linked: number, total: number) =>
-        `${imported} nouveau${imported === 1 ? "" : "x"} contact${imported === 1 ? "" : "s"} importé${imported === 1 ? "" : "s"}, ${linked} contact${linked === 1 ? "" : "s"} existant${linked === 1 ? "" : "s"} lié${linked === 1 ? "" : "s"} (${total} vérifié${total === 1 ? "" : "s"}).`,
+      resultSummary: (imported: number, linked: number, enriched: number, total: number) =>
+        `${imported} nouveau${imported === 1 ? "" : "x"} contact${imported === 1 ? "" : "s"} importé${imported === 1 ? "" : "s"}, ${linked} contact${linked === 1 ? "" : "s"} existant${linked === 1 ? "" : "s"} lié${linked === 1 ? "" : "s"}, ${enriched} contact${enriched === 1 ? "" : "s"} déjà importé${enriched === 1 ? "" : "s"} complété${enriched === 1 ? "" : "s"} (${total} vérifié${total === 1 ? "" : "s"}).`,
     },
     personal: {
       title: "Personnel",

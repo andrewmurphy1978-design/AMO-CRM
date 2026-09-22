@@ -29,7 +29,7 @@ export default function GoogleContactsImportForm({ connected, lang }: { connecte
       {result?.error && result.error !== "not_connected" && <p className="mt-2 text-sm text-red-600">{result.error}</p>}
       {result?.success && (
         <p className="mt-2 text-sm text-emerald-700">
-          {t.resultSummary(result.imported ?? 0, result.linked ?? 0, result.totalFetched ?? 0)}
+          {t.resultSummary(result.imported ?? 0, result.linked ?? 0, result.enriched ?? 0, result.totalFetched ?? 0)}
         </p>
       )}
       <p className="mt-2 text-xs text-soft">{t.reconnectNote}</p>

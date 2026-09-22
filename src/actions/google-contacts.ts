@@ -11,6 +11,7 @@ export interface ImportGoogleContactsResult {
   success?: string;
   imported?: number;
   linked?: number;
+  enriched?: number;
   totalFetched?: number;
 }
 
@@ -68,10 +69,18 @@ interface ExistingContactRow {
 
 // Everything beyond the identity fields (name/email/phone, set once at
 // creation) — run for both a freshly created contact (existing: null, so
-// every field below counts as empty) and an already-matched one (existing
-// holds its current values, so only genuinely empty fields get filled).
-// Never overwrites a non-empty value; the CRM's own data always wins.
-async function enrichContact(db: PrismaClient, contactId: string, existing: ExistingContactRow | null, gc: GoogleContactSummary): Promise<void> {
+// every field below counts as empty) and an already-linked one on a
+// repeat import (existing holds its current values, so only genuinely
+// empty fields get filled). Never overwrites a non-empty value; the CRM's
+// own data always wins. Every write here is idempotent (checked against
+// what's already there, or an upsert) since this same contact can be
+// enriched again on every future re-import once it's linked — a plain
+// unconditional `create` in any of the list-shaped sections below would
+// duplicate that row on every subsequent run. Returns whether it actually
+// changed anything, so the caller can report a meaningful count.
+async function enrichContact(db: PrismaClient, contactId: string, existing: ExistingContactRow | null, gc: GoogleContactSummary): Promise<boolean> {
+  let changed = false;
+
   const scalarUpdates: Record<string, string> = {};
   const primaryAddress = gc.addresses[0];
   if (primaryAddress) {
@@ -92,23 +101,43 @@ async function enrichContact(db: PrismaClient, contactId: string, existing: Exis
 
   if (Object.keys(scalarUpdates).length > 0) {
     await db.contact.update({ where: { id: contactId }, data: scalarUpdates });
+    changed = true;
   }
 
   // Additional addresses beyond the primary one — same "+" pattern as the
-  // Contact form's own extra-address rows.
-  for (const [i, addr] of gc.addresses.slice(1).entries()) {
-    await db.contactAddress.create({
-      data: { contactId, address: addr.address, city: addr.city, state: addr.state, zip: addr.zip, country: addr.country, order: i },
-    });
+  // Contact form's own extra-address rows. Matched against what's already
+  // there (by address+city+zip) so a repeat import never appends the same
+  // address twice.
+  const extraAddresses = gc.addresses.slice(1);
+  if (extraAddresses.length > 0) {
+    const existingAddresses = await db.contactAddress.findMany({ where: { contactId }, select: { address: true, city: true, zip: true } });
+    const existingKeys = new Set(existingAddresses.map((a) => `${a.address ?? ""}|${a.city ?? ""}|${a.zip ?? ""}`));
+    let order = existingAddresses.length;
+    for (const addr of extraAddresses) {
+      const key = `${addr.address ?? ""}|${addr.city ?? ""}|${addr.zip ?? ""}`;
+      if (existingKeys.has(key)) continue;
+      await db.contactAddress.create({
+        data: { contactId, address: addr.address, city: addr.city, state: addr.state, zip: addr.zip, country: addr.country, order: order++ },
+      });
+      changed = true;
+    }
   }
 
   // Websites beyond whichever one filled (or didn't need to fill) the
   // `website` column become social-link rows — "Website" is a real
   // SOCIAL_PLATFORMS value (see contact-form.tsx), so this never produces
   // a value the Contact Edit form's platform dropdown can't display.
+  // Checked against what's already there so a repeat import never
+  // appends the same URL twice.
   const extraWebsites = primaryWebsiteUsed ? gc.websites : gc.websites.slice(1);
-  for (const url of extraWebsites) {
-    await db.contactSocialLink.create({ data: { contactId, platform: "Website", url } });
+  if (extraWebsites.length > 0) {
+    const existingLinks = await db.contactSocialLink.findMany({ where: { contactId, platform: "Website" }, select: { url: true } });
+    const existingUrls = new Set(existingLinks.map((l) => l.url));
+    for (const url of extraWebsites) {
+      if (existingUrls.has(url)) continue;
+      await db.contactSocialLink.create({ data: { contactId, platform: "Website", url } });
+      changed = true;
+    }
   }
 
   // Skype is the one IM protocol with an exact match in VOIP_APPS (see
@@ -123,15 +152,20 @@ async function enrichContact(db: PrismaClient, contactId: string, existing: Exis
       const alreadyHasSkype = await db.contactVoipAccount.findFirst({ where: { contactId, app: "Skype" } });
       if (!alreadyHasSkype) {
         await db.contactVoipAccount.create({ data: { contactId, app: "Skype", handle: im.username } });
+        changed = true;
       }
     } else {
       const slug = `google_im_${slugify(im.protocol)}`;
-      await db.contactFieldValue.upsert({
-        where: { contactId_fieldSlug: { contactId, fieldSlug: slug } },
-        update: { value: im.username },
-        create: { contactId, fieldSlug: slug, value: im.username },
-      });
-      await ensureCustomFieldDefinition(db, slug, `IM (${im.protocol})`);
+      const before = await db.contactFieldValue.findUnique({ where: { contactId_fieldSlug: { contactId, fieldSlug: slug } } });
+      if (before?.value !== im.username) {
+        await db.contactFieldValue.upsert({
+          where: { contactId_fieldSlug: { contactId, fieldSlug: slug } },
+          update: { value: im.username },
+          create: { contactId, fieldSlug: slug, value: im.username },
+        });
+        await ensureCustomFieldDefinition(db, slug, `IM (${im.protocol})`);
+        changed = true;
+      }
     }
   }
 
@@ -140,12 +174,16 @@ async function enrichContact(db: PrismaClient, contactId: string, existing: Exis
   // unmapped fields already use (see PROMOTED_FIELD_SLUGS in sync.ts).
   for (const field of gc.customFields) {
     const slug = `google_${slugify(field.key)}`;
-    await db.contactFieldValue.upsert({
-      where: { contactId_fieldSlug: { contactId, fieldSlug: slug } },
-      update: { value: field.value },
-      create: { contactId, fieldSlug: slug, value: field.value },
-    });
-    await ensureCustomFieldDefinition(db, slug, field.key);
+    const before = await db.contactFieldValue.findUnique({ where: { contactId_fieldSlug: { contactId, fieldSlug: slug } } });
+    if (before?.value !== field.value) {
+      await db.contactFieldValue.upsert({
+        where: { contactId_fieldSlug: { contactId, fieldSlug: slug } },
+        update: { value: field.value },
+        create: { contactId, fieldSlug: slug, value: field.value },
+      });
+      await ensureCustomFieldDefinition(db, slug, field.key);
+      changed = true;
+    }
   }
 
   // Google's contact-group labels (Family, Friends, ...) become CRM tags
@@ -153,12 +191,14 @@ async function enrichContact(db: PrismaClient, contactId: string, existing: Exis
   // import targets, and the CRM already has a tagging system to hold it.
   for (const groupName of gc.groupNames) {
     const tag = await db.tag.upsert({ where: { name: groupName }, update: {}, create: { name: groupName } });
-    await db.contactTag.upsert({
-      where: { contactId_tagId: { contactId, tagId: tag.id } },
-      update: {},
-      create: { contactId, tagId: tag.id },
-    });
+    const existingTag = await db.contactTag.findUnique({ where: { contactId_tagId: { contactId, tagId: tag.id } } });
+    if (!existingTag) {
+      await db.contactTag.create({ data: { contactId, tagId: tag.id } });
+      changed = true;
+    }
   }
+
+  return changed;
 }
 
 // One-click pull of every Google Contact into the CRM (see the plan
@@ -218,12 +258,13 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
       },
     });
 
-    const byGoogleId = new Set(existing.map((c) => c.googleContactId).filter((v): v is string => Boolean(v)));
+    const byGoogleId = new Map<string, string>();
     const byEmail = new Map<string, string>();
     const byPhone = new Map<string, string>();
     const existingById = new Map<string, ExistingContactRow>();
     for (const c of existing) {
       existingById.set(c.id, c);
+      if (c.googleContactId) byGoogleId.set(c.googleContactId, c.id);
       for (const email of [c.email, c.email2, ...c.extraEmails]) {
         if (email) byEmail.set(email.toLowerCase(), c.id);
       }
@@ -235,6 +276,7 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
 
     let imported = 0;
     let linked = 0;
+    let enriched = 0;
     // Guards against two Google contacts sharing the same email creating
     // two CRM rows in the same run (the DB's own unique constraint on
     // Contact.email would only catch this on the second insert, as an
@@ -242,7 +284,16 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
     const seenEmailsThisRun = new Set<string>();
 
     for (const gc of googleContacts) {
-      if (byGoogleId.has(gc.resourceName)) continue; // already imported/linked in a previous run
+      // Already linked from a previous run — nothing to (re)match or
+      // create, but still worth enriching: a field this import didn't
+      // know how to pull before (or that Google itself added since) can
+      // still be backfilled, same as a first-time import.
+      const alreadyLinkedId = byGoogleId.get(gc.resourceName);
+      if (alreadyLinkedId) {
+        const didChange = await enrichContact(db, alreadyLinkedId, existingById.get(alreadyLinkedId) ?? null, gc);
+        if (didChange) enriched += 1;
+        continue;
+      }
 
       const matchEmail = gc.emails.find((e) => byEmail.has(e.toLowerCase()));
       const matchPhone = matchEmail ? undefined : gc.phones.find((p) => byPhone.has(normalizePhoneForMatch(p)));
@@ -305,6 +356,6 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
 
     revalidatePath("/contacts");
     revalidatePath("/settings");
-    return { success: "imported", imported, linked, totalFetched: googleContacts.length };
+    return { success: "imported", imported, linked, enriched, totalFetched: googleContacts.length };
   });
 }
