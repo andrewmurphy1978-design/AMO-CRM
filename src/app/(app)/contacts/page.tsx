@@ -138,7 +138,6 @@ export default async function ContactsPage({
         hour12={hour12}
         dateLocale={dateLocale}
         location={t.dashboard.myLocation}
-        centerActions
         actions={
           <Link href="/contacts/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
             {t.contacts.newContact}

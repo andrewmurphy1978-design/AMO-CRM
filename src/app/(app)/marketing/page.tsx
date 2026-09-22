@@ -67,12 +67,13 @@ function AffiliateProgramCard({
               content, so two cards with different data drift out of sync. */}
           <table className="w-full table-fixed divide-y divide-card-border text-sm">
             <colgroup>
-              <col className="w-[26%]" />
-              <col className="w-[18%]" />
-              <col className="w-[14%]" />
-              <col className="w-[20%]" />
-              <col className="w-[10%]" />
+              <col className="w-[22%]" />
+              <col className="w-[16%]" />
               <col className="w-[12%]" />
+              <col className="w-[18%]" />
+              <col className="w-[9%]" />
+              <col className="w-[10%]" />
+              <col className="w-[13%]" />
             </colgroup>
             <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
               <tr>
@@ -82,6 +83,7 @@ function AffiliateProgramCard({
                 <th className="py-2 pr-4">{t.marketing.colStatus}</th>
                 <th className="py-2 pr-4">{t.marketing.colFollowUp}</th>
                 <th className="py-2 pr-4">{t.marketing.colLink}</th>
+                <th className="py-2 pr-4">{t.marketing.colLinkedEmails}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-card-border">
@@ -93,9 +95,6 @@ function AffiliateProgramCard({
                       <Link href={`/marketing/programs/${p.id}`} className="text-ink hover:underline">
                         {p.name}
                       </Link>
-                      {p.emailLinks.length > 0 && (
-                        <span className="ml-2 text-xs font-normal text-emerald-700">{t.marketing.linkedEmails(p.emailLinks.length)}</span>
-                      )}
                     </td>
                     <td className="truncate py-2 pr-4 align-top text-ink/70">{tabTitle(p.tab, t)}</td>
                     <td className="truncate py-2 pr-4 align-top text-ink/70">{[p.type, p.category].filter(Boolean).join(" · ") || "—"}</td>
@@ -114,6 +113,9 @@ function AffiliateProgramCard({
                       ) : (
                         "—"
                       )}
+                    </td>
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">
+                      {p.emailLinks.length > 0 ? t.marketing.linkedEmails(p.emailLinks.length) : "—"}
                     </td>
                   </tr>
                 );
