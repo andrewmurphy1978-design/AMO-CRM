@@ -21,3 +21,19 @@ export const DEFAULT_EVENT_COLOR = { bg: "#4285f4", fg: "#fff" }; // Google's de
 export function eventColor(colorId: string | null): { bg: string; fg: string } {
   return (colorId && GOOGLE_EVENT_COLORS[colorId]) || DEFAULT_EVENT_COLOR;
 }
+
+// For the event dialog's color picker — Google's own names for each id, in
+// the same order Google Calendar's own UI lists them.
+export const EVENT_COLOR_OPTIONS: { id: string; name: string }[] = [
+  { id: "1", name: "Lavender" },
+  { id: "2", name: "Sage" },
+  { id: "3", name: "Grape" },
+  { id: "4", name: "Flamingo" },
+  { id: "5", name: "Banana" },
+  { id: "6", name: "Tangerine" },
+  { id: "7", name: "Peacock" },
+  { id: "8", name: "Graphite" },
+  { id: "9", name: "Blueberry" },
+  { id: "10", name: "Basil" },
+  { id: "11", name: "Tomato" },
+];

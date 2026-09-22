@@ -86,20 +86,13 @@ export default async function CalendarAppPage() {
     contactId: b.contactId,
   }));
 
-  const linkDialogLabels = {
-    link: t.linkPicker.link,
-    edit: t.linkPicker.edit,
-    none: t.linkPicker.none,
+  const linkPickerLabels = {
     contact: t.linkPicker.contact,
     project: t.linkPicker.project,
     task: t.linkPicker.task,
     booking: t.linkPicker.booking,
-    affiliateProgram: t.linkPicker.affiliateProgram,
-    save: t.linkPicker.save,
-    saving: t.linkPicker.saving,
-    cancel: t.linkPicker.cancel,
+    none: t.linkPicker.none,
     clear: t.linkPicker.clear,
-    title: t.linkPicker.titleWithBooking,
     searchPlaceholder: t.linkPicker.searchPlaceholder,
     noResults: t.linkPicker.noResults,
   };
@@ -139,6 +132,7 @@ export default async function CalendarAppPage() {
           hour12={hour12}
           dateLocale={dateLocale}
           intlLocale={intlLocale}
+          lang={lang}
           title={t.calendarApp.title}
           location={t.dashboard.myLocation}
           headerActions={openInCalendarButton}
@@ -156,7 +150,8 @@ export default async function CalendarAppPage() {
             todayColumn: t.dashboard.calendarToday,
             tomorrowColumn: t.dashboard.calendarTomorrow,
             noEvents: t.calendarApp.noEvents,
-            linkDialog: linkDialogLabels,
+            eventDialog: t.eventDialog,
+            linkPicker: linkPickerLabels,
           }}
         />
       )}

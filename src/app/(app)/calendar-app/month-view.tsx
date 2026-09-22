@@ -23,7 +23,7 @@ function EventPill({
   contactById,
   projectById,
   taskById,
-  onRequestLink,
+  onRequestEdit,
 }: {
   event: CalendarEventSummary;
   hour12: boolean;
@@ -32,14 +32,14 @@ function EventPill({
   contactById: Record<string, string>;
   projectById: Record<string, string>;
   taskById: Record<string, string>;
-  onRequestLink: (event: CalendarEventSummary) => void;
+  onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
   const color = eventColor(event.colorId);
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
+      onClick={() => onRequestEdit(event)}
       className="flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
       style={{ backgroundColor: color.bg, color: color.fg }}
       title={event.title}
@@ -57,23 +57,6 @@ function EventPill({
         taskById={taskById}
         className="mt-3 truncate text-xs font-normal opacity-90"
       />
-      <div className="mt-auto flex justify-end pt-0.5">
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRequestLink(event);
-          }}
-          className="shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
-          title="Link"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
-            <circle cx="8" cy="16" r="4" />
-            <circle cx="16" cy="8" r="4" />
-            <path strokeLinecap="round" d="M10.8 13.2 13.2 10.8" />
-          </svg>
-        </button>
-      </div>
     </div>
   );
 }
@@ -90,7 +73,7 @@ export default function MonthView({
   hour12,
   intlLocale,
   weekdayLabels,
-  onRequestLink,
+  onRequestEdit,
 }: {
   weeks: Date[][]; // 6 weeks x 7 days
   eventsByDay: CalendarEventSummary[][][]; // same shape as weeks
@@ -103,7 +86,7 @@ export default function MonthView({
   hour12: boolean;
   intlLocale: string;
   weekdayLabels: string[];
-  onRequestLink: (event: CalendarEventSummary) => void;
+  onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-card-border">
@@ -143,7 +126,7 @@ export default function MonthView({
                       event={event}
                       hour12={hour12}
                       intlLocale={intlLocale}
-                      onRequestLink={onRequestLink}
+                      onRequestEdit={onRequestEdit}
                       linkValues={links[event.id]}
                       contactById={contactById}
                       projectById={projectById}

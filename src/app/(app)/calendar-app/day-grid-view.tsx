@@ -46,7 +46,7 @@ function EventBlock({
   contactById,
   projectById,
   taskById,
-  onRequestLink,
+  onRequestEdit,
 }: {
   event: CalendarEventSummary;
   style: React.CSSProperties;
@@ -58,16 +58,16 @@ function EventBlock({
   contactById: Record<string, string>;
   projectById: Record<string, string>;
   taskById: Record<string, string>;
-  onRequestLink: (event: CalendarEventSummary) => void;
+  onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
   const color = eventColor(event.colorId);
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
+      onClick={() => onRequestEdit(event)}
       style={{ ...style, backgroundColor: color.bg, color: color.fg }}
-      className={`absolute flex cursor-pointer flex-col overflow-hidden px-1.5 py-1 pr-6 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
+      className={`absolute flex cursor-pointer flex-col overflow-hidden px-1.5 py-1 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
       title={event.title}
     >
       {isFirst && (
@@ -87,27 +87,6 @@ function EventBlock({
           />
         </>
       )}
-      {isLast && (
-        // Absolutely positioned (not a flex-flow child) so it always shows
-        // in the box's corner regardless of how short the box is — a very
-        // brief event's box can be too short to also reserve flow space
-        // for a link-button row, which is what previously hid it entirely.
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRequestLink(event);
-          }}
-          className="absolute bottom-0.5 right-0.5 shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
-          title="Link"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
-            <circle cx="8" cy="16" r="4" />
-            <circle cx="16" cy="8" r="4" />
-            <path strokeLinecap="round" d="M10.8 13.2 13.2 10.8" />
-          </svg>
-        </button>
-      )}
     </div>
   );
 }
@@ -123,7 +102,7 @@ function DayColumn({
   projectById,
   taskById,
   noEventsLabel,
-  onRequestLink,
+  onRequestEdit,
 }: {
   day: Date;
   index: number;
@@ -135,7 +114,7 @@ function DayColumn({
   projectById: Record<string, string>;
   taskById: Record<string, string>;
   noEventsLabel: string;
-  onRequestLink: (event: CalendarEventSummary) => void;
+  onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
   const timed: TimedEvent<CalendarEventSummary>[] = events
     .filter((e) => !e.allDay && e.start)
@@ -178,7 +157,7 @@ function DayColumn({
             <EventBlock
               key={`${event.id}-${i}`}
               event={event}
-              onRequestLink={onRequestLink}
+              onRequestEdit={onRequestEdit}
               isFirst={isFirst}
               isLast={isLast}
               hour12={hour12}
@@ -212,7 +191,7 @@ export default function DayGridView({
   todayLabel,
   tomorrowLabel,
   noEventsLabel,
-  onRequestLink,
+  onRequestEdit,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
@@ -226,7 +205,7 @@ export default function DayGridView({
   todayLabel: string;
   tomorrowLabel: string;
   noEventsLabel: string;
-  onRequestLink: (event: CalendarEventSummary) => void;
+  onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -289,7 +268,7 @@ export default function DayGridView({
                       key={event.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
+                      onClick={() => onRequestEdit(event)}
                       className="flex cursor-pointer items-start gap-1 overflow-hidden rounded px-1 py-0.5 text-xs font-medium"
                       style={{ backgroundColor: color.bg, color: color.fg }}
                       title={event.title}
@@ -328,7 +307,7 @@ export default function DayGridView({
               projectById={projectById}
               taskById={taskById}
               noEventsLabel={noEventsLabel}
-              onRequestLink={onRequestLink}
+              onRequestEdit={onRequestEdit}
             />
           ))}
         </div>

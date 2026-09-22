@@ -471,6 +471,184 @@ export async function getCalendarEventsInRange(
   }
 }
 
+export interface CalendarAttendee {
+  email: string;
+  displayName: string | null;
+  responseStatus: string | null; // "needsAction" | "accepted" | "declined" | "tentative"
+}
+
+export interface CalendarEventDetail {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  start: string | null; // ISO datetime, or an ISO date (yyyy-MM-dd) for all-day
+  end: string | null;
+  allDay: boolean;
+  colorId: string | null;
+  htmlLink: string | null;
+  attendees: CalendarAttendee[];
+  recurrence: string[]; // raw RRULE/EXDATE lines, e.g. ["RRULE:FREQ=WEEKLY;COUNT=10"]
+  recurringEventId: string | null; // set when this is one instance of a recurring event
+  visibility: "default" | "public" | "private";
+  transparency: "opaque" | "transparent"; // opaque = busy, transparent = free
+  reminderUseDefault: boolean;
+  reminderMinutes: number | null; // first override's minutes, when useDefault is false
+}
+
+// The shape the event dialog submits — always sends every field (rather
+// than a partial diff), so clearing a field in the form really clears it
+// on the Google side too instead of leaving the old value untouched.
+export interface CalendarEventInput {
+  title: string;
+  description: string;
+  location: string;
+  allDay: boolean;
+  start: string; // ISO datetime, or yyyy-MM-dd when allDay
+  end: string;
+  colorId: string | null;
+  attendeeEmails: string[];
+  recurrence: string[];
+  visibility: "default" | "public" | "private";
+  transparency: "opaque" | "transparent";
+  reminderUseDefault: boolean;
+  reminderMinutes: number | null;
+}
+
+interface RawGoogleEventDetail extends RawGoogleEvent {
+  description?: string;
+  location?: string;
+  attendees?: { email?: string; displayName?: string; responseStatus?: string }[];
+  recurrence?: string[];
+  recurringEventId?: string;
+  visibility?: string;
+  transparency?: string;
+  reminders?: { useDefault?: boolean; overrides?: { method?: string; minutes?: number }[] };
+}
+
+function mapGoogleEventDetail(item: RawGoogleEventDetail): CalendarEventDetail {
+  const summary = mapGoogleEvent(item);
+  const firstOverride = item.reminders?.overrides?.[0];
+  return {
+    ...summary,
+    description: item.description ?? "",
+    location: item.location ?? "",
+    attendees: (item.attendees ?? []).map((a) => ({
+      email: a.email ?? "",
+      displayName: a.displayName ?? null,
+      responseStatus: a.responseStatus ?? null,
+    })),
+    recurrence: item.recurrence ?? [],
+    recurringEventId: item.recurringEventId ?? null,
+    visibility: (item.visibility as CalendarEventDetail["visibility"]) ?? "default",
+    transparency: (item.transparency as CalendarEventDetail["transparency"]) ?? "opaque",
+    reminderUseDefault: item.reminders?.useDefault ?? true,
+    reminderMinutes: firstOverride?.minutes ?? null,
+  };
+}
+
+// Full single-event fetch for the edit dialog — the list/range endpoints
+// above only return the summary fields those views actually render, not
+// description/location/attendees/recurrence/etc.
+export async function getCalendarEvent(accessToken: string, eventId: string): Promise<CalendarEventDetail | null> {
+  try {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    return mapGoogleEventDetail((await res.json()) as RawGoogleEventDetail);
+  } catch {
+    return null;
+  }
+}
+
+function buildEventBody(input: CalendarEventInput): Record<string, unknown> {
+  const time = input.allDay ? { date: input.start } : { dateTime: input.start };
+  const endTime = input.allDay ? { date: input.end } : { dateTime: input.end };
+  return {
+    summary: input.title,
+    description: input.description,
+    location: input.location,
+    start: time,
+    end: endTime,
+    colorId: input.colorId || undefined,
+    attendees: input.attendeeEmails.map((email) => ({ email })),
+    recurrence: input.recurrence.length > 0 ? input.recurrence : undefined,
+    visibility: input.visibility,
+    transparency: input.transparency,
+    reminders: input.reminderUseDefault
+      ? { useDefault: true }
+      : {
+          useDefault: false,
+          overrides: input.reminderMinutes != null ? [{ method: "popup", minutes: input.reminderMinutes }] : [],
+        },
+  };
+}
+
+export async function createCalendarEvent(accessToken: string, input: CalendarEventInput): Promise<{ id: string } | { error: string }> {
+  try {
+    const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(buildEventBody(input)),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("createCalendarEvent failed:", res.status, text);
+      return { error: `Google Calendar returned ${res.status}` };
+    }
+    const data = (await res.json()) as { id: string };
+    return { id: data.id };
+  } catch (err) {
+    console.error("createCalendarEvent failed:", err);
+    return { error: "Request to Google Calendar failed" };
+  }
+}
+
+export async function updateCalendarEvent(
+  accessToken: string,
+  eventId: string,
+  input: CalendarEventInput
+): Promise<{ error?: string }> {
+  try {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(buildEventBody(input)),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("updateCalendarEvent failed:", res.status, text);
+      return { error: `Google Calendar returned ${res.status}` };
+    }
+    return {};
+  } catch (err) {
+    console.error("updateCalendarEvent failed:", err);
+    return { error: "Request to Google Calendar failed" };
+  }
+}
+
+export async function deleteCalendarEvent(accessToken: string, eventId: string): Promise<{ error?: string }> {
+  try {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    // Google returns 410 Gone for an event that's already been deleted on
+    // its side — treat that the same as success rather than surfacing an
+    // error for a delete that, from the user's perspective, already happened.
+    if (!res.ok && res.status !== 410) {
+      const text = await res.text();
+      console.error("deleteCalendarEvent failed:", res.status, text);
+      return { error: `Google Calendar returned ${res.status}` };
+    }
+    return {};
+  } catch (err) {
+    console.error("deleteCalendarEvent failed:", err);
+    return { error: "Request to Google Calendar failed" };
+  }
+}
+
 // Fetches specific events by id — there's no bulk "get by ids" endpoint in
 // the Calendar API, so this is one request per id (fine for the handful of
 // events a single contact/project ever has linked). Used by the Calendar

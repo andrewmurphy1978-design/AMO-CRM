@@ -17,7 +17,7 @@ export default function TableView({
   hour12,
   intlLocale,
   noEventsLabel,
-  onRequestLink,
+  onRequestEdit,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
@@ -29,7 +29,7 @@ export default function TableView({
   hour12: boolean;
   intlLocale: string;
   noEventsLabel: string;
-  onRequestLink: (event: CalendarEventSummary) => void;
+  onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-card-border">
@@ -52,7 +52,7 @@ export default function TableView({
                           key={event.id}
                           role="button"
                           tabIndex={0}
-                          onClick={() => event.htmlLink && window.open(event.htmlLink, "_blank", "noopener,noreferrer")}
+                          onClick={() => onRequestEdit(event)}
                           className="flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 transition-opacity hover:opacity-90"
                           style={{ backgroundColor: color.bg, color: color.fg }}
                         >
@@ -71,23 +71,6 @@ export default function TableView({
                             taskById={taskById}
                             className="ml-[7.375rem] mt-3 truncate text-sm font-normal opacity-90"
                           />
-                          <div className="flex justify-end pt-0.5">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onRequestLink(event);
-                              }}
-                              className="shrink-0 rounded-full bg-black/15 p-1 hover:bg-black/30"
-                              title="Link"
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
-                                <circle cx="8" cy="16" r="4" />
-                                <circle cx="16" cy="8" r="4" />
-                                <path strokeLinecap="round" d="M10.8 13.2 13.2 10.8" />
-                              </svg>
-                            </button>
-                          </div>
                         </div>
                       );
                     })}

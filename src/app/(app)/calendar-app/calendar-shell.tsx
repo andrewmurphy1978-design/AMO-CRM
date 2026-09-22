@@ -12,18 +12,14 @@ import {
   type Locale,
 } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
-import LinkDialog, { type LinkOption, type LinkDialogLabels, type LinkValues } from "../link-dialog";
-import { saveCalendarEventLink } from "@/actions/links";
+import type { Lang } from "@/lib/i18n/dictionaries";
+import type { LinkOption } from "../link-dialog";
+import EventDialog, { type EventDialogLabels, type EventDialogTarget } from "./event-dialog";
 import PageHeader from "../page-header";
 import RefreshButton from "../refresh-button";
 import DayGridView from "./day-grid-view";
 import MonthView from "./month-view";
 import TableView from "./table-view";
-
-// Opens Google Calendar's own "create event" screen in a new tab — there's
-// no in-app event editor (yet), so adding an event still happens on
-// Google's side; this just saves the trip of finding that button yourself.
-const GOOGLE_CALENDAR_NEW_EVENT_URL = "https://calendar.google.com/calendar/u/0/r/eventedit";
 
 type ViewMode = "month" | "week" | "5day" | "3day" | "day" | "table";
 
@@ -93,7 +89,8 @@ export interface CalendarShellLabels {
   todayColumn: string;
   tomorrowColumn: string;
   noEvents: string;
-  linkDialog: LinkDialogLabels;
+  eventDialog: EventDialogLabels;
+  linkPicker: { contact: string; project: string; task: string; booking: string; none: string; clear: string; searchPlaceholder: string; noResults: string };
 }
 
 export default function CalendarShell({
@@ -106,6 +103,7 @@ export default function CalendarShell({
   hour12,
   dateLocale,
   intlLocale,
+  lang,
   labels,
   title,
   location,
@@ -122,6 +120,7 @@ export default function CalendarShell({
   hour12: boolean;
   dateLocale: Locale | undefined;
   intlLocale: string;
+  lang: Lang;
   labels: CalendarShellLabels;
   title: string;
   location: string;
@@ -134,7 +133,7 @@ export default function CalendarShell({
   const [events, setEvents] = useState(initialEvents);
   const [links, setLinks] = useState(initialLinks);
   const [loading, setLoading] = useState(false);
-  const [linkTarget, setLinkTarget] = useState<CalendarEventSummary | null>(null);
+  const [dialogTarget, setDialogTarget] = useState<EventDialogTarget | null>(null);
   const isFirstRender = useRef(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -221,19 +220,20 @@ export default function CalendarShell({
 
   const weekdayLabels = Array.from({ length: 7 }, (_, i) => format(addDays(startOfWeek(new Date(), { weekStartsOn: 0 }), i), "EEE", { locale: dateLocale }));
 
-  async function handleSaveLink(values: LinkValues) {
-    if (!linkTarget) return;
-    await saveCalendarEventLink(linkTarget.id, values);
-    setLinks((prev) => ({ ...prev, [linkTarget.id]: values }));
+  function requestEdit(event: CalendarEventSummary) {
+    setDialogTarget({ id: event.id });
   }
 
-  // Calendar events never link to an affiliate program (that's an Email-page-
-  // only target — see LinkDialog's `affiliatePrograms` prop), so this is
-  // always blank here; still required to satisfy the shared LinkValues type.
-  const linkInitial: LinkValues = {
-    ...(linkTarget ? (links[linkTarget.id] ?? { contactId: "", projectId: "", taskId: "", bookingId: "" }) : { contactId: "", projectId: "", taskId: "", bookingId: "" }),
-    affiliateProgramId: "",
-  };
+  function requestCreate() {
+    // Defaults to "now" (rounded up to the next half hour) rather than the
+    // currently viewed day/anchor — the view components don't yet support
+    // clicking an empty slot to seed a specific time, so this is the one
+    // sensible default until they do.
+    const now = new Date();
+    now.setMinutes(now.getMinutes() < 30 ? 30 : 0, 0, 0);
+    if (now <= new Date()) now.setHours(now.getHours() + 1);
+    setDialogTarget({ start: now });
+  }
 
   return (
     <>
@@ -290,11 +290,7 @@ export default function CalendarShell({
           {loading && <span className="text-xs text-soft">…</span>}
         </div>
         <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => window.open(GOOGLE_CALENDAR_NEW_EVENT_URL, "_blank", "noopener,noreferrer")}
-            className="btn-primary rounded-lg px-4 py-1.5 text-sm font-semibold shadow-sm"
-          >
+          <button type="button" onClick={requestCreate} className="btn-primary rounded-lg px-4 py-1.5 text-sm font-semibold shadow-sm">
             {labels.addEvent}
           </button>
         </div>
@@ -328,7 +324,7 @@ export default function CalendarShell({
           hour12={hour12}
           intlLocale={intlLocale}
           noEventsLabel={labels.noEvents}
-          onRequestLink={setLinkTarget}
+          onRequestEdit={requestEdit}
         />
       ) : (
         <div className="-mx-4 -mb-4 min-h-0 flex-1 sm:-mx-8 sm:-mb-8">
@@ -346,7 +342,7 @@ export default function CalendarShell({
                 hour12={hour12}
                 intlLocale={intlLocale}
                 weekdayLabels={weekdayLabels}
-                onRequestLink={setLinkTarget}
+                onRequestEdit={requestEdit}
               />
             ) : (
               <DayGridView
@@ -362,24 +358,25 @@ export default function CalendarShell({
                 todayLabel={labels.todayColumn}
                 tomorrowLabel={labels.tomorrowColumn}
                 noEventsLabel={labels.noEvents}
-                onRequestLink={setLinkTarget}
+                onRequestEdit={requestEdit}
               />
             )}
           </div>
         </div>
       )}
 
-      <LinkDialog
-        key={linkTarget?.id ?? "none"}
-        open={linkTarget !== null}
-        onClose={() => setLinkTarget(null)}
+      <EventDialog
+        key={dialogTarget ? ("id" in dialogTarget ? dialogTarget.id : dialogTarget.start.getTime()) : "none"}
+        target={dialogTarget}
+        onClose={() => setDialogTarget(null)}
+        onSaved={refresh}
         contacts={contacts}
         projects={projects}
         tasks={tasks}
         bookings={bookings}
-        initial={linkInitial}
-        onSave={handleSaveLink}
-        labels={labels.linkDialog}
+        lang={lang}
+        labels={labels.eventDialog}
+        linkLabels={labels.linkPicker}
       />
       </div>
     </>
