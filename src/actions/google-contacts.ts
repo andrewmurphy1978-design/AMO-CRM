@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
-import { withScopedPrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getValidAccessToken } from "@/lib/google";
 import { listGoogleContacts, type GoogleContactSummary } from "@/lib/google-contacts";
 
@@ -33,15 +33,146 @@ function splitDisplayName(displayName: string): { firstName: string | null; last
   return { firstName: first, lastName: rest.join(" ") || null };
 }
 
+// Turns an arbitrary Google custom-field key (or IM protocol name) into a
+// safe ContactFieldValue slug — lowercase, non-alphanumeric collapsed to
+// underscores. "google_" prefixed by every caller so these can never
+// collide with a systeme.io field slug.
+function slugify(text: string): string {
+  return text.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "field";
+}
+
+// contact_field_values.fieldSlug has no enforced DB foreign key to
+// custom_field_definitions (see that table's migration) — this upsert is
+// purely so the Contact Info page's "other fields" section (which looks
+// up ContactFieldValue.definition.label) shows a human label instead of
+// the raw slug, not a requirement for the value itself to save.
+async function ensureCustomFieldDefinition(db: PrismaClient, slug: string, label: string): Promise<void> {
+  await db.customFieldDefinition.upsert({ where: { slug }, update: {}, create: { slug, label, type: "text" } });
+}
+
+interface ExistingContactRow {
+  id: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  country: string | null;
+  company: string | null;
+  jobTitle: string | null;
+  birthday: string | null;
+  nickname: string | null;
+  avatarUrl: string | null;
+  website: string | null;
+  notes: string | null;
+}
+
+// Everything beyond the identity fields (name/email/phone, set once at
+// creation) — run for both a freshly created contact (existing: null, so
+// every field below counts as empty) and an already-matched one (existing
+// holds its current values, so only genuinely empty fields get filled).
+// Never overwrites a non-empty value; the CRM's own data always wins.
+async function enrichContact(db: PrismaClient, contactId: string, existing: ExistingContactRow | null, gc: GoogleContactSummary): Promise<void> {
+  const scalarUpdates: Record<string, string> = {};
+  const primaryAddress = gc.addresses[0];
+  if (primaryAddress) {
+    if (primaryAddress.address && !existing?.address) scalarUpdates.address = primaryAddress.address;
+    if (primaryAddress.city && !existing?.city) scalarUpdates.city = primaryAddress.city;
+    if (primaryAddress.state && !existing?.state) scalarUpdates.state = primaryAddress.state;
+    if (primaryAddress.zip && !existing?.zip) scalarUpdates.zip = primaryAddress.zip;
+    if (primaryAddress.country && !existing?.country) scalarUpdates.country = primaryAddress.country;
+  }
+  if (gc.company && !existing?.company) scalarUpdates.company = gc.company;
+  if (gc.jobTitle && !existing?.jobTitle) scalarUpdates.jobTitle = gc.jobTitle;
+  if (gc.birthday && !existing?.birthday) scalarUpdates.birthday = gc.birthday;
+  if (gc.nickname && !existing?.nickname) scalarUpdates.nickname = gc.nickname;
+  if (gc.avatarUrl && !existing?.avatarUrl) scalarUpdates.avatarUrl = gc.avatarUrl;
+  const primaryWebsiteUsed = Boolean(existing?.website);
+  if (gc.websites[0] && !existing?.website) scalarUpdates.website = gc.websites[0];
+  if (gc.notes && !existing?.notes) scalarUpdates.notes = gc.notes;
+
+  if (Object.keys(scalarUpdates).length > 0) {
+    await db.contact.update({ where: { id: contactId }, data: scalarUpdates });
+  }
+
+  // Additional addresses beyond the primary one — same "+" pattern as the
+  // Contact form's own extra-address rows.
+  for (const [i, addr] of gc.addresses.slice(1).entries()) {
+    await db.contactAddress.create({
+      data: { contactId, address: addr.address, city: addr.city, state: addr.state, zip: addr.zip, country: addr.country, order: i },
+    });
+  }
+
+  // Websites beyond whichever one filled (or didn't need to fill) the
+  // `website` column become social-link rows — "Website" is a real
+  // SOCIAL_PLATFORMS value (see contact-form.tsx), so this never produces
+  // a value the Contact Edit form's platform dropdown can't display.
+  const extraWebsites = primaryWebsiteUsed ? gc.websites : gc.websites.slice(1);
+  for (const url of extraWebsites) {
+    await db.contactSocialLink.create({ data: { contactId, platform: "Website", url } });
+  }
+
+  // Skype is the one IM protocol with an exact match in VOIP_APPS (see
+  // platform-icons.ts) — everything else (Google Talk, AIM, ICQ, Jabber,
+  // MSN, QQ, Yahoo Messenger, ...) has no fixed dropdown to safely land
+  // in (an unlisted value there would silently reset to the dropdown's
+  // first option the next time this contact is saved through the Edit
+  // form), so those go to the same custom-field overflow as userDefined
+  // fields below instead.
+  for (const im of gc.imAccounts) {
+    if (im.protocol.toLowerCase() === "skype") {
+      const alreadyHasSkype = await db.contactVoipAccount.findFirst({ where: { contactId, app: "Skype" } });
+      if (!alreadyHasSkype) {
+        await db.contactVoipAccount.create({ data: { contactId, app: "Skype", handle: im.username } });
+      }
+    } else {
+      const slug = `google_im_${slugify(im.protocol)}`;
+      await db.contactFieldValue.upsert({
+        where: { contactId_fieldSlug: { contactId, fieldSlug: slug } },
+        update: { value: im.username },
+        create: { contactId, fieldSlug: slug, value: im.username },
+      });
+      await ensureCustomFieldDefinition(db, slug, `IM (${im.protocol})`);
+    }
+  }
+
+  // Arbitrary custom fields the user typed into Google Contacts' own
+  // "Custom field" section — same overflow bucket systeme.io's own
+  // unmapped fields already use (see PROMOTED_FIELD_SLUGS in sync.ts).
+  for (const field of gc.customFields) {
+    const slug = `google_${slugify(field.key)}`;
+    await db.contactFieldValue.upsert({
+      where: { contactId_fieldSlug: { contactId, fieldSlug: slug } },
+      update: { value: field.value },
+      create: { contactId, fieldSlug: slug, value: field.value },
+    });
+    await ensureCustomFieldDefinition(db, slug, field.key);
+  }
+
+  // Google's contact-group labels (Family, Friends, ...) become CRM tags
+  // — real organizational signal for exactly the personal contacts this
+  // import targets, and the CRM already has a tagging system to hold it.
+  for (const groupName of gc.groupNames) {
+    const tag = await db.tag.upsert({ where: { name: groupName }, update: {}, create: { name: groupName } });
+    await db.contactTag.upsert({
+      where: { contactId_tagId: { contactId, tagId: tag.id } },
+      update: {},
+      create: { contactId, tagId: tag.id },
+    });
+  }
+}
+
 // One-click pull of every Google Contact into the CRM (see the plan
-// discussed with the user: pull direction first, push direction later).
-// A Google contact whose email/phone already matches an existing CRM
-// contact (e.g. a systeme.io lead who's also a personal contact) is only
-// linked via googleContactId, never overwritten — the CRM's own data
-// stays authoritative. Everything else becomes a new Contact in the
-// PERSONAL stage, which keeps it out of the sales pipeline and (since it
-// has no systemeIoId) means it's never pushed back to systeme.io by the
-// contact-save action.
+// discussed with the user: pull direction first, push direction later),
+// importing every field Google's People API offers a reasonable CRM
+// mapping for (see google-contacts.ts's header comment for what's
+// deliberately left out). A Google contact whose email/phone already
+// matches an existing CRM contact (e.g. a systeme.io lead who's also a
+// personal contact) is linked via googleContactId and enriched with
+// whatever fields it doesn't already have — never overwritten; the CRM's
+// own data always wins on a conflict. Everything else becomes a new
+// Contact in the PERSONAL stage, which keeps it out of the sales pipeline
+// and (since it has no systemeIoId) means it's never pushed back to
+// systeme.io by the contact-save action.
 export async function importGoogleContactsAction(): Promise<ImportGoogleContactsResult> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
@@ -72,13 +203,27 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
         phone2: true,
         extraPhones: true,
         googleContactId: true,
+        address: true,
+        city: true,
+        state: true,
+        zip: true,
+        country: true,
+        company: true,
+        jobTitle: true,
+        birthday: true,
+        nickname: true,
+        avatarUrl: true,
+        website: true,
+        notes: true,
       },
     });
 
     const byGoogleId = new Set(existing.map((c) => c.googleContactId).filter((v): v is string => Boolean(v)));
     const byEmail = new Map<string, string>();
     const byPhone = new Map<string, string>();
+    const existingById = new Map<string, ExistingContactRow>();
     for (const c of existing) {
+      existingById.set(c.id, c);
       for (const email of [c.email, c.email2, ...c.extraEmails]) {
         if (email) byEmail.set(email.toLowerCase(), c.id);
       }
@@ -109,6 +254,7 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
 
       if (matchedContactId) {
         await db.contact.update({ where: { id: matchedContactId }, data: { googleContactId: gc.resourceName } });
+        await enrichContact(db, matchedContactId, existingById.get(matchedContactId) ?? null, gc);
         linked += 1;
         continue;
       }
@@ -133,7 +279,7 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
       }
 
       try {
-        await db.contact.create({
+        const created = await db.contact.create({
           data: {
             email: firstEmail ?? null,
             email2: secondEmail ?? null,
@@ -143,12 +289,12 @@ export async function importGoogleContactsAction(): Promise<ImportGoogleContacts
             extraPhones: restPhones,
             firstName,
             lastName,
-            company: gc.company,
             stage: "PERSONAL",
             source: "google_contacts",
             googleContactId: gc.resourceName,
           },
         });
+        await enrichContact(db, created.id, null, gc);
         if (firstEmail) seenEmailsThisRun.add(firstEmail.toLowerCase());
         imported += 1;
       } catch {

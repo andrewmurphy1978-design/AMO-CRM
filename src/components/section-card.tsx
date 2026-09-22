@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 // as the Email page's category sections.
 export const CARD_COLORS = {
   general: "bg-emerald-600",
+  personal: "bg-purple-600",
   contact: "bg-sky-600",
   addresses: "bg-amber-500",
   techStack: "bg-slate-600",

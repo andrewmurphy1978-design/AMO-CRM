@@ -423,6 +423,20 @@ export default async function ContactDetailPage({
             </div>
           </Card>
 
+          {(contact.nickname || contact.jobTitle || contact.birthday || contact.avatarUrl) && (
+            <Card color="personal" title={t.contactForm.cardPersonalInfo}>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {contact.avatarUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element -- an arbitrary external Google-hosted URL, not a local/optimizable asset
+                  <img src={contact.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
+                )}
+                <InfoField label={t.contactForm.nickname} value={contact.nickname} />
+                <InfoField label={t.contactForm.jobTitle} value={contact.jobTitle} />
+                <InfoField label={t.contactForm.birthday} value={contact.birthday} />
+              </div>
+            </Card>
+          )}
+
           <Card color="contact" title={t.contactForm.cardContactInfo}>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
               <div>

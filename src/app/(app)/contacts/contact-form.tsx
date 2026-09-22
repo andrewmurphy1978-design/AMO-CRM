@@ -36,6 +36,10 @@ type ContactFormValues = {
   phone2?: string | null;
   extraPhones?: string[] | null;
   company?: string | null;
+  nickname?: string | null;
+  jobTitle?: string | null;
+  birthday?: string | null;
+  avatarUrl?: string | null;
   companyType?: string | null;
   jurisdictionCountry?: string | null;
   jurisdictionRegion?: string | null;
@@ -570,6 +574,32 @@ export default function ContactForm({
           </div>
         </div>
       </Card>
+
+      {/* Only ever populated by the Google Contacts import (see
+          actions/google-contacts.ts) — a personal contact's nickname, job
+          title, birthday, and (read-only) Google avatar. Shown only when
+          at least one of these has a value, so a systeme.io-only contact
+          never sees an empty card. */}
+      {(defaultValues?.nickname || defaultValues?.jobTitle || defaultValues?.birthday || defaultValues?.avatarUrl) && (
+        <Card color="personal" title={t.contactForm.cardPersonalInfo}>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {defaultValues?.avatarUrl && (
+              <div className="flex items-center gap-3 lg:col-span-1">
+                {/* eslint-disable-next-line @next/next/no-img-element -- an arbitrary external Google-hosted URL, not a local/optimizable asset */}
+                <img src={defaultValues.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
+              </div>
+            )}
+            <Field label={t.contactForm.nickname} name="nickname" defaultValue={defaultValues?.nickname ?? ""} />
+            <Field label={t.contactForm.jobTitle} name="jobTitle" defaultValue={defaultValues?.jobTitle ?? ""} />
+            <Field
+              label={t.contactForm.birthday}
+              name="birthday"
+              defaultValue={defaultValues?.birthday ?? ""}
+              placeholder="YYYY-MM-DD"
+            />
+          </div>
+        </Card>
+      )}
 
       <Card color="contact" title={t.contactForm.cardContactInfo}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
@@ -1133,6 +1163,7 @@ function Field({
   as,
   options,
   list,
+  placeholder,
 }: {
   label: string;
   name: string;
@@ -1142,6 +1173,7 @@ function Field({
   as?: "select";
   options?: { value: string; label: string }[];
   list?: string;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -1164,6 +1196,7 @@ function Field({
           required={required}
           defaultValue={defaultValue ?? ""}
           list={list}
+          placeholder={placeholder}
           className={FIELD_CLASS}
         />
       )}

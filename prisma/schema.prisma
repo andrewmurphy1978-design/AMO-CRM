@@ -169,6 +169,20 @@ model Contact {
   // a contact it already created/linked instead of duplicating it.
   googleContactId       String?   @unique
 
+  // --- Fields only Google Contacts (not systeme.io) ever populates ---
+  // Stored as Google returns it: "YYYY-MM-DD", or "--MM-DD" when Google
+  // has no year (a real, common case for a personal contact) — kept as
+  // text rather than three separate int columns since nothing in the app
+  // does date arithmetic on it yet, just displays it.
+  birthday  String?
+  nickname  String?
+  // From the Google contact's primary organization's job title — distinct
+  // from `company` above (that's the organization's name).
+  jobTitle  String?
+  // Google's own hosted photo URL — never re-hosted/downloaded, just
+  // linked to directly.
+  avatarUrl String?
+
   // --- Common systeme.io custom fields promoted to real columns for
   // fast search/sort. Any other custom field systeme.io returns is stored
   // in ContactFieldValue below so nothing is ever dropped. ---
