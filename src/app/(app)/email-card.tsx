@@ -18,8 +18,7 @@ export interface EmailLabels {
   notConnected: string;
   connectInSettings: string;
   noItems: string;
-  openInGmail: string;
-  openIonosWebmail: string;
+  openEmails: string;
   categoryNeedsReply: string;
   categoryNeedsAttention: string;
   awaitingResponse: string;
@@ -174,8 +173,16 @@ export default function EmailCard({
   return (
     <div className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm" style={{ height: CARD_HEIGHT }}>
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <div className="flex shrink-0 items-center justify-between">
+      <div className="relative flex shrink-0 items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
+        {connected && (
+          <Link
+            href="/email"
+            className="btn-primary absolute left-1/2 -translate-x-1/2 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm"
+          >
+            {labels.openEmails}
+          </Link>
+        )}
         {connected && <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />}
       </div>
 
@@ -242,15 +249,6 @@ export default function EmailCard({
               <ul className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-card-bg">{needsAttention.map((e, i) => emailRow(e, i))}</ul>
             </section>
           )}
-
-          <div className="mt-auto flex shrink-0 flex-wrap gap-x-4 gap-y-1 border-t border-card-border pt-3 text-xs">
-            <a href="https://mail.google.com/" target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700 hover:underline">
-              {labels.openInGmail}
-            </a>
-            <a href="https://mail.ionos.com/" target="_blank" rel="noopener noreferrer" className="font-medium text-emerald-700 hover:underline">
-              {labels.openIonosWebmail}
-            </a>
-          </div>
         </div>
       )}
     </div>
