@@ -8,8 +8,9 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
 import type { AffiliateProgramTab } from "@prisma/client";
-import { classifyAffiliateStatus, AFFILIATE_STATUS_STYLES } from "@/lib/affiliate-status";
+import { statusStyle } from "@/lib/affiliate-status";
 import PageHeader, { HeaderBreadcrumb } from "../../../page-header";
+import Card from "@/components/section-card";
 import DeleteAffiliateProgramButton from "../delete-button";
 import CreateShortIoLinkButton from "../create-shortio-link-button";
 import RefreshStatsButton from "../refresh-stats-button";
@@ -70,8 +71,7 @@ export default async function AffiliateProgramDetailPage({
   if (!program) notFound();
 
   const isAdmin = session?.user.role === "ADMIN";
-  const bucket = classifyAffiliateStatus(program.affiliateStatus);
-  const styles = AFFILIATE_STATUS_STYLES[bucket];
+  const styles = statusStyle(program.affiliateStatus);
   const hasStats = program.shortioClicks != null || program.shortioClicksFr != null;
 
   return (
@@ -95,8 +95,7 @@ export default async function AffiliateProgramDetailPage({
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+          <Card color="general" title={t.contactForm.cardGeneralInfo}>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="font-display text-xl font-semibold text-ink">{program.name}</h1>
               <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${styles.badge}`}>
@@ -105,7 +104,7 @@ export default async function AffiliateProgramDetailPage({
               </span>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <p className={LABEL_CLASS}>{t.marketing.affiliateProgramsTitle}</p>
                 <p className="mt-1 text-sm text-ink">{tabTitle(program.tab, t)}</p>
@@ -121,6 +120,10 @@ export default async function AffiliateProgramDetailPage({
               <div>
                 <p className={LABEL_CLASS}>{t.marketing.accountPlanLabel}</p>
                 <p className="mt-1 text-sm text-ink">{program.accountPlan || "—"}</p>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-3">
+                <p className={LABEL_CLASS}>{t.marketing.statusDetailsLabel}</p>
+                <p className="mt-1 text-sm text-ink">{program.statusDetails || "—"}</p>
               </div>
               <div>
                 <p className={LABEL_CLASS}>{t.marketing.colFollowUp}</p>
@@ -167,25 +170,26 @@ export default async function AffiliateProgramDetailPage({
             </div>
 
             {program.notes && (
-              <div className="mt-5 border-t border-card-border pt-4">
+              <div className="border-t border-card-border pt-4">
                 <p className={LABEL_CLASS}>{t.marketing.notesLabel}</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-ink/80">{program.notes}</p>
               </div>
             )}
-          </section>
+          </Card>
 
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-display text-lg font-semibold text-ink">{t.marketing.statsTitle}</h2>
-              {isAdmin && (program.shortioLinkId || program.shortioLinkIdFr) && (
+          <Card
+            color="statistics"
+            title={t.marketing.statsTitle}
+            actions={
+              isAdmin && (program.shortioLinkId || program.shortioLinkIdFr) ? (
                 <RefreshStatsButton programId={program.id} lang={lang} />
-              )}
-            </div>
+              ) : undefined
+            }
+          >
             {!hasStats ? (
-              <p className="mt-2 text-sm text-soft">{t.marketing.noStatsYet}</p>
+              <p className="text-sm text-soft">{t.marketing.noStatsYet}</p>
             ) : (
-              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {program.shortioClicks != null && (
                   <div>
                     <p className={LABEL_CLASS}>
@@ -205,21 +209,19 @@ export default async function AffiliateProgramDetailPage({
               </div>
             )}
             {program.shortioStatsSyncedAt && (
-              <p className="mt-3 text-xs text-soft">
+              <p className="text-xs text-soft">
                 {t.marketing.statsLastSynced(format(program.shortioStatsSyncedAt, "PPp", { locale: dateLocale }))}
               </p>
             )}
-          </section>
+          </Card>
         </div>
 
         <div className="space-y-6">
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.linkedEmailsTitle}</h2>
+          <Card color="linkedEmails" title={t.contactDetail.linkedEmailsTitle}>
             {program.emailLinks.length === 0 ? (
-              <p className="mt-2 text-sm text-soft">{t.marketing.noLinkedEmailsYet}</p>
+              <p className="text-sm text-soft">{t.marketing.noLinkedEmailsYet}</p>
             ) : (
-              <ul className="mt-3 divide-y divide-card-border">
+              <ul className="divide-y divide-card-border">
                 {program.emailLinks.map((link) => (
                   <li key={link.id} className="py-2">
                     {link.gmailLink ? (
@@ -242,7 +244,7 @@ export default async function AffiliateProgramDetailPage({
                 ))}
               </ul>
             )}
-          </section>
+          </Card>
         </div>
       </div>
     </div>

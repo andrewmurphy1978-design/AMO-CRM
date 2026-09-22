@@ -1,15 +1,16 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import type { AffiliateProgramTab, Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
-import type { AffiliateProgramTab } from "@prisma/client";
-import { classifyAffiliateStatus, AFFILIATE_STATUS_STYLES, type AffiliateStatusBucket } from "@/lib/affiliate-status";
+import { statusGroupOf, statusStyle, type AffiliateStatusGroup } from "@/lib/affiliate-status";
 import PageHeader from "../page-header";
+import Card, { type CardColor } from "@/components/section-card";
 import SyncShortIoButton from "./programs/sync-shortio-button";
+import AffiliateProgramFilters from "./programs/filters";
 
 type AffiliateProgramRow = {
   id: string;
@@ -35,55 +36,31 @@ function tabTitle(tab: AffiliateProgramTab, t: ReturnType<typeof getDict>): stri
   return t.marketing[TAB_TITLES.find((section) => section.tab === tab)?.key ?? "aiToolsTitle"];
 }
 
-// Collapses the 6 fine-grained status buckets (see src/lib/affiliate-status.ts)
-// down to the 3 groups this page is organized around: a program with its
-// real affiliate link live and working, one still being pursued (or
-// running on a fallback link while that happens), and one with nothing to
-// chase — no public program exists, or it was turned down.
-type StatusGroup = "ACTIVE" | "PENDING" | "NO_PROGRAM_OR_DECLINED";
-
-function statusGroupOf(bucket: AffiliateStatusBucket): StatusGroup {
-  switch (bucket) {
-    case "APPROVED_LIVE":
-      return "ACTIVE";
-    case "PENDING_APPROVAL":
-    case "PARTNER_TO_VERIFY":
-    case "FALLBACK_ACTIVE":
-      return "PENDING";
-    case "FALLBACK_NO_PUBLIC_PROGRAM":
-    case "DECLINED":
-    case "OTHER":
-      return "NO_PROGRAM_OR_DECLINED";
-  }
-}
-
 function AffiliateProgramCard({
+  color,
   title,
   programs,
   t,
-  filters,
 }: {
+  color: CardColor;
   title: string;
   programs: AffiliateProgramRow[];
   t: ReturnType<typeof getDict>;
-  filters?: ReactNode;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
-        <div className="flex items-center gap-4">
-          {filters}
-          <Link href="/marketing/programs/new" className="text-xs font-semibold text-amo-lime hover:underline">
-            + {t.marketing.newProgram}
-          </Link>
-        </div>
-      </div>
+    <Card
+      color={color}
+      title={title}
+      actions={
+        <Link href="/marketing/programs/new" className="text-xs font-semibold text-white hover:underline">
+          + {t.marketing.newProgram}
+        </Link>
+      }
+    >
       {programs.length === 0 ? (
-        <p className="mt-2 text-sm text-soft">{t.marketing.noAffiliateProgramsYet}</p>
+        <p className="text-sm text-soft">{t.marketing.noAffiliateProgramsYet}</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-card-border text-sm">
             <thead className="text-left text-xs font-medium uppercase tracking-wide text-soft">
               <tr>
@@ -97,8 +74,7 @@ function AffiliateProgramCard({
             </thead>
             <tbody className="divide-y divide-card-border">
               {programs.map((p) => {
-                const bucket = classifyAffiliateStatus(p.affiliateStatus);
-                const styles = AFFILIATE_STATUS_STYLES[bucket];
+                const styles = statusStyle(p.affiliateStatus);
                 return (
                   <tr key={p.id} id={p.id} className={`scroll-mt-24 ${styles.row} hover:brightness-95`}>
                     <td className={`py-2 pr-4 pl-3 align-top font-medium border-l-4 ${styles.border}`}>
@@ -134,20 +110,22 @@ function AffiliateProgramCard({
           </table>
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
-export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ activeCategory?: string }> }) {
+export default async function MarketingPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
-  const { activeCategory: rawActiveCategory } = await searchParams;
-  const activeCategory =
-    rawActiveCategory === "AI_TOOLS" || rawActiveCategory === "TRAINING_PROGRAMS" || rawActiveCategory === "BUSINESS_OPPORTUNITIES"
-      ? rawActiveCategory
-      : null;
+  const { q, category: rawCategory } = await searchParams;
+  const category =
+    rawCategory === "AI_TOOLS" || rawCategory === "TRAINING_PROGRAMS" || rawCategory === "BUSINESS_OPPORTUNITIES" ? rawCategory : null;
+
+  const where: Prisma.AffiliateProgramWhereInput = {};
+  if (category) where.tab = category;
+  if (q) where.name = { contains: q, mode: "insensitive" };
 
   // One shared client — see src/lib/prisma.ts for why (each `prisma.x`
   // property access on the raw proxy opens a brand-new connection, and
@@ -155,6 +133,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   // than sequential for Cloudflare's Error 1102 resource limit).
   const { affiliatePrograms, hour12 } = await withScopedPrismaClient(async (db) => {
     const affiliatePrograms = await db.affiliateProgram.findMany({
+      where,
       orderBy: { name: "asc" },
       include: { emailLinks: { orderBy: { messageDate: "desc" } } },
     });
@@ -162,11 +141,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     return { affiliatePrograms, hour12 };
   });
 
-  const grouped: Record<StatusGroup, AffiliateProgramRow[]> = { ACTIVE: [], PENDING: [], NO_PROGRAM_OR_DECLINED: [] };
+  const grouped: Record<AffiliateStatusGroup, AffiliateProgramRow[]> = { ACTIVE: [], PENDING: [], NO_PROGRAM_OR_DECLINED: [] };
   for (const program of affiliatePrograms) {
-    grouped[statusGroupOf(classifyAffiliateStatus(program.affiliateStatus))].push(program);
+    grouped[statusGroupOf(program.affiliateStatus)].push(program);
   }
-  const activePrograms = activeCategory ? grouped.ACTIVE.filter((p) => p.tab === activeCategory) : grouped.ACTIVE;
+
+  const categoryOptions = TAB_TITLES.map((section) => ({ value: section.tab, label: tabTitle(section.tab, t) }));
 
   return (
     <div className="space-y-6">
@@ -178,26 +158,27 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         actions={session?.user.role === "ADMIN" ? <SyncShortIoButton lang={lang} /> : undefined}
       />
 
-      <AffiliateProgramCard
-        title={t.marketing.activeLinksTitle}
-        programs={activePrograms}
-        t={t}
-        filters={
-          <div className="flex items-center gap-3 text-xs font-semibold">
-            {([null, ...TAB_TITLES.map((s) => s.tab)] as const).map((key) => (
-              <Link
-                key={key ?? "ALL"}
-                href={key ? `/marketing?activeCategory=${key}` : "/marketing"}
-                className={activeCategory === key ? "text-ink underline" : "text-soft hover:text-ink"}
-              >
-                {key ? tabTitle(key, t) : t.marketing.filterAll}
-              </Link>
-            ))}
-          </div>
+      <AffiliateProgramFilters
+        q={q ?? ""}
+        category={category}
+        categoryOptions={categoryOptions}
+        allCategoriesLabel={t.marketing.filterAll}
+        searchPlaceholder={t.marketing.nameFilterPlaceholder}
+        trailing={
+          <span className="ml-auto rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
+            {t.marketing.shown(affiliatePrograms.length)}
+          </span>
         }
       />
-      <AffiliateProgramCard title={t.marketing.pendingLinksTitle} programs={grouped.PENDING} t={t} />
-      <AffiliateProgramCard title={t.marketing.noProgramOrDeclinedTitle} programs={grouped.NO_PROGRAM_OR_DECLINED} t={t} />
+
+      <AffiliateProgramCard color="marketingActive" title={t.marketing.activeLinksTitle} programs={grouped.ACTIVE} t={t} />
+      <AffiliateProgramCard color="marketingPending" title={t.marketing.pendingLinksTitle} programs={grouped.PENDING} t={t} />
+      <AffiliateProgramCard
+        color="marketingNoProgram"
+        title={t.marketing.noProgramOrDeclinedTitle}
+        programs={grouped.NO_PROGRAM_OR_DECLINED}
+        t={t}
+      />
     </div>
   );
 }

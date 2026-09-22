@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { encryptSecret } from "@/lib/crypto";
+import { AFFILIATE_STATUS_VALUES } from "@/lib/affiliate-status";
 import {
   getShortIoConfig,
   createShortIoLink,
@@ -24,7 +25,8 @@ const AffiliateProgramSchema = z.object({
   shortioCreated: z.boolean(),
   brandedLink: z.string().trim().optional(),
   destinationLink: z.string().trim().optional(),
-  affiliateStatus: z.string().trim().optional(),
+  affiliateStatus: z.enum(AFFILIATE_STATUS_VALUES).optional(),
+  statusDetails: z.string().trim().optional(),
   frenchSlug: z.string().trim().optional(),
   frenchLink: z.string().trim().optional(),
   followUpNeeded: z.boolean(),
@@ -45,6 +47,7 @@ function readAffiliateProgramForm(formData: FormData) {
     brandedLink: String(formData.get("brandedLink") ?? "").trim() || undefined,
     destinationLink: String(formData.get("destinationLink") ?? "").trim() || undefined,
     affiliateStatus: String(formData.get("affiliateStatus") ?? "").trim() || undefined,
+    statusDetails: String(formData.get("statusDetails") ?? "").trim() || undefined,
     frenchSlug: String(formData.get("frenchSlug") ?? "").trim() || undefined,
     frenchLink: String(formData.get("frenchLink") ?? "").trim() || undefined,
     followUpNeeded: formData.get("followUpNeeded") === "on",

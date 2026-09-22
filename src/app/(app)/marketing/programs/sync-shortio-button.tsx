@@ -24,7 +24,7 @@ export default function SyncShortIoButton({ lang }: { lang: Lang }) {
             if (!outcome.error) router.refresh();
           });
         }}
-        className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60"
+        className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
         {pending ? t.marketing.shortioSyncing : t.marketing.shortioSyncNow}
       </button>

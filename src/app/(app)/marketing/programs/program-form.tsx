@@ -3,43 +3,7 @@
 import { useActionState, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import PageHeader from "../../page-header";
-
-// Category options per tab. These mirror the groupings already used across
-// the real affiliate-programs data (which were pulled from the same source
-// as the andrewmurphy.online Services/Training/Business Opportunities
-// pages) — kept as suggestions in a combo-box (an <input> + <datalist>)
-// rather than a rigid <select>, so existing free-text values already in
-// the database (e.g. plain "AI") still display correctly.
-const TYPE_OPTIONS: Record<string, string[]> = {
-  AI_TOOLS: [
-    "AI Chat Assistants",
-    "AI Images & Design",
-    "AI Video Creation",
-    "AI-Powered SEO",
-    "Audio AI",
-    "Marketing & Automation",
-    "Social Media",
-    "Writing & Language Tools",
-  ],
-  TRAINING_PROGRAMS: ["AI & Business Programs", "Affiliate Marketing", "Social Media Programs"],
-  BUSINESS_OPPORTUNITIES: [
-    "Affiliate & Content Business",
-    "Buy / Sell Online Businesses",
-    "Digital Products",
-    "Dropshipping",
-    "Freelancing / Agencies",
-    "Print-on-Demand",
-  ],
-};
-
-const STATUS_OPTIONS = [
-  "Approved - affiliate link live",
-  "Pending approval",
-  "Partner/referral program to verify",
-  "Fallback active",
-  "Fallback active / No public affiliate program",
-  "Declined",
-];
+import { AFFILIATE_STATUS_VALUES, AFFILIATE_TYPE_OPTIONS } from "@/lib/affiliate-status";
 
 const PLATFORM_OPTIONS = ["PartnerStack", "Impact", "Direct", "Other"];
 
@@ -59,6 +23,7 @@ type AffiliateProgramFormValues = {
   brandedLink?: string | null;
   destinationLink?: string | null;
   affiliateStatus?: string | null;
+  statusDetails?: string | null;
   frenchSlug?: string | null;
   frenchLink?: string | null;
   followUpNeeded?: boolean;
@@ -106,7 +71,7 @@ export default function AffiliateProgramForm({
     { value: "TRAINING_PROGRAMS", label: t.marketing.trainingProgramsTitle },
     { value: "BUSINESS_OPPORTUNITIES", label: t.marketing.businessOpportunitiesTitle },
   ];
-  const typeOptions = TYPE_OPTIONS[tab] ?? [];
+  const typeOptions = AFFILIATE_TYPE_OPTIONS[tab] ?? [];
 
   return (
     <form action={formAction} className="space-y-6">
@@ -147,12 +112,14 @@ export default function AffiliateProgramForm({
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.colType}</label>
-            <input list="typeOptions" name="type" defaultValue={defaultValues?.type ?? ""} className={FIELD_CLASS} />
-            <datalist id="typeOptions">
+            <select name="type" defaultValue={defaultValues?.type ?? ""} className={FIELD_CLASS}>
+              <option value="">—</option>
               {typeOptions.map((opt) => (
-                <option key={opt} value={opt} />
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
               ))}
-            </datalist>
+            </select>
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.categoryLabel}</label>
@@ -160,12 +127,18 @@ export default function AffiliateProgramForm({
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.colStatus}</label>
-            <input list="statusOptions" name="affiliateStatus" defaultValue={defaultValues?.affiliateStatus ?? ""} className={FIELD_CLASS} />
-            <datalist id="statusOptions">
-              {STATUS_OPTIONS.map((opt) => (
-                <option key={opt} value={opt} />
+            <select name="affiliateStatus" defaultValue={defaultValues?.affiliateStatus ?? ""} className={FIELD_CLASS}>
+              <option value="">—</option>
+              {AFFILIATE_STATUS_VALUES.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
               ))}
-            </datalist>
+            </select>
+          </div>
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className={LABEL_CLASS}>{t.marketing.statusDetailsLabel}</label>
+            <input name="statusDetails" defaultValue={defaultValues?.statusDetails ?? ""} className={FIELD_CLASS} />
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.marketing.accountPlanLabel}</label>

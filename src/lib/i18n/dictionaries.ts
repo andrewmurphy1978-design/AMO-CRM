@@ -692,6 +692,9 @@ export const dictionaries = {
       statsClicks: "Clicks",
       statsLastSynced: (when: string) => `Last synced ${when}`,
       noStatsYet: "No Short.io stats yet — create or sync a link first.",
+      statusDetailsLabel: "Status details",
+      nameFilterPlaceholder: "Search by name...",
+      shown: (n: number) => `${n} shown`,
     },
     bookings: {
       title: "Bookings",
@@ -1615,6 +1618,9 @@ export const dictionaries = {
       statsClicks: "Clics",
       statsLastSynced: (when: string) => `Dernière synchronisation ${when}`,
       noStatsYet: "Aucune statistique Short.io pour l'instant — créez ou synchronisez d'abord un lien.",
+      statusDetailsLabel: "Détails du statut",
+      nameFilterPlaceholder: "Rechercher par nom...",
+      shown: (n: number) => `${n} affiché${n === 1 ? "" : "s"}`,
     },
     bookings: {
       title: "Réservations",

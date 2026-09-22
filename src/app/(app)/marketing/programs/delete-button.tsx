@@ -16,7 +16,7 @@ export default function DeleteAffiliateProgramButton({ programId, lang }: { prog
         if (!confirm(t.marketing.deleteProgramConfirm)) return;
         startTransition(() => deleteAffiliateProgram(programId));
       }}
-      className="font-semibold text-red-600 hover:underline disabled:opacity-60"
+      className="rounded-md border border-white/30 px-4 py-2 text-sm font-medium text-white hover:border-red-300 hover:bg-red-500/30 disabled:opacity-60"
     >
       {t.common.delete}
     </button>

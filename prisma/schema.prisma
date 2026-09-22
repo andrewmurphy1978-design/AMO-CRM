@@ -875,7 +875,8 @@ model AffiliateProgram {
   shortioCreated  Boolean @default(false) // "Short.io Created?"
   brandedLink     String? // "go.andrewmurphy.online Link"
   destinationLink String? // "Real Destination Link"
-  affiliateStatus String? // "Affiliate Status"
+  affiliateStatus String? // one of the 8 fixed values in AFFILIATE_STATUS_VALUES (src/lib/affiliate-status.ts)
+  statusDetails   String? @db.Text // free-text nuance moved out of affiliateStatus once it became a fixed set
   frenchSlug      String? // "French go.andrewmurphy.online Slug"
   frenchLink      String? // "French Affiliate/Fallback Link"
   followUpNeeded  Boolean @default(false) // "Follow-up Needed?"
