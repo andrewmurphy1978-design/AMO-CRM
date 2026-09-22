@@ -297,6 +297,10 @@ function DateDisplayField({
     return Number.isNaN(d.getTime()) ? value : format(d, longFormat, { locale: dateLocale });
   })();
 
+  // Fixed width on both variants — a native <input type="date"> is
+  // intrinsically narrower than the long formatted text it replaces on
+  // focus, which without this made the field visibly shrink the moment
+  // you clicked into it.
   return focused ? (
     <input
       type="date"
@@ -304,7 +308,7 @@ function DateDisplayField({
       value={value}
       onBlur={() => setFocused(false)}
       onChange={(e) => onChange(e.target.value)}
-      className={COMPACT_FIELD_CLASS}
+      className={`${COMPACT_FIELD_CLASS} w-40`}
     />
   ) : (
     <input
@@ -312,7 +316,7 @@ function DateDisplayField({
       readOnly
       value={displayValue}
       onFocus={() => setFocused(true)}
-      className={`${COMPACT_FIELD_CLASS} cursor-pointer`}
+      className={`${COMPACT_FIELD_CLASS} w-40 cursor-pointer`}
     />
   );
 }
@@ -353,6 +357,52 @@ function parseTimeText(raw: string): string | null {
   return `${pad(hour)}:${pad(minute)}`;
 }
 
+const MINUTE_STEPS = Array.from({ length: 12 }, (_, i) => i * 5); // 00, 05, ..., 55
+
+// A column of clickable values inside the picker popup, auto-scrolled to
+// the current selection when it opens — the "rolling column" feel of a
+// native mobile time picker's hour/minute/AM-PM wheels, without depending
+// on the browser's own (locale-tied, un-overridable) time input.
+function PickerColumn({
+  values,
+  format,
+  selected,
+  onSelect,
+  open,
+}: {
+  values: number[];
+  format: (v: number) => string;
+  selected: number;
+  onSelect: (v: number) => void;
+  open: boolean;
+}) {
+  const selectedRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (open) selectedRef.current?.scrollIntoView({ block: "center" });
+  }, [open]);
+
+  return (
+    <div className="max-h-48 w-14 overflow-y-auto border-r border-card-border last:border-r-0">
+      {values.map((v) => (
+        <button
+          key={v}
+          ref={v === selected ? selectedRef : undefined}
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onSelect(v)}
+          className={`block w-full px-2 py-1 text-center text-sm hover:bg-amo-lime/10 ${v === selected ? "bg-amo-lime/10 font-semibold text-ink" : "text-ink"}`}
+        >
+          {format(v)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const HOUR_OPTIONS_24 = Array.from({ length: 24 }, (_, i) => i);
+const HOUR_OPTIONS_12 = [12, ...Array.from({ length: 11 }, (_, i) => i + 1)]; // 12, 1, 2, ..., 11 — clock order
+
 function TimeDisplayField({
   value,
   onChange,
@@ -381,15 +431,6 @@ function TimeDisplayField({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const presets = useMemo(
-    () =>
-      Array.from({ length: (24 * 60) / 5 }, (_, i) => {
-        const v = `${pad(Math.floor((i * 5) / 60))}:${pad((i * 5) % 60)}`;
-        return { value: v, label: timeDisplay(v, hour12, intlLocale) };
-      }),
-    [hour12, intlLocale]
-  );
-
   function commit(raw: string) {
     const parsed = parseTimeText(raw);
     if (parsed) {
@@ -398,6 +439,36 @@ function TimeDisplayField({
     } else {
       setText(timeDisplay(value, hour12, intlLocale));
     }
+  }
+
+  const [hour24, minute] = value.split(":").map(Number);
+  const safeHour = Number.isNaN(hour24) ? 0 : hour24;
+  const safeMinute = Number.isNaN(minute) ? 0 : minute;
+  const isPM = safeHour >= 12;
+  const hour12Value = safeHour % 12 === 0 ? 12 : safeHour % 12;
+
+  function apply(nextHour24: number, nextMinute: number) {
+    const next = `${pad(nextHour24)}:${pad(nextMinute)}`;
+    onChange(next);
+    setText(timeDisplay(next, hour12, intlLocale));
+  }
+
+  function selectHour(h: number) {
+    if (!hour12) {
+      apply(h, safeMinute);
+      return;
+    }
+    const next24 = isPM ? (h === 12 ? 12 : h + 12) : h === 12 ? 0 : h;
+    apply(next24, safeMinute);
+  }
+
+  function selectMinute(m: number) {
+    apply(safeHour, m);
+  }
+
+  function selectPeriod(period: "AM" | "PM") {
+    if ((period === "PM") === isPM) return;
+    apply(period === "PM" ? safeHour + 12 : safeHour - 12, safeMinute);
   }
 
   return (
@@ -417,25 +488,27 @@ function TimeDisplayField({
             setOpen(false);
           }
         }}
-        className={COMPACT_FIELD_CLASS}
+        className={`${COMPACT_FIELD_CLASS} w-20`}
       />
       {open && (
-        <div className="absolute z-30 mt-1 max-h-48 w-28 overflow-y-auto rounded-md border border-card-border bg-card-bg shadow-lg">
-          {presets.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onChange(p.value);
-                setText(p.label);
-                setOpen(false);
-              }}
-              className={`block w-full px-3 py-1 text-left text-sm hover:bg-amo-lime/10 ${p.value === value ? "bg-amo-lime/10 font-semibold text-ink" : "text-ink"}`}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="absolute z-30 mt-1 flex overflow-hidden rounded-md border border-card-border bg-card-bg shadow-lg">
+          <PickerColumn
+            values={hour12 ? HOUR_OPTIONS_12 : HOUR_OPTIONS_24}
+            format={pad}
+            selected={hour12 ? hour12Value : safeHour}
+            onSelect={selectHour}
+            open={open}
+          />
+          <PickerColumn values={MINUTE_STEPS} format={pad} selected={safeMinute - (safeMinute % 5)} onSelect={selectMinute} open={open} />
+          {hour12 && (
+            <PickerColumn
+              values={[0, 1]}
+              format={(v) => (v === 0 ? "AM" : "PM")}
+              selected={isPM ? 1 : 0}
+              onSelect={(v) => selectPeriod(v === 0 ? "AM" : "PM")}
+              open={open}
+            />
+          )}
         </div>
       )}
     </div>
@@ -748,21 +821,23 @@ export default function EventDialog({
             {/* Full-width, above the two-column split below — start/end
                 date+time, all-day, timezone, and repeat all get the whole
                 dialog's width to spread out in, rather than being squeezed
-                into a 2/3 column beside the Link-to section. Start row,
-                then End row — each date always stays on the same line as
-                its own time, the way Google Calendar's own editor groups
-                them, rather than one shared row where a wrap could
-                separate End's date from End's time. */}
+                into a 2/3 column beside the Link-to section. Start and End
+                sit on the same row as two grouped pairs (each date glued to
+                its own time via its own flex group) so on a narrow screen
+                a wrap breaks between Start and End rather than separating
+                either one's date from its own time. */}
             <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.start}</span>
-                <DateDisplayField value={form.startDate} onChange={(v) => update("startDate", v)} lang={lang} dateLocale={dateLocale} />
-                {!form.allDay && <TimeDisplayField value={form.startTime} onChange={(v) => update("startTime", v)} hour12={hour12} intlLocale={intlLocale} />}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.end}</span>
-                <DateDisplayField value={form.endDate} onChange={(v) => update("endDate", v)} lang={lang} dateLocale={dateLocale} />
-                {!form.allDay && <TimeDisplayField value={form.endTime} onChange={(v) => update("endTime", v)} hour12={hour12} intlLocale={intlLocale} />}
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.start}</span>
+                  <DateDisplayField value={form.startDate} onChange={(v) => update("startDate", v)} lang={lang} dateLocale={dateLocale} />
+                  {!form.allDay && <TimeDisplayField value={form.startTime} onChange={(v) => update("startTime", v)} hour12={hour12} intlLocale={intlLocale} />}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-10 shrink-0 text-xs font-semibold uppercase tracking-wide text-soft">{labels.end}</span>
+                  <DateDisplayField value={form.endDate} onChange={(v) => update("endDate", v)} lang={lang} dateLocale={dateLocale} />
+                  {!form.allDay && <TimeDisplayField value={form.endTime} onChange={(v) => update("endTime", v)} hour12={hour12} intlLocale={intlLocale} />}
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
