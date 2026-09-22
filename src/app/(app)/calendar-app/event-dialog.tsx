@@ -518,7 +518,6 @@ function TimeDisplayField({
 export default function EventDialog({
   target,
   initialLinks,
-  calendarName,
   onClose,
   onSaved,
   onDeleted,
@@ -539,10 +538,6 @@ export default function EventDialog({
   // no idea about these, so without this the edit dialog would silently
   // wipe an event's existing contact/project/task/booking link on every save.
   initialLinks?: EventLinkTargets;
-  // The connected Google account's own display name — this app only ever
-  // touches the "primary" calendar, so this doubles as that calendar's name
-  // (there's no per-event fetch for it; a new event has no organizer yet).
-  calendarName?: string | null;
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
@@ -567,11 +562,21 @@ export default function EventDialog({
   const [defaultReminders, setDefaultReminders] = useState<number[]>([]);
   const [form, setForm] = useState<FormState>(() => (target && "start" in target ? blankState(target.start) : blankState(new Date())));
   const [contactSearch, setContactSearch] = useState("");
+  const [contactFieldOpen, setContactFieldOpen] = useState(false);
+  const contactFieldRef = useRef<HTMLDivElement>(null);
   const [guestInput, setGuestInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const timeZoneOptions = useMemo(() => listTimeZoneOptions(), []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (contactFieldRef.current && !contactFieldRef.current.contains(e.target as Node)) setContactFieldOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   useEffect(() => {
     // Independent of create/edit — a brand new event still needs to show
@@ -654,6 +659,13 @@ export default function EventDialog({
     if (!trimmed || form.attendeeEmails.includes(trimmed)) return;
     update("attendeeEmails", [...form.attendeeEmails, trimmed]);
     setGuestInput("");
+  }
+
+  // "Andrew Murphy (andrewmurphy1978@gmail.com)" when the address matches a
+  // known contact, otherwise just the bare email.
+  function guestLabel(email: string): string {
+    const match = contacts.find((c) => c.email && c.email.toLowerCase() === email.toLowerCase());
+    return match ? `${match.label} (${email})` : email;
   }
 
   // Mirrors Google Calendar's own behavior: adding a custom notification
@@ -894,18 +906,11 @@ export default function EventDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_CLASS}>{labels.calendar}</label>
-                  <p className={`${FIELD_CLASS} truncate bg-black/[0.02] text-soft`}>{detail?.organizerName ?? calendarName ?? ""}</p>
-                </div>
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className={LABEL_CLASS}>{labels.color}</label>
                   <ColorSelect options={colorOptions} value={form.colorId} onChange={(v) => update("colorId", v)} className="mt-1" />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL_CLASS}>{labels.busyFree}</label>
                   <select value={form.transparency} onChange={(e) => update("transparency", e.target.value as FormState["transparency"])} className={FIELD_CLASS}>
@@ -930,13 +935,13 @@ export default function EventDialog({
                   "default" doesn't visibly change anything. */}
               <div>
                 <label className={LABEL_CLASS}>{labels.reminder}</label>
-                <div className="mt-1 space-y-1.5">
+                <div className="mt-1 flex flex-wrap items-center gap-2">
                   {form.reminderUseDefault ? (
                     defaultReminders.length > 0 ? (
                       defaultReminders.map((m, i) => (
-                        <div key={i} className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
+                        <div key={i} className="flex items-center gap-2 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
                           <span>{formatReminderMinutes(m, labels)}</span>
-                          <button type="button" onClick={() => removeDefaultReminderAt(i)} aria-label={labels.removeReminder} className="ml-2 shrink-0 text-xs text-soft hover:underline">
+                          <button type="button" onClick={() => removeDefaultReminderAt(i)} aria-label={labels.removeReminder} className="shrink-0 text-xs text-soft hover:underline">
                             {labels.removeReminder}
                           </button>
                         </div>
@@ -983,7 +988,7 @@ export default function EventDialog({
                   <ul className="mt-1 space-y-1">
                     {form.attendeeEmails.map((email) => (
                       <li key={email} className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
-                        <span className="truncate">{email}</span>
+                        <span className="truncate">{guestLabel(email)}</span>
                         <button type="button" onClick={() => update("attendeeEmails", form.attendeeEmails.filter((e) => e !== email))} className="ml-2 shrink-0 text-xs text-soft hover:underline">
                           {t.contactForm.removeEntry}
                         </button>
@@ -1038,7 +1043,7 @@ export default function EventDialog({
             <div className="min-w-0 space-y-3 border-t border-card-border pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <label className={LABEL_CLASS}>{labels.linkTo}</label>
 
-              <div>
+              <div ref={contactFieldRef}>
                 {selectedContact ? (
                   <div className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink">
                     <span className="truncate">{selectedContact.label}</span>
@@ -1048,26 +1053,39 @@ export default function EventDialog({
                   </div>
                 ) : (
                   <>
-                    <input type="text" value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder={linkLabels.searchPlaceholder} className={FIELD_CLASS} />
-                    <div className="mt-1 max-h-32 overflow-y-auto rounded-md border border-card-border">
-                      {filteredContacts.length === 0 ? (
-                        <p className="px-3 py-2 text-xs text-soft">{linkLabels.noResults}</p>
-                      ) : (
-                        filteredContacts.map((c) => (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => {
-                              setForm((f) => ({ ...f, contactId: c.id, projectId: "", taskId: "", bookingId: "" }));
-                              setContactSearch("");
-                            }}
-                            className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-amo-lime/10"
-                          >
-                            {c.label}
-                          </button>
-                        ))
-                      )}
-                    </div>
+                    <input
+                      type="text"
+                      value={contactSearch}
+                      onFocus={() => setContactFieldOpen(true)}
+                      onChange={(e) => {
+                        setContactSearch(e.target.value);
+                        setContactFieldOpen(true);
+                      }}
+                      placeholder={linkLabels.searchPlaceholder}
+                      className={FIELD_CLASS}
+                    />
+                    {contactFieldOpen && (
+                      <div className="mt-1 max-h-32 overflow-y-auto rounded-md border border-card-border">
+                        {filteredContacts.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-soft">{linkLabels.noResults}</p>
+                        ) : (
+                          filteredContacts.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                setForm((f) => ({ ...f, contactId: c.id, projectId: "", taskId: "", bookingId: "" }));
+                                setContactSearch("");
+                                setContactFieldOpen(false);
+                              }}
+                              className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-amo-lime/10"
+                            >
+                              {c.label}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

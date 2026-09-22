@@ -360,7 +360,6 @@ export default function CalendarCard({
   lang,
   hour12,
   labels,
-  calendarName,
   contactOptions,
   projectOptions,
   taskOptions,
@@ -375,7 +374,6 @@ export default function CalendarCard({
   lang: "en" | "fr";
   hour12: boolean;
   labels: CalendarLabels;
-  calendarName?: string | null;
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
@@ -475,6 +473,11 @@ export default function CalendarCard({
 
       <EventViewDialog
         eventId={viewTarget}
+        links={viewTarget ? toLinkTargets(links[viewTarget]) : undefined}
+        contacts={contactOptions}
+        projects={projectOptions}
+        tasks={taskOptions}
+        bookings={bookingOptions}
         onClose={() => setViewTarget(null)}
         onEdit={() => {
           const id = viewTarget;
@@ -496,7 +499,6 @@ export default function CalendarCard({
         key={dialogTarget ? ("id" in dialogTarget ? dialogTarget.id : dialogTarget.start.getTime()) : "none"}
         target={dialogTarget}
         initialLinks={dialogTarget && "id" in dialogTarget ? toLinkTargets(links[dialogTarget.id]) : undefined}
-        calendarName={calendarName}
         onClose={() => setDialogTarget(null)}
         onSaved={() => {
           refresh();

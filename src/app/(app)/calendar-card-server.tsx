@@ -1,5 +1,4 @@
 import { format } from "date-fns";
-import { auth } from "@/lib/auth";
 import { getUpcomingEvents } from "@/lib/google";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getResolvedEventLinks } from "@/lib/calendar-links";
@@ -25,7 +24,6 @@ export default async function CalendarCardServer({
   hour12: boolean;
   labels: CalendarLabels;
 }) {
-  const session = await auth();
   const events = accessToken ? await getUpcomingEvents(accessToken) : null;
 
   // One shared client for the link lookup and the contact/project/task/
@@ -89,7 +87,6 @@ export default async function CalendarCardServer({
       lang={lang}
       hour12={hour12}
       labels={labels}
-      calendarName={session?.user.name}
       contactOptions={contactOptions}
       projectOptions={projectOptions}
       taskOptions={taskOptions}

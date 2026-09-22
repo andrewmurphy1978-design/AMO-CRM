@@ -138,7 +138,6 @@ export default async function CalendarAppPage() {
           headerActions={openInCalendarButton}
           refreshLabel={t.dashboard.refresh}
           refreshingLabel={t.dashboard.refreshing}
-          calendarName={session?.user.name}
           labels={{
             today: t.calendarApp.today,
             addEvent: t.calendarApp.addEvent,

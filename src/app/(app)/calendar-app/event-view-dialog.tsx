@@ -5,8 +5,9 @@ import { format, type Locale } from "date-fns";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatTimeRange } from "@/lib/calendar-time";
 import { formatReminderList, type ReminderLabels } from "@/lib/calendar-reminders";
-import type { CalendarEventDetail } from "@/lib/google";
-import { fetchCalendarEventDetail, fetchDefaultReminders, deleteCalendarEventAction } from "@/actions/calendar";
+import type { CalendarAttendee, CalendarEventDetail } from "@/lib/google";
+import { fetchCalendarEventDetail, fetchDefaultReminders, deleteCalendarEventAction, type EventLinkTargets } from "@/actions/calendar";
+import type { LinkOption } from "../link-dialog";
 
 export interface EventViewDialogLabels extends ReminderLabels {
   loading: string;
@@ -19,11 +20,23 @@ export interface EventViewDialogLabels extends ReminderLabels {
   busy: string;
   free: string;
   allDay: string;
+  guests: string;
+  linkedTo: string;
   openInGoogleCalendar: string;
   repeatDaily: string;
   repeatWeeklyOn: string; // "Weekly on {day}"
   repeatMonthlyOn: string; // "Monthly on day {day}"
   repeatYearlyOn: string; // "Yearly on {date}"
+}
+
+// "Andrew Murphy (andrewmurphy1978@gmail.com)" when the address matches a
+// known contact; otherwise Google's own displayName for that guest, or
+// just the bare email when neither is available.
+function guestDisplay(a: CalendarAttendee, contacts: LinkOption[]): string {
+  const match = contacts.find((c) => c.email && c.email.toLowerCase() === a.email.toLowerCase());
+  if (match) return `${match.label} (${a.email})`;
+  if (a.displayName) return `${a.displayName} (${a.email})`;
+  return a.email;
 }
 
 // A short description of the event's own RRULE, the way Google Calendar's
@@ -78,9 +91,27 @@ const LocationIcon = () => (
     <circle cx="12" cy="9.5" r="2.5" />
   </svg>
 );
+const PeopleIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-5 w-5">
+    <circle cx="9" cy="8" r="3" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 19a5.5 5.5 0 0111 0M15 8.5a2.5 2.5 0 110-5M17 19a4.5 4.5 0 00-3.5-4.4" />
+  </svg>
+);
+const LinkIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-5 w-5">
+    <circle cx="8" cy="16" r="4" />
+    <circle cx="16" cy="8" r="4" />
+    <path strokeLinecap="round" d="M10.8 13.2 13.2 10.8" />
+  </svg>
+);
 
 export default function EventViewDialog({
   eventId,
+  links,
+  contacts,
+  projects,
+  tasks,
+  bookings,
   onClose,
   onEdit,
   onDeleted,
@@ -90,6 +121,13 @@ export default function EventViewDialog({
   labels,
 }: {
   eventId: string | null;
+  // Known CRM links for this event, from the calendar's own already-
+  // fetched map (same raw ids the edit dialog prefills from).
+  links?: EventLinkTargets;
+  contacts: LinkOption[];
+  projects: LinkOption[];
+  tasks: LinkOption[];
+  bookings: LinkOption[];
   onClose: () => void;
   onEdit: () => void;
   onDeleted: () => void;
@@ -190,6 +228,31 @@ export default function EventViewDialog({
               {detail?.location && (
                 <IconRow icon={<LocationIcon />}>
                   <span className="break-words">{detail.location}</span>
+                </IconRow>
+              )}
+
+              {detail?.attendees && detail.attendees.length > 0 && (
+                <IconRow icon={<PeopleIcon />}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.guests}</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {detail.attendees.map((a) => (
+                      <li key={a.email} className="truncate">
+                        {guestDisplay(a, contacts)}
+                      </li>
+                    ))}
+                  </ul>
+                </IconRow>
+              )}
+
+              {links && (links.contactId || links.projectId || links.taskId || links.bookingId) && (
+                <IconRow icon={<LinkIcon />}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.linkedTo}</p>
+                  <div className="mt-0.5 space-y-0.5">
+                    {links.contactId && <div className="truncate">{contacts.find((c) => c.id === links.contactId)?.label}</div>}
+                    {links.projectId && <div className="truncate">{projects.find((p) => p.id === links.projectId)?.label}</div>}
+                    {links.taskId && <div className="truncate">{tasks.find((tk) => tk.id === links.taskId)?.label}</div>}
+                    {links.bookingId && <div className="truncate">{bookings.find((b) => b.id === links.bookingId)?.label}</div>}
+                  </div>
                 </IconRow>
               )}
 

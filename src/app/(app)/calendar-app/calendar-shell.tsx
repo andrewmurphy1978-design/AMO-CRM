@@ -112,7 +112,6 @@ export default function CalendarShell({
   headerActions,
   refreshLabel,
   refreshingLabel,
-  calendarName,
 }: {
   initialEvents: CalendarEventSummary[];
   initialLinks: Record<string, EventLinkValues>;
@@ -130,7 +129,6 @@ export default function CalendarShell({
   headerActions?: ReactNode;
   refreshLabel: string;
   refreshingLabel: string;
-  calendarName?: string | null;
 }) {
   const [view, setView] = useState<ViewMode>("week");
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
@@ -379,6 +377,11 @@ export default function CalendarShell({
 
       <EventViewDialog
         eventId={viewTarget}
+        links={viewTarget ? links[viewTarget] : undefined}
+        contacts={contacts}
+        projects={projects}
+        tasks={tasks}
+        bookings={bookings}
         onClose={() => setViewTarget(null)}
         onEdit={() => {
           const id = viewTarget;
@@ -400,7 +403,6 @@ export default function CalendarShell({
         key={dialogTarget ? ("id" in dialogTarget ? dialogTarget.id : dialogTarget.start.getTime()) : "none"}
         target={dialogTarget}
         initialLinks={dialogTarget && "id" in dialogTarget ? links[dialogTarget.id] : undefined}
-        calendarName={calendarName}
         onClose={() => setDialogTarget(null)}
         onSaved={() => {
           refresh();
