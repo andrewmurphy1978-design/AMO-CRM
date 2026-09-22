@@ -69,7 +69,7 @@ export default async function EditProjectPage({
       location={t.dashboard.myLocation}
       contacts={contacts.map((c) => ({
         id: c.id,
-        label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email,
+        label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "",
       }))}
       users={users}
     />

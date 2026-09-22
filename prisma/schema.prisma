@@ -142,6 +142,11 @@ enum ContactStage {
   CLIENT
   PAST_CLIENT
   UNSUBSCRIBED
+  // Not part of the sales pipeline — a personal/family contact pulled in
+  // from Google Contacts with no systeme.io relationship. Never pushed to
+  // systeme.io (that only happens for a contact that already has a
+  // systemeIoId — see the save action in actions/contacts.ts).
+  PERSONAL
 }
 
 model Contact {
@@ -152,9 +157,17 @@ model Contact {
   // contacts created directly in the CRM that have not been pushed/matched
   // to systeme.io yet.
   systemeIoId           Int?      @unique
-  email                 String    @unique
+  // Nullable — a personal contact imported from Google Contacts (see
+  // google-contacts.ts) commonly has only a phone number, no email.
+  // Postgres allows multiple NULLs under a unique constraint, so this
+  // stays unique without conflicting for every email-less contact.
+  email                 String?   @unique
   locale                String? // e.g. "en", "fr"
   systemeIoRegisteredAt DateTime? // registered_at from systeme.io
+  // The Google People API resourceName (e.g. "people/c123...") this
+  // contact was imported from or matched to — lets a re-import recognize
+  // a contact it already created/linked instead of duplicating it.
+  googleContactId       String?   @unique
 
   // --- Common systeme.io custom fields promoted to real columns for
   // fast search/sort. Any other custom field systeme.io returns is stored

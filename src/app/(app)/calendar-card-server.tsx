@@ -5,9 +5,9 @@ import { getResolvedEventLinks } from "@/lib/calendar-links";
 import { getDict } from "@/lib/i18n/dictionaries";
 import CalendarCard, { type CalendarLabels } from "./calendar-card";
 
-function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
+function contactLabel(c: { firstName: string | null; lastName: string | null; email: string | null }): string {
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
-  return name || c.email;
+  return name || c.email || "";
 }
 
 // `accessToken` is resolved once, sequentially, by the caller — see the

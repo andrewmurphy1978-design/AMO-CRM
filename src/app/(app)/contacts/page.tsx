@@ -20,6 +20,7 @@ const STAGE_COLORS: Record<string, string> = {
   CLIENT: "bg-sky-50 text-sky-700",
   PAST_CLIENT: "bg-red-200 text-red-900",
   UNSUBSCRIBED: "bg-red-50 text-red-600",
+  PERSONAL: "bg-violet-50 text-violet-700",
 };
 
 function toArray(value: string | string[] | undefined): string[] {

@@ -113,7 +113,7 @@ export default async function ProjectDetailPage({
       calendarEventLinks,
       calendarContactOptions: allContacts.map((c) => ({
         id: c.id,
-        label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email,
+        label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "",
         email: c.email,
       })),
       calendarProjectOptions: allProjects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId })),
@@ -143,7 +143,7 @@ export default async function ProjectDetailPage({
   const openTasks = project.tasks.filter((t) => t.status !== "DONE");
   const doneTasks = project.tasks.filter((t) => t.status === "DONE");
   const clientName =
-    [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.email;
+    [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.email || "";
   const teamNames = project.teamMembers.map((tm) => tm.user.name);
 
   return (

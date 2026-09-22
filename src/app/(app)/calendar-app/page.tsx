@@ -10,9 +10,9 @@ import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader from "../page-header";
 import CalendarShell from "./calendar-shell";
 
-function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
+function contactLabel(c: { firstName: string | null; lastName: string | null; email: string | null }): string {
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
-  return name || c.email;
+  return name || c.email || "";
 }
 
 // Hand-drawn like PlatformIcon's FaceTimeIcon — Google doesn't publish a

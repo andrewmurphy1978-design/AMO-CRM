@@ -2,9 +2,9 @@ import type { PrismaClient } from "@/lib/prisma";
 import { getCalendarEventsByIds, type CalendarEventSummary } from "@/lib/google";
 import type { EventLinkTargets } from "@/actions/calendar";
 
-function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
+function contactLabel(c: { firstName: string | null; lastName: string | null; email: string | null }): string {
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
-  return name || c.email;
+  return name || c.email || "";
 }
 
 export interface ResolvedEventLink {

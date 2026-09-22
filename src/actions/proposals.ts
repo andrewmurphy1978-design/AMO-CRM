@@ -330,7 +330,8 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
     const clientLabel =
       [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") ||
       project.contact.company ||
-      project.contact.email;
+      project.contact.email ||
+      "";
 
     return draftProposalWithAI(db, {
       clientLabel,

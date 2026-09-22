@@ -272,7 +272,7 @@ export default async function ContactDetailPage({
       calendarEventLinks,
       calendarContactOptions: allContacts.map((c) => ({
         id: c.id,
-        label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email,
+        label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "",
         email: c.email,
       })),
       calendarProjectOptions: allProjects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId })),
@@ -283,7 +283,7 @@ export default async function ContactDetailPage({
 
   if (!contact) notFound();
 
-  const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email;
+  const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email || "";
 
   const calendarBookingLabelOptions = calendarBookingOptions.map((b) => ({
     id: b.id,

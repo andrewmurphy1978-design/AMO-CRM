@@ -27,7 +27,7 @@ type AppHandleRow = { app: string; handle: string };
 type FieldValueRow = { fieldSlug: string; value: string | null };
 
 type ContactFormValues = {
-  email?: string;
+  email?: string | null;
   email2?: string | null;
   extraEmails?: string[] | null;
   firstName?: string | null;
@@ -268,6 +268,7 @@ export default function ContactForm({
     { value: "CLIENT", label: t.stages.CLIENT },
     { value: "PAST_CLIENT", label: t.stages.PAST_CLIENT },
     { value: "UNSUBSCRIBED", label: t.stages.UNSUBSCRIBED },
+    { value: "PERSONAL", label: t.stages.PERSONAL },
   ];
 
   // A contact with no systeme.io id was never synced — created directly in
@@ -579,7 +580,7 @@ export default function ContactForm({
                 type="email"
                 name="email"
                 required
-                defaultValue={defaultValues?.email}
+                defaultValue={defaultValues?.email ?? ""}
                 aria-label={t.contactForm.email}
                 className={`${FIELD_CLASS} mt-0`}
               />

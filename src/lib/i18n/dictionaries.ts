@@ -185,6 +185,7 @@ export const dictionaries = {
       CLIENT: "Client",
       PAST_CLIENT: "Past client",
       UNSUBSCRIBED: "Unsubscribed",
+      PERSONAL: "Personal",
     },
     projectStatuses: {
       PLANNING: "Planning",
@@ -838,6 +839,17 @@ export const dictionaries = {
       addressRequired: "Enter the mailbox address.",
       hostRequired: "Fill in the host, username, and password fields.",
     },
+    googleContactsImport: {
+      title: "Google Contacts",
+      description:
+        "Pull in your Google Contacts — old friends, family, anyone not already in systeme.io — so their emails and calendar events link up automatically. Safe to run more than once: a contact already matched by email or phone is just linked, never duplicated or overwritten.",
+      reconnectNote: "Connected before Contacts import was added? Disconnect and connect again once so Google grants Contacts access too.",
+      importButton: "Import from Google Contacts",
+      importing: "Importing…",
+      notConnected: "Connect Google first.",
+      resultSummary: (imported: number, linked: number, total: number) =>
+        `Imported ${imported} new contact${imported === 1 ? "" : "s"}, linked ${linked} existing contact${linked === 1 ? "" : "s"} (${total} checked).`,
+    },
     personal: {
       title: "Personal",
       subtitle: "Emails and calendar events for family — visible only to you.",
@@ -1308,6 +1320,7 @@ export const dictionaries = {
       CLIENT: "Client",
       PAST_CLIENT: "Ancien client",
       UNSUBSCRIBED: "Désabonné",
+      PERSONAL: "Personnel",
     },
     projectStatuses: {
       PLANNING: "Planification",
@@ -1961,6 +1974,17 @@ export const dictionaries = {
       lastError: "Dernière erreur",
       addressRequired: "Entrez l'adresse de la boîte courriel.",
       hostRequired: "Remplissez les champs serveur, nom d'utilisateur et mot de passe.",
+    },
+    googleContactsImport: {
+      title: "Contacts Google",
+      description:
+        "Importez vos contacts Google — anciens amis, famille, toute personne pas déjà dans systeme.io — pour que leurs courriels et événements de calendrier se lient automatiquement. Sans risque à relancer : un contact déjà associé par courriel ou téléphone est simplement lié, jamais dupliqué ni écrasé.",
+      reconnectNote: "Connecté avant l'ajout de l'importation des contacts? Déconnectez et reconnectez-vous une fois pour que Google accorde aussi l'accès aux contacts.",
+      importButton: "Importer depuis Google Contacts",
+      importing: "Importation en cours…",
+      notConnected: "Connectez d'abord Google.",
+      resultSummary: (imported: number, linked: number, total: number) =>
+        `${imported} nouveau${imported === 1 ? "" : "x"} contact${imported === 1 ? "" : "s"} importé${imported === 1 ? "" : "s"}, ${linked} contact${linked === 1 ? "" : "s"} existant${linked === 1 ? "" : "s"} lié${linked === 1 ? "" : "s"} (${total} vérifié${total === 1 ? "" : "s"}).`,
     },
     personal: {
       title: "Personnel",

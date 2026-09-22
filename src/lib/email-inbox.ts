@@ -266,9 +266,9 @@ export interface EmailLinkInfo {
   affiliateProgramName: string;
 }
 
-function contactLabel(c: { firstName: string | null; lastName: string | null; email: string }): string {
+function contactLabel(c: { firstName: string | null; lastName: string | null; email: string | null }): string {
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
-  return name || c.email;
+  return name || c.email || "";
 }
 
 export async function getEmailLinksByThread(db: PrismaClient, threadIds: string[]): Promise<Record<string, EmailLinkInfo>> {

@@ -38,8 +38,13 @@ export default async function InvoiceDetailPage({
 
   if (!project || !invoice || invoice.projectId !== id) notFound();
 
+  // A reminder is a mailto: draft (see buildReminderDraft's comment) — a
+  // contact with no email on file (e.g. a personal Google Contacts import,
+  // see google-contacts.ts) has nowhere for it to go.
   const reminderDraft =
-    invoice.status === "OVERDUE" ? buildReminderDraft(invoice, project.contact) : null;
+    invoice.status === "OVERDUE" && project.contact.email
+      ? buildReminderDraft(invoice, { email: project.contact.email, firstName: project.contact.firstName })
+      : null;
 
   return (
     <div className="max-w-3xl space-y-6">

@@ -48,7 +48,8 @@ export default async function TaskDetailPage({
 
   const clientName =
     [task.project.contact.firstName, task.project.contact.lastName].filter(Boolean).join(" ") ||
-    task.project.contact.email;
+    task.project.contact.email ||
+    "";
 
   return (
     <div className="max-w-3xl space-y-6">

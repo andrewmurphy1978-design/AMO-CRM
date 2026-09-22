@@ -4,17 +4,19 @@ import { auth } from "@/lib/auth";
 // Kicks off the OAuth consent flow for Gmail (read + send) + Calendar
 // (read/write events — calendar.events rather than the broader calendar
 // scope, since the in-app Calendar only ever creates/edits/deletes events,
-// never touches calendar list/settings). gmail.send (added alongside the
-// Email Dialog's Reply/Forward feature) is the narrowest scope that allows
-// users.messages.send — it grants nothing beyond sending, no draft/label
-// access. `access_type=offline` + `prompt=consent` together are what make
-// Google hand back a refresh_token — without both, a returning user who
-// already granted consent gets a silent redirect with no refresh_token at
-// all. Existing connections made before calendar.events or gmail.send were
-// added need to reconnect once (Settings -> Disconnect, then Connect
-// again) before event edits / sending mail will work — their stored
-// refresh token only carries whichever grant was current when they
-// connected.
+// never touches calendar list/settings) + Contacts (read-only — this app
+// only ever pulls Google Contacts in, see google-contacts.ts, never writes
+// back to them). gmail.send (added alongside the Email Dialog's Reply/
+// Forward feature) is the narrowest scope that allows users.messages.send
+// — it grants nothing beyond sending, no draft/label access.
+// `access_type=offline` + `prompt=consent` together are what make Google
+// hand back a refresh_token — without both, a returning user who already
+// granted consent gets a silent redirect with no refresh_token at all.
+// Existing connections made before calendar.events, gmail.send, or
+// contacts.readonly were added need to reconnect once (Settings ->
+// Disconnect, then Connect again) before event edits / sending mail /
+// importing contacts will work — their stored refresh token only carries
+// whichever grant was current when they connected.
 export async function GET(request: NextRequest) {
   const session = await auth();
   const base = process.env.NEXTAUTH_URL ?? request.nextUrl.origin;
@@ -33,6 +35,7 @@ export async function GET(request: NextRequest) {
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/contacts.readonly",
   ].join(" ");
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");

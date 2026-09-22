@@ -3,6 +3,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { getGoogleConnection } from "@/lib/google";
 import { getIonosMailbox } from "@/lib/mail/ionos";
 import { disconnectGoogleAccount } from "@/actions/integrations";
+import GoogleContactsImportForm from "./google-contacts-import-form";
 import IonosMailboxForm from "./ionos-mailbox-form";
 import SystemeIoForm from "./systeme-io-form";
 import AnthropicKeyForm from "./anthropic-key-form";
@@ -214,6 +215,7 @@ export default async function SettingsPage({
                 </a>
               )}
             </div>
+            <GoogleContactsImportForm connected={Boolean(googleConnection)} lang={lang} />
           </section>
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
