@@ -556,29 +556,32 @@ export default async function ContactDetailPage({
         </div>
 
         <div className="space-y-6">
-          <section id="projects" className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.projectsTitle}</h2>
-              <Link href={`/projects/new?contactId=${contact.id}`} className="text-xs font-semibold text-amo-lime hover:underline">
-                + {t.contactDetail.newProject}
-              </Link>
-            </div>
-            {contact.projects.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.contactDetail.noProjectsYet}</p>
-            ) : (
-              <ul className="mt-3 divide-y divide-card-border">
-                {contact.projects.map((project) => (
-                  <li key={project.id} className="py-2">
-                    <Link href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
-                      {project.name}
-                    </Link>
-                    <span className="ml-2 text-xs text-soft">{t.projectStatuses[project.status]}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <div id="projects">
+            <Card
+              color="projects"
+              title={t.contactDetail.projectsTitle}
+              actions={
+                <Link href={`/projects/new?contactId=${contact.id}`} className="text-xs font-semibold text-white hover:underline">
+                  + {t.contactDetail.newProject}
+                </Link>
+              }
+            >
+              {contact.projects.length === 0 ? (
+                <p className="text-sm text-soft">{t.contactDetail.noProjectsYet}</p>
+              ) : (
+                <ul className="divide-y divide-card-border">
+                  {contact.projects.map((project) => (
+                    <li key={project.id} className="py-2">
+                      <Link href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
+                        {project.name}
+                      </Link>
+                      <span className="ml-2 text-xs text-soft">{t.projectStatuses[project.status]}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
 
           <CalendarEventsCard
             title={t.calendarApp.title}
@@ -589,13 +592,11 @@ export default async function ContactDetailPage({
             intlLocale={intlLocale}
           />
 
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.linkedEmailsTitle}</h2>
+          <Card color="linkedEmails" title={t.contactDetail.linkedEmailsTitle}>
             {contact.emailLinks.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.contactDetail.noLinkedEmails}</p>
+              <p className="text-sm text-soft">{t.contactDetail.noLinkedEmails}</p>
             ) : (
-              <ul className="mt-3 space-y-3">
+              <ul className="space-y-3">
                 {contact.emailLinks.map((link) => (
                   <li key={link.id} className="text-sm">
                     {link.gmailLink ? (
@@ -613,11 +614,9 @@ export default async function ContactDetailPage({
                 ))}
               </ul>
             )}
-          </section>
+          </Card>
 
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.purchasesTitle}</h2>
+          <Card color="purchases" title={t.contactDetail.purchasesTitle}>
             {contact.subscriptions.length === 0 &&
             contact.courseEnrollments.length === 0 &&
             contact.communityMemberships.length === 0 ? (
@@ -678,20 +677,21 @@ export default async function ContactDetailPage({
                 )}
               </div>
             )}
-          </section>
+          </Card>
 
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.title}</h2>
-              <Link href="#projects" className="text-xs font-semibold text-amo-lime hover:underline">
+          <Card
+            color="proposals"
+            title={t.proposals.title}
+            actions={
+              <Link href="#projects" className="text-xs font-semibold text-white hover:underline">
                 + {t.contactDetail.newProposal}
               </Link>
-            </div>
+            }
+          >
             {proposalItems.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.contactDetail.noProposalsYet}</p>
+              <p className="text-sm text-soft">{t.contactDetail.noProposalsYet}</p>
             ) : (
-              <ul className="mt-3 divide-y divide-card-border">
+              <ul className="divide-y divide-card-border">
                 {proposalItems.map((item) => (
                   <li key={item.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
                     <span className="flex-1 font-medium text-ink">{item.label}</span>
@@ -708,20 +708,21 @@ export default async function ContactDetailPage({
                 ))}
               </ul>
             )}
-          </section>
+          </Card>
 
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-display text-lg font-semibold text-ink">{t.invoices.title}</h2>
-              <Link href="#projects" className="text-xs font-semibold text-amo-lime hover:underline">
+          <Card
+            color="invoices"
+            title={t.invoices.title}
+            actions={
+              <Link href="#projects" className="text-xs font-semibold text-white hover:underline">
                 + {t.contactDetail.newInvoice}
               </Link>
-            </div>
+            }
+          >
             {invoiceItems.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.contactDetail.noInvoicesYet}</p>
+              <p className="text-sm text-soft">{t.contactDetail.noInvoicesYet}</p>
             ) : (
-              <ul className="mt-3 divide-y divide-card-border">
+              <ul className="divide-y divide-card-border">
                 {invoiceItems.map((item) => (
                   <li key={item.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
                     <span className="flex-1 font-medium text-ink">{item.label}</span>
@@ -738,33 +739,27 @@ export default async function ContactDetailPage({
                 ))}
               </ul>
             )}
-          </section>
+          </Card>
 
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.callsEmails}</h2>
-            <div className="mt-3">
-              <InteractionLog
-                lang={lang}
-                contactId={contact.id}
-                interactions={contact.interactions.map((i) => ({
-                  id: i.id,
-                  type: i.type,
-                  subject: i.subject,
-                  notes: i.notes,
-                  occurredAt: i.occurredAt.toISOString(),
-                  loggedBy: i.loggedBy ? { name: i.loggedBy.name } : null,
-                  project: i.project ? { id: i.project.id, name: i.project.name } : null,
-                }))}
-              />
-            </div>
-          </section>
+          <Card color="interactions" title={t.contactDetail.callsEmails}>
+            <InteractionLog
+              lang={lang}
+              contactId={contact.id}
+              interactions={contact.interactions.map((i) => ({
+                id: i.id,
+                type: i.type,
+                subject: i.subject,
+                notes: i.notes,
+                occurredAt: i.occurredAt.toISOString(),
+                loggedBy: i.loggedBy ? { name: i.loggedBy.name } : null,
+                project: i.project ? { id: i.project.id, name: i.project.name } : null,
+              }))}
+            />
+          </Card>
 
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.contactDetail.systemActivity}</h2>
+          <Card color="activity" title={t.contactDetail.systemActivity}>
             <NoteForm lang={lang} contactId={contact.id} />
-            <ul className="mt-4 space-y-3">
+            <ul className="space-y-3">
               {contact.activity.map((entry) => (
                 <li key={entry.id} className="text-sm">
                   <p className="text-ink">{entry.message}</p>
@@ -774,7 +769,7 @@ export default async function ContactDetailPage({
                 </li>
               ))}
             </ul>
-          </section>
+          </Card>
         </div>
       </div>
     </div>

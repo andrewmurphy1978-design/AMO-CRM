@@ -2,6 +2,7 @@ import { format, type Locale } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatTimeRange } from "@/lib/calendar-time";
+import Card from "@/components/section-card";
 
 // Shown on Contact and Project detail pages — lists whichever Google
 // Calendar events have been linked to that client/project from the
@@ -25,9 +26,7 @@ export default function CalendarEventsCard({
   intlLocale: string;
 }) {
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
+    <Card color="calendarEvents" title={title}>
       {events.length === 0 ? (
         <p className="mt-3 text-sm text-soft">{notConnectedLabel ?? noEventsLabel}</p>
       ) : (
@@ -56,6 +55,6 @@ export default function CalendarEventsCard({
           })}
         </ul>
       )}
-    </section>
+    </Card>
   );
 }

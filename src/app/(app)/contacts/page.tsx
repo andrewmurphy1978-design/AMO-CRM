@@ -132,7 +132,17 @@ export default async function ContactsPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.contacts.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <PageHeader
+        title={t.contacts.title}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        location={t.dashboard.myLocation}
+        actions={
+          <Link href="/contacts/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
+            {t.contacts.newContact}
+          </Link>
+        }
+      />
 
       <ContactFilters
         q={q ?? ""}
@@ -145,14 +155,9 @@ export default async function ContactsPage({
         allTagsLabel={t.contacts.allTags}
         filterLabel={t.common.filter}
         trailing={
-          <div className="ml-auto flex items-center gap-3">
-            <span className="rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
-              {t.contacts.shown(contacts.length)}
-            </span>
-            <Link href="/contacts/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
-              {t.contacts.newContact}
-            </Link>
-          </div>
+          <span className="ml-auto rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
+            {t.contacts.shown(contacts.length)}
+          </span>
         }
       />
 
