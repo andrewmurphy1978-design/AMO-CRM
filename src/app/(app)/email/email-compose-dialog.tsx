@@ -129,7 +129,17 @@ export default function EmailComposeDialog({
     });
     setSending(false);
     if ("error" in result) {
-      setError(labels.sendFailed);
+      // "not_connected"/"recipient_required" are internal codes with their
+      // own translated labels; anything else is a raw SMTP/Gmail API
+      // diagnostic (e.g. "SMTP AUTH PLAIN failed (535): ...") that's far
+      // more useful shown as-is than hidden behind a generic message.
+      if (result.error === "recipient_required") {
+        setError(labels.recipientRequired);
+      } else if (result.error === "not_connected") {
+        setError(labels.sendFailed);
+      } else {
+        setError(`${labels.sendFailed} (${result.error})`);
+      }
       return;
     }
     onSent();
