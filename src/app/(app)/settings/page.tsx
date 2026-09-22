@@ -1,7 +1,9 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getGoogleConnection } from "@/lib/google";
+import { getIonosMailbox } from "@/lib/mail/ionos";
 import { disconnectGoogleAccount } from "@/actions/integrations";
+import IonosMailboxForm from "./ionos-mailbox-form";
 import SystemeIoForm from "./systeme-io-form";
 import AnthropicKeyForm from "./anthropic-key-form";
 import MakeForm from "./make-form";
@@ -56,6 +58,7 @@ export default async function SettingsPage({
     shortioIntegration,
     bufferSettings,
     googleConnection,
+    ionosMailbox,
     users,
     watchedPeople,
     vaultEntries,
@@ -81,6 +84,7 @@ export default async function SettingsPage({
         where: { provider: { in: ["buffer_en", "buffer_fr", "buffer_fb", "buffer_li"] } },
       });
       const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
+      const ionosMailbox = session ? await getIonosMailbox(session.user.id, db) : null;
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
       const watchedPeople = showPersonalCard ? await getWatchedPeople(db) : [];
       // Never select valueEncrypted here — the ciphertext has no reason to
@@ -100,6 +104,7 @@ export default async function SettingsPage({
         shortioIntegration,
         bufferSettings,
         googleConnection,
+        ionosMailbox,
         users,
         watchedPeople,
         vaultEntries,
@@ -208,6 +213,21 @@ export default async function SettingsPage({
                   {t.settings.googleConnect}
                 </a>
               )}
+            </div>
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.ionosMailbox.title}</h2>
+            <div className="mt-4">
+              <IonosMailboxForm
+                connected={Boolean(ionosMailbox)}
+                address={ionosMailbox?.address ?? ""}
+                displayName={ionosMailbox?.displayName ?? ""}
+                lastCheckedAt={ionosMailbox?.lastCheckedAt ?? null}
+                lastError={ionosMailbox?.lastError ?? null}
+                lang={lang}
+              />
             </div>
           </section>
 

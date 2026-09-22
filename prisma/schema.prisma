@@ -65,6 +65,7 @@ model User {
   activityEntries ActivityLogEntry[]
   interactions    Interaction[]
   googleAccount   GoogleAccount?
+  ionosMailbox    IonosMailboxAccount?
 
   @@map("users")
 }
@@ -83,6 +84,28 @@ model GoogleAccount {
   updatedAt       DateTime @updatedAt
 
   @@map("google_accounts")
+}
+
+// The IONOS-hosted mailbox one CRM user reads over IMAP and sends from
+// over SMTP — the CRM's own mail client for an address like
+// andrew@andrewmurphy.online, which has no OAuth flow of its own. Same
+// shape as GoogleAccount above: one row per user, every secret inside one
+// encrypted JSON blob (host/port/security x2, username, password) rather
+// than a column per field.
+model IonosMailboxAccount {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address              String // the mailbox itself — also the address every reply to it is sent from
+  displayName          String?
+  credentialsEncrypted String    @db.Text // encrypted JSON: { imapHost, imapPort, imapSecurity, smtpHost, smtpPort, smtpSecurity, username, password }
+  sentMailbox          String? // IMAP folder a sent copy is APPENDed to — discovered via LIST, editable in Settings
+  lastCheckedAt        DateTime?
+  lastError            String?   @db.Text // last IMAP/SMTP failure text, shown in Settings — protocol errors are otherwise invisible
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@map("ionos_mailbox_accounts")
 }
 
 // ---------------------------------------------------------------------------

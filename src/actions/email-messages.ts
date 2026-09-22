@@ -6,6 +6,8 @@ import { getValidAccessToken, getGoogleConnection, fetchGmailMessageRaw, sendGma
 import { parseMessage, type AttachmentMeta } from "@/lib/mail/mime-parse";
 import { buildMimeMessage } from "@/lib/mail/mime-build";
 import { resolveReplyIdentity, type MailIdentity } from "@/lib/mail/identity";
+import { getIonosMailbox, recordIonosResult } from "@/lib/mail/ionos";
+import { sendViaSmtp } from "@/lib/mail/smtp";
 
 export interface EmailDetail {
   id: string;
@@ -23,14 +25,17 @@ export interface EmailDetail {
   replyIdentity: MailIdentity;
 }
 
-// Every mail identity this user currently has, in preference order — just
-// Gmail for now; a connected IONOS mailbox joins this list in a later
-// phase, and resolveReplyIdentity already knows how to choose between
-// several.
+// Every mail identity this user currently has, in preference order — Gmail
+// first (the primary account), then a connected IONOS mailbox if any.
+// resolveReplyIdentity picks between them based on the original message's
+// own headers, not this order — this order only matters as the last-
+// resort fallback when nothing else matches.
 async function loadIdentities(userId: string, db: PrismaClient): Promise<MailIdentity[]> {
-  const google = await getGoogleConnection(userId, db);
-  if (!google?.email) return [];
-  return [{ source: "gmail", accountAddress: google.email, displayName: null }];
+  const [google, ionos] = await Promise.all([getGoogleConnection(userId, db), getIonosMailbox(userId, db)]);
+  const identities: MailIdentity[] = [];
+  if (google?.email) identities.push({ source: "gmail", accountAddress: google.email, displayName: null });
+  if (ionos) identities.push({ source: "ionos", accountAddress: ionos.address, displayName: ionos.displayName });
+  return identities;
 }
 
 // The Email Dialog's "open a message" call — fetches the full RFC 5322
@@ -130,8 +135,32 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
       references: input.references,
     });
 
-    // Only the "gmail" source exists today — an "ionos" branch (native
-    // SMTP) joins this switch in a later phase.
+    if (replyIdentity.source === "ionos") {
+      const mailbox = await getIonosMailbox(session.user.id, db);
+      if (!mailbox) return { error: "not_connected" };
+      try {
+        await sendViaSmtp(
+          {
+            host: mailbox.credentials.smtpHost,
+            port: mailbox.credentials.smtpPort,
+            security: mailbox.credentials.smtpSecurity,
+            username: mailbox.credentials.username,
+            password: mailbox.credentials.password,
+          },
+          { from: replyIdentity.accountAddress, to: input.to, cc: input.cc, bcc: [], raw }
+        );
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        await recordIonosResult(session.user.id, db, message);
+        return { error: message };
+      }
+      await recordIonosResult(session.user.id, db, null);
+      // The sent copy isn't filed into the mailbox's own Sent folder yet —
+      // that needs IMAP APPEND, which joins this once Phase 4's native
+      // IMAP client exists.
+      return { success: true };
+    }
+
     const result = await sendGmailMessage(accessToken, raw, input.threadId ?? undefined);
     if ("error" in result) return { error: result.error };
     return { success: true };

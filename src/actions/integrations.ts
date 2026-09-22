@@ -7,6 +7,9 @@ import { encryptSecret } from "@/lib/crypto";
 import { runSystemeIoSync } from "@/lib/sync";
 import { disconnectGoogle } from "@/lib/google";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { saveIonosMailbox, getIonosMailbox, disconnectIonosMailbox, recordIonosResult } from "@/lib/mail/ionos";
+import { verifySmtp } from "@/lib/mail/smtp";
+import type { MailSecurity } from "@/lib/mail/socket";
 
 async function requireAdmin() {
   const session = await auth();
@@ -176,4 +179,87 @@ export async function disconnectGoogleAccount(): Promise<void> {
   await disconnectGoogle(session.user.id);
   revalidatePath("/settings");
   revalidatePath("/");
+}
+
+// The IONOS mailbox is a personal, per-user connection too (see
+// IonosMailboxAccount's comment in schema.prisma) — same no-admin-check
+// pattern as Google above.
+export async function saveIonosMailboxAction(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not signed in");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const address = String(formData.get("address") ?? "").trim();
+  const displayName = String(formData.get("displayName") ?? "").trim() || null;
+  const imapHost = String(formData.get("imapHost") ?? "").trim();
+  const imapPort = Number(formData.get("imapPort") ?? 993);
+  const imapSecurity = String(formData.get("imapSecurity") ?? "tls") as MailSecurity;
+  const smtpHost = String(formData.get("smtpHost") ?? "").trim();
+  const smtpPort = Number(formData.get("smtpPort") ?? 465);
+  const smtpSecurity = String(formData.get("smtpSecurity") ?? "tls") as MailSecurity;
+  const username = String(formData.get("username") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  if (!address) return { error: t.ionosMailbox.addressRequired };
+  if (!imapHost || !smtpHost || !username) return { error: t.ionosMailbox.hostRequired };
+
+  try {
+    await withScopedPrismaClient((db) =>
+      saveIonosMailbox(
+        session.user.id,
+        { address, displayName, credentials: { imapHost, imapPort, imapSecurity, smtpHost, smtpPort, smtpSecurity, username, password } },
+        db
+      )
+    );
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  revalidatePath("/settings");
+  return { success: t.ionosMailbox.saved };
+}
+
+// Logs into SMTP only (IMAP verification joins this once Phase 4's native
+// IMAP client exists) — lets a bad host/port/credential surface right
+// away from Settings instead of only being discovered on the first real
+// send, since protocol failures are otherwise invisible.
+export async function testIonosMailboxAction(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not signed in");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const smtpHost = String(formData.get("smtpHost") ?? "").trim();
+  const smtpPort = Number(formData.get("smtpPort") ?? 465);
+  const smtpSecurity = String(formData.get("smtpSecurity") ?? "tls") as MailSecurity;
+  const username = String(formData.get("username") ?? "").trim();
+  const formPassword = String(formData.get("password") ?? "");
+
+  return withScopedPrismaClient(async (db) => {
+    const existing = await getIonosMailbox(session.user.id, db);
+    const password = formPassword || existing?.credentials.password;
+    if (!smtpHost || !username || !password) return { error: t.ionosMailbox.hostRequired };
+
+    try {
+      await verifySmtp({ host: smtpHost, port: smtpPort, security: smtpSecurity, username, password });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      await recordIonosResult(session.user.id, db, message);
+      return { error: message };
+    }
+    await recordIonosResult(session.user.id, db, null);
+    return { success: t.ionosMailbox.testOk };
+  });
+}
+
+export async function disconnectIonosMailboxAction(): Promise<void> {
+  const session = await auth();
+  if (!session) throw new Error("Not signed in");
+  await withScopedPrismaClient((db) => disconnectIonosMailbox(session.user.id, db));
+  revalidatePath("/settings");
 }
