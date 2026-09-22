@@ -144,14 +144,17 @@ function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: stri
   );
 }
 
-// Fixed widths on every column after the subject (linked-to name, link
-// icon, complete icon, quick actions, date) are what keep icons lined up
-// between rows — a variable-width date string ("19:58" vs "Sep 12, 3:15
-// PM") was previously the last flex child, so its own width change shifted
-// where every fixed-width icon before it landed.
-const PRIMARY_LABEL_WIDTH = "w-56";
-const LINKED_TO_WIDTH = "w-44";
-const DATE_WIDTH = "w-24";
+// A CSS grid instead of a flex row: each column gets a minmax() range
+// instead of a fixed pixel width, so the row always fills exactly the
+// available width (no leftover dead space, no horizontal scroll on a
+// normal desktop width) and reflows automatically whenever that width
+// changes — a browser resize or the sidebar collapsing/expanding — with
+// no JS involved. Only the subject column is allowed to actually grow
+// (1fr); every other column has a fixed practical range. The icon
+// cluster is "auto" (its own natural content width) since it's a set of
+// fixed-size buttons, not text that benefits from extra room.
+const ROW_GRID_COLUMNS =
+  "[grid-template-columns:minmax(8rem,11rem)_minmax(12rem,1fr)_minmax(7rem,11rem)_auto_minmax(4.5rem,6rem)]";
 
 function EmailRow({
   index,
@@ -232,35 +235,32 @@ function EmailRow({
 
   return (
     <li className={clsx("overflow-hidden transition-colors hover:bg-black/5", highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : "")}>
-      <div className="flex items-center gap-2 py-1.5 pl-3 pr-4">
-        <button
-          type="button"
-          onClick={openDialog}
-          className={`${PRIMARY_LABEL_WIDTH} shrink-0 truncate text-left text-sm font-medium text-ink hover:opacity-80`}
-        >
+      <div className={clsx("grid items-center gap-2 py-1.5 pl-3 pr-4", ROW_GRID_COLUMNS)}>
+        <button type="button" onClick={openDialog} className="min-w-0 truncate text-left text-sm font-medium text-ink hover:opacity-80">
           {primaryLabel}
         </button>
         <button
           type="button"
           onClick={openDialog}
-          className="flex min-w-0 max-w-xl flex-1 items-center gap-1 truncate text-left text-sm text-soft hover:opacity-80"
+          className="flex min-w-0 items-center gap-1 truncate text-left text-sm text-soft hover:opacity-80"
         >
           {hasAttachments && <AttachmentIcon className="h-3.5 w-3.5 shrink-0" title={attachmentLabel} />}
           {important && <ImportantIcon className="h-3.5 w-3.5 shrink-0 text-red-600" title={importantLabel} />}
           <span className="truncate">{subject}</span>
         </button>
-        <span className={`${LINKED_TO_WIDTH} shrink-0 truncate text-right text-xs font-medium`}>
+        <span className="min-w-0 truncate text-right text-xs font-medium">
           {linkedTo && (
             <Link href={linkedTo.href} className="text-emerald-700 hover:underline">
               {linkedTo.name}
             </Link>
           )}
         </span>
-        {/* This icon cluster (link/complete/reply-forward) is kept tight
-            with its own small gap, distinct from the wider gap-2 between
-            the text columns above — these read as one grouped set of
-            actions, not separate columns. */}
-        <div className="flex shrink-0 items-center gap-0.5">
+        {/* This icon cluster (link/complete/mark-unread/reply-forward) is
+            kept tighter than the grid's own gap-2 between columns — these
+            read as one grouped set of actions, not separate columns — but
+            not so tight that the Complete and Mark-unread icons (both
+            shown together in Recently Read) crowd each other. */}
+        <div className="flex items-center gap-1.5">
           <EmailLinkPicker
             threadId={threadId}
             subject={subject}
@@ -285,7 +285,7 @@ function EmailRow({
           {onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}
           <EmailQuickActions labels={quickActionLabels} onOpen={onOpen} onAction={onQuickAction} />
         </div>
-        <span className={`${DATE_WIDTH} shrink-0 whitespace-nowrap text-right text-xs text-soft`}>
+        <span className="whitespace-nowrap text-right text-xs text-soft">
           <EmailTime iso={dateIso} hour12={hour12} intlLocale={intlLocale} />
         </span>
       </div>
