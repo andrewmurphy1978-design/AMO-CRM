@@ -102,7 +102,7 @@ export default async function ContactsPage({
   }
 
   let orderBy: Prisma.ContactOrderByWithRelationInput | Prisma.ContactOrderByWithRelationInput[] = { createdAt: "desc" };
-  if (sortField === "name") orderBy = [{ firstName: sortDir }, { lastName: sortDir }];
+  if (sortField === "name") orderBy = [{ lastName: sortDir }, { firstName: sortDir }];
   else if (sortField === "country") orderBy = { country: sortDir };
   else if (sortField === "stage") orderBy = { stage: sortDir };
   else if (sortField === "source") orderBy = { source: sortDir };
