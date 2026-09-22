@@ -80,18 +80,6 @@ function ImportantIcon({ className, title }: { className?: string; title: string
   );
 }
 
-// The row's fallback external link — the primary label/subject now open
-// the in-app Email Dialog instead of navigating away, so this is the one
-// remaining click that opens the message's own Gmail thread in a new tab.
-function OpenExternalIcon({ className, title }: { className?: string; title: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
-      <title>{title}</title>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M14 5h5v5M10 14 19 5M8 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2" />
-    </svg>
-  );
-}
-
 function CompleteButton({ onClick, title }: { onClick: () => void; title: string }) {
   return (
     <button
@@ -161,9 +149,9 @@ function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: stri
 // between rows — a variable-width date string ("19:58" vs "Sep 12, 3:15
 // PM") was previously the last flex child, so its own width change shifted
 // where every fixed-width icon before it landed.
-const PRIMARY_LABEL_WIDTH = "w-28";
-const LINKED_TO_WIDTH = "w-20";
-const DATE_WIDTH = "w-16";
+const PRIMARY_LABEL_WIDTH = "w-44";
+const LINKED_TO_WIDTH = "w-32";
+const DATE_WIDTH = "w-24";
 
 function EmailRow({
   index,
@@ -191,7 +179,6 @@ function EmailRow({
   onOpen,
   onOpenDialog,
   onQuickAction,
-  openExternalLabel,
   onLinkSaved,
   onComplete,
   onUncomplete,
@@ -226,7 +213,6 @@ function EmailRow({
   onOpen?: () => void;
   onOpenDialog: () => void;
   onQuickAction: (mode: EmailQuickActionMode) => void;
-  openExternalLabel: string;
   onLinkSaved: (values: LinkValues) => void;
   onComplete?: () => void;
   onUncomplete?: () => void;
@@ -246,7 +232,7 @@ function EmailRow({
 
   return (
     <li className={clsx("overflow-hidden transition-colors hover:bg-black/5", highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : "")}>
-      <div className="flex items-center gap-1.5 px-3 py-1.5">
+      <div className="flex items-center gap-2 py-1.5 pl-3 pr-4">
         <button
           type="button"
           onClick={openDialog}
@@ -254,7 +240,11 @@ function EmailRow({
         >
           {primaryLabel}
         </button>
-        <button type="button" onClick={openDialog} className="flex min-w-0 flex-1 items-center gap-1 truncate text-left text-sm text-soft hover:opacity-80">
+        <button
+          type="button"
+          onClick={openDialog}
+          className="flex min-w-0 max-w-md flex-1 items-center gap-1 truncate text-left text-sm text-soft hover:opacity-80"
+        >
           {hasAttachments && <AttachmentIcon className="h-3.5 w-3.5 shrink-0" title={attachmentLabel} />}
           {important && <ImportantIcon className="h-3.5 w-3.5 shrink-0 text-red-600" title={importantLabel} />}
           <span className="truncate">{subject}</span>
@@ -266,45 +256,35 @@ function EmailRow({
             </Link>
           )}
         </span>
-        <EmailLinkPicker
-          threadId={threadId}
-          subject={subject}
-          fromLabel={primaryLabel}
-          date={dateIso}
-          link={link}
-          contacts={contactOptions}
-          projects={projectOptions}
-          tasks={taskOptions}
-          programs={programOptions}
-          initialContactId={linkInfo?.contactId ?? ""}
-          initialProjectId={linkInfo?.projectId ?? ""}
-          initialTaskId={linkInfo?.taskId ?? ""}
-          initialProgramId={linkInfo?.affiliateProgramId ?? ""}
-          summary={linkSummaryText}
-          labels={linkLabels}
-          onSaved={onLinkSaved}
-        />
-        {/* Fixed-width slots even when a given row has no action there (e.g.
-            the Completed section has no Complete button of its own, and
-            only Recently Read has an unread button) — otherwise the icons
-            after them would shift between sections. */}
-        <span className="flex w-6 shrink-0 justify-center">
+        {/* This icon cluster (link/complete/reply-forward) is kept tight
+            with its own small gap, distinct from the wider gap-2 between
+            the text columns above — these read as one grouped set of
+            actions, not separate columns. */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          <EmailLinkPicker
+            threadId={threadId}
+            subject={subject}
+            fromLabel={primaryLabel}
+            date={dateIso}
+            link={link}
+            contacts={contactOptions}
+            projects={projectOptions}
+            tasks={taskOptions}
+            programs={programOptions}
+            initialContactId={linkInfo?.contactId ?? ""}
+            initialProjectId={linkInfo?.projectId ?? ""}
+            initialTaskId={linkInfo?.taskId ?? ""}
+            initialProgramId={linkInfo?.affiliateProgramId ?? ""}
+            summary={linkSummaryText}
+            labels={linkLabels}
+            onSaved={onLinkSaved}
+          />
           {onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}
           {onUncomplete && <UncompleteButton onClick={onUncomplete} title={uncompleteLabel} />}
           {!onUncomplete && completedLocked && <CompletedBadge title={completeLabel} />}
-        </span>
-        <span className="flex w-6 shrink-0 justify-center">{onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}</span>
-        <EmailQuickActions labels={quickActionLabels} onOpen={onOpen} onAction={onQuickAction} />
-        <a
-          href={link}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          title={openExternalLabel}
-          className="shrink-0 rounded p-1 text-soft hover:bg-black/10 hover:text-ink"
-        >
-          <OpenExternalIcon className="h-3.5 w-3.5" title={openExternalLabel} />
-        </a>
+          {onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}
+          <EmailQuickActions labels={quickActionLabels} onOpen={onOpen} onAction={onQuickAction} />
+        </div>
         <span className={`${DATE_WIDTH} shrink-0 whitespace-nowrap text-right text-xs text-soft`}>
           <EmailTime iso={dateIso} hour12={hour12} intlLocale={intlLocale} />
         </span>
@@ -596,7 +576,6 @@ export default function EmailScreeningView({
         onOpen={opts.markAsRead ? () => markRead(email.id) : undefined}
         onOpenDialog={() => setOpenMessage({ id: email.id, link: email.link })}
         onQuickAction={(mode) => openComposeFor(email.id, mode)}
-        openExternalLabel={t.emailDialog.openInGmail}
         onLinkSaved={() => markLinked(email.threadId)}
         onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
         onUncomplete={opts.showUncomplete ? () => markUncomplete(email.id) : undefined}
@@ -634,7 +613,6 @@ export default function EmailScreeningView({
         intlLocale={intlLocale}
         onOpenDialog={() => setOpenMessage({ id: s.id, link: s.link })}
         onQuickAction={(mode) => openComposeFor(s.id, mode)}
-        openExternalLabel={t.emailDialog.openInGmail}
         onLinkSaved={() => markLinked(s.threadId)}
         onComplete={opts.showComplete ? () => markComplete(s.id) : undefined}
         // A thread with status "completed" got that way because Gmail
