@@ -39,7 +39,10 @@ function EventPill({
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onRequestEdit(event)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onRequestEdit(event);
+      }}
       className="flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
       style={{ backgroundColor: color.bg, color: color.fg }}
       title={event.title}
@@ -74,6 +77,7 @@ export default function MonthView({
   intlLocale,
   weekdayLabels,
   onRequestEdit,
+  onRequestCreate,
 }: {
   weeks: Date[][]; // 6 weeks x 7 days
   eventsByDay: CalendarEventSummary[][][]; // same shape as weeks
@@ -87,7 +91,21 @@ export default function MonthView({
   intlLocale: string;
   weekdayLabels: string[];
   onRequestEdit: (event: CalendarEventSummary) => void;
+  onRequestCreate: (date: Date) => void;
 }) {
+  // Clicking an empty part of a day cell opens Add Event preset to that
+  // date, at the next half-hour from now (event blocks stop their own
+  // click from bubbling here) — same idea as the day/week grid's
+  // click-to-create, applied to a whole-day cell instead of a time slot.
+  function handleDayClick(day: Date) {
+    const now = new Date();
+    const target = new Date(day);
+    const minutes = now.getMinutes() < 30 ? 30 : 0;
+    const hours = now.getMinutes() < 30 ? now.getHours() : now.getHours() + 1;
+    target.setHours(hours, minutes, 0, 0);
+    onRequestCreate(target);
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-card-border">
       <div className="grid shrink-0 grid-cols-7 border-b border-card-border">
@@ -106,7 +124,8 @@ export default function MonthView({
             {week.map((day, di) => (
               <div
                 key={di}
-                className={`flex min-h-0 flex-col overflow-hidden border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(day, di)}`}
+                onClick={() => handleDayClick(day)}
+                className={`flex min-h-0 cursor-pointer flex-col overflow-hidden border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(day, di)}`}
               >
                 <p
                   className={

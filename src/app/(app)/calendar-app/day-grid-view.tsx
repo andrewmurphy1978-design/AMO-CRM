@@ -65,7 +65,10 @@ function EventBlock({
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onRequestEdit(event)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onRequestEdit(event);
+      }}
       style={{ ...style, backgroundColor: color.bg, color: color.fg }}
       className={`absolute flex cursor-pointer flex-col overflow-hidden px-1.5 py-1 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
       title={event.title}
@@ -103,6 +106,7 @@ function DayColumn({
   taskById,
   noEventsLabel,
   onRequestEdit,
+  onRequestCreate,
 }: {
   day: Date;
   index: number;
@@ -115,6 +119,7 @@ function DayColumn({
   taskById: Record<string, string>;
   noEventsLabel: string;
   onRequestEdit: (event: CalendarEventSummary) => void;
+  onRequestCreate: (date: Date) => void;
 }) {
   const timed: TimedEvent<CalendarEventSummary>[] = events
     .filter((e) => !e.allDay && e.start)
@@ -133,8 +138,26 @@ function DayColumn({
   const positioned = layoutDayEvents(timed);
   const hourMarks = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => GRID_START_HOUR + i);
 
+  // Clicking anywhere in the empty part of the column (event blocks stop
+  // their own click from bubbling here) opens Add Event preset to the
+  // clicked date/time, snapped to the nearest 30 minutes — same idea as
+  // clicking an empty slot in Google Calendar's week/day grid.
+  function handleClick(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const totalMinutes = (offsetY / ROW_HEIGHT) * 60;
+    const gridMinutes = (GRID_END_HOUR - GRID_START_HOUR) * 60;
+    const snapped = Math.min(Math.max(Math.round(totalMinutes / 30) * 30, 0), gridMinutes - 30);
+    const target = new Date(day);
+    target.setHours(GRID_START_HOUR, snapped, 0, 0);
+    onRequestCreate(target);
+  }
+
   return (
-    <div className={`relative min-w-0 flex-1 border-l border-card-border first:border-l-0 ${dayColumnBg(day, index)}`}>
+    <div
+      onClick={handleClick}
+      className={`relative min-w-0 flex-1 cursor-pointer border-l border-card-border first:border-l-0 ${dayColumnBg(day, index)}`}
+    >
       {hourMarks.map((h) => (
         <div
           key={h}
@@ -192,6 +215,7 @@ export default function DayGridView({
   tomorrowLabel,
   noEventsLabel,
   onRequestEdit,
+  onRequestCreate,
 }: {
   days: Date[];
   eventsByDay: CalendarEventSummary[][];
@@ -206,6 +230,7 @@ export default function DayGridView({
   tomorrowLabel: string;
   noEventsLabel: string;
   onRequestEdit: (event: CalendarEventSummary) => void;
+  onRequestCreate: (date: Date) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -268,7 +293,10 @@ export default function DayGridView({
                       key={event.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => onRequestEdit(event)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRequestEdit(event);
+                      }}
                       className="flex cursor-pointer items-start gap-1 overflow-hidden rounded px-1 py-0.5 text-xs font-medium"
                       style={{ backgroundColor: color.bg, color: color.fg }}
                       title={event.title}
@@ -308,6 +336,7 @@ export default function DayGridView({
               taskById={taskById}
               noEventsLabel={noEventsLabel}
               onRequestEdit={onRequestEdit}
+              onRequestCreate={onRequestCreate}
             />
           ))}
         </div>

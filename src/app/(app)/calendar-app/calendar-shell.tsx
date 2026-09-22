@@ -234,11 +234,15 @@ export default function CalendarShell({
     setViewTarget(event.id);
   }
 
-  function requestCreate() {
-    // Defaults to "now" (rounded up to the next half hour) rather than the
-    // currently viewed day/anchor — the view components don't yet support
-    // clicking an empty slot to seed a specific time, so this is the one
-    // sensible default until they do.
+  function requestCreate(presetStart?: Date) {
+    // Clicking an empty slot in the grid/month views passes the exact
+    // date/time to preset (see DayGridView/MonthView's onRequestCreate) —
+    // otherwise (the header's Add button) default to "now" rounded up to
+    // the next half hour.
+    if (presetStart) {
+      setDialogTarget({ start: presetStart });
+      return;
+    }
     const now = new Date();
     now.setMinutes(now.getMinutes() < 30 ? 30 : 0, 0, 0);
     if (now <= new Date()) now.setHours(now.getHours() + 1);
@@ -300,7 +304,7 @@ export default function CalendarShell({
           {loading && <span className="text-xs text-soft">…</span>}
         </div>
         <div className="flex justify-center">
-          <button type="button" onClick={requestCreate} className="btn-primary rounded-lg px-4 py-1.5 text-sm font-semibold shadow-sm">
+          <button type="button" onClick={() => requestCreate()} className="btn-primary rounded-lg px-4 py-1.5 text-sm font-semibold shadow-sm">
             {labels.addEvent}
           </button>
         </div>
@@ -353,6 +357,7 @@ export default function CalendarShell({
                 intlLocale={intlLocale}
                 weekdayLabels={weekdayLabels}
                 onRequestEdit={requestEdit}
+                onRequestCreate={requestCreate}
               />
             ) : (
               <DayGridView
@@ -369,6 +374,7 @@ export default function CalendarShell({
                 tomorrowLabel={labels.tomorrowColumn}
                 noEventsLabel={labels.noEvents}
                 onRequestEdit={requestEdit}
+                onRequestCreate={requestCreate}
               />
             )}
           </div>
