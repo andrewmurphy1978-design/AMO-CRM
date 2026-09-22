@@ -113,13 +113,18 @@ export default function EmailCard({
   }
 
   const isRead = (id: string): boolean => readOverrides[id] || Boolean(data?.readStates[id]);
+  // Anything marked Completed on the Email page must disappear from here
+  // too — this card previously never checked completions at all, so a
+  // thread completed there kept counting here, inflating these three
+  // counts past what the Email page itself shows for the same data.
+  const isCompleted = (id: string): boolean => Boolean(data?.completions[id]);
   const emails = data?.emails ?? [];
   // Only threads still genuinely awaiting a reply — sentAwaitingReply now
   // also carries ones Gmail shows a reply has arrived on (so the Email
   // page can list them under Completed), which don't belong in this card.
-  const awaitingSent = (data?.sentAwaitingReply ?? []).filter((s) => s.status === "awaiting");
-  const needsReply = emails.filter((e) => !isRead(e.id) && data?.classifications[e.id] === "NEEDS_REPLY");
-  const needsAttention = emails.filter((e) => !isRead(e.id) && data?.classifications[e.id] === "NEEDS_ATTENTION");
+  const awaitingSent = (data?.sentAwaitingReply ?? []).filter((s) => s.status === "awaiting" && !isCompleted(s.id));
+  const needsReply = emails.filter((e) => !isCompleted(e.id) && !isRead(e.id) && data?.classifications[e.id] === "NEEDS_REPLY");
+  const needsAttention = emails.filter((e) => !isCompleted(e.id) && !isRead(e.id) && data?.classifications[e.id] === "NEEDS_ATTENTION");
   const nothingToShow = needsReply.length === 0 && awaitingSent.length === 0 && needsAttention.length === 0;
 
   // Name/Object stacked (Object smaller, right below) plus the date on
