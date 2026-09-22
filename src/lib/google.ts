@@ -219,6 +219,35 @@ async function fetchEmailSummary(accessToken: string, id: string): Promise<Email
   };
 }
 
+// Fetches the message's full RFC 5322 body (headers + every MIME part,
+// base64url-encoded) for the Email Dialog's "open a message" view —
+// deliberately a separate, more expensive call from fetchEmailSummary
+// above, whose `fields` mask exists specifically to keep the *list* cheap
+// by excluding part bodies (same "cheap list, expensive detail-on-open"
+// split already used by fetchCalendarEventDetail for Calendar). Returns
+// the decoded raw message text (still MIME-encoded, i.e. what
+// mime-parse.ts's parseMessage expects), or null on any failure.
+export async function fetchGmailMessageRaw(accessToken: string, id: string): Promise<string | null> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=raw`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { raw?: string };
+  if (!data.raw) return null;
+  return decodeBase64UrlToBinaryString(data.raw);
+}
+
+// Gmail's `raw` field is base64url (RFC 4648 §5: "-"/"_", no padding).
+// Decoded to a "binary string" (one JS char per byte) rather than UTF-8
+// text — mime-parse.ts's parser expects that convention throughout, since
+// charset decoding only happens once a leaf MIME part's own
+// Content-Transfer-Encoding has been undone.
+function decodeBase64UrlToBinaryString(b64url: string): string {
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+  return atob(padded);
+}
+
 // Takes the access token directly rather than fetching it internally —
 // this (and getUpcomingEvents below) runs inside a <Suspense> boundary
 // alongside other independent boundaries that Next.js renders

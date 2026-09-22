@@ -15,6 +15,7 @@ import RefreshButton from "../refresh-button";
 import EmailLinkPicker, { type LinkOption } from "./email-link-picker";
 import EmailTime from "./email-time";
 import EmailQuickActions from "../email-quick-actions";
+import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email-dialog";
 import type { LinkValues, LinkDialogLabels } from "../link-dialog";
 
 export type { EmailScreeningPayload };
@@ -73,6 +74,18 @@ function ImportantIcon({ className, title }: { className?: string; title: string
         d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a1 1 0 0 1 1 1v4.5a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1Zm0 9.25a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Z"
         clipRule="evenodd"
       />
+    </svg>
+  );
+}
+
+// The row's fallback external link — the primary label/subject now open
+// the in-app Email Dialog instead of navigating away, so this is the one
+// remaining click that opens the message's own Gmail thread in a new tab.
+function OpenExternalIcon({ className, title }: { className?: string; title: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
+      <title>{title}</title>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14 5h5v5M10 14 19 5M8 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-2" />
     </svg>
   );
 }
@@ -146,9 +159,9 @@ function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: stri
 // between rows — a variable-width date string ("19:58" vs "Sep 12, 3:15
 // PM") was previously the last flex child, so its own width change shifted
 // where every fixed-width icon before it landed.
-const PRIMARY_LABEL_WIDTH = "w-40";
-const LINKED_TO_WIDTH = "w-28";
-const DATE_WIDTH = "w-20";
+const PRIMARY_LABEL_WIDTH = "w-28";
+const LINKED_TO_WIDTH = "w-20";
+const DATE_WIDTH = "w-16";
 
 function EmailRow({
   index,
@@ -174,6 +187,8 @@ function EmailRow({
   hour12,
   intlLocale,
   onOpen,
+  onOpenDialog,
+  openExternalLabel,
   onLinkSaved,
   onComplete,
   onUncomplete,
@@ -206,6 +221,8 @@ function EmailRow({
   hour12: boolean;
   intlLocale: string;
   onOpen?: () => void;
+  onOpenDialog: () => void;
+  openExternalLabel: string;
   onLinkSaved: (values: LinkValues) => void;
   onComplete?: () => void;
   onUncomplete?: () => void;
@@ -218,29 +235,26 @@ function EmailRow({
   uncompleteLabel: string;
   markUnreadLabel: string;
 }) {
+  function openDialog() {
+    onOpen?.();
+    onOpenDialog();
+  }
+
   return (
     <li className={clsx("overflow-hidden transition-colors hover:bg-black/5", highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : "")}>
-      <div className="flex items-center gap-2 px-4 py-1.5">
-        <a
-          href={link}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={onOpen}
-          className={`${PRIMARY_LABEL_WIDTH} shrink-0 truncate text-sm font-medium text-ink hover:opacity-80`}
+      <div className="flex items-center gap-1.5 px-3 py-1.5">
+        <button
+          type="button"
+          onClick={openDialog}
+          className={`${PRIMARY_LABEL_WIDTH} shrink-0 truncate text-left text-sm font-medium text-ink hover:opacity-80`}
         >
           {primaryLabel}
-        </a>
-        <a
-          href={link}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={onOpen}
-          className="flex min-w-0 flex-1 items-center gap-1 truncate text-sm text-soft hover:opacity-80"
-        >
+        </button>
+        <button type="button" onClick={openDialog} className="flex min-w-0 flex-1 items-center gap-1 truncate text-left text-sm text-soft hover:opacity-80">
           {hasAttachments && <AttachmentIcon className="h-3.5 w-3.5 shrink-0" title={attachmentLabel} />}
           {important && <ImportantIcon className="h-3.5 w-3.5 shrink-0 text-red-600" title={importantLabel} />}
           <span className="truncate">{subject}</span>
-        </a>
+        </button>
         <span className={`${LINKED_TO_WIDTH} shrink-0 truncate text-right text-xs font-medium`}>
           {linkedTo && (
             <Link href={linkedTo.href} className="text-emerald-700 hover:underline">
@@ -277,6 +291,16 @@ function EmailRow({
         </span>
         <span className="flex w-6 shrink-0 justify-center">{onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}</span>
         <EmailQuickActions link={link} labels={quickActionLabels} onOpen={onOpen} />
+        <a
+          href={link}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title={openExternalLabel}
+          className="shrink-0 rounded p-1 text-soft hover:bg-black/10 hover:text-ink"
+        >
+          <OpenExternalIcon className="h-3.5 w-3.5" title={openExternalLabel} />
+        </a>
         <span className={`${DATE_WIDTH} shrink-0 whitespace-nowrap text-right text-xs text-soft`}>
           <EmailTime iso={dateIso} hour12={hour12} intlLocale={intlLocale} />
         </span>
@@ -327,6 +351,7 @@ export default function EmailScreeningView({
   const [readOverrides, setReadOverrides] = useState<Record<string, string | null>>({});
   const [linkOverrides, setLinkOverrides] = useState<Record<string, boolean>>({});
   const [completedOverrides, setCompletedOverrides] = useState<Record<string, string | null>>({});
+  const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
 
   async function runScreening() {
     try {
@@ -431,6 +456,7 @@ export default function EmailScreeningView({
     noResults: t.linkPicker.noResults,
   };
   const quickActionLabels = { reply: t.dashboard.emailReply, replyAll: t.dashboard.emailReplyAll, forward: t.dashboard.emailForward };
+  const emailDialogLabels: EmailDialogLabels = t.emailDialog;
   const categoryLabels: Record<EmailCategory, string> = {
     NEEDS_REPLY: t.email.categoryNeedsReply,
     NEEDS_ATTENTION: t.email.categoryNeedsAttention,
@@ -545,6 +571,8 @@ export default function EmailScreeningView({
         hour12={hour12}
         intlLocale={intlLocale}
         onOpen={opts.markAsRead ? () => markRead(email.id) : undefined}
+        onOpenDialog={() => setOpenMessage({ id: email.id, link: email.link })}
+        openExternalLabel={t.emailDialog.openInGmail}
         onLinkSaved={() => markLinked(email.threadId)}
         onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
         onUncomplete={opts.showUncomplete ? () => markUncomplete(email.id) : undefined}
@@ -580,6 +608,8 @@ export default function EmailScreeningView({
         dateIso={s.date}
         hour12={hour12}
         intlLocale={intlLocale}
+        onOpenDialog={() => setOpenMessage({ id: s.id, link: s.link })}
+        openExternalLabel={t.emailDialog.openInGmail}
         onLinkSaved={() => markLinked(s.threadId)}
         onComplete={opts.showComplete ? () => markComplete(s.id) : undefined}
         // A thread with status "completed" got that way because Gmail
@@ -659,10 +689,12 @@ export default function EmailScreeningView({
               <h2 className={`text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
             </div>
-            <ul className={`bg-card-bg ${section.dim ? "opacity-80" : ""}`}>{section.rows}</ul>
+            <ul className={`overflow-x-auto bg-card-bg ${section.dim ? "opacity-80" : ""}`}>{section.rows}</ul>
           </section>
         );
       })}
+
+      <EmailDialog target={openMessage} onClose={() => setOpenMessage(null)} dateLocale={dateLocale} intlLocale={intlLocale} hour12={hour12} labels={emailDialogLabels} />
     </div>
   );
 }
