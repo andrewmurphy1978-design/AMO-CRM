@@ -9,6 +9,7 @@ import { resolveReplyIdentity, type MailIdentity, type MailSource } from "@/lib/
 import { getIonosMailbox, recordIonosResult, type IonosMailbox } from "@/lib/mail/ionos";
 import { sendViaSmtp } from "@/lib/mail/smtp";
 import { fetchImapMessageRaw } from "@/lib/mail/imap";
+import { recordIonosSend, parseIonosSentRecordId } from "@/lib/mail/sent-records";
 
 // "ionos:<uid>" ids (see EmailSummary's source/messageIdHeader comment in
 // google.ts) never collide with a bare Gmail id, which is exactly what
@@ -89,6 +90,33 @@ export async function fetchEmailDetail(id: string): Promise<EmailDetail | { erro
   if (!session) throw new Error("Not authenticated");
 
   return withScopedPrismaClient(async (db) => {
+    // An "ionos-sent:<id>" record has no raw message stored anywhere (SMTP
+    // doesn't file a Sent-folder copy the way Gmail's send API does — see
+    // sendEmailAction's ionos branch) — it's the CRM's own local record of
+    // a send, so the dialog shows what that record has rather than
+    // fetching a body that was never kept.
+    const sentRecordId = parseIonosSentRecordId(id);
+    if (sentRecordId !== null) {
+      const record = await db.sentEmailRecord.findUnique({ where: { id: sentRecordId } });
+      if (!record || record.userId !== session.user.id) return { error: "not_found" };
+      const mailbox = await getIonosMailbox(session.user.id, db);
+      return {
+        id,
+        threadId: id,
+        subject: record.subject,
+        from: { name: mailbox?.displayName ?? "", email: mailbox?.address ?? "" },
+        to: [record.toEmail],
+        cc: [],
+        date: record.sentAt.toISOString(),
+        html: null,
+        text: null,
+        attachments: [],
+        messageIdHeader: record.messageId,
+        references: [],
+        replyIdentity: { source: "ionos", accountAddress: mailbox?.address ?? "", displayName: mailbox?.displayName ?? null },
+      };
+    }
+
     const accessToken = await getValidAccessToken(session.user.id, db);
     if (!accessToken) return { error: "not_connected" };
 
@@ -164,7 +192,7 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
 
     if (input.to.length === 0) return { error: "recipient_required" };
 
-    const { raw } = buildMimeMessage({
+    const { raw, messageId } = buildMimeMessage({
       fromName: replyIdentity.displayName,
       fromEmail: replyIdentity.accountAddress,
       to: input.to,
@@ -177,7 +205,6 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
     });
 
     if (replyIdentity.source === "ionos") {
-      const mailbox = await getIonosMailbox(session.user.id, db);
       if (!mailbox) return { error: "not_connected" };
       try {
         await sendViaSmtp(
@@ -196,9 +223,15 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
         return { error: message };
       }
       await recordIonosResult(session.user.id, db, null);
+      // A reply to an existing thread doesn't need its own "awaiting
+      // reply" row — a fresh message (no inReplyToId) is the only case
+      // that starts a new thread worth tracking that way.
+      if (!input.inReplyToId) {
+        await recordIonosSend(db, session.user.id, { messageId, to: input.to[0], toEmail: input.to[0], subject: input.subject });
+      }
       // The sent copy isn't filed into the mailbox's own Sent folder yet —
-      // that needs IMAP APPEND, which is Phase 5 polish, not core to
-      // sending working.
+      // that needs IMAP APPEND, which is further Phase 5 polish beyond
+      // this pass, not core to sending or its "awaiting reply" tracking.
       return { success: true };
     }
 

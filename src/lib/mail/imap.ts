@@ -31,6 +31,11 @@ export interface ImapMessageSummary {
   subject: string;
   date: string | null; // ISO, from the message's own Date header
   messageIdHeader: string | null;
+  // Matched against a SentEmailRecord's own messageId to reconcile
+  // whether an IONOS-sent message is still "awaiting" a reply or has one
+  // now — see reconcileIonosSentRecords in sent-records.ts.
+  inReplyTo: string | null;
+  references: string[];
   hasAttachments: boolean;
   important: boolean;
 }
@@ -256,6 +261,8 @@ function buildSummary(uid: number, items: Map<string, string>): ImapMessageSumma
     subject: decodeEncodedWords(headerFirst("subject")) || "(no subject)",
     date: parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : null,
     messageIdHeader: headerFirst("message-id").trim() || null,
+    inReplyTo: headerFirst("in-reply-to").trim() || null,
+    references: headerFirst("references").match(/<[^>]+>/g) ?? [],
     // A rough heuristic from the header alone (no body parts fetched at
     // list time) — a multipart/mixed top-level type is what every common
     // mail client uses for "message + attachment(s)".
@@ -281,7 +288,7 @@ export async function listRecentImapMessages(cfg: ImapConfig, maxResults: number
 
     const start = Math.max(1, exists - maxResults + 1);
     const fetch = await session.command(
-      `FETCH ${start}:${exists} (UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID CONTENT-TYPE IMPORTANCE X-PRIORITY)])`
+      `FETCH ${start}:${exists} (UID FLAGS INTERNALDATE BODY.PEEK[HEADER.FIELDS (FROM TO CC SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES CONTENT-TYPE IMPORTANCE X-PRIORITY)])`
     );
     expect(fetch, "FETCH");
 
@@ -317,6 +324,25 @@ export async function fetchImapMessageRaw(cfg: ImapConfig, uid: number): Promise
     if (!line) return null;
     const items = parseFetchDataItems(line);
     return items.get("BODY[]") ?? null;
+  } finally {
+    await session.command("LOGOUT").catch(() => {});
+    await session.close();
+  }
+}
+
+// Syncs the CRM's own "opened this message" state (EmailReadState — kept
+// deliberately separate from the server's own \Seen flag everywhere else
+// in this file, so listing/opening a message here never marks it read on
+// the server behind the user's back) out to the actual mailbox, only when
+// the user explicitly marks a message read/unread from the Email page —
+// so a native mail app or webmail session checking the same mailbox
+// agrees with what the CRM shows, instead of drifting from it silently.
+export async function setImapSeenFlag(cfg: ImapConfig, uid: number, seen: boolean): Promise<void> {
+  const session = await connectAndLogin(cfg);
+  try {
+    expect(await session.command("SELECT INBOX"), "SELECT INBOX");
+    const op = seen ? "+FLAGS" : "-FLAGS";
+    expect(await session.command(`UID STORE ${uid} ${op} (\\Seen)`), "UID STORE");
   } finally {
     await session.command("LOGOUT").catch(() => {});
     await session.close();

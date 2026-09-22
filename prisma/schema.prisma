@@ -66,6 +66,7 @@ model User {
   interactions    Interaction[]
   googleAccount   GoogleAccount?
   ionosMailbox    IonosMailboxAccount?
+  sentEmailRecords SentEmailRecord[]
 
   @@map("users")
 }
@@ -106,6 +107,27 @@ model IonosMailboxAccount {
   updatedAt            DateTime  @updatedAt
 
   @@map("ionos_mailbox_accounts")
+}
+
+// A message sent from the IONOS mailbox via SMTP — Gmail's own "Sent —
+// awaiting reply" section is derived live from Gmail's Sent folder/thread
+// data (see getSentAwaitingReplies in src/lib/google.ts), but IONOS has no
+// equivalent API to query on demand, so each send is recorded here
+// instead and reconciled against the mailbox's own recent inbox messages
+// (matching In-Reply-To/References against messageId) on every refresh.
+model SentEmailRecord {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId String  @unique // this sent message's own Message-ID header — what a reply's In-Reply-To/References is matched against
+  to       String
+  toEmail  String
+  subject  String
+  sentAt   DateTime @default(now())
+  status   String   @default("awaiting") // "awaiting" | "completed" — same two states as Gmail's own SentEmailSummary.status
+
+  @@index([userId])
+  @@map("sent_email_records")
 }
 
 // ---------------------------------------------------------------------------

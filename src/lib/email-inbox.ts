@@ -4,6 +4,7 @@ import { getRecentEmails, getSentAwaitingReplies, type EmailSummary, type SentEm
 import { getEmailClassifications, type EmailCategory } from "@/lib/email-classifier";
 import { getIonosMailbox, recordIonosResult } from "@/lib/mail/ionos";
 import { listRecentImapMessages, type ImapMessageSummary } from "@/lib/mail/imap";
+import { reconcileIonosSentRecords, listIonosSentRecords } from "@/lib/mail/sent-records";
 
 // Wraps one IMAP message into the same EmailSummary shape the rest of the
 // Email page already works with — "ionos:<uid>" keeps every id disjoint
@@ -323,9 +324,16 @@ export async function getCachedInbox(db: PrismaClient, userId: string): Promise<
   if (!row) return null;
   const gmailEmails = row.emails as unknown as EmailSummary[];
   const ionosEmails = (row.ionosEmails as unknown as EmailSummary[] | null) ?? [];
+  const gmailSent = (row.sentAwaitingReply as unknown as SentEmailSummary[] | null) ?? [];
+  // IONOS sent records live in their own table (SentEmailRecord), not the
+  // cache row's JSON column — same reason ionosEmails is stored
+  // separately from the Gmail-only emails column: independently
+  // refreshable, and this always reflects reconcileIonosSentRecords'
+  // latest awaiting/completed status rather than a stale JSON snapshot.
+  const ionosSent = await listIonosSentRecords(db, userId, 15);
   return {
     emails: mergeEmailSources(gmailEmails, ionosEmails),
-    sentAwaitingReply: (row.sentAwaitingReply as unknown as SentEmailSummary[] | null) ?? [],
+    sentAwaitingReply: [...gmailSent, ...ionosSent],
     fetchedAt: row.fetchedAt.toISOString(),
   };
 }
@@ -381,6 +389,7 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
       ionosEmailList = messages.map(ionosSummaryFromImap);
       ionosFetchedAt = new Date();
       await recordIonosResult(userId, db, null);
+      await reconcileIonosSentRecords(db, userId, messages);
     } catch (e) {
       // A bad password, a down host, a network hiccup — none of these
       // should blank out an otherwise-good Gmail snapshot, so this falls
@@ -436,7 +445,8 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
     create: { userId, emails: emailsJson, sentAwaitingReply: sentJson, fetchedAt, ionosEmails: ionosJson, ionosFetchedAt },
   });
 
-  return { emails: mergedEmails, sentAwaitingReply: sentList, fetchedAt: fetchedAt.toISOString() };
+  const ionosSentList = mailbox ? await listIonosSentRecords(db, userId, 15) : [];
+  return { emails: mergedEmails, sentAwaitingReply: [...sentList, ...ionosSentList], fetchedAt: fetchedAt.toISOString() };
 }
 
 export type { EmailCategory };
