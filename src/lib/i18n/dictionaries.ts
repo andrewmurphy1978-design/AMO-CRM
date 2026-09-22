@@ -216,7 +216,10 @@ export const dictionaries = {
     },
     contacts: {
       title: "Contacts",
-      shown: (n: number) => `${n} shown`,
+      shownRange: (from: number, to: number, total: number) => (total === 0 ? "0 shown" : `${from}–${to} of ${total}`),
+      previousPage: "Previous",
+      nextPage: "Next",
+      pageOf: (page: number, totalPages: number) => `Page ${page} of ${totalPages}`,
       newContact: "New contact",
       searchPlaceholder: "Search name, email, company...",
       allStages: "All stages",
@@ -1351,7 +1354,10 @@ export const dictionaries = {
     },
     contacts: {
       title: "Contacts",
-      shown: (n: number) => `${n} affiché${n > 1 ? "s" : ""}`,
+      shownRange: (from: number, to: number, total: number) => (total === 0 ? "0 affiché" : `${from}–${to} sur ${total}`),
+      previousPage: "Précédent",
+      nextPage: "Suivant",
+      pageOf: (page: number, totalPages: number) => `Page ${page} sur ${totalPages}`,
       newContact: "Nouveau contact",
       searchPlaceholder: "Rechercher un nom, courriel, entreprise...",
       allStages: "Toutes les étapes",

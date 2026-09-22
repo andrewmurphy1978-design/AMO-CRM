@@ -30,6 +30,7 @@ function toArray(value: string | string[] | undefined): string[] {
 
 type SortField = "name" | "country" | "stage" | "source";
 const SORT_FIELDS: SortField[] = ["name", "country", "stage", "source"];
+const PAGE_SIZE = 100;
 
 function SortableHeader({
   field,
@@ -77,13 +78,14 @@ function TagPills({ tags, vertical }: { tags: { tagId: string; tag: { name: stri
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string | string[]; tag?: string | string[]; sort?: string; dir?: string }>;
+  searchParams: Promise<{ q?: string; stage?: string | string[]; tag?: string | string[]; sort?: string; dir?: string; page?: string }>;
 }) {
-  const { q, stage, tag, sort, dir } = await searchParams;
+  const { q, stage, tag, sort, dir, page: pageParam } = await searchParams;
   const stages = toArray(stage);
   const selectedTags = toArray(tag);
   const sortField: SortField | null = SORT_FIELDS.includes(sort as SortField) ? (sort as SortField) : null;
   const sortDir: "asc" | "desc" = dir === "desc" ? "desc" : "asc";
+  const requestedPage = Math.max(1, Math.floor(Number(pageParam)) || 1);
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
@@ -108,21 +110,32 @@ export default async function ContactsPage({
   else if (sortField === "stage") orderBy = { stage: sortDir };
   else if (sortField === "source") orderBy = { source: sortDir };
 
-  // One shared client for all three reads below — see src/lib/prisma.ts
+  // One shared client for all four reads below — see src/lib/prisma.ts
   // for why (each `prisma.x` property access on the raw proxy opens a
-  // brand-new connection; three of those on this frequently-visited page
+  // brand-new connection; several of those on this frequently-visited page
   // was a real contributor to Cloudflare's Error 1102).
-  const { contacts, tags, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { contacts, total, page, tags, hour12 } = await withScopedPrismaClient(async (db) => {
+    const total = await db.contact.count({ where });
+    // Clamped against the count before fetching, so a stale/out-of-range
+    // page param (e.g. a bookmarked link from before a filter narrowed the
+    // results) shows the last real page of contacts instead of an empty one.
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const page = Math.min(requestedPage, totalPages);
     const contacts = await db.contact.findMany({
       where,
       orderBy,
-      take: 100,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
       include: { tags: { include: { tag: true } } },
     });
     const tags = await db.tag.findMany({ orderBy: { name: "asc" } });
     const hour12 = await getHour12(session, db);
-    return { contacts, tags, hour12 };
+    return { contacts, total, page, tags, hour12 };
   });
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   const stageOptions = Object.entries(STAGE_LABELS).map(([value, label]) => ({ value, label }));
   const tagOptions = tags.map((tg) => ({ value: tg.name, label: tg.name }));
@@ -131,6 +144,16 @@ export default async function ContactsPage({
   if (q) baseParams.set("q", q);
   for (const s of stages) baseParams.append("stage", s);
   for (const tg of selectedTags) baseParams.append("tag", tg);
+
+  function pageHref(targetPage: number): string {
+    const params = new URLSearchParams(baseParams);
+    if (sortField) {
+      params.set("sort", sortField);
+      params.set("dir", sortDir);
+    }
+    if (targetPage > 1) params.set("page", String(targetPage));
+    return `/contacts?${params.toString()}`;
+  }
 
   return (
     <div className="space-y-6">
@@ -158,7 +181,7 @@ export default async function ContactsPage({
         filterLabel={t.common.filter}
         trailing={
           <span className="ml-auto rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
-            {t.contacts.shown(contacts.length)}
+            {t.contacts.shownRange(rangeStart, rangeEnd, total)}
           </span>
         }
       />
@@ -324,6 +347,26 @@ export default async function ContactsPage({
           </tbody>
         </table>
       </ScrollableList>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 text-sm">
+          {page > 1 ? (
+            <Link href={pageHref(page - 1)} className="rounded-lg border border-card-border px-3 py-1.5 text-ink hover:bg-black/5">
+              {t.contacts.previousPage}
+            </Link>
+          ) : (
+            <span className="rounded-lg border border-card-border px-3 py-1.5 text-soft opacity-50">{t.contacts.previousPage}</span>
+          )}
+          <span className="text-soft">{t.contacts.pageOf(page, totalPages)}</span>
+          {page < totalPages ? (
+            <Link href={pageHref(page + 1)} className="rounded-lg border border-card-border px-3 py-1.5 text-ink hover:bg-black/5">
+              {t.contacts.nextPage}
+            </Link>
+          ) : (
+            <span className="rounded-lg border border-card-border px-3 py-1.5 text-soft opacity-50">{t.contacts.nextPage}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
