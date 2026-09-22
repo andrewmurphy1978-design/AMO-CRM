@@ -138,9 +138,12 @@ export default function EmailCard({
             <p className="truncate text-xs text-soft">{email.subject}</p>
           </a>
           <EmailQuickActions
-            link={email.link}
             labels={{ reply: labels.reply, replyAll: labels.replyAll, forward: labels.forward }}
             onOpen={() => markRead(email.id)}
+            // The Dashboard card doesn't have the full Email Dialog/compose
+            // UI yet (that's a later phase) — every quick action falls back
+            // to Gmail's own thread the same way the whole row already does.
+            onAction={() => window.open(email.link, "_blank", "noopener,noreferrer")}
           />
           <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">{formatEmailDate(email.date, hour12, intlLocale)}</span>
         </div>
@@ -156,7 +159,10 @@ export default function EmailCard({
             <p className="truncate text-sm font-medium text-ink">{item.to}</p>
             <p className="truncate text-xs text-soft">{item.subject}</p>
           </a>
-          <EmailQuickActions link={item.link} labels={{ reply: labels.reply, replyAll: labels.replyAll, forward: labels.forward }} />
+          <EmailQuickActions
+            labels={{ reply: labels.reply, replyAll: labels.replyAll, forward: labels.forward }}
+            onAction={() => window.open(item.link, "_blank", "noopener,noreferrer")}
+          />
           <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">{formatEmailDate(item.date, hour12, intlLocale)}</span>
         </div>
       </li>

@@ -183,19 +183,22 @@ export default async function SettingsPage({
             )}
             <div className="mt-4">
               {googleConnection ? (
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm text-ink">
-                    {t.settings.googleConnectedAs}{" "}
-                    <span className="font-medium">{googleConnection.email ?? "—"}</span>
-                  </p>
-                  <form action={disconnectGoogleAccount}>
-                    <button
-                      type="submit"
-                      className="rounded-lg border border-card-border px-3 py-1.5 text-sm text-soft hover:bg-black/5"
-                    >
-                      {t.settings.googleDisconnect}
-                    </button>
-                  </form>
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm text-ink">
+                      {t.settings.googleConnectedAs}{" "}
+                      <span className="font-medium">{googleConnection.email ?? "—"}</span>
+                    </p>
+                    <form action={disconnectGoogleAccount}>
+                      <button
+                        type="submit"
+                        className="rounded-lg border border-card-border px-3 py-1.5 text-sm text-soft hover:bg-black/5"
+                      >
+                        {t.settings.googleDisconnect}
+                      </button>
+                    </form>
+                  </div>
+                  <p className="mt-2 text-xs text-soft">{t.settings.googleReconnectForSend}</p>
                 </div>
               ) : (
                 <a

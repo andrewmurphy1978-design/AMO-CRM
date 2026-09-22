@@ -226,15 +226,16 @@ async function fetchEmailSummary(accessToken: string, id: string): Promise<Email
 // by excluding part bodies (same "cheap list, expensive detail-on-open"
 // split already used by fetchCalendarEventDetail for Calendar). Returns
 // the decoded raw message text (still MIME-encoded, i.e. what
-// mime-parse.ts's parseMessage expects), or null on any failure.
-export async function fetchGmailMessageRaw(accessToken: string, id: string): Promise<string | null> {
+// mime-parse.ts's parseMessage expects) plus the Gmail threadId (needed to
+// reply within the same thread), or null on any failure.
+export async function fetchGmailMessageRaw(accessToken: string, id: string): Promise<{ raw: string; threadId: string } | null> {
   const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=raw`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) return null;
-  const data = (await res.json()) as { raw?: string };
+  const data = (await res.json()) as { raw?: string; threadId?: string };
   if (!data.raw) return null;
-  return decodeBase64UrlToBinaryString(data.raw);
+  return { raw: decodeBase64UrlToBinaryString(data.raw), threadId: data.threadId ?? id };
 }
 
 // Gmail's `raw` field is base64url (RFC 4648 §5: "-"/"_", no padding).
@@ -246,6 +247,37 @@ function decodeBase64UrlToBinaryString(b64url: string): string {
   const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
   const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
   return atob(padded);
+}
+
+// The reverse of the above — mime-build.ts hands back a "binary string"
+// RFC 5322 message (one JS char per byte); Gmail's send endpoint wants
+// that same message base64url-encoded, no padding.
+function encodeBinaryStringToBase64Url(raw: string): string {
+  return btoa(raw).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// Sends a message built by mime-build.ts's buildMimeMessage. Passing
+// `threadId` keeps a reply in the same Gmail thread — Gmail also needs the
+// raw message's own In-Reply-To/References headers to actually thread it
+// correctly in every client, which buildMimeMessage already sets, so
+// threadId here is a belt-and-suspenders addition, not the only thing
+// doing the work.
+export async function sendGmailMessage(
+  accessToken: string,
+  raw: string,
+  threadId?: string
+): Promise<{ id: string; threadId: string } | { error: string }> {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ raw: encodeBinaryStringToBase64Url(raw), ...(threadId ? { threadId } : {}) }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    return { error: `Gmail send failed (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}` };
+  }
+  const data = (await res.json()) as { id: string; threadId: string };
+  return { id: data.id, threadId: data.threadId };
 }
 
 // Takes the access token directly rather than fetching it internally —

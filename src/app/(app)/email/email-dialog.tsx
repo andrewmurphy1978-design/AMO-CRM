@@ -5,6 +5,7 @@ import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
 import { fetchEmailDetail, type EmailDetail } from "@/actions/email-messages";
 import EmailBodyFrame from "./email-body-frame";
+import type { ComposeMode } from "./email-compose-dialog";
 
 export interface EmailDialogLabels {
   loading: string;
@@ -18,6 +19,9 @@ export interface EmailDialogLabels {
   noContent: string;
   openInGmail: string;
   attachments: string;
+  reply: string;
+  replyAll: string;
+  forward: string;
 }
 
 export interface EmailDialogTarget {
@@ -47,6 +51,7 @@ function formatBytes(n: number): string {
 export default function EmailDialog({
   target,
   onClose,
+  onReply,
   dateLocale,
   intlLocale,
   hour12,
@@ -54,6 +59,7 @@ export default function EmailDialog({
 }: {
   target: EmailDialogTarget | null;
   onClose: () => void;
+  onReply: (detail: EmailDetail, mode: ComposeMode) => void;
   dateLocale: Locale | undefined;
   intlLocale: string;
   hour12: boolean;
@@ -171,9 +177,36 @@ export default function EmailDialog({
           <a href={target.link} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-emerald-700 hover:underline">
             {labels.openInGmail} ↗
           </a>
-          <button type="button" onClick={onClose} className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5">
-            {labels.close}
-          </button>
+          <div className="flex items-center gap-2">
+            {detail && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onReply(detail, "reply")}
+                  className="rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
+                >
+                  {labels.reply}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReply(detail, "replyAll")}
+                  className="rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
+                >
+                  {labels.replyAll}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReply(detail, "forward")}
+                  className="rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
+                >
+                  {labels.forward}
+                </button>
+              </>
+            )}
+            <button type="button" onClick={onClose} className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5">
+              {labels.close}
+            </button>
+          </div>
         </div>
       </div>
     </div>

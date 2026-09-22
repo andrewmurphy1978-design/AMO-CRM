@@ -14,8 +14,10 @@ import PageHeader from "../page-header";
 import RefreshButton from "../refresh-button";
 import EmailLinkPicker, { type LinkOption } from "./email-link-picker";
 import EmailTime from "./email-time";
-import EmailQuickActions from "../email-quick-actions";
+import EmailQuickActions, { type EmailQuickActionMode } from "../email-quick-actions";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email-dialog";
+import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email-compose-dialog";
+import { fetchEmailDetail, type EmailDetail } from "@/actions/email-messages";
 import type { LinkValues, LinkDialogLabels } from "../link-dialog";
 
 export type { EmailScreeningPayload };
@@ -188,6 +190,7 @@ function EmailRow({
   intlLocale,
   onOpen,
   onOpenDialog,
+  onQuickAction,
   openExternalLabel,
   onLinkSaved,
   onComplete,
@@ -222,6 +225,7 @@ function EmailRow({
   intlLocale: string;
   onOpen?: () => void;
   onOpenDialog: () => void;
+  onQuickAction: (mode: EmailQuickActionMode) => void;
   openExternalLabel: string;
   onLinkSaved: (values: LinkValues) => void;
   onComplete?: () => void;
@@ -290,7 +294,7 @@ function EmailRow({
           {!onUncomplete && completedLocked && <CompletedBadge title={completeLabel} />}
         </span>
         <span className="flex w-6 shrink-0 justify-center">{onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}</span>
-        <EmailQuickActions link={link} labels={quickActionLabels} onOpen={onOpen} />
+        <EmailQuickActions labels={quickActionLabels} onOpen={onOpen} onAction={onQuickAction} />
         <a
           href={link}
           target="_blank"
@@ -352,6 +356,14 @@ export default function EmailScreeningView({
   const [linkOverrides, setLinkOverrides] = useState<Record<string, boolean>>({});
   const [completedOverrides, setCompletedOverrides] = useState<Record<string, string | null>>({});
   const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
+  const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   async function runScreening() {
     try {
@@ -438,6 +450,16 @@ export default function EmailScreeningView({
     postJson("/api/email/mark-uncomplete", id);
   }
 
+  // The row-level Reply/Reply All/Forward icons need the message's full
+  // detail (From/To/Cc/body/identity) to prefill compose, which the list
+  // view never fetches — same fetchEmailDetail call the Email Dialog
+  // itself makes when opened.
+  async function openComposeFor(id: string, mode: ComposeMode) {
+    const result = await fetchEmailDetail(id);
+    if ("error" in result) return;
+    setComposeTarget({ message: result, mode });
+  }
+
   const linkLabels = {
     link: t.linkPicker.link,
     edit: t.linkPicker.edit,
@@ -457,6 +479,7 @@ export default function EmailScreeningView({
   };
   const quickActionLabels = { reply: t.dashboard.emailReply, replyAll: t.dashboard.emailReplyAll, forward: t.dashboard.emailForward };
   const emailDialogLabels: EmailDialogLabels = t.emailDialog;
+  const emailComposeLabels: EmailComposeLabels = t.emailCompose;
   const categoryLabels: Record<EmailCategory, string> = {
     NEEDS_REPLY: t.email.categoryNeedsReply,
     NEEDS_ATTENTION: t.email.categoryNeedsAttention,
@@ -572,6 +595,7 @@ export default function EmailScreeningView({
         intlLocale={intlLocale}
         onOpen={opts.markAsRead ? () => markRead(email.id) : undefined}
         onOpenDialog={() => setOpenMessage({ id: email.id, link: email.link })}
+        onQuickAction={(mode) => openComposeFor(email.id, mode)}
         openExternalLabel={t.emailDialog.openInGmail}
         onLinkSaved={() => markLinked(email.threadId)}
         onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
@@ -609,6 +633,7 @@ export default function EmailScreeningView({
         hour12={hour12}
         intlLocale={intlLocale}
         onOpenDialog={() => setOpenMessage({ id: s.id, link: s.link })}
+        onQuickAction={(mode) => openComposeFor(s.id, mode)}
         openExternalLabel={t.emailDialog.openInGmail}
         onLinkSaved={() => markLinked(s.threadId)}
         onComplete={opts.showComplete ? () => markComplete(s.id) : undefined}
@@ -694,7 +719,34 @@ export default function EmailScreeningView({
         );
       })}
 
-      <EmailDialog target={openMessage} onClose={() => setOpenMessage(null)} dateLocale={dateLocale} intlLocale={intlLocale} hour12={hour12} labels={emailDialogLabels} />
+      <EmailDialog
+        target={openMessage}
+        onClose={() => setOpenMessage(null)}
+        onReply={(detail: EmailDetail, mode: ComposeMode) => {
+          setOpenMessage(null);
+          setComposeTarget({ message: detail, mode });
+        }}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+        hour12={hour12}
+        labels={emailDialogLabels}
+      />
+
+      <EmailComposeDialog
+        target={composeTarget}
+        onClose={() => setComposeTarget(null)}
+        onSent={() => {
+          setComposeTarget(null);
+          setToast(emailComposeLabels.sentToast);
+        }}
+        labels={emailComposeLabels}
+      />
+
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-[60] flex justify-center px-4">
+          <div className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>
+        </div>
+      )}
     </div>
   );
 }
