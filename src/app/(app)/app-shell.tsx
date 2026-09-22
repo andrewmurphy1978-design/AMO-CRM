@@ -31,7 +31,7 @@ export default function AppShell({
   // Re-deriving this on route change is a render-phase state adjustment
   // (React's sanctioned alternative to an effect for this), not an effect,
   // so it can't cascade an extra render.
-  const autoCollapse = (p: string) => p === "/" || p === "/calendar-app" || p === "/email";
+  const autoCollapse = (p: string) => p === "/" || p === "/calendar-app" || p === "/email" || p === "/contacts";
   const [prevPathname, setPrevPathname] = useState(pathname);
   const [collapsed, setCollapsed] = useState(autoCollapse(pathname));
   if (pathname !== prevPathname) {

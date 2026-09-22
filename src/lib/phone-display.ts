@@ -18,13 +18,13 @@ import { parsePhoneNumber, type CountryCode, type PhoneNumber } from "libphonenu
 // this is only attempted once there are enough digits (11+) that a stray
 // national-only number (typically 10 digits or fewer) can't be mistaken for
 // one with a calling code prefix.
-// Recognizes "x1234", "ext 1234", "ext. 1234", "extension 1234" (any
-// casing, with or without a preceding space) at the end of a stored phone
-// value, so an extension can travel inside the same single text field
+// Recognizes "x1234", "ext 1234", "ext. 1234", "extension 1234", "#1234"
+// (any casing, with or without a preceding space) at the end of a stored
+// phone value, so an extension can travel inside the same single text field
 // instead of needing its own column. Digits-only on purpose — a stray "x"
 // inside a formatted number (there isn't one) would never match this
 // anchored-at-the-end pattern.
-const EXTENSION_PATTERN = /\s*(?:x|ext\.?|extension)\s*(\d+)\s*$/i;
+const EXTENSION_PATTERN = /\s*(?:x|ext\.?|extension|#)\s*(\d+)\s*$/i;
 
 export function splitPhoneExtension(value: string): { number: string; ext: string | null } {
   const match = value.match(EXTENSION_PATTERN);

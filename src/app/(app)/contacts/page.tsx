@@ -180,9 +180,44 @@ export default async function ContactsPage({
         allTagsLabel={t.contacts.allTags}
         filterLabel={t.common.filter}
         trailing={
-          <span className="ml-auto rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
-            {t.contacts.shownRange(rangeStart, rangeEnd, total)}
-          </span>
+          <>
+            {totalPages > 1 && (
+              <div className="ml-auto flex items-center gap-2 text-sm">
+                {page > 1 ? (
+                  <Link
+                    href={pageHref(page - 1)}
+                    aria-label={t.contacts.previousPage}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-ink hover:bg-black/5"
+                  >
+                    ←
+                  </Link>
+                ) : (
+                  <span aria-label={t.contacts.previousPage} className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft opacity-50">
+                    ←
+                  </span>
+                )}
+                <span className="text-soft">{t.contacts.pageOf(page, totalPages)}</span>
+                {page < totalPages ? (
+                  <Link
+                    href={pageHref(page + 1)}
+                    aria-label={t.contacts.nextPage}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-ink hover:bg-black/5"
+                  >
+                    →
+                  </Link>
+                ) : (
+                  <span aria-label={t.contacts.nextPage} className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft opacity-50">
+                    →
+                  </span>
+                )}
+              </div>
+            )}
+            <span
+              className={`rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800 ${totalPages > 1 ? "" : "ml-auto"}`}
+            >
+              {t.contacts.shownRange(rangeStart, rangeEnd, total)}
+            </span>
+          </>
         }
       />
 
@@ -199,7 +234,11 @@ export default async function ContactsPage({
               style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="font-medium text-ink">
+                <p className="flex items-center gap-2 font-medium text-ink">
+                  {contact.avatarUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={contact.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                  )}
                   {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
                 </p>
                 <span className="shrink-0 text-xs text-ink/70">{contact.source ?? "—"}</span>
@@ -282,9 +321,16 @@ export default async function ContactsPage({
                         regardless of the td/a in between) — a pure-CSS
                         "stretched link" so no client component is needed just
                         for row navigation. */}
-                    <Link href={`/contacts/${contact.id}`} className="relative z-10 font-medium text-ink group-hover:underline">
+                    <Link
+                      href={`/contacts/${contact.id}`}
+                      className="relative z-10 flex items-center gap-2 font-medium text-ink group-hover:underline"
+                    >
                       <span className="absolute inset-0 z-0 group-hover:bg-black/5" aria-hidden="true" />
-                      {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
+                      {contact.avatarUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={contact.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                      )}
+                      <span className="truncate">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</span>
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-ink/70">
@@ -348,25 +394,6 @@ export default async function ContactsPage({
         </table>
       </ScrollableList>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3 text-sm">
-          {page > 1 ? (
-            <Link href={pageHref(page - 1)} className="rounded-lg border border-card-border px-3 py-1.5 text-ink hover:bg-black/5">
-              {t.contacts.previousPage}
-            </Link>
-          ) : (
-            <span className="rounded-lg border border-card-border px-3 py-1.5 text-soft opacity-50">{t.contacts.previousPage}</span>
-          )}
-          <span className="text-soft">{t.contacts.pageOf(page, totalPages)}</span>
-          {page < totalPages ? (
-            <Link href={pageHref(page + 1)} className="rounded-lg border border-card-border px-3 py-1.5 text-ink hover:bg-black/5">
-              {t.contacts.nextPage}
-            </Link>
-          ) : (
-            <span className="rounded-lg border border-card-border px-3 py-1.5 text-soft opacity-50">{t.contacts.nextPage}</span>
-          )}
-        </div>
-      )}
     </div>
   );
 }
