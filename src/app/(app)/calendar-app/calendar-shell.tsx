@@ -15,6 +15,7 @@ import type { CalendarEventSummary } from "@/lib/google";
 import type { Lang } from "@/lib/i18n/dictionaries";
 import type { LinkOption } from "../link-dialog";
 import EventDialog, { type EventDialogLabels, type EventDialogTarget } from "./event-dialog";
+import EventViewDialog, { type EventViewDialogLabels } from "./event-view-dialog";
 import PageHeader from "../page-header";
 import RefreshButton from "../refresh-button";
 import DayGridView from "./day-grid-view";
@@ -90,6 +91,7 @@ export interface CalendarShellLabels {
   tomorrowColumn: string;
   noEvents: string;
   eventDialog: EventDialogLabels;
+  eventViewDialog: EventViewDialogLabels;
   linkPicker: { contact: string; project: string; task: string; booking: string; none: string; clear: string; searchPlaceholder: string; noResults: string };
 }
 
@@ -110,6 +112,7 @@ export default function CalendarShell({
   headerActions,
   refreshLabel,
   refreshingLabel,
+  calendarName,
 }: {
   initialEvents: CalendarEventSummary[];
   initialLinks: Record<string, EventLinkValues>;
@@ -127,6 +130,7 @@ export default function CalendarShell({
   headerActions?: ReactNode;
   refreshLabel: string;
   refreshingLabel: string;
+  calendarName?: string | null;
 }) {
   const [view, setView] = useState<ViewMode>("week");
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
@@ -134,7 +138,15 @@ export default function CalendarShell({
   const [links, setLinks] = useState(initialLinks);
   const [loading, setLoading] = useState(false);
   const [dialogTarget, setDialogTarget] = useState<EventDialogTarget | null>(null);
+  const [viewTarget, setViewTarget] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   // Starts from a rough calc() estimate (header + page padding) so there's
@@ -221,7 +233,7 @@ export default function CalendarShell({
   const weekdayLabels = Array.from({ length: 7 }, (_, i) => format(addDays(startOfWeek(new Date(), { weekStartsOn: 0 }), i), "EEE", { locale: dateLocale }));
 
   function requestEdit(event: CalendarEventSummary) {
-    setDialogTarget({ id: event.id });
+    setViewTarget(event.id);
   }
 
   function requestCreate() {
@@ -365,11 +377,39 @@ export default function CalendarShell({
         </div>
       )}
 
+      <EventViewDialog
+        eventId={viewTarget}
+        onClose={() => setViewTarget(null)}
+        onEdit={() => {
+          const id = viewTarget;
+          setViewTarget(null);
+          if (id) setDialogTarget({ id });
+        }}
+        onDeleted={() => {
+          setViewTarget(null);
+          refresh();
+          setToast(labels.eventDialog.deleted);
+        }}
+        hour12={hour12}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+        labels={labels.eventViewDialog}
+      />
+
       <EventDialog
         key={dialogTarget ? ("id" in dialogTarget ? dialogTarget.id : dialogTarget.start.getTime()) : "none"}
         target={dialogTarget}
+        initialLinks={dialogTarget && "id" in dialogTarget ? links[dialogTarget.id] : undefined}
+        calendarName={calendarName}
         onClose={() => setDialogTarget(null)}
-        onSaved={refresh}
+        onSaved={() => {
+          refresh();
+          setToast(labels.eventDialog.saved);
+        }}
+        onDeleted={() => {
+          refresh();
+          setToast(labels.eventDialog.deleted);
+        }}
         contacts={contacts}
         projects={projects}
         tasks={tasks}
@@ -378,6 +418,12 @@ export default function CalendarShell({
         labels={labels.eventDialog}
         linkLabels={labels.linkPicker}
       />
+
+      {toast && (
+        <div className="fixed inset-x-0 top-4 z-[60] flex justify-center px-4">
+          <div className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg">{toast}</div>
+        </div>
+      )}
       </div>
     </>
   );

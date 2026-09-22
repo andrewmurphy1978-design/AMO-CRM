@@ -44,7 +44,7 @@ export async function fetchCalendarEventDetail(eventId: string): Promise<Calenda
   return withScopedPrismaClient(async (db) => {
     const accessToken = await getValidAccessToken(session.user.id, db);
     if (!accessToken) return { error: "not_connected" };
-    const detail = await gGetEvent(accessToken, eventId);
+    const detail = await gGetEvent(accessToken, eventId, session.user.name ?? null);
     if (!detail) return { error: "not_found" };
     return detail;
   });

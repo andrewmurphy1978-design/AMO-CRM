@@ -425,8 +425,8 @@ export async function getUpcomingEvents(accessToken: string): Promise<CalendarEv
 interface RawGoogleEvent {
   id: string;
   summary?: string;
-  start?: { dateTime?: string; date?: string };
-  end?: { dateTime?: string; date?: string };
+  start?: { dateTime?: string; date?: string; timeZone?: string };
+  end?: { dateTime?: string; date?: string; timeZone?: string };
   colorId?: string;
   htmlLink?: string;
   attendees?: { email?: string }[];
@@ -494,18 +494,28 @@ export interface CalendarEventDetail {
   transparency: "opaque" | "transparent"; // opaque = busy, transparent = free
   reminderUseDefault: boolean;
   reminderMinutes: number | null; // first override's minutes, when useDefault is false
+  timeZone: string | null; // IANA zone the event's own start carries, e.g. "America/Montreal"
+  organizerName: string | null; // the connected Google account's own display name/email
 }
 
 // The shape the event dialog submits — always sends every field (rather
 // than a partial diff), so clearing a field in the form really clears it
 // on the Google side too instead of leaving the old value untouched.
+//
+// start/end are "floating" local wall-clock strings (yyyy-MM-ddTHH:mm:ss,
+// no trailing Z/offset) paired with an explicit IANA `timeZone` — exactly
+// the shape Google's own Calendar UI submits, and the only way to let the
+// user pick a timezone independent of the browser's own: a bare ISO string
+// with a "Z"/offset baked in would already have committed to some specific
+// UTC instant before timeZone even entered the picture.
 export interface CalendarEventInput {
   title: string;
   description: string;
   location: string;
   allDay: boolean;
-  start: string; // ISO datetime, or yyyy-MM-dd when allDay
+  start: string; // floating local datetime, or yyyy-MM-dd when allDay
   end: string;
+  timeZone: string; // ignored when allDay (Google's all-day events carry no timeZone)
   colorId: string | null;
   attendeeEmails: string[];
   recurrence: string[];
@@ -526,7 +536,7 @@ interface RawGoogleEventDetail extends RawGoogleEvent {
   reminders?: { useDefault?: boolean; overrides?: { method?: string; minutes?: number }[] };
 }
 
-function mapGoogleEventDetail(item: RawGoogleEventDetail): CalendarEventDetail {
+function mapGoogleEventDetail(item: RawGoogleEventDetail, organizerName: string | null): CalendarEventDetail {
   const summary = mapGoogleEvent(item);
   const firstOverride = item.reminders?.overrides?.[0];
   return {
@@ -544,27 +554,36 @@ function mapGoogleEventDetail(item: RawGoogleEventDetail): CalendarEventDetail {
     transparency: (item.transparency as CalendarEventDetail["transparency"]) ?? "opaque",
     reminderUseDefault: item.reminders?.useDefault ?? true,
     reminderMinutes: firstOverride?.minutes ?? null,
+    timeZone: item.start?.timeZone ?? null,
+    organizerName,
   };
 }
 
 // Full single-event fetch for the edit dialog — the list/range endpoints
 // above only return the summary fields those views actually render, not
-// description/location/attendees/recurrence/etc.
-export async function getCalendarEvent(accessToken: string, eventId: string): Promise<CalendarEventDetail | null> {
+// description/location/attendees/recurrence/etc. `organizerName` is just
+// passed through onto the mapped result (the connected Google account's
+// own display name/email) — there's no per-event "calendar name" to fetch
+// since this app only ever touches the one "primary" calendar.
+export async function getCalendarEvent(
+  accessToken: string,
+  eventId: string,
+  organizerName: string | null = null
+): Promise<CalendarEventDetail | null> {
   try {
     const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!res.ok) return null;
-    return mapGoogleEventDetail((await res.json()) as RawGoogleEventDetail);
+    return mapGoogleEventDetail((await res.json()) as RawGoogleEventDetail, organizerName);
   } catch {
     return null;
   }
 }
 
 function buildEventBody(input: CalendarEventInput): Record<string, unknown> {
-  const time = input.allDay ? { date: input.start } : { dateTime: input.start };
-  const endTime = input.allDay ? { date: input.end } : { dateTime: input.end };
+  const time = input.allDay ? { date: input.start } : { dateTime: input.start, timeZone: input.timeZone };
+  const endTime = input.allDay ? { date: input.end } : { dateTime: input.end, timeZone: input.timeZone };
   return {
     summary: input.title,
     description: input.description,
@@ -585,9 +604,13 @@ function buildEventBody(input: CalendarEventInput): Record<string, unknown> {
   };
 }
 
+// `sendUpdates=all` on both create and update — without it Google still
+// saves the attendee list, but never actually emails the invite/change to
+// them, which is what made "Add guest" look like it did nothing even
+// though the name was really being stored.
 export async function createCalendarEvent(accessToken: string, input: CalendarEventInput): Promise<{ id: string } | { error: string }> {
   try {
-    const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+    const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all", {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify(buildEventBody(input)),
@@ -611,7 +634,7 @@ export async function updateCalendarEvent(
   input: CalendarEventInput
 ): Promise<{ error?: string }> {
   try {
-    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?sendUpdates=all`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify(buildEventBody(input)),
@@ -630,7 +653,7 @@ export async function updateCalendarEvent(
 
 export async function deleteCalendarEvent(accessToken: string, eventId: string): Promise<{ error?: string }> {
   try {
-    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`, {
+    const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}?sendUpdates=all`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${accessToken}` },
     });

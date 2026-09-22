@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { EVENT_COLOR_OPTIONS } from "@/lib/calendar-colors";
+import { EVENT_COLOR_OPTIONS, GOOGLE_EVENT_COLORS, DEFAULT_EVENT_COLOR } from "@/lib/calendar-colors";
+import ColorSelect, { type ColorOption } from "@/components/color-select";
+import RichTextarea from "@/components/rich-textarea";
 import type { CalendarEventInput, CalendarEventDetail } from "@/lib/google";
 import {
   fetchCalendarEventDetail,
@@ -50,22 +52,74 @@ function toDateInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function toDateTimeLocalInput(d: Date): string {
-  return `${toDateInput(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function toTimeInput(d: Date): string {
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function parseGoogleDateOrDateTime(value: string, allDay: boolean): string {
-  if (allDay) return value.slice(0, 10);
-  return new Date(value).toISOString();
+function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "UTC";
+  }
+}
+
+const FALLBACK_TIME_ZONES = [
+  "UTC",
+  "America/Montreal",
+  "America/Toronto",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/Vancouver",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+];
+
+function listTimeZones(): string[] {
+  try {
+    const supportedValuesOf = (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf;
+    if (typeof supportedValuesOf === "function") return supportedValuesOf("timeZone");
+  } catch {
+    // fall through to the fallback list below
+  }
+  return FALLBACK_TIME_ZONES;
+}
+
+// Extracts the wall-clock date/time an instant reads as in a *specific*
+// IANA zone — plain `Date` getters only ever give the browser's own local
+// zone, which is exactly what a per-event timezone picker needs to not be
+// tied to. `en-CA` conveniently formats as yyyy-mm-dd.
+function wallClockInZone(date: Date, timeZone: string): { date: string; time: string } {
+  try {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]));
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour === "24" ? "00" : parts.hour}:${parts.minute}` };
+  } catch {
+    return { date: toDateInput(date), time: toTimeInput(date) };
+  }
 }
 
 interface FormState {
   title: string;
-  description: string;
+  description: string; // HTML
   location: string;
   allDay: boolean;
-  startInput: string; // date or datetime-local string, in the input's own format
-  endInput: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  timeZone: string;
   colorId: string;
   repeat: RepeatPreset;
   reminder: ReminderPreset;
@@ -85,8 +139,11 @@ function blankState(start: Date): FormState {
     description: "",
     location: "",
     allDay: false,
-    startInput: toDateTimeLocalInput(start),
-    endInput: toDateTimeLocalInput(end),
+    startDate: toDateInput(start),
+    startTime: toTimeInput(start),
+    endDate: toDateInput(end),
+    endTime: toTimeInput(end),
+    timeZone: browserTimeZone(),
     colorId: "",
     repeat: "none",
     reminder: "default",
@@ -101,15 +158,21 @@ function blankState(start: Date): FormState {
 }
 
 function stateFromDetail(detail: CalendarEventDetail, links: EventLinkTargets): FormState {
+  const timeZone = detail.timeZone ?? browserTimeZone();
   const start = detail.start ? new Date(detail.start) : new Date();
   const end = detail.end ? new Date(detail.end) : new Date(start.getTime() + 30 * 60 * 1000);
+  const startWall = detail.allDay ? { date: toDateInput(start), time: "00:00" } : wallClockInZone(start, timeZone);
+  const endWall = detail.allDay ? { date: toDateInput(end), time: "00:00" } : wallClockInZone(end, timeZone);
   return {
     title: detail.title === "(untitled)" ? "" : detail.title,
     description: detail.description,
     location: detail.location,
     allDay: detail.allDay,
-    startInput: detail.allDay ? toDateInput(start) : toDateTimeLocalInput(start),
-    endInput: detail.allDay ? toDateInput(end) : toDateTimeLocalInput(end),
+    startDate: startWall.date,
+    startTime: startWall.time,
+    endDate: endWall.date,
+    endTime: endWall.time,
+    timeZone,
     colorId: detail.colorId ?? "",
     repeat: repeatPresetFromRrule(detail.recurrence),
     reminder: reminderPresetFrom(detail.reminderUseDefault, detail.reminderMinutes),
@@ -132,9 +195,13 @@ export interface EventDialogLabels {
   allDay: string;
   start: string;
   end: string;
+  to: string;
+  timeZone: string;
   location: string;
   locationPlaceholder: string;
+  viewOnMap: string;
   description: string;
+  calendar: string;
   color: string;
   defaultColor: string;
   repeat: string;
@@ -170,6 +237,8 @@ export interface EventDialogLabels {
   deleteConfirm: string;
   notConnected: string;
   loadFailed: string;
+  saved: string;
+  deleted: string;
 }
 
 const FIELD_CLASS =
@@ -178,8 +247,11 @@ const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-so
 
 export default function EventDialog({
   target,
+  initialLinks,
+  calendarName,
   onClose,
   onSaved,
+  onDeleted,
   contacts,
   projects,
   tasks,
@@ -189,8 +261,18 @@ export default function EventDialog({
   linkLabels,
 }: {
   target: EventDialogTarget | null;
+  // Known CRM links for an existing event, from the calendar's own already-
+  // fetched map — fetchCalendarEventDetail only talks to Google, which has
+  // no idea about these, so without this the edit dialog would silently
+  // wipe an event's existing contact/project/task/booking link on every save.
+  initialLinks?: EventLinkTargets;
+  // The connected Google account's own display name — this app only ever
+  // touches the "primary" calendar, so this doubles as that calendar's name
+  // (there's no per-event fetch for it; a new event has no organizer yet).
+  calendarName?: string | null;
   onClose: () => void;
   onSaved: () => void;
+  onDeleted: () => void;
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
@@ -212,12 +294,9 @@ export default function EventDialog({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const timeZones = useMemo(() => listTimeZones(), []);
+
   useEffect(() => {
-    // Only the "edit an existing event" case needs to fetch anything — the
-    // "create" case's initial state already came from blankState(target.start)
-    // via the lazy useState initializer above, and the parent remounts this
-    // whole component (via a `key` keyed on the target) whenever it changes,
-    // so there's nothing left to synchronize here for that branch.
     if (!target || "start" in target) return;
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -231,7 +310,7 @@ export default function EventDialog({
         return;
       }
       setDetail(result);
-      setForm(stateFromDetail(result, { contactId: "", projectId: "", taskId: "", bookingId: "" }));
+      setForm(stateFromDetail(result, initialLinks ?? { contactId: "", projectId: "", taskId: "", bookingId: "" }));
       setLoading(false);
     });
     return () => {
@@ -257,6 +336,14 @@ export default function EventDialog({
   );
   const selectedContact = contacts.find((c) => c.id === form.contactId) ?? null;
 
+  const colorOptions: ColorOption[] = useMemo(
+    () => [
+      { value: "", label: labels.defaultColor, swatch: DEFAULT_EVENT_COLOR.bg },
+      ...EVENT_COLOR_OPTIONS.map((c) => ({ value: c.id, label: c.name, swatch: GOOGLE_EVENT_COLORS[c.id].bg })),
+    ],
+    [labels.defaultColor]
+  );
+
   if (!target) return null;
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -264,16 +351,7 @@ export default function EventDialog({
   }
 
   function toggleAllDay(checked: boolean) {
-    setForm((f) => {
-      if (checked) {
-        const start = f.startInput ? new Date(f.startInput) : new Date();
-        const end = f.endInput ? new Date(f.endInput) : start;
-        return { ...f, allDay: true, startInput: toDateInput(start), endInput: toDateInput(end) };
-      }
-      const start = f.startInput ? new Date(`${f.startInput}T09:00`) : new Date();
-      const end = new Date(start.getTime() + 30 * 60 * 1000);
-      return { ...f, allDay: false, startInput: toDateTimeLocalInput(start), endInput: toDateTimeLocalInput(end) };
-    });
+    update("allDay", checked);
   }
 
   function addGuest() {
@@ -286,13 +364,16 @@ export default function EventDialog({
   function buildInput(): CalendarEventInput {
     const reminderUseDefault = form.reminder === "default";
     const reminderMinutes = reminderUseDefault || form.reminder === "none" ? null : Number(form.reminder);
+    const start = form.allDay ? form.startDate : `${form.startDate}T${form.startTime}:00`;
+    const end = form.allDay ? form.endDate : `${form.endDate}T${form.endTime}:00`;
     return {
       title: form.title.trim() || "(untitled)",
       description: form.description,
       location: form.location,
       allDay: form.allDay,
-      start: parseGoogleDateOrDateTime(form.startInput, form.allDay),
-      end: parseGoogleDateOrDateTime(form.endInput, form.allDay),
+      start,
+      end,
+      timeZone: form.timeZone,
       colorId: form.colorId || null,
       attendeeEmails: form.attendeeEmails,
       recurrence: form.repeat === "none" ? [] : [REPEAT_RRULE[form.repeat]],
@@ -330,28 +411,51 @@ export default function EventDialog({
         setError(result.error);
         return;
       }
-      onSaved();
+      onDeleted();
       onClose();
     });
   }
 
   const isRecurringInstance = Boolean(detail?.recurringEventId);
+  const mapsUrl = form.location.trim() ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.location.trim())}` : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-5 shadow-xl"
+        className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="font-display text-lg font-semibold text-ink">{isEdit ? labels.editTitle : labels.createTitle}</h3>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-display text-lg font-semibold text-ink">{isEdit ? labels.editTitle : labels.createTitle}</h3>
+          {!loading && !loadError && (
+            <div className="flex items-center gap-3">
+              {isEdit && (
+                <button type="button" disabled={pending} onClick={remove} className="text-sm text-red-600 hover:underline disabled:opacity-60">
+                  {labels.delete}
+                </button>
+              )}
+              <button type="button" onClick={onClose} className="text-sm text-soft hover:underline">
+                {labels.cancel}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={save}
+                className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
+              >
+                {pending ? labels.saving : labels.save}
+              </button>
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <p className="mt-4 text-sm text-soft">{labels.loading}</p>
         ) : loadError ? (
           <p className="mt-4 text-sm text-red-600">{loadError === "not_connected" ? labels.notConnected : labels.loadFailed}</p>
         ) : (
-          <>
-            <div className="mt-4">
+          <div className="mt-4 grid gap-6 lg:grid-cols-[2fr_1fr]">
+            <div className="min-w-0 space-y-4">
               <input
                 type="text"
                 value={form.title}
@@ -359,185 +463,174 @@ export default function EventDialog({
                 placeholder={labels.titlePlaceholder}
                 className="w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-base font-medium text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
               />
-            </div>
 
-            <label className="mt-3 flex items-center gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={form.allDay}
-                onChange={(e) => toggleAllDay(e.target.checked)}
-                className="h-4 w-4 rounded border-card-border"
-              />
-              {labels.allDay}
-            </label>
-
-            <div className="mt-3 grid grid-cols-2 gap-3">
+              {/* Date/time row + All day + Repeat, all grouped together like
+                  Google's own event editor keeps its date/time controls. */}
               <div>
-                <label className={LABEL_CLASS}>{labels.start}</label>
-                <input
-                  type={form.allDay ? "date" : "datetime-local"}
-                  value={form.startInput}
-                  onChange={(e) => update("startInput", e.target.value)}
-                  className={FIELD_CLASS}
-                />
-              </div>
-              <div>
-                <label className={LABEL_CLASS}>{labels.end}</label>
-                <input
-                  type={form.allDay ? "date" : "datetime-local"}
-                  value={form.endInput}
-                  onChange={(e) => update("endInput", e.target.value)}
-                  className={FIELD_CLASS}
-                />
-              </div>
-            </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input type="date" value={form.startDate} onChange={(e) => update("startDate", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm" />
+                  {!form.allDay && (
+                    <input type="time" value={form.startTime} onChange={(e) => update("startTime", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm" />
+                  )}
+                  <span className="text-sm text-soft">{labels.to}</span>
+                  {!form.allDay && (
+                    <input type="time" value={form.endTime} onChange={(e) => update("endTime", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm" />
+                  )}
+                  <input type="date" value={form.endDate} onChange={(e) => update("endDate", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm" />
+                </div>
 
-            <div className="mt-3">
-              <label className={LABEL_CLASS}>{labels.location}</label>
-              <input
-                type="text"
-                value={form.location}
-                onChange={(e) => update("location", e.target.value)}
-                placeholder={labels.locationPlaceholder}
-                className={FIELD_CLASS}
-              />
-            </div>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm text-ink">
+                    <input type="checkbox" checked={form.allDay} onChange={(e) => toggleAllDay(e.target.checked)} className="h-4 w-4 rounded border-card-border" />
+                    {labels.allDay}
+                  </label>
 
-            <div className="mt-3">
-              <label className={LABEL_CLASS}>{labels.description}</label>
-              <textarea value={form.description} onChange={(e) => update("description", e.target.value)} rows={3} className={FIELD_CLASS} />
-            </div>
+                  {!form.allDay && (
+                    <select value={form.timeZone} onChange={(e) => update("timeZone", e.target.value)} className="rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-xs text-ink shadow-sm">
+                      {!timeZones.includes(form.timeZone) && <option value={form.timeZone}>{form.timeZone}</option>}
+                      {timeZones.map((tz) => (
+                        <option key={tz} value={tz}>
+                          {tz}
+                        </option>
+                      ))}
+                    </select>
+                  )}
 
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div>
-                <label className={LABEL_CLASS}>{labels.color}</label>
-                <select value={form.colorId} onChange={(e) => update("colorId", e.target.value)} className={FIELD_CLASS}>
-                  <option value="">{labels.defaultColor}</option>
-                  {EVENT_COLOR_OPTIONS.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={LABEL_CLASS}>{labels.busyFree}</label>
-                <select
-                  value={form.transparency}
-                  onChange={(e) => update("transparency", e.target.value as FormState["transparency"])}
-                  className={FIELD_CLASS}
-                >
-                  <option value="opaque">{labels.busy}</option>
-                  <option value="transparent">{labels.free}</option>
-                </select>
-              </div>
-            </div>
+                  {isRecurringInstance ? (
+                    <span className="rounded-md border border-card-border bg-black/[0.02] px-2.5 py-1.5 text-xs text-soft">{labels.repeatLockedNotice}</span>
+                  ) : (
+                    <select value={form.repeat} onChange={(e) => update("repeat", e.target.value as RepeatPreset)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm">
+                      <option value="none">{labels.repeatNone}</option>
+                      <option value="daily">{labels.repeatDaily}</option>
+                      <option value="weekly">{labels.repeatWeekly}</option>
+                      <option value="monthly">{labels.repeatMonthly}</option>
+                      <option value="yearly">{labels.repeatYearly}</option>
+                    </select>
+                  )}
 
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              <div>
-                <label className={LABEL_CLASS}>{labels.repeat}</label>
-                {isRecurringInstance ? (
-                  <p className="mt-1 rounded-md border border-card-border bg-black/[0.02] px-3 py-2 text-xs text-soft">
-                    {labels.repeatLockedNotice}
-                  </p>
-                ) : (
-                  <select value={form.repeat} onChange={(e) => update("repeat", e.target.value as RepeatPreset)} className={FIELD_CLASS}>
-                    <option value="none">{labels.repeatNone}</option>
-                    <option value="daily">{labels.repeatDaily}</option>
-                    <option value="weekly">{labels.repeatWeekly}</option>
-                    <option value="monthly">{labels.repeatMonthly}</option>
-                    <option value="yearly">{labels.repeatYearly}</option>
+                  <select value={form.reminder} onChange={(e) => update("reminder", e.target.value as ReminderPreset)} className="rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm">
+                    <option value="default">{labels.reminderDefault}</option>
+                    <option value="none">{labels.reminderNone}</option>
+                    <option value="10">{labels.reminderMinutes10}</option>
+                    <option value="30">{labels.reminderMinutes30}</option>
+                    <option value="60">{labels.reminderHours1}</option>
+                    <option value="1440">{labels.reminderDay1}</option>
                   </select>
-                )}
+                </div>
               </div>
+
               <div>
-                <label className={LABEL_CLASS}>{labels.reminder}</label>
-                <select value={form.reminder} onChange={(e) => update("reminder", e.target.value as ReminderPreset)} className={FIELD_CLASS}>
-                  <option value="default">{labels.reminderDefault}</option>
-                  <option value="none">{labels.reminderNone}</option>
-                  <option value="10">{labels.reminderMinutes10}</option>
-                  <option value="30">{labels.reminderMinutes30}</option>
-                  <option value="60">{labels.reminderHours1}</option>
-                  <option value="1440">{labels.reminderDay1}</option>
-                </select>
+                <label className={LABEL_CLASS}>{labels.location}</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={form.location}
+                    onChange={(e) => update("location", e.target.value)}
+                    placeholder={labels.locationPlaceholder}
+                    className="w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+                  />
+                  {mapsUrl && (
+                    <a href={mapsUrl} target="_blank" rel="noopener noreferrer" title={labels.viewOnMap} className="shrink-0 rounded-md border border-card-border p-2 text-soft hover:bg-black/5">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s7-6.5 7-11.5a7 7 0 10-14 0C5 14.5 12 21 12 21z" />
+                        <circle cx="12" cy="9.5" r="2.5" />
+                      </svg>
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="mt-3">
-              <label className={LABEL_CLASS}>{labels.visibility}</label>
-              <select
-                value={form.visibility}
-                onChange={(e) => update("visibility", e.target.value as FormState["visibility"])}
-                className={FIELD_CLASS}
-              >
-                <option value="default">{labels.visibilityDefault}</option>
-                <option value="public">{labels.visibilityPublic}</option>
-                <option value="private">{labels.visibilityPrivate}</option>
-              </select>
-            </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL_CLASS}>{labels.calendar}</label>
+                  <p className={`${FIELD_CLASS} truncate bg-black/[0.02] text-soft`}>{detail?.organizerName ?? calendarName ?? ""}</p>
+                </div>
+                <div>
+                  <label className={LABEL_CLASS}>{labels.color}</label>
+                  <ColorSelect options={colorOptions} value={form.colorId} onChange={(v) => update("colorId", v)} className="mt-1" />
+                </div>
+              </div>
 
-            <div className="mt-3">
-              <label className={LABEL_CLASS}>{labels.guests}</label>
-              {form.attendeeEmails.length > 0 && (
-                <ul className="mt-1 space-y-1">
-                  {form.attendeeEmails.map((email) => (
-                    <li key={email} className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
-                      <span className="truncate">{email}</span>
-                      <button
-                        type="button"
-                        onClick={() => update("attendeeEmails", form.attendeeEmails.filter((e) => e !== email))}
-                        className="ml-2 shrink-0 text-xs text-soft hover:underline"
-                      >
-                        {t.contactForm.removeEntry}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={LABEL_CLASS}>{labels.busyFree}</label>
+                  <select value={form.transparency} onChange={(e) => update("transparency", e.target.value as FormState["transparency"])} className={FIELD_CLASS}>
+                    <option value="opaque">{labels.busy}</option>
+                    <option value="transparent">{labels.free}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={LABEL_CLASS}>{labels.visibility}</label>
+                  <select value={form.visibility} onChange={(e) => update("visibility", e.target.value as FormState["visibility"])} className={FIELD_CLASS}>
+                    <option value="default">{labels.visibilityDefault}</option>
+                    <option value="public">{labels.visibilityPublic}</option>
+                    <option value="private">{labels.visibilityPrivate}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className={LABEL_CLASS}>{labels.guests}</label>
+                {form.attendeeEmails.length > 0 && (
+                  <ul className="mt-1 space-y-1">
+                    {form.attendeeEmails.map((email) => (
+                      <li key={email} className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
+                        <span className="truncate">{email}</span>
+                        <button type="button" onClick={() => update("attendeeEmails", form.attendeeEmails.filter((e) => e !== email))} className="ml-2 shrink-0 text-xs text-soft hover:underline">
+                          {t.contactForm.removeEntry}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-1 flex gap-1.5">
+                  <input
+                    type="email"
+                    value={guestInput}
+                    onChange={(e) => setGuestInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addGuest();
+                      }
+                    }}
+                    placeholder={labels.guestEmailPlaceholder}
+                    className="flex-1 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+                  />
+                  <button type="button" onClick={addGuest} className="rounded-md border border-card-border px-3 py-2 text-xs font-medium text-ink hover:bg-black/5">
+                    {labels.addGuest}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className={LABEL_CLASS}>{labels.description}</label>
+                <RichTextarea value={form.description} onChange={(html) => update("description", html)} className="mt-1" />
+              </div>
+
+              {detail?.htmlLink && (
+                <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" className="inline-block text-xs font-semibold text-amo-lime hover:underline">
+                  {labels.openInGoogleCalendar} ↗
+                </a>
               )}
-              <div className="mt-1 flex gap-1.5">
-                <input
-                  type="email"
-                  value={guestInput}
-                  onChange={(e) => setGuestInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addGuest();
-                    }
-                  }}
-                  placeholder={labels.guestEmailPlaceholder}
-                  className="flex-1 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-                />
-                <button type="button" onClick={addGuest} className="rounded-md border border-card-border px-3 py-2 text-xs font-medium text-ink hover:bg-black/5">
-                  {labels.addGuest}
-                </button>
-              </div>
+
+              {error && <p className="text-sm text-red-600">{error}</p>}
             </div>
 
-            <div className="mt-4 border-t border-card-border pt-3">
+            <div className="min-w-0 space-y-3 border-t border-card-border pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
               <label className={LABEL_CLASS}>{labels.linkTo}</label>
 
-              <div className="mt-2">
+              <div>
                 {selectedContact ? (
                   <div className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink">
                     <span className="truncate">{selectedContact.label}</span>
-                    <button
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, contactId: "", projectId: "", taskId: "", bookingId: "" }))}
-                      className="ml-2 shrink-0 text-xs text-soft hover:underline"
-                    >
+                    <button type="button" onClick={() => setForm((f) => ({ ...f, contactId: "", projectId: "", taskId: "", bookingId: "" }))} className="ml-2 shrink-0 text-xs text-soft hover:underline">
                       {linkLabels.clear}
                     </button>
                   </div>
                 ) : (
                   <>
-                    <input
-                      type="text"
-                      value={contactSearch}
-                      onChange={(e) => setContactSearch(e.target.value)}
-                      placeholder={linkLabels.searchPlaceholder}
-                      className={FIELD_CLASS}
-                    />
+                    <input type="text" value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} placeholder={linkLabels.searchPlaceholder} className={FIELD_CLASS} />
                     <div className="mt-1 max-h-32 overflow-y-auto rounded-md border border-card-border">
                       {filteredContacts.length === 0 ? (
                         <p className="px-3 py-2 text-xs text-soft">{linkLabels.noResults}</p>
@@ -561,49 +654,31 @@ export default function EventDialog({
                 )}
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_CLASS}>{linkLabels.project}</label>
-                  <select
-                    value={form.projectId}
-                    onChange={(e) => update("projectId", e.target.value)}
-                    disabled={!form.contactId}
-                    className={`${FIELD_CLASS} disabled:opacity-50`}
-                  >
-                    <option value="">{linkLabels.none}</option>
-                    {availableProjects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={LABEL_CLASS}>{linkLabels.task}</label>
-                  <select
-                    value={form.taskId}
-                    onChange={(e) => update("taskId", e.target.value)}
-                    disabled={!form.projectId}
-                    className={`${FIELD_CLASS} disabled:opacity-50`}
-                  >
-                    <option value="">{linkLabels.none}</option>
-                    {availableTasks.map((tk) => (
-                      <option key={tk.id} value={tk.id}>
-                        {tk.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className={LABEL_CLASS}>{linkLabels.project}</label>
+                <select value={form.projectId} onChange={(e) => update("projectId", e.target.value)} disabled={!form.contactId} className={`${FIELD_CLASS} disabled:opacity-50`}>
+                  <option value="">{linkLabels.none}</option>
+                  {availableProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
               </div>
-
-              <div className="mt-2">
+              <div>
+                <label className={LABEL_CLASS}>{linkLabels.task}</label>
+                <select value={form.taskId} onChange={(e) => update("taskId", e.target.value)} disabled={!form.projectId} className={`${FIELD_CLASS} disabled:opacity-50`}>
+                  <option value="">{linkLabels.none}</option>
+                  {availableTasks.map((tk) => (
+                    <option key={tk.id} value={tk.id}>
+                      {tk.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className={LABEL_CLASS}>{linkLabels.booking}</label>
-                <select
-                  value={form.bookingId}
-                  onChange={(e) => update("bookingId", e.target.value)}
-                  disabled={!form.contactId}
-                  className={`${FIELD_CLASS} disabled:opacity-50`}
-                >
+                <select value={form.bookingId} onChange={(e) => update("bookingId", e.target.value)} disabled={!form.contactId} className={`${FIELD_CLASS} disabled:opacity-50`}>
                   <option value="">{linkLabels.none}</option>
                   {availableBookings.map((b) => (
                     <option key={b.id} value={b.id}>
@@ -613,43 +688,7 @@ export default function EventDialog({
                 </select>
               </div>
             </div>
-
-            {detail?.htmlLink && (
-              <a
-                href={detail.htmlLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-block text-xs font-semibold text-amo-lime hover:underline"
-              >
-                {labels.openInGoogleCalendar} ↗
-              </a>
-            )}
-
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-            <div className="mt-5 flex items-center justify-between gap-3">
-              {isEdit ? (
-                <button type="button" disabled={pending} onClick={remove} className="text-sm text-red-600 hover:underline disabled:opacity-60">
-                  {labels.delete}
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={onClose} className="text-sm text-soft hover:underline">
-                  {labels.cancel}
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={save}
-                  className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
-                >
-                  {pending ? labels.saving : labels.save}
-                </button>
-              </div>
-            </div>
-          </>
+          </div>
         )}
       </div>
     </div>
