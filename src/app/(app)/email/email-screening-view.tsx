@@ -132,8 +132,8 @@ function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: stri
 // between rows — a variable-width date string ("19:58" vs "Sep 12, 3:15
 // PM") was previously the last flex child, so its own width change shifted
 // where every fixed-width icon before it landed.
-const LINKED_TO_WIDTH = "w-28";
-const DATE_WIDTH = "w-24";
+const LINKED_TO_WIDTH = "w-20";
+const DATE_WIDTH = "w-20";
 
 function EmailRow({
   index,
@@ -199,14 +199,14 @@ function EmailRow({
   markUnreadLabel: string;
 }) {
   return (
-    <li className={clsx("transition-colors hover:bg-black/5", highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : "")}>
-      <div className="flex items-center gap-3 px-4 py-1.5">
+    <li className={clsx("overflow-hidden transition-colors hover:bg-black/5", highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : "")}>
+      <div className="flex items-center gap-2 px-4 py-1.5">
         <a
           href={link}
           target="_blank"
           rel="noopener noreferrer"
           onClick={onOpen}
-          className="w-40 shrink-0 truncate text-sm font-medium text-ink hover:opacity-80"
+          className="w-28 shrink-0 truncate text-sm font-medium text-ink hover:opacity-80"
         >
           {primaryLabel}
         </a>

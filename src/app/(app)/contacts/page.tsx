@@ -214,10 +214,23 @@ export default async function ContactsPage({
 
       {/* Desktop/tablet: full table. Its own scrollbar (not the page's)
           reaches to the bottom of the screen, so the sticky header row
-          stays visible while scrolling through contacts. */}
+          stays visible while scrolling through contacts. table-fixed with
+          an explicit colgroup keeps the table's own width pinned to its
+          container no matter how long any cell's content is (truncated
+          instead) — the earlier auto-layout table could grow wider than
+          its container and force the whole page to scroll horizontally. */}
       <ScrollableList className="hidden rounded-lg border border-card-border bg-card-bg shadow-sm sm:block">
-        <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-card-border text-sm">
+        <table className="w-full table-fixed divide-y divide-card-border text-sm">
+          <colgroup>
+            <col className="w-[14%]" />
+            <col className="w-[18%]" />
+            <col className="w-[14%]" />
+            <col className="w-[12%]" />
+            <col className="w-[9%]" />
+            <col className="w-[10%]" />
+            <col className="w-[15%]" />
+            <col className="w-[8%]" />
+          </colgroup>
           <thead
             className="sticky top-0 z-10 text-left text-xs font-medium uppercase tracking-wide"
             style={{ backgroundColor: "#1e4430", color: "#f4faf6" }}
@@ -239,7 +252,7 @@ export default async function ContactsPage({
               const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
               return (
                 <tr key={contact.id} className="group relative" style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}>
-                  <td className="px-4 py-3">
+                  <td className="truncate px-4 py-3">
                     {/* The whole row is clickable via this link stretching over
                         it (position:relative on the <tr> above makes it the
                         containing block for this absolutely-positioned span,
@@ -252,50 +265,52 @@ export default async function ContactsPage({
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-ink/70">
-                    <div>{contact.email}</div>
-                    {contact.email2 && <div>{contact.email2}</div>}
+                    <div className="truncate">{contact.email}</div>
+                    {contact.email2 && <div className="truncate">{contact.email2}</div>}
                     {contact.extraEmails.map((email) => (
-                      <div key={email}>{email}</div>
-                    ))}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-ink/70">
-                    <div>
-                      <PhoneDisplay value={contact.phone} country={contact.country} />
-                    </div>
-                    {contact.phone2 && (
-                      <div>
-                        <PhoneDisplay value={contact.phone2} country={contact.country} />
-                      </div>
-                    )}
-                    {contact.extraPhones.map((phone) => (
-                      <div key={phone}>
-                        <PhoneDisplay value={phone} country={contact.country} />
+                      <div key={email} className="truncate">
+                        {email}
                       </div>
                     ))}
                   </td>
                   <td className="px-4 py-3 text-ink/70">
+                    <div className="truncate">
+                      <PhoneDisplay value={contact.phone} country={contact.country} />
+                    </div>
+                    {contact.phone2 && (
+                      <div className="truncate">
+                        <PhoneDisplay value={contact.phone2} country={contact.country} />
+                      </div>
+                    )}
+                    {contact.extraPhones.map((phone) => (
+                      <div key={phone} className="truncate">
+                        <PhoneDisplay value={phone} country={contact.country} />
+                      </div>
+                    ))}
+                  </td>
+                  <td className="truncate px-4 py-3 text-ink/70">
                     {contact.country ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <CountryFlag country={contact.country} /> {countryFullName(contact.country)}
+                      <span className="inline-flex max-w-full items-center gap-1.5">
+                        <CountryFlag country={contact.country} /> <span className="truncate">{countryFullName(contact.country)}</span>
                       </span>
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="truncate px-4 py-3">
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}
                     >
                       {STAGE_LABELS[contact.stage]}
                     </span>
                   </td>
-                  <td className="w-px px-4 py-3">
+                  <td className="px-4 py-3">
                     <TagPills tags={languageTags} vertical />
                   </td>
                   <td className="px-4 py-3">
                     <TagPills tags={otherTags} />
                   </td>
-                  <td className="px-4 py-3 text-ink/70">{contact.source ?? "—"}</td>
+                  <td className="truncate px-4 py-3 text-ink/70">{contact.source ?? "—"}</td>
                 </tr>
               );
             })}
@@ -308,7 +323,6 @@ export default async function ContactsPage({
             )}
           </tbody>
         </table>
-        </div>
       </ScrollableList>
     </div>
   );
