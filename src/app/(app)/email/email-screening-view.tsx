@@ -102,7 +102,7 @@ function UncompleteButton({ onClick, title }: { onClick: () => void; title: stri
       type="button"
       onClick={onClick}
       title={title}
-      className="shrink-0 rounded bg-emerald-600 p-1 text-white hover:bg-emerald-700"
+      className="shrink-0 rounded-full bg-emerald-600 p-1 text-white hover:bg-emerald-700"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
