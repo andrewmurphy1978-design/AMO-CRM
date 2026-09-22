@@ -9,6 +9,13 @@ import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
 import type { AffiliateProgramTab } from "@prisma/client";
 import { statusStyle } from "@/lib/affiliate-status";
+import {
+  getShortIoConfig,
+  getShortIoLinkStatistics,
+  isShortIoStatsStale,
+  summarizeShortIoStats,
+  type ShortIoStatsSummary,
+} from "@/lib/shortio";
 import PageHeader, { HeaderBreadcrumb } from "../../../page-header";
 import Card from "@/components/section-card";
 import DeleteAffiliateProgramButton from "../delete-button";
@@ -46,6 +53,84 @@ function LinkField({ label, value, extra }: { label: string; value: string | nul
   );
 }
 
+function ShortIoStatBlock({ title, summary, t }: { title: string; summary: ShortIoStatsSummary; t: ReturnType<typeof getDict> }) {
+  const maxDaily = Math.max(1, ...summary.dailyClicks.map((d) => d.count));
+  return (
+    <div className="space-y-3">
+      <p className="text-sm font-semibold text-ink">{title}</p>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <p className={LABEL_CLASS}>{t.marketing.statsClicks}</p>
+          <p className="mt-1 text-2xl font-semibold text-ink">{summary.totalClicks ?? "—"}</p>
+        </div>
+        <div>
+          <p className={LABEL_CLASS}>{t.marketing.statsHumanClicks}</p>
+          <p className="mt-1 text-2xl font-semibold text-ink">{summary.humanClicks ?? "—"}</p>
+        </div>
+      </div>
+
+      {summary.dailyClicks.length > 0 && (
+        <div>
+          <p className={LABEL_CLASS}>{t.marketing.statsLast30Days}</p>
+          <div className="mt-2 flex h-10 items-end gap-0.5">
+            {summary.dailyClicks.map((d) => (
+              <div
+                key={d.date}
+                title={`${d.date.slice(0, 10)}: ${d.count}`}
+                className="min-h-1 flex-1 rounded-t bg-amo-lime/70"
+                style={{ height: `${Math.max(4, (d.count / maxDaily) * 100)}%` }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        {summary.topCountries.length > 0 && (
+          <div>
+            <p className={LABEL_CLASS}>{t.marketing.statsTopCountries}</p>
+            <ul className="mt-1 space-y-0.5 text-sm text-ink">
+              {summary.topCountries.map((c) => (
+                <li key={c.name} className="flex justify-between gap-2">
+                  <span className="truncate">{c.name}</span>
+                  <span className="text-ink/60">{c.score}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {summary.topReferrers.length > 0 && (
+          <div>
+            <p className={LABEL_CLASS}>{t.marketing.statsTopReferrers}</p>
+            <ul className="mt-1 space-y-0.5 text-sm text-ink">
+              {summary.topReferrers.map((r, i) => (
+                <li key={i} className="flex justify-between gap-2">
+                  <span className="truncate">{r.label || t.marketing.statsDirect}</span>
+                  <span className="text-ink/60">{r.score}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {summary.topBrowsers.length > 0 && (
+          <div>
+            <p className={LABEL_CLASS}>{t.marketing.statsTopBrowsers}</p>
+            <ul className="mt-1 space-y-0.5 text-sm text-ink">
+              {summary.topBrowsers.map((b) => (
+                <li key={b.name} className="flex justify-between gap-2">
+                  <span className="truncate">{b.name}</span>
+                  <span className="text-ink/60">{b.score}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default async function AffiliateProgramDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
@@ -53,19 +138,66 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
+  const isAdmin = session?.user.role === "ADMIN";
+  // Detailed per-program stats (country/referrer/browser breakdown, daily
+  // clicks) are only worth fetching for the one program actually being
+  // viewed — the list page's Clicks column is kept fed separately by the
+  // batched account-wide sync, which stays limited to totals so it never
+  // risks Cloudflare's per-invocation subrequest cap. Re-fetching here is
+  // gated on staleness so repeat views of the same program within the
+  // window don't re-hit Short.io on every load.
   const { program, hour12 } = await withScopedPrismaClient(async (db) => {
-    const program = await db.affiliateProgram.findUnique({
+    let program = await db.affiliateProgram.findUnique({
       where: { id },
       include: { emailLinks: { orderBy: { messageDate: "desc" } } },
     });
     const hour12 = await getHour12(session, db);
+    if (!program) return { program, hour12 };
+
+    const needsStats = isAdmin && (program.shortioLinkId || program.shortioLinkIdFr) && isShortIoStatsStale(program.shortioStatsSyncedAt);
+
+    if (needsStats) {
+      const config = await getShortIoConfig(db);
+      if (config) {
+        const data: Record<string, unknown> = { shortioStatsSyncedAt: new Date() };
+        let changed = false;
+        try {
+          if (program.shortioLinkId) {
+            const stats = await getShortIoLinkStatistics(config.apiKey, [program.shortioLinkId]);
+            data.shortioClicks = stats.totalClicks;
+            data.shortioStats = stats.raw as object;
+            data.shortioLinkId = stats.matchedId;
+            changed = true;
+          }
+          if (program.shortioLinkIdFr) {
+            const stats = await getShortIoLinkStatistics(config.apiKey, [program.shortioLinkIdFr]);
+            data.shortioClicksFr = stats.totalClicks;
+            data.shortioStatsFr = stats.raw as object;
+            data.shortioLinkIdFr = stats.matchedId;
+            changed = true;
+          }
+        } catch {
+          // Best-effort — an on-open refresh failure just falls back to
+          // whatever stats are already on file; the manual "Refresh stats"
+          // button still surfaces the actual error if the admin wants it.
+        }
+        if (changed) {
+          program = await db.affiliateProgram.update({
+            where: { id: program.id },
+            data,
+            include: { emailLinks: { orderBy: { messageDate: "desc" } } },
+          });
+        }
+      }
+    }
+
     return { program, hour12 };
   });
   if (!program) notFound();
-
-  const isAdmin = session?.user.role === "ADMIN";
   const styles = statusStyle(program.affiliateStatus);
   const hasStats = program.shortioClicks != null || program.shortioClicksFr != null;
+  const enStats = summarizeShortIoStats(program.shortioStats);
+  const frStats = summarizeShortIoStats(program.shortioStatsFr);
 
   return (
     <div className="space-y-6">
@@ -191,21 +323,11 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
             {!hasStats ? (
               <p className="text-sm text-soft">{t.marketing.noStatsYet}</p>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {program.shortioClicks != null && (
-                  <div>
-                    <p className={LABEL_CLASS}>
-                      {t.marketing.brandedLinkLabel} · {t.marketing.statsClicks}
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold text-ink">{program.shortioClicks}</p>
-                  </div>
-                )}
-                {program.shortioClicksFr != null && (
-                  <div>
-                    <p className={LABEL_CLASS}>
-                      {t.marketing.frenchSlugLabel} · {t.marketing.statsClicks}
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold text-ink">{program.shortioClicksFr}</p>
+              <div className="space-y-6">
+                {enStats && <ShortIoStatBlock title={t.marketing.brandedLinkLabel} summary={enStats} t={t} />}
+                {frStats && (
+                  <div className={enStats ? "border-t border-card-border pt-6" : undefined}>
+                    <ShortIoStatBlock title={t.marketing.frenchLinkLabel} summary={frStats} t={t} />
                   </div>
                 )}
               </div>

@@ -177,3 +177,73 @@ export async function getShortIoLinkStatistics(apiKey: string, candidateIds: str
 
   throw lastError instanceof Error ? lastError : new Error("Short.io statistics request failed");
 }
+
+const STATS_STALE_MS = 30 * 60 * 1000;
+
+// Gates the Affiliate Program detail page's on-open stats refresh — cheap
+// enough per-program to re-fetch eagerly, but only once the last sync is
+// old enough that repeat views of the same program don't re-hit Short.io
+// on every single load.
+export function isShortIoStatsStale(syncedAt: Date | null): boolean {
+  return !syncedAt || Date.now() - syncedAt.getTime() > STATS_STALE_MS;
+}
+
+export interface ShortIoStatsSummary {
+  totalClicks: number | null;
+  humanClicks: number | null;
+  topCountries: { name: string; score: number }[];
+  // `label: null` means Short.io reported an empty referer (direct traffic
+  // or one it couldn't resolve) — the caller substitutes its own
+  // translated "Direct / unknown" string for that case.
+  topReferrers: { label: string | null; score: number }[];
+  topBrowsers: { name: string; score: number }[];
+  dailyClicks: { date: string; count: number }[];
+}
+
+function topByScore<T extends { score: number }>(rows: unknown, n: number): T[] {
+  if (!Array.isArray(rows)) return [];
+  return (rows as T[])
+    .filter((r) => r && typeof r.score === "number" && r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, n);
+}
+
+// Distills the raw JSON already saved by getShortIoLinkStatistics (and
+// persisted onto AffiliateProgram.shortioStats/shortioStatsFr) into the
+// handful of fields the detail page's Stats card actually renders — no
+// extra Short.io calls involved, since the raw payload is already on file
+// from whichever sync last ran.
+export function summarizeShortIoStats(raw: unknown): ShortIoStatsSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const data = raw as Record<string, unknown>;
+
+  const countries = topByScore<{ country?: string; countryName?: string; score: number }>(data.country, 3).map((c) => ({
+    name: c.countryName || c.country || "—",
+    score: c.score,
+  }));
+  const referrers = topByScore<{ referer?: string; score: number }>(data.referer, 3).map((r) => ({
+    label: r.referer ? r.referer : null,
+    score: r.score,
+  }));
+  const browsers = topByScore<{ browser?: string; score: number }>(data.browser, 3).map((b) => ({
+    name: b.browser || "—",
+    score: b.score,
+  }));
+
+  const series = (data.clickStatistics as { datasets?: { data?: { x?: string; y?: string }[] }[] } | undefined)?.datasets?.[0]?.data;
+  const dailyClicks = Array.isArray(series)
+    ? series
+        .filter((point): point is { x: string; y: string } => typeof point?.x === "string")
+        .map((point) => ({ date: point.x, count: Number(point.y) || 0 }))
+        .slice(-30)
+    : [];
+
+  return {
+    totalClicks: typeof data.totalClicks === "number" ? data.totalClicks : null,
+    humanClicks: typeof data.humanClicks === "number" ? data.humanClicks : null,
+    topCountries: countries,
+    topReferrers: referrers,
+    topBrowsers: browsers,
+    dailyClicks,
+  };
+}
