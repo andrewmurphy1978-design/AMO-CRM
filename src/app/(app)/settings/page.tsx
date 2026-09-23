@@ -22,7 +22,7 @@ import ServicePriceListForm from "./service-price-list-form";
 import BillingSettingsForm from "./billing-settings-form";
 import EmailComposePreferencesForm from "./email-compose-preferences-form";
 import EmailSignaturesForm from "./email-signatures-form";
-import { format } from "date-fns";
+import BuildVersion from "./build-version";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -139,7 +139,6 @@ export default async function SettingsPage({
   // "Your CRM link" card as the fastest way to confirm a given push
   // actually went live, short of checking the workflow run itself.
   const buildSha = process.env.NEXT_PUBLIC_BUILD_SHA || null;
-  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME) : null;
   const mailAccounts: { source: string; address: string }[] = [
     ...(googleConnection?.email ? [{ source: "gmail", address: googleConnection.email }] : []),
     ...(ionosMailbox ? [{ source: "ionos", address: ionosMailbox.address }] : []),
@@ -182,10 +181,14 @@ export default async function SettingsPage({
             >
               crm.andrewmurphy.online
             </a>
-            <p className="mt-3 font-mono text-xs text-soft">
-              {t.settings.versionLabel}: {buildSha ?? t.settings.localBuildLabel}
-              {buildTime && ` · ${t.settings.deployedAt(format(buildTime, "PPp", { locale: dateLocale }))}`}
-            </p>
+            <BuildVersion
+              buildSha={buildSha}
+              buildTimeIso={process.env.NEXT_PUBLIC_BUILD_TIME || null}
+              lang={lang}
+              versionLabel={t.settings.versionLabel}
+              localBuildLabel={t.settings.localBuildLabel}
+              deployedAtPrefix={t.settings.deployedAtPrefix}
+            />
           </section>
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">

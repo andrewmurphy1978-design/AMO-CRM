@@ -115,6 +115,26 @@ export default function Sidebar({
               <NavLink key={item.href} href={item.href} label={item.label} collapsed />
             ))}
           </nav>
+          {/* The expanded aside below shows name/email + a "Sign out" text
+              link here; collapsed has no room for either, but sign-out
+              itself still needs to be reachable without expanding the
+              sidebar first — same icon-only button as the mobile rail's. */}
+          <form action={signOutAction} className="shrink-0 border-t border-white/10 p-2">
+            <button
+              type="submit"
+              aria-label={signOutLabel}
+              title={signOutLabel}
+              className="flex w-full items-center justify-center rounded-md p-2 text-amo-muted transition-colors hover:bg-white/10 hover:text-amo-white"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-5 w-5">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-6 3 3m0 0-3 3m3-3H9"
+                />
+              </svg>
+            </button>
+          </form>
         </aside>
       </>
     );
