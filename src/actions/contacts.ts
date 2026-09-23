@@ -10,9 +10,20 @@ import { DEFAULT_PUSH_FIELD_SLUGS } from "@/lib/systemeio";
 import { countryToCode } from "@/lib/country-flag";
 import { normalizeRegionForCountry } from "@/lib/regions";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { getValidAccessToken } from "@/lib/google";
+import { pushContactToGoogle } from "@/lib/google-contacts";
 
+// Google Contacts import (see google-contacts.ts) leaves email null for a
+// phone-only personal contact, and Contact.email is nullable in the schema
+// specifically to allow that — so this can't require a value the way it
+// used to. Empty string is normalized to undefined before the .email()
+// check runs, so a blank field passes and a genuinely malformed address
+// still doesn't.
 const ContactSchema = z.object({
-  email: z.string().email("A valid email is required"),
+  email: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().trim().toLowerCase().email("A valid email is required").optional()
+  ),
   email2: z.string().trim().optional(),
   extraEmails: z.array(z.string().trim()).optional(),
   firstName: z.string().trim().optional(),
@@ -64,7 +75,7 @@ const ContactSchema = z.object({
   paymentTerms: z.string().trim().optional(),
   paymentSchedule: z.string().trim().optional(),
   defaultDiscount: z.number().optional(),
-  stage: z.enum(["LEAD", "PROSPECT", "CLIENT", "PAST_CLIENT", "UNSUBSCRIBED"]),
+  stage: z.enum(["LEAD", "PROSPECT", "CLIENT", "PAST_CLIENT", "UNSUBSCRIBED", "PERSONAL"]),
   notes: z.string().trim().optional(),
 });
 
@@ -267,7 +278,11 @@ function readContactForm(formData: FormData) {
   raw.billingState = normalizeRegionForCountry(raw.billingCountry as string | undefined, raw.billingState as string | undefined) || undefined;
   raw.jurisdictionRegion =
     normalizeRegionForCountry(raw.jurisdictionCountry as string | undefined, raw.jurisdictionRegion as string | undefined) || undefined;
-  return ContactSchema.parse(raw);
+  const parsed = ContactSchema.parse(raw);
+  // Prisma treats an `undefined` property as "leave unchanged", not "clear
+  // it" — explicit null is what actually empties the column back out if a
+  // previously-set email is removed on the form.
+  return { ...parsed, email: parsed.email ?? null };
 }
 
 // Core tag-add logic, taking a shared scoped client — callers that already
@@ -376,9 +391,11 @@ export async function createContact(
   // regular `prisma` proxy opens a new one per property access, and this
   // action alone used to make double digits of them with a few tags).
   const result = await withScopedPrismaClient(async (db) => {
-    const existing = await db.contact.findUnique({ where: { email: data.email } });
-    if (existing) {
-      return { error: t.actions.contactEmailExists };
+    if (data.email) {
+      const existing = await db.contact.findUnique({ where: { email: data.email } });
+      if (existing) {
+        return { error: t.actions.contactEmailExists };
+      }
     }
 
     const contact = await db.contact.create({
@@ -489,11 +506,13 @@ export async function updateContact(
   // below goes into one batched $transaction instead of 10+ sequential
   // `await`s.
   const result = await withScopedPrismaClient(async (db) => {
-    const existing = await db.contact.findFirst({
-      where: { email: data.email, NOT: { id: contactId } },
-    });
-    if (existing) {
-      return { error: t.actions.contactEmailExistsOther };
+    if (data.email) {
+      const existing = await db.contact.findFirst({
+        where: { email: data.email, NOT: { id: contactId } },
+      });
+      if (existing) {
+        return { error: t.actions.contactEmailExistsOther };
+      }
     }
 
     const updated = await db.contact.update({ where: { id: contactId }, data });
@@ -557,6 +576,25 @@ export async function updateContact(
       } catch (error) {
         const message = error instanceof Error ? error.message : "unknown error";
         syncStatus = t.actions.contactUpdatedWarning(message);
+      }
+    }
+
+    // Best-effort push back to Google Contacts too, for a contact that was
+    // imported from (or linked to) one — same "never fails the CRM save,
+    // always reported" shape as the systeme.io push above. Requires the
+    // read/write `contacts` scope (see api/google/connect/route.ts); an
+    // account still on the older contacts.readonly grant needs to
+    // reconnect once before this can succeed.
+    if (updated.googleContactId) {
+      try {
+        const accessToken = await getValidAccessToken(session.user.id, db);
+        if (accessToken) {
+          const pushResult = await pushContactToGoogle(accessToken, updated.googleContactId, updated);
+          syncStatus += pushResult.error ? t.actions.contactUpdatedGoogleWarning(pushResult.error) : t.actions.contactUpdatedGoogleSynced;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "unknown error";
+        syncStatus += t.actions.contactUpdatedGoogleWarning(message);
       }
     }
 

@@ -294,7 +294,7 @@ export default async function ContactsPage({
             <col className="w-[8%]" />
           </colgroup>
           <thead
-            className="sticky top-0 z-10 text-left text-xs font-medium uppercase tracking-wide"
+            className="sticky top-0 z-20 text-left text-xs font-medium uppercase tracking-wide"
             style={{ backgroundColor: "#1e4430", color: "#f4faf6" }}
           >
             <tr>

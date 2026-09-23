@@ -1,11 +1,14 @@
-// Google People API client — read-only pull of the connected user's
-// Google Contacts, used by importGoogleContactsAction (see
-// actions/google-contacts.ts) to bring personal/old contacts that have no
-// systeme.io relationship into the CRM, so their emails and calendar
-// events auto-link the same way a systeme.io contact's already do (see
-// autoLinkToContacts in email-inbox.ts). This app never writes back to
-// Google Contacts — contacts.readonly is the only scope requested (see
-// src/app/api/google/connect/route.ts).
+// Google People API client. The pull side (listGoogleContacts) brings
+// personal/old contacts that have no systeme.io relationship into the CRM,
+// used by importGoogleContactsAction (see actions/google-contacts.ts), so
+// their emails and calendar events auto-link the same way a systeme.io
+// contact's already do (see autoLinkToContacts in email-inbox.ts). The
+// push side (pushContactToGoogle) mirrors a CRM edit back onto the same
+// Google contact, called from updateContact (see actions/contacts.ts) for
+// any contact carrying a googleContactId. Both directions need the
+// read/write `contacts` scope, not just `contacts.readonly` (see
+// src/app/api/google/connect/route.ts) — an account connected before that
+// scope was added needs to reconnect once before either direction works.
 //
 // Deliberately NOT imported: ageRanges, genders, interests, skills,
 // locales, miscKeywords, relations, events (other than birthdays),
@@ -229,7 +232,7 @@ function mapPerson(person: RawPerson, groupNamesByResource: Map<string, string>)
 // People API has not been used in project ... or it is disabled. Enable
 // it by visiting ...") — a bare HTTP status code tells the user nothing
 // they can act on, so this is worth the extra parse.
-async function describeError(res: Response): Promise<string> {
+export async function describeError(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { error?: { message?: string } };
     if (body.error?.message) return body.error.message;
@@ -343,4 +346,102 @@ export async function listGoogleContacts(accessToken: string): Promise<GoogleCon
   } while (pageToken && page < MAX_PAGES);
 
   return results;
+}
+
+// Just the Contact columns pushContactToGoogle actually mirrors — a subset
+// of the full Prisma Contact shape, so the caller (updateContact) can pass
+// its freshly-updated row straight through without reshaping it.
+export interface ContactPushInput {
+  firstName?: string | null;
+  lastName?: string | null;
+  nickname?: string | null;
+  email?: string | null;
+  email2?: string | null;
+  extraEmails?: string[] | null;
+  phone?: string | null;
+  phone2?: string | null;
+  extraPhones?: string[] | null;
+  company?: string | null;
+  jobTitle?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country?: string | null;
+  birthday?: string | null; // "YYYY-MM-DD", or "--MM-DD" with no year
+  notes?: string | null;
+}
+
+// Inverse of mapBirthday — "YYYY-MM-DD" or "--MM-DD" back to the
+// {year?, month, day} shape people.updateContact expects.
+function birthdayToGoogleDate(birthday: string | null | undefined): { date: { year?: number; month: number; day: number } } | null {
+  if (!birthday) return null;
+  const withYear = birthday.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (withYear) return { date: { year: Number(withYear[1]), month: Number(withYear[2]), day: Number(withYear[3]) } };
+  const noYear = birthday.match(/^--(\d{2})-(\d{2})$/);
+  if (noYear) return { date: { month: Number(noYear[1]), day: Number(noYear[2]) } };
+  return null;
+}
+
+// Mirrors a CRM edit back onto the Google contact it was imported from (or
+// linked to) — the reverse of mapPerson/listGoogleContacts above. Sends
+// every field this app owns on every call, even when empty, so removing a
+// value in the CRM clears it on the Google side too rather than leaving a
+// stale one behind; updatePersonFields has to name exactly the fields
+// present in the body for that to happen. People API requires the
+// contact's current etag on every update (a concurrency guard against
+// clobbering a change made directly in Google Contacts since the last
+// pull), so this always does one people.get before the write.
+export async function pushContactToGoogle(
+  accessToken: string,
+  resourceName: string,
+  contact: ContactPushInput
+): Promise<{ error?: string }> {
+  const getRes = await fetch(`https://people.googleapis.com/v1/${resourceName}?personFields=metadata`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!getRes.ok) return { error: await describeError(getRes) };
+  const current = (await getRes.json()) as { etag?: string };
+  if (!current.etag) return { error: "Google Contacts did not return a version marker (etag) for this contact." };
+
+  const emails = [contact.email, contact.email2, ...(contact.extraEmails ?? [])].filter((v): v is string => Boolean(v?.trim()));
+  const phones = [contact.phone, contact.phone2, ...(contact.extraPhones ?? [])].filter((v): v is string => Boolean(v?.trim()));
+  const hasOrg = Boolean(contact.company?.trim() || contact.jobTitle?.trim());
+  const hasAddress = Boolean(contact.address?.trim() || contact.city?.trim() || contact.state?.trim() || contact.zip?.trim() || contact.country?.trim());
+  const birthday = birthdayToGoogleDate(contact.birthday);
+
+  const updatePersonFields = ["names", "nicknames", "emailAddresses", "phoneNumbers", "organizations", "addresses", "biographies", "birthdays"];
+
+  const body = {
+    etag: current.etag,
+    names: [{ givenName: contact.firstName?.trim() ?? "", familyName: contact.lastName?.trim() ?? "" }],
+    nicknames: contact.nickname?.trim() ? [{ value: contact.nickname.trim() }] : [],
+    emailAddresses: emails.map((value) => ({ value })),
+    phoneNumbers: phones.map((value) => ({ value })),
+    organizations: hasOrg ? [{ name: contact.company?.trim() ?? "", title: contact.jobTitle?.trim() ?? "" }] : [],
+    addresses: hasAddress
+      ? [
+          {
+            streetAddress: contact.address?.trim() ?? "",
+            city: contact.city?.trim() ?? "",
+            region: contact.state?.trim() ?? "",
+            postalCode: contact.zip?.trim() ?? "",
+            country: contact.country?.trim() ?? "",
+          },
+        ]
+      : [],
+    biographies: contact.notes?.trim() ? [{ value: contact.notes.trim() }] : [],
+    birthdays: birthday ? [birthday] : [],
+  };
+
+  const url = new URL(`https://people.googleapis.com/v1/${resourceName}:updateContact`);
+  url.searchParams.set("updatePersonFields", updatePersonFields.join(","));
+
+  const res = await fetch(url.toString(), {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return { error: await describeError(res) };
+  return {};
 }

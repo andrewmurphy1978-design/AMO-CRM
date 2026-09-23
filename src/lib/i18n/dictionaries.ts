@@ -642,6 +642,8 @@ export const dictionaries = {
       contactUpdatedWarning: (message: string) => ` (saved here, but systeme.io update failed: ${message})`,
       contactUpdatedPartialWarning: (skippedSlugs: string[]) =>
         ` (saved here, but systeme.io didn't accept: ${skippedSlugs.map((s) => SYSTEMEIO_SLUG_LABELS_EN[s] ?? s).join(", ")})`,
+      contactUpdatedGoogleSynced: " Google Contacts updated too.",
+      contactUpdatedGoogleWarning: (message: string) => ` (saved here, but Google Contacts update failed: ${message})`,
       projectUpdated: "Project updated.",
       taskUpdated: "Task updated.",
       userAdded: (name: string) => `Added ${name}.`,
@@ -849,8 +851,9 @@ export const dictionaries = {
     googleContactsImport: {
       title: "Google Contacts",
       description:
-        "Pull in your Google Contacts — old friends, family, anyone not already in systeme.io — so their emails and calendar events link up automatically. Safe to run more than once: a contact already matched by email or phone is just linked, never duplicated or overwritten.",
-      reconnectNote: "Connected before Contacts import was added? Disconnect and connect again once so Google grants Contacts access too.",
+        "Pull in your Google Contacts — old friends, family, anyone not already in systeme.io — so their emails and calendar events link up automatically. Safe to run more than once: a contact already matched by email or phone is just linked, never duplicated or overwritten. Editing an imported contact afterward also updates it back in Google Contacts.",
+      reconnectNote:
+        "Connected before Contacts import (or contact editing) was added? Disconnect and connect again once so Google grants full Contacts access too.",
       importButton: "Import from Google Contacts",
       importing: "Importing…",
       notConnected: "Connect Google first.",
@@ -1791,6 +1794,8 @@ export const dictionaries = {
       contactUpdatedWarning: (message: string) => ` (enregistré ici, mais la mise à jour systeme.io a échoué : ${message})`,
       contactUpdatedPartialWarning: (skippedSlugs: string[]) =>
         ` (enregistré ici, mais systeme.io a refusé : ${skippedSlugs.map((s) => SYSTEMEIO_SLUG_LABELS_FR[s] ?? s).join(", ")})`,
+      contactUpdatedGoogleSynced: " Google Contacts a aussi été mis à jour.",
+      contactUpdatedGoogleWarning: (message: string) => ` (enregistré ici, mais la mise à jour de Google Contacts a échoué : ${message})`,
       projectUpdated: "Projet mis à jour.",
       taskUpdated: "Tâche mise à jour.",
       userAdded: (name: string) => `${name} a été ajouté(e).`,
@@ -2001,8 +2006,9 @@ export const dictionaries = {
     googleContactsImport: {
       title: "Contacts Google",
       description:
-        "Importez vos contacts Google — anciens amis, famille, toute personne pas déjà dans systeme.io — pour que leurs courriels et événements de calendrier se lient automatiquement. Sans risque à relancer : un contact déjà associé par courriel ou téléphone est simplement lié, jamais dupliqué ni écrasé.",
-      reconnectNote: "Connecté avant l'ajout de l'importation des contacts? Déconnectez et reconnectez-vous une fois pour que Google accorde aussi l'accès aux contacts.",
+        "Importez vos contacts Google — anciens amis, famille, toute personne pas déjà dans systeme.io — pour que leurs courriels et événements de calendrier se lient automatiquement. Sans risque à relancer : un contact déjà associé par courriel ou téléphone est simplement lié, jamais dupliqué ni écrasé. Modifier un contact importé le met aussi à jour dans Google Contacts.",
+      reconnectNote:
+        "Connecté avant l'ajout de l'importation (ou de la modification) des contacts? Déconnectez et reconnectez-vous une fois pour que Google accorde l'accès complet aux contacts.",
       importButton: "Importer depuis Google Contacts",
       importing: "Importation en cours…",
       notConnected: "Connectez d'abord Google.",

@@ -609,7 +609,6 @@ export default function ContactForm({
               <input
                 type="email"
                 name="email"
-                required
                 defaultValue={defaultValues?.email ?? ""}
                 aria-label={t.contactForm.email}
                 className={`${FIELD_CLASS} mt-0`}
