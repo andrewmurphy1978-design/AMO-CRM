@@ -29,9 +29,12 @@ export type { EmailScreeningPayload };
 
 const CATEGORY_ORDER: EmailCategory[] = ["NEEDS_REPLY", "NEEDS_ATTENTION", "CAN_WAIT", "LOW_PRIORITY"];
 // Once opened, a message stays in "Recently read" for a week (in case it
-// still needs linking to a client/project/task), then drops out of view —
-// sooner if it gets linked before that.
-const RECENTLY_READ_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+// still needs linking to a client/project/task) — or in "Recently linked"
+// instead, for the same week, once it's been linked. Completed messages
+// get the same week-long window. Past that, a message drops out of the
+// Email page's view entirely — it's still sitting in the real mailbox
+// untouched, this is purely how long this screening view keeps showing it.
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function Spinner({ className }: { className?: string }) {
   return (
@@ -521,6 +524,11 @@ export default function EmailScreeningView({
       projectName: project?.label ?? "",
       taskName: task?.label ?? "",
       affiliateProgramName: program?.label ?? "",
+      // The real DB row's updatedAt would be "now" too on the save this
+      // reconstructs (see EmailLinkInfo's own comment) — this is only ever
+      // stale if the row already existed with an older updatedAt and this
+      // save is itself what bumps it, which is exactly the case here.
+      linkedAt: new Date().toISOString(),
     };
   }
 
@@ -694,6 +702,7 @@ export default function EmailScreeningView({
   }
 
   const isLinked = (e: { threadId: string }): boolean => linkOverrides[e.threadId] || Boolean(data?.linksByThread[e.threadId]);
+  const linkedAtIso = (e: { threadId: string }): string | undefined => data?.linksByThread[e.threadId]?.linkedAt;
   const readIso = (e: { id: string }): string | undefined => {
     const override = readOverrides[e.id];
     return override !== undefined ? (override ?? undefined) : data?.readStates[e.id];
@@ -702,15 +711,28 @@ export default function EmailScreeningView({
     const override = completedOverrides[id];
     return override !== undefined ? override !== null : Boolean(data?.completions[id]);
   };
+  const completedAtIso = (id: string): string | undefined => {
+    const override = completedOverrides[id];
+    return override !== undefined ? (override ?? undefined) : data?.completions[id];
+  };
 
   const now = new Date().getTime();
+  // No timestamp to judge by (e.g. a Gmail-detected "reply arrived"
+  // completion, which has no EmailCompletion row) never gets hidden by
+  // this — only a completion this app actually timestamped ages out.
+  const withinWindow = (iso: string | undefined): boolean => !iso || now - new Date(iso).getTime() <= SEVEN_DAYS_MS;
   const emails = data?.emails ?? [];
   const sentAwaitingReply = data?.sentAwaitingReply ?? [];
 
-  const completedEmails = emails.filter((e) => isCompleted(e.id));
+  // Aging out of Completed's own 7-day window doesn't return a message to
+  // "active" — activeEmails always excludes every completed message
+  // regardless of age, so once completedEmails' own window filter below
+  // also excludes it, the message is simply gone from this page, not
+  // reclassified back into a live category.
+  const completedEmails = emails.filter((e) => isCompleted(e.id) && withinWindow(completedAtIso(e.id)));
   const activeEmails = emails.filter((e) => !isCompleted(e.id));
   const awaitingSent = sentAwaitingReply.filter((s) => s.status === "awaiting" && !isCompleted(s.id));
-  const completedSent = sentAwaitingReply.filter((s) => s.status === "completed" || isCompleted(s.id));
+  const completedSent = sentAwaitingReply.filter((s) => (s.status === "completed" || isCompleted(s.id)) && withinWindow(completedAtIso(s.id)));
 
   const groups: { category: EmailCategory; emails: EmailSummary[] }[] = CATEGORY_ORDER.map((category) => ({
     category,
@@ -721,13 +743,28 @@ export default function EmailScreeningView({
     .filter((e) => {
       const iso = readIso(e);
       if (!iso || isLinked(e)) return false;
-      return now - new Date(iso).getTime() <= RECENTLY_READ_WINDOW_MS;
+      return now - new Date(iso).getTime() <= SEVEN_DAYS_MS;
     })
     .sort((a, b) => new Date(readIso(b)!).getTime() - new Date(readIso(a)!).getTime());
+
+  // Where a read-and-linked message goes instead of Recently Read — same
+  // week-long window, keyed off when it was linked rather than when it was
+  // read, so re-linking (or first linking) an older already-read message
+  // resets its own visibility clock. A linked message that's still unread
+  // stays in its normal classification category until it's opened, same
+  // as before this section existed.
+  const recentlyLinked = activeEmails
+    .filter((e) => {
+      if (!isLinked(e) || !readIso(e)) return false;
+      const iso = linkedAtIso(e);
+      return !iso || now - new Date(iso).getTime() <= SEVEN_DAYS_MS;
+    })
+    .sort((a, b) => new Date(linkedAtIso(b) ?? 0).getTime() - new Date(linkedAtIso(a) ?? 0).getTime());
 
   const nothingToShow =
     groups.length === 0 &&
     recentlyRead.length === 0 &&
+    recentlyLinked.length === 0 &&
     awaitingSent.length === 0 &&
     completedEmails.length === 0 &&
     completedSent.length === 0;
@@ -876,6 +913,17 @@ export default function EmailScreeningView({
             heading: t.email.recentlyRead,
             count: recentlyRead.length,
             rows: receivedRows(recentlyRead, { markAsRead: false, showComplete: true, showMarkUnread: true }),
+            dim: true,
+          },
+        ]
+      : []),
+    ...(recentlyLinked.length > 0
+      ? [
+          {
+            key: "RECENTLY_LINKED",
+            heading: t.email.recentlyLinked,
+            count: recentlyLinked.length,
+            rows: receivedRows(recentlyLinked, { markAsRead: false, showComplete: true, showMarkUnread: true }),
             dim: true,
           },
         ]

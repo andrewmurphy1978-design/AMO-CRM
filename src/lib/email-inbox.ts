@@ -271,6 +271,11 @@ export interface EmailLinkInfo {
   projectName: string;
   taskName: string;
   affiliateProgramName: string;
+  // When this link was last saved (EmailLink.updatedAt — bumped on every
+  // save, not just the first) — the Email page's "Recently linked" section
+  // uses this for its own 7-day window, the same way EmailReadState.readAt
+  // drives Recently Read's.
+  linkedAt: string;
 }
 
 function contactLabel(c: { firstName: string | null; lastName: string | null; email: string | null }): string {
@@ -295,6 +300,7 @@ export async function getEmailLinksByThread(db: PrismaClient, threadIds: string[
       projectName: link.project?.name ?? "",
       taskName: link.task?.title ?? "",
       affiliateProgramName: link.affiliateProgram?.name ?? "",
+      linkedAt: link.updatedAt.toISOString(),
     };
   }
   return result;

@@ -17,5 +17,6 @@ export const EMAIL_SECTION_COLORS: Record<string, EmailSectionColorSet> = {
   CAN_WAIT: { headerBg: "bg-violet-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
   LOW_PRIORITY: { headerBg: "bg-slate-300", headerText: "text-slate-800", badgeBg: "bg-white/60", badgeText: "text-slate-800" },
   RECENTLY_READ: { headerBg: "bg-gray-200", headerText: "text-gray-700", badgeBg: "bg-white/70", badgeText: "text-gray-700" },
+  RECENTLY_LINKED: { headerBg: "bg-emerald-200", headerText: "text-emerald-900", badgeBg: "bg-white/60", badgeText: "text-emerald-900" },
   COMPLETED: { headerBg: "bg-emerald-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
 };
