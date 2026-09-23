@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
-import { getValidAccessToken, getGoogleConnection, fetchGmailMessageRaw, sendGmailMessage } from "@/lib/google";
+import { getValidAccessToken, getGoogleConnection, fetchGmailMessageRaw, resolveGmailThreadLatestMessageId, sendGmailMessage } from "@/lib/google";
 import { parseMessage, extractAttachmentBytes, encodeBase64, type AttachmentMeta, type ParsedMessage } from "@/lib/mail/mime-parse";
 import { buildMimeMessage } from "@/lib/mail/mime-build";
 import { resolveReplyIdentity, type MailIdentity, type MailSource } from "@/lib/mail/identity";
@@ -47,8 +47,18 @@ async function fetchOriginal(
     return { raw, parsed: parseMessage(raw), threadId: id, source: "ionos" };
   }
   const fetched = await fetchGmailMessageRaw(accessToken, id);
-  if (!fetched) return null;
-  return { raw: fetched.raw, parsed: parseMessage(fetched.raw), threadId: fetched.threadId, source: "gmail" };
+  if (fetched) return { raw: fetched.raw, parsed: parseMessage(fetched.raw), threadId: fetched.threadId, source: "gmail" };
+
+  // `id` wasn't a real message id — the caller may have only had a Gmail
+  // thread id to work with (EmailLink stores one row per thread, not per
+  // message, see saveEmailLink), and a thread's own id only sometimes
+  // doubles as one of its messages' ids. Resolve it to the thread's actual
+  // latest message and retry once before giving up.
+  const resolvedId = await resolveGmailThreadLatestMessageId(accessToken, id);
+  if (!resolvedId || resolvedId === id) return null;
+  const retried = await fetchGmailMessageRaw(accessToken, resolvedId);
+  if (!retried) return null;
+  return { raw: retried.raw, parsed: parseMessage(retried.raw), threadId: retried.threadId, source: "gmail" };
 }
 
 export interface EmailDetail {

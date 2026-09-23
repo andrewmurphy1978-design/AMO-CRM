@@ -19,12 +19,12 @@ export interface LinkedEmailRow {
 // The "Linked emails" card's row list, shared by the Contact and Affiliate
 // Program detail pages — a Client Component (unlike the pages themselves)
 // specifically so a row click can open the same Email Dialog the full
-// Email page uses, rather than just deep-linking out to Gmail. A thread's
-// own id doubles as its first message's id in Gmail's data model, which is
-// the only message identifier this app's EmailLink rows keep (one row per
-// thread, not per message) — good enough to open the dialog on the right
-// conversation even if it lands on the first message rather than whichever
-// one was most recent when the link was made.
+// Email page uses, rather than just deep-linking out to Gmail. EmailLink
+// rows only keep a Gmail thread id (one row per thread, not per message —
+// see saveEmailLink), and a thread's id does NOT reliably double as one of
+// its real message ids, so the dialog target is the thread id and
+// fetchOriginal (email-messages.ts) resolves it to an actual message id
+// server-side before fetching.
 export default function LinkedEmailsList({
   emailLinks,
   noLinkedEmailsLabel,
@@ -55,7 +55,7 @@ export default function LinkedEmailsList({
         {emailLinks.map((link, i) => {
           const date = link.messageDate ? new Date(link.messageDate) : null;
           return (
-            <li key={link.id} style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}>
+            <li key={link.id} style={{ backgroundColor: i % 2 === 0 ? "#fdf4ff" : "#fae8ff" }}>
               <button
                 type="button"
                 onClick={() => setOpenMessage({ id: link.gmailThreadId, link: link.gmailLink ?? "" })}

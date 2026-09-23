@@ -682,7 +682,17 @@ export default async function ContactDetailPage({
             linkPickerLabels={calendarLinkPickerLabels}
           />
 
-          <Card color="linkedEmails" title={t.contactDetail.linkedEmailsTitle}>
+          <Card
+            color="linkedEmails"
+            title={t.contactDetail.linkedEmailsTitle}
+            actions={
+              contact.emailLinks.length > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold">
+                  {contact.emailLinks.length}
+                </span>
+              )
+            }
+          >
             <LinkedEmailsList
               emailLinks={contact.emailLinks.map((link) => ({
                 id: link.id,

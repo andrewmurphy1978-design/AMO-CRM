@@ -248,6 +248,26 @@ export async function fetchGmailMessageRaw(accessToken: string, id: string): Pro
   return { raw: decodeBase64UrlToBinaryString(data.raw), threadId: data.threadId ?? id };
 }
 
+// A Gmail thread's own `id` is only sometimes the id of a real, fetchable
+// message — it happens to match for many threads, but not reliably (a
+// single-message "SENT" thread, for one, has been seen with a distinct
+// message id) — so anything that only has a thread id (EmailLink rows,
+// which store one per thread rather than per message) needs this lookup
+// before it can fetch a body. `format=minimal` keeps it to just ids/labels,
+// no bodies, since all that's wanted here is which real message to fetch
+// next. Returns the most recent message's id (closest to what a
+// "messageDate"/"fromLabel" snapshot taken at link time would have meant),
+// or null if the thread itself can't be found.
+export async function resolveGmailThreadLatestMessageId(accessToken: string, threadId: string): Promise<string | null> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=minimal`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { messages?: { id: string }[] };
+  const messages = data.messages ?? [];
+  return messages.length > 0 ? messages[messages.length - 1].id : null;
+}
+
 // Gmail's `raw` field is base64url (RFC 4648 §5: "-"/"_", no padding).
 // Decoded to a "binary string" (one JS char per byte) rather than UTF-8
 // text — mime-parse.ts's parser expects that convention throughout, since

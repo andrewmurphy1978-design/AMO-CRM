@@ -372,7 +372,17 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
         </div>
 
         <div className="space-y-6">
-          <Card color="linkedEmails" title={t.contactDetail.linkedEmailsTitle}>
+          <Card
+            color="linkedEmails"
+            title={t.contactDetail.linkedEmailsTitle}
+            actions={
+              program.emailLinks.length > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold">
+                  {program.emailLinks.length}
+                </span>
+              )
+            }
+          >
             <LinkedEmailsList
               emailLinks={program.emailLinks.map((link) => ({
                 id: link.id,
