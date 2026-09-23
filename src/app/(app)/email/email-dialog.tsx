@@ -107,15 +107,25 @@ export default function EmailDialog({
     setLoadError(null);
     setDetail(null);
     setLinkExpanded(false);
-    fetchEmailDetail(target.id).then((result) => {
-      if (cancelled) return;
-      if ("error" in result) {
-        setLoadError(result.error);
-      } else {
-        setDetail(result);
-      }
-      setLoading(false);
-    });
+    fetchEmailDetail(target.id)
+      .then((result) => {
+        if (cancelled) return;
+        if ("error" in result) {
+          setLoadError(result.error);
+        } else {
+          setDetail(result);
+        }
+      })
+      .catch(() => {
+        // A rejected call (e.g. a transient Cloudflare/Hyperdrive error)
+        // must still clear `loading` — otherwise the dialog is stuck on
+        // "Loading message..." forever with no way to recover short of
+        // closing it.
+        if (!cancelled) setLoadError("load_failed");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
     };

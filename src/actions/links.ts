@@ -45,7 +45,17 @@ export async function saveEmailLink(
     }
   });
 
-  revalidatePath("/email");
+  // Deliberately no revalidatePath("/email") — the Email page is a client
+  // component that already patches its own state the instant a link save
+  // resolves (see applyLinkSave in email-screening-view.tsx), and while the
+  // dialog stays open, revalidating the current route would make Next
+  // auto-refetch /email's Server Component (several sequential Prisma
+  // reads) at the same moment the dialog may fire its own fetchEmailDetail
+  // call for the next message — two concurrent Prisma-backed requests
+  // racing on one Hyperdrive connection, which is exactly what trips
+  // Cloudflare's Error 1102 (same lesson documented throughout this file's
+  // sibling actions). /contacts and /marketing aren't the active route
+  // when this runs, so revalidating them carries none of that risk.
   revalidatePath("/contacts");
   revalidatePath("/marketing");
 }

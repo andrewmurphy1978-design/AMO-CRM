@@ -503,6 +503,47 @@ export default function EmailScreeningView({
     setLinkOverrides((prev) => ({ ...prev, [threadId]: true }));
   }
 
+  // Rebuilds an EmailLinkInfo purely from the option lists already in
+  // scope — no server round trip needed, since a LinkValues selection and
+  // its display name/id are both already known client-side the instant
+  // the editor's own Save resolves.
+  function valuesToLinkInfo(values: LinkValues): EmailLinkInfo {
+    const contact = contactOptions.find((c) => c.id === values.contactId);
+    const project = projectOptions.find((p) => p.id === values.projectId);
+    const task = taskOptions.find((tk) => tk.id === values.taskId);
+    const program = programOptions.find((p) => p.id === values.affiliateProgramId);
+    return {
+      contactId: values.contactId,
+      projectId: values.projectId,
+      taskId: values.taskId,
+      affiliateProgramId: values.affiliateProgramId,
+      contactName: contact?.label ?? "",
+      projectName: project?.label ?? "",
+      taskName: task?.label ?? "",
+      affiliateProgramName: program?.label ?? "",
+    };
+  }
+
+  // Runs after a successful saveEmailLink — patches every place that
+  // shows the link (the cached screening data a row reads from, and
+  // whichever dialog is currently open) immediately, instead of waiting on
+  // a full refetch. Without this, the Email/Compose dialogs' read-only
+  // "Linked to" summary kept showing the pre-save value until the next
+  // manual Refresh, since it was only ever computed once at dialog-open
+  // time from data that a client-side save never touched.
+  function applyLinkSave(threadId: string, values: LinkValues) {
+    markLinked(threadId);
+    const info = valuesToLinkInfo(values);
+    setData((prev) => (prev ? { ...prev, linksByThread: { ...prev.linksByThread, [threadId]: info } } : prev));
+    const current = linkedTo(info);
+    setOpenMessage((prev) =>
+      prev && prev.linkConfig?.threadId === threadId ? { ...prev, linkConfig: { ...prev.linkConfig, current, initial: values } } : prev
+    );
+    setComposeTarget((prev) =>
+      prev && prev.linkConfig?.threadId === threadId ? { ...prev, linkConfig: { ...prev.linkConfig, current, initial: values } } : prev
+    );
+  }
+
   function markComplete(id: string) {
     setCompletedOverrides((prev) => (prev[id] ? prev : { ...prev, [id]: new Date().toISOString() }));
     postJson("/api/email/mark-complete", id);
@@ -518,9 +559,16 @@ export default function EmailScreeningView({
   // view never fetches — same fetchEmailDetail call the Email Dialog
   // itself makes when opened.
   async function openComposeFor(id: string, mode: ComposeMode) {
-    const result = await fetchEmailDetail(id);
-    if ("error" in result) return;
-    setComposeTarget(composeTargetFrom(result, mode));
+    try {
+      const result = await fetchEmailDetail(id);
+      if ("error" in result) return;
+      setComposeTarget(composeTargetFrom(result, mode));
+    } catch {
+      // A rejected call (e.g. a transient Cloudflare/Hyperdrive error)
+      // otherwise fails silently — there's no loading state tied to this
+      // one, but the row's icon click would do nothing with no feedback.
+      setToast(emailDialogLabels.loadFailed);
+    }
   }
 
   const linkLabels = {
@@ -591,7 +639,7 @@ export default function EmailScreeningView({
       },
       current: linkedTo(info),
       labels: linkLabels,
-      onSaved: () => markLinked(threadId),
+      onSaved: (values) => applyLinkSave(threadId, values),
     };
   }
 
@@ -725,7 +773,7 @@ export default function EmailScreeningView({
           })
         }
         onQuickAction={(mode) => openComposeFor(email.id, mode)}
-        onLinkSaved={() => markLinked(email.threadId)}
+        onLinkSaved={(values) => applyLinkSave(email.threadId, values)}
         onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
         onUncomplete={opts.showUncomplete ? () => markUncomplete(email.id) : undefined}
         // Only the still-unread categorized sections (the ones markAsRead
@@ -781,7 +829,7 @@ export default function EmailScreeningView({
           })
         }
         onQuickAction={(mode) => openComposeFor(s.id, mode)}
-        onLinkSaved={() => markLinked(s.threadId)}
+        onLinkSaved={(values) => applyLinkSave(s.threadId, values)}
         onComplete={opts.showComplete ? () => markComplete(s.id) : undefined}
         // A thread with status "completed" got that way because Gmail
         // shows a reply arrived — that can't be undone from here, so only
