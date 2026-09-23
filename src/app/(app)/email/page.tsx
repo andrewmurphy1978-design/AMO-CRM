@@ -101,7 +101,9 @@ export default async function EmailPage() {
             className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
           >
             <GmailIcon className="h-4 w-4 shrink-0" />
-            {t.dashboard.openInGmail}
+            {/* Mobile only: icon-only — see the "New email" button's own
+                comment in email-screening-view.tsx for why. */}
+            <span className="hidden sm:inline">{t.dashboard.openInGmail}</span>
           </a>
           <a
             href="https://mail.ionos.com/"
@@ -110,7 +112,7 @@ export default async function EmailPage() {
             className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
           >
             <IonosIcon className="h-4 w-4 shrink-0" />
-            {t.dashboard.openIonosWebmail}
+            <span className="hidden sm:inline">{t.dashboard.openIonosWebmail}</span>
           </a>
         </>
       }

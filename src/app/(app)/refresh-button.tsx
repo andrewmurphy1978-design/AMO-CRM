@@ -8,6 +8,7 @@ export default function RefreshButton({
   label,
   loadingLabel,
   variant = "default",
+  hideLabelOnMobile = false,
 }: {
   onClick: () => void;
   loading: boolean;
@@ -17,6 +18,11 @@ export default function RefreshButton({
   // default's soft-gray text (meant for light dashboard cards) is nearly
   // invisible — matches the header's other gold/blue btn-primary actions.
   variant?: "default" | "header";
+  // Opt-in per caller (not a variant default) so a header with several
+  // other actions crowding it on mobile — the Email page — can go
+  // icon-only below `sm` without changing every other "header" variant
+  // caller's (e.g. Calendar's) mobile appearance.
+  hideLabelOnMobile?: boolean;
 }) {
   const className =
     variant === "header"
@@ -37,7 +43,7 @@ export default function RefreshButton({
           d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
         />
       </svg>
-      {loading ? loadingLabel : label}
+      {hideLabelOnMobile ? <span className="hidden sm:inline">{loading ? loadingLabel : label}</span> : loading ? loadingLabel : label}
     </button>
   );
 }

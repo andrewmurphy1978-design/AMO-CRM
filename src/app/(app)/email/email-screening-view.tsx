@@ -503,7 +503,12 @@ export default function EmailScreeningView({
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4 shrink-0">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
             </svg>
-            {t.email.newEmail}
+            {/* Mobile only: icon-only, so the header's four action buttons
+                (this one, Open Gmail, Open IONOS Webmail, Refresh) stop
+                forcing the whole page wider than the viewport — that's
+                what was dragging the sidebar out of view on mobile.
+                Desktop/tablet (sm+) keeps the label, unchanged. */}
+            <span className="hidden sm:inline">{t.email.newEmail}</span>
           </button>
           {headerActions}
           {loading && (
@@ -512,7 +517,14 @@ export default function EmailScreeningView({
               {t.email.screening}
             </span>
           )}
-          <RefreshButton onClick={refresh} loading={loading} label={t.email.refresh} loadingLabel={t.email.refreshing} variant="header" />
+          <RefreshButton
+            onClick={refresh}
+            loading={loading}
+            label={t.email.refresh}
+            loadingLabel={t.email.refreshing}
+            variant="header"
+            hideLabelOnMobile
+          />
         </>
       }
     />
@@ -1031,11 +1043,13 @@ export default function EmailScreeningView({
       {drafts.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
           <div className={`flex items-center gap-2 px-4 py-2.5 ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
-            <h2 className={`text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}>
+            <h2 className={`min-w-0 flex-1 text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}
+            >
               {drafts.length}
             </span>
-            {draftsLoading && <Spinner className="h-3.5 w-3.5 text-white/80" />}
+            {draftsLoading && <Spinner className="h-3.5 w-3.5 shrink-0 text-white/80" />}
           </div>
           <ul className="divide-y divide-card-border bg-card-bg">
             {drafts.map((draft) => (
@@ -1067,8 +1081,8 @@ export default function EmailScreeningView({
         return (
           <section key={section.key} className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
             <div className={`flex items-center gap-2 px-4 py-2.5 ${color.headerBg}`}>
-              <h2 className={`text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
+              <h2 className={`min-w-0 flex-1 text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
             </div>
             <ul className={`overflow-x-auto bg-card-bg ${section.dim ? "opacity-80" : ""}`}>{section.rows}</ul>
           </section>
