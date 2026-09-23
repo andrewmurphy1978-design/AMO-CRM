@@ -37,14 +37,14 @@ export default function Card({
   children,
 }: {
   color: CardColor;
-  title: string;
+  title: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm">
       <div className={`flex items-center justify-between gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white ${CARD_COLORS[color]}`}>
-        <span>{title}</span>
+        <span className="flex items-center gap-2">{title}</span>
         {actions}
       </div>
       <div className="space-y-4 p-4">{children}</div>

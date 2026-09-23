@@ -684,13 +684,15 @@ export default async function ContactDetailPage({
 
           <Card
             color="linkedEmails"
-            title={t.contactDetail.linkedEmailsTitle}
-            actions={
-              contact.emailLinks.length > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold">
-                  {contact.emailLinks.length}
-                </span>
-              )
+            title={
+              <>
+                {t.contactDetail.linkedEmailsTitle}
+                {contact.emailLinks.length > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">
+                    {contact.emailLinks.length}
+                  </span>
+                )}
+              </>
             }
           >
             <LinkedEmailsList
