@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import RichTextarea from "@/components/rich-textarea";
 import { sendEmailAction } from "@/actions/email-messages";
 import type { EmailDetail } from "@/actions/email-messages";
+import { sendDraftAction, discardDraftAction, type DraftSource } from "@/actions/email-drafts";
 import { buildQuotedReply } from "@/lib/mail/mime-build";
 import { NO_ADDRESS_COLOR, contrastTextColor } from "@/lib/email-address-match";
 import { EmailLinkSummary, EmailLinkEditor, type EmailLinkConfig } from "./email-link-fields";
 
-export type ComposeMode = "reply" | "replyAll" | "forward";
+export type ComposeMode = "reply" | "replyAll" | "forward" | "draft";
 
 export interface EmailComposeTarget {
   message: EmailDetail;
@@ -17,12 +18,19 @@ export interface EmailComposeTarget {
   // EmailDialogTarget's own dotColor/linkConfig (see that file's comment).
   dotColor?: string | null;
   linkConfig?: EmailLinkConfig;
+  // Set only for mode "draft" — which Drafts-folder row this came from, so
+  // Send/Discard know where to remove it from afterward (see
+  // sendDraftAction/discardDraftAction — a draft's own account is never in
+  // question the way a reply's is, so these bypass sendEmailAction's
+  // header-based identity guess entirely).
+  draft?: { id: string; source: DraftSource };
 }
 
 export interface EmailComposeLabels {
   replyTitle: string;
   replyAllTitle: string;
   forwardTitle: string;
+  draftTitle: string;
   from: string;
   to: string;
   cc: string;
@@ -30,10 +38,12 @@ export interface EmailComposeLabels {
   send: string;
   sending: string;
   cancel: string;
+  discard: string;
   sendFailed: string;
   recipientRequired: string;
   quotedHeader: string; // "{sender} wrote:" — {sender} filled in by this component
   sentToast: string;
+  discardedToast: string;
   attach: string;
   attachmentTooLarge: string; // "{name}" filled in by this component
   removeAttachment: string; // "{name}" filled in by this component
@@ -90,11 +100,13 @@ export default function EmailComposeDialog({
   target,
   onClose,
   onSent,
+  onDiscarded,
   labels,
 }: {
   target: EmailComposeTarget | null;
   onClose: () => void;
   onSent: () => void;
+  onDiscarded?: () => void;
   labels: EmailComposeLabels;
 }) {
   const [to, setTo] = useState("");
@@ -105,12 +117,24 @@ export default function EmailComposeDialog({
   const [error, setError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const [linkExpanded, setLinkExpanded] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
 
   useEffect(() => {
     if (!target) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLinkExpanded(false);
     const { message, mode } = target;
+
+    if (mode === "draft") {
+      setTo(message.to.join(", "));
+      setCc(message.cc.join(", "));
+      setSubject(message.subject);
+      setError(null);
+      setHtml(message.html ?? (message.text ? `<pre style="white-space:pre-wrap">${message.text}</pre>` : ""));
+      setAttachments([]);
+      return;
+    }
+
     const selfAddress = message.replyIdentity.accountAddress.toLowerCase();
 
     let nextTo = "";
@@ -147,7 +171,7 @@ export default function EmailComposeDialog({
 
   const title = useMemo(() => {
     if (!target) return "";
-    return { reply: labels.replyTitle, replyAll: labels.replyAllTitle, forward: labels.forwardTitle }[target.mode];
+    return { reply: labels.replyTitle, replyAll: labels.replyAllTitle, forward: labels.forwardTitle, draft: labels.draftTitle }[target.mode];
   }, [target, labels]);
 
   if (!target) return null;
@@ -177,17 +201,20 @@ export default function EmailComposeDialog({
     }
     setSending(true);
     setError(null);
-    const result = await sendEmailAction({
-      inReplyToId: target.message.id,
-      threadId: target.message.threadId,
-      messageIdHeader: target.message.messageIdHeader,
-      references: target.message.references,
-      to: toList,
-      cc: parseAddressField(cc),
-      subject,
-      html,
-      attachments: attachments.map(({ filename, mimeType, base64 }) => ({ filename, mimeType, base64 })),
-    });
+    const attachmentInputs = attachments.map(({ filename, mimeType, base64 }) => ({ filename, mimeType, base64 }));
+    const result = target.draft
+      ? await sendDraftAction(target.draft.id, target.draft.source, { to: toList, cc: parseAddressField(cc), subject, html, attachments: attachmentInputs })
+      : await sendEmailAction({
+          inReplyToId: target.message.id,
+          threadId: target.message.threadId,
+          messageIdHeader: target.message.messageIdHeader,
+          references: target.message.references,
+          to: toList,
+          cc: parseAddressField(cc),
+          subject,
+          html,
+          attachments: attachmentInputs,
+        });
     setSending(false);
     if ("error" in result) {
       // "not_connected"/"recipient_required" are internal codes with their
@@ -204,6 +231,14 @@ export default function EmailComposeDialog({
       return;
     }
     onSent();
+  }
+
+  async function handleDiscard() {
+    if (!target?.draft) return;
+    setDiscarding(true);
+    await discardDraftAction(target.draft.id, target.draft.source);
+    setDiscarding(false);
+    (onDiscarded ?? onSent)();
   }
 
   const color = target.dotColor || NO_ADDRESS_COLOR;
@@ -224,6 +259,11 @@ export default function EmailComposeDialog({
         <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4" style={{ backgroundColor: color, color: fg }}>
           <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold">{title}</h3>
           <div className="flex shrink-0 items-center gap-3">
+            {target.draft && (
+              <button type="button" disabled={discarding} onClick={handleDiscard} className={`text-sm hover:underline disabled:opacity-60 ${headerBtnClass}`}>
+                {labels.discard}
+              </button>
+            )}
             <button type="button" onClick={onClose} className={`text-sm hover:underline ${headerBtnClass}`}>
               {labels.cancel}
             </button>

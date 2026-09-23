@@ -10,6 +10,7 @@ export interface EmailSectionColorSet {
 }
 
 export const EMAIL_SECTION_COLORS: Record<string, EmailSectionColorSet> = {
+  DRAFTS: { headerBg: "bg-orange-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
   NEEDS_REPLY: { headerBg: "bg-rose-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
   SENT_AWAITING_REPLY: { headerBg: "bg-amber-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
   NEEDS_ATTENTION: { headerBg: "bg-blue-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },

@@ -278,11 +278,11 @@ function buildSummary(uid: number, items: Map<string, string>): ImapMessageSumma
 // snippet field) — deliberately left out rather than parsing each
 // message's MIME tree just for a preview string; the classifier still
 // works fine from subject + sender alone.
-export async function listRecentImapMessages(cfg: ImapConfig, maxResults: number): Promise<ImapMessageSummary[]> {
+export async function listRecentImapMessages(cfg: ImapConfig, maxResults: number, folder: string = "INBOX"): Promise<ImapMessageSummary[]> {
   const session = await connectAndLogin(cfg);
   try {
-    const select = await session.command("SELECT INBOX");
-    expect(select, "SELECT INBOX");
+    const select = await session.command(`SELECT ${folder}`);
+    expect(select, `SELECT ${folder}`);
     const exists = parseExists(select.untagged);
     if (exists === 0) return [];
 
@@ -314,10 +314,10 @@ export async function listRecentImapMessages(cfg: ImapConfig, maxResults: number
 // marks it \Seen on the server) fetches the complete RFC 5322 text
 // verbatim, no base64 wrapping (unlike Gmail's format=raw) — fed directly
 // into the same parseMessage() Gmail's raw fetch uses.
-export async function fetchImapMessageRaw(cfg: ImapConfig, uid: number): Promise<string | null> {
+export async function fetchImapMessageRaw(cfg: ImapConfig, uid: number, folder: string = "INBOX"): Promise<string | null> {
   const session = await connectAndLogin(cfg);
   try {
-    expect(await session.command("SELECT INBOX"), "SELECT INBOX");
+    expect(await session.command(`SELECT ${folder}`), `SELECT ${folder}`);
     const fetch = await session.command(`UID FETCH ${uid} (BODY.PEEK[])`);
     expect(fetch, "UID FETCH");
     const line = fetch.untagged.find((l) => /^\d+ FETCH /i.test(l.text));
@@ -343,6 +343,35 @@ export async function setImapSeenFlag(cfg: ImapConfig, uid: number, seen: boolea
     expect(await session.command("SELECT INBOX"), "SELECT INBOX");
     const op = seen ? "+FLAGS" : "-FLAGS";
     expect(await session.command(`UID STORE ${uid} ${op} (\\Seen)`), "UID STORE");
+  } finally {
+    await session.command("LOGOUT").catch(() => {});
+    await session.close();
+  }
+}
+
+// The Email page's "Drafts waiting for your approval" section, IONOS
+// side — same listing as listRecentImapMessages but against the Drafts
+// mailbox. Wrapped in its own try/catch (rather than letting a caller's
+// Promise.all fail outright) since "Drafts" isn't a name IMAP servers are
+// required to use verbatim — a mailbox some IONOS accounts name
+// differently should degrade to an empty list, not break the page.
+export async function listDraftMessages(cfg: ImapConfig, maxResults: number): Promise<ImapMessageSummary[]> {
+  try {
+    return await listRecentImapMessages(cfg, maxResults, "Drafts");
+  } catch {
+    return [];
+  }
+}
+
+// Removes a draft from the Drafts mailbox after it's been sent or
+// discarded — IMAP has no single "delete" verb, just the two-step
+// mark-then-purge every client uses.
+export async function deleteImapMessage(cfg: ImapConfig, uid: number, folder: string): Promise<void> {
+  const session = await connectAndLogin(cfg);
+  try {
+    expect(await session.command(`SELECT ${folder}`), `SELECT ${folder}`);
+    expect(await session.command(`UID STORE ${uid} +FLAGS (\\Deleted)`), "UID STORE");
+    await session.command("EXPUNGE");
   } finally {
     await session.command("LOGOUT").catch(() => {});
     await session.close();

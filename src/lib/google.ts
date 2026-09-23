@@ -497,6 +497,107 @@ export async function getSentAwaitingReplies(
   }
 }
 
+export interface DraftSummary {
+  id: string; // Gmail draft id (distinct from any message id)
+  threadId: string;
+  to: string;
+  subject: string;
+  snippet: string;
+  date: string; // ISO — the draft's own internalDate (last saved)
+  link: string; // opens the draft directly in Gmail's compose window
+}
+
+// Every saved-but-unsent draft in the Gmail account's Drafts folder — the
+// Email page's "Drafts waiting for your approval" section, so a draft
+// started (by hand or by an assistant) doesn't sit forgotten outside the
+// CRM. `drafts.list` only returns bare ids, so each one needs its own
+// metadata fetch, same two-step shape as getSentAwaitingReplies above.
+export async function getDrafts(accessToken: string, { maxResults = 20 }: { maxResults?: number } = {}): Promise<DraftSummary[] | null> {
+  try {
+    const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts?maxResults=${maxResults}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!listRes.ok) {
+      console.error("getDrafts: drafts.list returned", listRes.status, await listRes.text());
+      return null;
+    }
+    const listData = (await listRes.json()) as { drafts?: { id: string }[] };
+    const draftIds = (listData.drafts ?? []).map((d) => d.id);
+    if (draftIds.length === 0) return [];
+
+    const results = await Promise.all(
+      draftIds.map(async (draftId): Promise<DraftSummary | null> => {
+        const res = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draftId}?format=metadata&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!res.ok) return null;
+        const data = (await res.json()) as {
+          id: string;
+          message?: {
+            id: string;
+            threadId?: string;
+            snippet?: string;
+            internalDate?: string;
+            payload?: { headers?: { name?: string; value?: string }[] };
+          };
+        };
+        const headers = data.message?.payload?.headers;
+        const toHeader = extractHeader(headers, "To");
+        const dateHeader = extractHeader(headers, "Date");
+        const parsedDateHeader = dateHeader ? new Date(dateHeader) : null;
+        const date =
+          parsedDateHeader && !isNaN(parsedDateHeader.getTime())
+            ? parsedDateHeader.toISOString()
+            : data.message?.internalDate
+              ? new Date(Number(data.message.internalDate)).toISOString()
+              : new Date().toISOString();
+        return {
+          id: data.id,
+          threadId: data.message?.threadId ?? data.id,
+          to: toHeader ? formatFrom(toHeader) : "",
+          subject: extractHeader(headers, "Subject") || "(no subject)",
+          snippet: data.message?.snippet ?? "",
+          date,
+          link: `https://mail.google.com/mail/u/0/#drafts?compose=${data.message?.id ?? data.id}`,
+        };
+      })
+    );
+    return results.filter((d): d is DraftSummary => d !== null);
+  } catch (err) {
+    console.error("getDrafts: request failed:", err);
+    return null;
+  }
+}
+
+// The Drafts section's "open to review" call — the full raw MIME of a
+// saved draft, same shape fetchGmailMessageRaw returns for a real message
+// (feeds the same mime-parse.ts parser) plus the draft's own id, needed
+// separately from its message id to later delete or resend it.
+export async function fetchGmailDraftRaw(
+  accessToken: string,
+  draftId: string
+): Promise<{ raw: string; threadId: string; messageId: string } | null> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draftId}?format=raw`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { id: string; message?: { id: string; threadId?: string; raw?: string } };
+  if (!data.message?.raw) return null;
+  return { raw: decodeBase64UrlToBinaryString(data.message.raw), threadId: data.message.threadId ?? draftId, messageId: data.message.id };
+}
+
+// Removes a draft after it's been sent or explicitly discarded — a no-op
+// (not an error) if it's already gone, since either outcome leaves the
+// draft where the caller wants it: not in the Drafts folder.
+export async function deleteGmailDraft(accessToken: string, draftId: string): Promise<boolean> {
+  const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/drafts/${draftId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return res.ok || res.status === 404;
+}
+
 export interface CalendarEventSummary {
   id: string;
   title: string;

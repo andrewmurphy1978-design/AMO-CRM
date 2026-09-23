@@ -20,6 +20,8 @@ import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./e
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email-compose-dialog";
 import type { EmailLinkConfig } from "./email-link-fields";
 import { fetchEmailDetail, type EmailDetail } from "@/actions/email-messages";
+import { fetchDraftsAction, fetchDraftDetailAction, type DraftRow } from "@/actions/email-drafts";
+import { GmailIcon, IonosIcon } from "./mail-brand-icons";
 import type { LinkValues, LinkDialogLabels } from "../link-dialog";
 import { EMAIL_SECTION_COLORS } from "../email-section-colors";
 
@@ -372,12 +374,59 @@ export default function EmailScreeningView({
   const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
   const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(connected);
 
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 5000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  async function refreshDrafts() {
+    if (!connected) return;
+    setDraftsLoading(true);
+    try {
+      setDrafts(await fetchDraftsAction());
+    } catch {
+      // Keep whatever drafts were already shown rather than clearing them.
+    } finally {
+      setDraftsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshDrafts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function openDraft(row: DraftRow) {
+    const result = await fetchDraftDetailAction(row.id);
+    if ("error" in result) return;
+    const dotColor = colorForAddress(result.fromAddress, addressColors);
+    setComposeTarget({
+      message: {
+        id: row.id,
+        threadId: result.threadId,
+        subject: result.subject,
+        from: { name: "", email: result.fromAddress },
+        to: result.to,
+        cc: result.cc,
+        date: null,
+        html: result.html,
+        text: result.text,
+        attachments: [],
+        messageIdHeader: null,
+        references: [],
+        replyIdentity: { source: result.source, accountAddress: result.fromAddress, displayName: null },
+        deliveredTo: result.fromAddress,
+      },
+      mode: "draft",
+      dotColor,
+      draft: { id: row.id, source: row.source },
+    });
+  }
 
   async function runScreening() {
     try {
@@ -803,7 +852,39 @@ export default function EmailScreeningView({
     <div className="space-y-6">
       {header}
 
-      {nothingToShow && <p className="text-sm text-soft">{t.email.noMessages}</p>}
+      {drafts.length > 0 && (
+        <section className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
+          <div className={`flex items-center gap-2 px-4 py-2.5 ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
+            <h2 className={`text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}>
+              {drafts.length}
+            </span>
+            {draftsLoading && <Spinner className="h-3.5 w-3.5 text-white/80" />}
+          </div>
+          <ul className="divide-y divide-card-border bg-card-bg">
+            {drafts.map((draft) => (
+              <li key={draft.id}>
+                <button
+                  type="button"
+                  onClick={() => openDraft(draft)}
+                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-black/[0.03]"
+                >
+                  {draft.source === "gmail" ? <GmailIcon className="h-4 w-4 shrink-0" /> : <IonosIcon className="h-4 w-4 shrink-0" />}
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                    {draft.to || t.email.draftNoRecipient}
+                    {draft.subject && <span className="text-soft"> — {draft.subject}</span>}
+                  </span>
+                  <span className="shrink-0 text-xs text-soft">
+                    <EmailTime iso={draft.date} hour12={hour12} intlLocale={intlLocale} />
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {nothingToShow && drafts.length === 0 && <p className="text-sm text-soft">{t.email.noMessages}</p>}
 
       {orderedSections.map((section) => {
         const color = EMAIL_SECTION_COLORS[section.key] ?? EMAIL_SECTION_COLORS.LOW_PRIORITY;
@@ -845,6 +926,12 @@ export default function EmailScreeningView({
         onSent={() => {
           setComposeTarget(null);
           setToast(emailComposeLabels.sentToast);
+          refreshDrafts();
+        }}
+        onDiscarded={() => {
+          setComposeTarget(null);
+          setToast(emailComposeLabels.discardedToast);
+          refreshDrafts();
         }}
         labels={emailComposeLabels}
       />
