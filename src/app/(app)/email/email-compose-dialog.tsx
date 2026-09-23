@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import RichTextarea from "@/components/rich-textarea";
 import { sendEmailAction } from "@/actions/email-messages";
 import type { EmailDetail } from "@/actions/email-messages";
 import { buildQuotedReply } from "@/lib/mail/mime-build";
+import { NO_ADDRESS_COLOR, contrastTextColor } from "@/lib/email-address-match";
 
 export type ComposeMode = "reply" | "replyAll" | "forward";
 
 export interface EmailComposeTarget {
   message: EmailDetail;
   mode: ComposeMode;
+  // Both computed by the caller at click time — same reasoning as
+  // EmailDialogTarget's own dotColor/linkSection (see that file's comment).
+  dotColor?: string | null;
+  linkSection?: ReactNode;
 }
 
 export interface EmailComposeLabels {
@@ -23,7 +28,7 @@ export interface EmailComposeLabels {
   subject: string;
   send: string;
   sending: string;
-  discard: string;
+  cancel: string;
   sendFailed: string;
   recipientRequired: string;
   quotedHeader: string; // "{sender} wrote:" — {sender} filled in by this component
@@ -198,102 +203,24 @@ export default function EmailComposeDialog({
     onSent();
   }
 
+  const color = target.dotColor || NO_ADDRESS_COLOR;
+  const fg = contrastTextColor(color);
+  // fg is only ever black or white (contrastTextColor's whole job) — this
+  // picks the border/hover treatment that stays visible against either,
+  // same branch Calendar's own colored-header edit dialog uses.
+  const headerBtnClass = fg === "#000000" ? "opacity-80 hover:opacity-100" : "opacity-90 hover:opacity-100";
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-card-border px-5 py-4">
-          <h3 className="font-display text-lg font-semibold text-ink">{title}</h3>
-          <button type="button" onClick={onClose} className="rounded-full p-1.5 text-soft hover:bg-black/10">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
-              <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-5">
-          <div className="flex items-center gap-2 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm">
-            <span className="shrink-0 text-soft">{labels.from}:</span>
-            <span className="min-w-0 flex-1 truncate text-ink">
-              {target.message.replyIdentity.displayName
-                ? `${target.message.replyIdentity.displayName} <${target.message.replyIdentity.accountAddress}>`
-                : target.message.replyIdentity.accountAddress}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="w-10 shrink-0 text-sm text-soft">{labels.to}</label>
-            <input
-              type="text"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="w-10 shrink-0 text-sm text-soft">{labels.cc}</label>
-            <input
-              type="text"
-              value={cc}
-              onChange={(e) => setCc(e.target.value)}
-              className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="w-10 shrink-0 text-sm text-soft">{labels.subject}</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
-            />
-          </div>
-
-          <RichTextarea value={html} onChange={setHtml} className="min-h-[220px]" />
-
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {attachments.map((a, i) => (
-                <span key={i} className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink">
-                  <span className="max-w-[10rem] truncate">{a.filename}</span>
-                  <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(i)}
-                    title={labels.removeAttachment.replace("{name}", a.filename)}
-                    className="ml-0.5 rounded-full p-0.5 text-soft hover:bg-black/10 hover:text-ink"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
-                      <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
-                    </svg>
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </div>
-
-        <div className="flex shrink-0 items-center justify-between border-t border-card-border px-5 py-3">
-          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94a3 3 0 1 1 4.243 4.242L9.564 17.31a1.5 1.5 0 0 1-2.122-2.12l8.485-8.486"
-              />
-            </svg>
-            {labels.attach}
-            <input type="file" multiple className="hidden" onChange={(e) => handleFilesSelected(e.target.files)} />
-          </label>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={onClose} className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5">
-              {labels.discard}
+        <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4" style={{ backgroundColor: color, color: fg }}>
+          <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold">{title}</h3>
+          <div className="flex shrink-0 items-center gap-3">
+            <button type="button" onClick={onClose} className={`text-sm hover:underline ${headerBtnClass}`}>
+              {labels.cancel}
             </button>
             <button
               type="button"
@@ -303,6 +230,92 @@ export default function EmailComposeDialog({
             >
               {sending ? labels.sending : labels.send}
             </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center gap-2 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm">
+                <span className="shrink-0 text-soft">{labels.from}:</span>
+                <span className="min-w-0 flex-1 truncate text-ink">
+                  {target.message.replyIdentity.displayName
+                    ? `${target.message.replyIdentity.displayName} <${target.message.replyIdentity.accountAddress}>`
+                    : target.message.replyIdentity.accountAddress}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="w-10 shrink-0 text-sm text-soft">{labels.to}</label>
+                <input
+                  type="text"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="w-10 shrink-0 text-sm text-soft">{labels.cc}</label>
+                <input
+                  type="text"
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="w-10 shrink-0 text-sm text-soft">{labels.subject}</label>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
+                />
+              </div>
+
+              <RichTextarea value={html} onChange={setHtml} className="min-h-[220px]" />
+
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {attachments.map((a, i) => (
+                    <span key={i} className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink">
+                      <span className="max-w-[10rem] truncate">{a.filename}</span>
+                      <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(i)}
+                        title={labels.removeAttachment.replace("{name}", a.filename)}
+                        className="ml-0.5 rounded-full p-0.5 text-soft hover:bg-black/10 hover:text-ink"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
+                          <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <label className="flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94a3 3 0 1 1 4.243 4.242L9.564 17.31a1.5 1.5 0 0 1-2.122-2.12l8.485-8.486"
+                  />
+                </svg>
+                {labels.attach}
+                <input type="file" multiple className="hidden" onChange={(e) => handleFilesSelected(e.target.files)} />
+              </label>
+
+              {error && <p className="text-sm text-red-600">{error}</p>}
+            </div>
+
+            {target.linkSection && (
+              <div className="min-w-0 border-t border-card-border pt-4 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">{target.linkSection}</div>
+            )}
           </div>
         </div>
       </div>

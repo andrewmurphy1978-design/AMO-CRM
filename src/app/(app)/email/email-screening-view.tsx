@@ -465,7 +465,7 @@ export default function EmailScreeningView({
   async function openComposeFor(id: string, mode: ComposeMode) {
     const result = await fetchEmailDetail(id);
     if ("error" in result) return;
-    setComposeTarget({ message: result, mode });
+    setComposeTarget(composeTargetFrom(result, mode));
   }
 
   const linkLabels = {
@@ -508,6 +508,72 @@ export default function EmailScreeningView({
     if (link.affiliateProgramName) return { name: link.affiliateProgramName, href: `/marketing#${link.affiliateProgramId}` };
     if (link.taskName) return { name: link.taskName, href: `/projects/${link.projectId}/tasks/${link.taskId}/edit` };
     return null;
+  }
+
+  // The Email/Compose dialogs' right-column "Linked to" section — same
+  // EmailLinkPicker every row already uses, plus a visible current-summary
+  // line so the link is readable without hovering (unlike the row's own
+  // icon-only affordance).
+  function buildLinkSection(threadId: string, subject: string, fromLabel: string, dateIso: string, link: string, myAddress: string | null): ReactNode {
+    const info = data?.linksByThread[threadId];
+    const current = linkedTo(info);
+    return (
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-soft">{linkLabels.link}</p>
+        <div className="mt-1 flex items-center gap-2">
+          {current ? (
+            <Link href={current.href} className="min-w-0 truncate text-sm font-medium text-emerald-700 hover:underline">
+              {current.name}
+            </Link>
+          ) : (
+            <span className="truncate text-sm text-soft">{linkLabels.none}</span>
+          )}
+          <EmailLinkPicker
+            threadId={threadId}
+            subject={subject}
+            fromLabel={fromLabel}
+            date={dateIso}
+            link={link}
+            myAddress={myAddress}
+            contacts={contactOptions}
+            projects={projectOptions}
+            tasks={taskOptions}
+            programs={programOptions}
+            initialContactId={info?.contactId ?? ""}
+            initialProjectId={info?.projectId ?? ""}
+            initialTaskId={info?.taskId ?? ""}
+            initialProgramId={info?.affiliateProgramId ?? ""}
+            summary={linkSummaryText(info)}
+            labels={linkLabels}
+            onSaved={() => markLinked(threadId)}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Reply/forward's colored header and "Linked to" section both key off the
+  // original message being replied to, not the identity actually sending
+  // the reply — reusing that context is what makes the compose dialog's
+  // color and link picker consistent with the message it's answering.
+  function composeTargetFrom(message: EmailDetail, mode: ComposeMode): EmailComposeTarget {
+    const toRaw = [...message.to, ...message.cc].join(", ");
+    const emailLike = { deliveredTo: message.deliveredTo, toRaw };
+    const dateIso = message.date ?? new Date().toISOString();
+    const link = `https://mail.google.com/mail/u/0/#inbox/${message.threadId}`;
+    return {
+      message,
+      mode,
+      dotColor: resolveEmailAddressColor(emailLike, addressColors),
+      linkSection: buildLinkSection(
+        message.threadId,
+        message.subject,
+        message.from.name || message.from.email,
+        dateIso,
+        link,
+        primaryReceivedAddress(emailLike)
+      ),
+    };
   }
 
   if (!connected) {
@@ -607,7 +673,14 @@ export default function EmailScreeningView({
         hour12={hour12}
         intlLocale={intlLocale}
         onOpen={opts.markAsRead ? () => markRead(email.id) : undefined}
-        onOpenDialog={() => setOpenMessage({ id: email.id, link: email.link })}
+        onOpenDialog={() =>
+          setOpenMessage({
+            id: email.id,
+            link: email.link,
+            dotColor,
+            linkSection: buildLinkSection(email.threadId, email.subject, email.from, email.date, email.link, primaryReceivedAddress(email)),
+          })
+        }
         onQuickAction={(mode) => openComposeFor(email.id, mode)}
         onLinkSaved={() => markLinked(email.threadId)}
         onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
@@ -656,7 +729,14 @@ export default function EmailScreeningView({
         dateIso={s.date}
         hour12={hour12}
         intlLocale={intlLocale}
-        onOpenDialog={() => setOpenMessage({ id: s.id, link: s.link })}
+        onOpenDialog={() =>
+          setOpenMessage({
+            id: s.id,
+            link: s.link,
+            dotColor,
+            linkSection: buildLinkSection(s.threadId, s.subject, s.to, s.date, s.link, s.fromEmail ?? null),
+          })
+        }
         onQuickAction={(mode) => openComposeFor(s.id, mode)}
         onLinkSaved={() => markLinked(s.threadId)}
         onComplete={opts.showComplete ? () => markComplete(s.id) : undefined}
@@ -749,7 +829,7 @@ export default function EmailScreeningView({
         onClose={() => setOpenMessage(null)}
         onReply={(detail: EmailDetail, mode: ComposeMode) => {
           setOpenMessage(null);
-          setComposeTarget({ message: detail, mode });
+          setComposeTarget(composeTargetFrom(detail, mode));
         }}
         dateLocale={dateLocale}
         intlLocale={intlLocale}

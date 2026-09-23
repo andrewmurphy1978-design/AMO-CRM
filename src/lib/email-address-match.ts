@@ -49,3 +49,22 @@ export function resolveEmailAddressColor(
   const match = colors.find((c) => candidates.has(c.address.trim().toLowerCase()));
   return match?.color ?? null;
 }
+
+// The Email Dialog/Compose Dialog header color when no address color
+// applies — a neutral slate rather than defaulting to any one address's
+// own color, and the same value Settings seeds a freshly-added row with.
+export const NO_ADDRESS_COLOR = "#64748b";
+
+// A user-picked hex can be any lightness — this decides black-vs-white
+// header text/icon color the same way GOOGLE_EVENT_COLORS' fixed fg values
+// do for Calendar, just computed instead of hand-picked (WCAG relative
+// luminance, standard coefficients).
+export function contrastTextColor(hex: string): "#000000" | "#ffffff" {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return "#ffffff";
+  const r = parseInt(clean.slice(0, 2), 16) / 255;
+  const g = parseInt(clean.slice(2, 4), 16) / 255;
+  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.6 ? "#000000" : "#ffffff";
+}

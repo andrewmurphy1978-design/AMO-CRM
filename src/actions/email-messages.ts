@@ -75,6 +75,10 @@ export interface EmailDetail {
   messageIdHeader: string | null;
   references: string[];
   replyIdentity: MailIdentity;
+  // Which of the account's own addresses/aliases this was delivered to —
+  // the Email Dialog's colored-header match (see EmailSummary.deliveredTo
+  // in google.ts for the list-view equivalent).
+  deliveredTo: string;
 }
 
 // Every mail identity this user currently has, in preference order — Gmail
@@ -83,7 +87,12 @@ export interface EmailDetail {
 // own headers, not this order — this order only matters as the last-
 // resort fallback when nothing else matches.
 async function loadIdentities(userId: string, db: PrismaClient): Promise<MailIdentity[]> {
-  const [google, ionos] = await Promise.all([getGoogleConnection(userId, db), getIonosMailbox(userId, db)]);
+  // Sequential, not Promise.all — two Prisma reads landing at once against
+  // the same Hyperdrive connection is exactly what trips Cloudflare's
+  // Error 1102 (same lesson documented throughout this codebase, e.g.
+  // getUpcomingEvents in google.ts).
+  const google = await getGoogleConnection(userId, db);
+  const ionos = await getIonosMailbox(userId, db);
   const identities: MailIdentity[] = [];
   if (google?.email) identities.push({ source: "gmail", accountAddress: google.email, displayName: null });
   if (ionos) identities.push({ source: "ionos", accountAddress: ionos.address, displayName: ionos.displayName });
@@ -124,13 +133,15 @@ export async function fetchEmailDetail(id: string): Promise<EmailDetail | { erro
         messageIdHeader: record.messageId,
         references: [],
         replyIdentity: { source: "ionos", accountAddress: mailbox?.address ?? "", displayName: mailbox?.displayName ?? null },
+        deliveredTo: mailbox?.address ?? "",
       };
     }
 
     const accessToken = await getValidAccessToken(session.user.id, db);
     if (!accessToken) return { error: "not_connected" };
 
-    const [mailbox, identities] = await Promise.all([getIonosMailbox(session.user.id, db), loadIdentities(session.user.id, db)]);
+    const mailbox = await getIonosMailbox(session.user.id, db);
+    const identities = await loadIdentities(session.user.id, db);
     const original = await fetchOriginal(id, accessToken, mailbox);
     if (!original) return { error: "not_found" };
 
@@ -155,6 +166,7 @@ export async function fetchEmailDetail(id: string): Promise<EmailDetail | { erro
       messageIdHeader: parsed.messageId,
       references: parsed.references,
       replyIdentity,
+      deliveredTo: parsed.deliveredTo,
     };
   });
 }
@@ -184,7 +196,8 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
     const accessToken = await getValidAccessToken(session.user.id, db);
     if (!accessToken) return { error: "not_connected" };
 
-    const [mailbox, identities] = await Promise.all([getIonosMailbox(session.user.id, db), loadIdentities(session.user.id, db)]);
+    const mailbox = await getIonosMailbox(session.user.id, db);
+    const identities = await loadIdentities(session.user.id, db);
     if (identities.length === 0) return { error: "not_connected" };
 
     // Re-derive the reply identity from the original message rather than

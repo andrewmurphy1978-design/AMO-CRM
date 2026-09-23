@@ -6,7 +6,7 @@ import { formatClockTime } from "@/lib/calendar-time";
 import type { EmailDetail } from "@/actions/email-messages";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email/email-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email/email-compose-dialog";
-import { colorForAddress, type EmailAddressColorEntry } from "@/lib/email-address-match";
+import { colorForAddress, resolveEmailAddressColor, type EmailAddressColorEntry } from "@/lib/email-address-match";
 
 export interface LinkedEmailRow {
   id: string;
@@ -63,7 +63,7 @@ export default function LinkedEmailsList({
             <li key={link.id} style={{ backgroundColor: i % 2 === 0 ? "#fdf4ff" : "#fae8ff" }}>
               <button
                 type="button"
-                onClick={() => setOpenMessage({ id: link.gmailThreadId, link: link.gmailLink ?? "" })}
+                onClick={() => setOpenMessage({ id: link.gmailThreadId, link: link.gmailLink ?? "", dotColor })}
                 className="flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left hover:brightness-95"
               >
                 <div className="min-w-0 flex-1">
@@ -91,7 +91,11 @@ export default function LinkedEmailsList({
         onClose={() => setOpenMessage(null)}
         onReply={(detail: EmailDetail, mode: ComposeMode) => {
           setOpenMessage(null);
-          setComposeTarget({ message: detail, mode });
+          const dotColor = resolveEmailAddressColor(
+            { deliveredTo: detail.deliveredTo, toRaw: [...detail.to, ...detail.cc].join(", ") },
+            addressColors
+          );
+          setComposeTarget({ message: detail, mode, dotColor });
         }}
         dateLocale={dateLocale}
         intlLocale={intlLocale}

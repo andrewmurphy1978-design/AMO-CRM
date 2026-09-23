@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
 import { fetchEmailDetail, downloadEmailAttachment, type EmailDetail } from "@/actions/email-messages";
+import { NO_ADDRESS_COLOR, contrastTextColor } from "@/lib/email-address-match";
 import EmailBodyFrame from "./email-body-frame";
 import type { ComposeMode } from "./email-compose-dialog";
 import { GmailIcon, IonosIcon } from "./mail-brand-icons";
@@ -29,6 +30,12 @@ export interface EmailDialogLabels {
 export interface EmailDialogTarget {
   id: string;
   link: string; // the row's already-known Gmail thread URL — the dialog's own "Open in Gmail" fallback
+  // Both computed by the caller at click time (it already has the row's own
+  // dot color and linked-entity data — see email-screening-view.tsx) rather
+  // than recomputed here, so this dialog doesn't need addressColors/contact
+  // option lists threaded into every place it's opened from.
+  dotColor?: string | null;
+  linkSection?: ReactNode;
 }
 
 const AttachmentIcon = () => (
@@ -136,15 +143,25 @@ export default function EmailDialog({
     ? `${format(new Date(detail.date), "EEEE, MMMM d, yyyy", { locale: dateLocale })} · ${formatClockTime(new Date(detail.date), hour12, intlLocale)}`
     : "";
 
+  const color = target.dotColor || NO_ADDRESS_COLOR;
+  const fg = contrastTextColor(color);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-card-border px-5 py-4">
+        <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: color }} />
+        <div className="flex shrink-0 items-start justify-between gap-2 px-5 py-4">
           <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold text-ink">{detail?.subject ?? ""}</h3>
-          <button type="button" onClick={onClose} aria-label={labels.close} className="shrink-0 rounded-full p-1.5 text-soft hover:bg-black/10">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={labels.close}
+            className="shrink-0 rounded-full p-1 hover:opacity-80"
+            style={{ backgroundColor: color, color: fg }}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-5 w-5">
               <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
             </svg>
@@ -158,24 +175,29 @@ export default function EmailDialog({
             <p className="text-sm text-red-600">{loadError === "not_connected" ? labels.notConnected : labels.loadFailed}</p>
           ) : (
             <>
-              <div className="space-y-0.5 text-sm text-ink">
-                <p>
-                  <span className="text-soft">{labels.from}: </span>
-                  {detail?.from.name ? `${detail.from.name} <${detail.from.email}>` : detail?.from.email}
-                </p>
-                {detail && detail.to.length > 0 && (
-                  <p className="truncate">
-                    <span className="text-soft">{labels.to}: </span>
-                    {detail.to.join(", ")}
+              <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
+                <div className="min-w-0 space-y-0.5 text-sm text-ink">
+                  <p>
+                    <span className="text-soft">{labels.from}: </span>
+                    {detail?.from.name ? `${detail.from.name} <${detail.from.email}>` : detail?.from.email}
                   </p>
+                  {detail && detail.to.length > 0 && (
+                    <p className="truncate">
+                      <span className="text-soft">{labels.to}: </span>
+                      {detail.to.join(", ")}
+                    </p>
+                  )}
+                  {detail && detail.cc.length > 0 && (
+                    <p className="truncate">
+                      <span className="text-soft">{labels.cc}: </span>
+                      {detail.cc.join(", ")}
+                    </p>
+                  )}
+                  {dateLabel && <p className="text-soft">{dateLabel}</p>}
+                </div>
+                {target.linkSection && (
+                  <div className="min-w-0 border-t border-card-border pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">{target.linkSection}</div>
                 )}
-                {detail && detail.cc.length > 0 && (
-                  <p className="truncate">
-                    <span className="text-soft">{labels.cc}: </span>
-                    {detail.cc.join(", ")}
-                  </p>
-                )}
-                {dateLabel && <p className="text-soft">{dateLabel}</p>}
               </div>
 
               {detail && detail.attachments.length > 0 && (
@@ -218,36 +240,44 @@ export default function EmailDialog({
             {isIonos ? <IonosIcon className="h-3.5 w-3.5 shrink-0" /> : <GmailIcon className="h-3.5 w-3.5 shrink-0" />}
             {isIonos ? labels.openWebmail : labels.openInGmail} ↗
           </a>
-          <div className="flex items-center gap-2">
-            {detail && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onReply(detail, "reply")}
-                  className="rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
-                >
-                  {labels.reply}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onReply(detail, "replyAll")}
-                  className="rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
-                >
-                  {labels.replyAll}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onReply(detail, "forward")}
-                  className="rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
-                >
-                  {labels.forward}
-                </button>
-              </>
-            )}
-            <button type="button" onClick={onClose} className="rounded-lg border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5">
-              {labels.close}
-            </button>
-          </div>
+          {detail && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                title={labels.reply}
+                aria-label={labels.reply}
+                onClick={() => onReply(detail, "reply")}
+                className="rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                title={labels.replyAll}
+                aria-label={labels.replyAll}
+                onClick={() => onReply(detail, "replyAll")}
+                className="rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15 7 10m0 0 5-5M7 10h9a6 6 0 0 1 6 6v1.5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 15 3 10m5-5-5 5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                title={labels.forward}
+                aria-label={labels.forward}
+                onClick={() => onReply(detail, "forward")}
+                className="rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
