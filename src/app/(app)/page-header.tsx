@@ -33,10 +33,14 @@ export function HeaderBreadcrumb({ parts }: { parts: { label: string; href?: str
 // sidebar, the Date/Time/Location card on the right (an optional action
 // button, e.g. Calendar's "Open in Google Calendar", sits just left of
 // it). No logo on most pages: the sidebar already shows it, so repeating
-// it would be redundant. The Dashboard is the one exception — its own
-// sidebar entry hides the logo (see Sidebar's hideLogo prop), and shows
-// the full AMO lockup here instead, with the title centered between it
-// and the card.
+// it would be redundant. The Dashboard is the one exception on desktop —
+// its own sidebar entry hides the logo there (see Sidebar's hideLogo
+// prop), and this header shows the full AMO lockup instead, with the
+// title centered between it and the card. On mobile there's no room for
+// the full lockup next to the icon-only sidebar rail (which always shows
+// its own badge logo regardless of this prop, see Sidebar), so below `sm`
+// this hides the image entirely and left-aligns the title like every
+// other page's header.
 export default function PageHeader({
   title,
   hour12,
@@ -64,8 +68,8 @@ export default function PageHeader({
     return (
       <header className="sticky top-0 z-30 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={logoUrl} alt="Andrew Murphy Online" className="h-auto w-36 shrink-0 object-contain sm:w-56" />
-        <h1 className="absolute left-1/2 -translate-x-1/2 truncate font-display text-xl font-semibold text-amo-white sm:text-2xl">
+        <img src={logoUrl} alt="Andrew Murphy Online" className="hidden h-auto w-36 shrink-0 object-contain sm:block sm:w-56" />
+        <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-2xl">
           {title}
         </h1>
         <div className="flex items-center gap-3">

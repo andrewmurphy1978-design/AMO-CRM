@@ -40,27 +40,33 @@ export default function Sidebar({
   // collapsed/expanded toggle below — before this, the sidebar (in either
   // state) was `hidden` under the `sm` breakpoint entirely, so there was no
   // way at all to navigate between pages on a phone besides the browser's
-  // back button. `sticky top-0 h-screen` (same as the desktop aside below)
-  // pins it in place so it stays visible while the main content scrolls,
-  // instead of scrolling away with the page as an ordinary flex child
-  // would. Sign-out lives here too, as an icon at the bottom — this used
-  // to be its own separate "CRM" + text-link header bar above the main
-  // content (app-shell.tsx); folding both into the rail means there's only
-  // ever one mobile nav surface, not two stacked on top of each other.
+  // back button. `sticky top-0` pins it in place so it stays visible while
+  // the main content scrolls, instead of scrolling away with the page as
+  // an ordinary flex child would. Height is `h-dvh` (dynamic viewport
+  // height), not `h-screen` (100vh) — on a phone, 100vh is measured
+  // against the *largest* possible viewport (address bar hidden), taller
+  // than what's actually visible when the bar is showing, so a h-screen
+  // rail's own bottom (the sign-out button) rendered below the real fold,
+  // and the mismatch between the cached 100vh box and the actual visible
+  // area as the browser chrome shows/hides made the whole rail appear to
+  // scroll. `env(safe-area-inset-bottom)` padding on the sign-out row
+  // additionally clears the home-indicator/gesture-bar strip on phones
+  // that have one. The logo always shows here regardless of `hideLogo`
+  // (unlike the desktop aside below) — that prop only hides it when the
+  // Dashboard's own header shows the full lockup instead, which never
+  // happens on this narrow a screen.
   const mobileRail = (
-    <aside className="sticky top-0 z-10 flex h-screen w-14 shrink-0 flex-col bg-amo-green sm:hidden">
+    <aside className="sticky top-0 z-10 flex h-dvh w-14 shrink-0 flex-col bg-amo-green sm:hidden">
       <div className="flex h-14 shrink-0 items-center justify-center border-b border-white/10">
-        {!hideLogo && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-7 w-7 object-contain" />
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-7 w-7 object-contain" />
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto px-1.5 py-3">
         {navItems.map((item) => (
           <NavLink key={item.href} href={item.href} label={item.label} collapsed />
         ))}
       </nav>
-      <form action={signOutAction} className="shrink-0 border-t border-white/10 p-2">
+      <form action={signOutAction} className="shrink-0 border-t border-white/10 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
         <button
           type="submit"
           aria-label={signOutLabel}
