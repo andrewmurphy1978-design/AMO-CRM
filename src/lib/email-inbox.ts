@@ -11,7 +11,7 @@ import { reconcileIonosSentRecords, listIonosSentRecords } from "@/lib/mail/sent
 // from a bare Gmail id (see EmailSummary's source/messageIdHeader comment
 // in google.ts), and since IMAP has no native thread grouping the way
 // Gmail does, each message is simply its own thread for now.
-function ionosSummaryFromImap(m: ImapMessageSummary): EmailSummary {
+function ionosSummaryFromImap(m: ImapMessageSummary, mailboxAddress: string): EmailSummary {
   const id = `ionos:${m.uid}`;
   return {
     id,
@@ -19,6 +19,9 @@ function ionosSummaryFromImap(m: ImapMessageSummary): EmailSummary {
     from: m.from.name || m.from.email,
     fromEmail: m.from.email,
     toRaw: m.to.join(", "),
+    // An IONOS IMAP mailbox only ever holds mail for its own address, so
+    // unlike Gmail's multi-alias inbox this doesn't need a header lookup.
+    deliveredTo: mailboxAddress,
     subject: m.subject,
     snippet: "",
     date: m.date ?? m.internalDate ?? new Date().toISOString(),
@@ -386,7 +389,7 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
         },
         20
       );
-      ionosEmailList = messages.map(ionosSummaryFromImap);
+      ionosEmailList = messages.map((m) => ionosSummaryFromImap(m, mailbox.address));
       ionosFetchedAt = new Date();
       await recordIonosResult(userId, db, null);
       await reconcileIonosSentRecords(db, userId, messages);

@@ -25,7 +25,7 @@ export default async function EmailPage() {
   // page load; only the client-side Refresh button (or a first-ever visit
   // with no cache row yet) spends a live Gmail/Claude call, via
   // /api/email/inbox.
-  const { connected, hour12, contacts, projects, tasks, affiliatePrograms, initialData } = await withScopedPrismaClient(async (db) => {
+  const { connected, hour12, contacts, projects, tasks, affiliatePrograms, addressColors, initialData } = await withScopedPrismaClient(async (db) => {
     const accessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
     const contacts = await db.contact.findMany({
@@ -48,6 +48,7 @@ export default async function EmailPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     });
+    const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
 
     let initialData: EmailScreeningPayload | null = null;
     if (accessToken && session) {
@@ -58,7 +59,7 @@ export default async function EmailPage() {
       }
     }
 
-    return { connected: accessToken !== null, hour12, contacts, projects, tasks, affiliatePrograms, initialData };
+    return { connected: accessToken !== null, hour12, contacts, projects, tasks, affiliatePrograms, addressColors, initialData };
   });
 
   const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c) }));
@@ -74,6 +75,7 @@ export default async function EmailPage() {
       projectOptions={projectOptions}
       taskOptions={taskOptions}
       programOptions={programOptions}
+      addressColors={addressColors}
       hour12={hour12}
       lang={lang}
       title={t.email.title}

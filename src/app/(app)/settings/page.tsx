@@ -15,6 +15,7 @@ import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
 import PersonalWatchForm from "./personal-watch-form";
+import EmailAddressColorForm from "./email-address-color-form";
 import EmailScreeningForm from "./email-screening-form";
 import ApiKeyVaultForm from "./api-key-vault-form";
 import ServicePriceListForm from "./service-price-list-form";
@@ -63,6 +64,7 @@ export default async function SettingsPage({
     ionosMailbox,
     users,
     watchedPeople,
+    emailAddressColors,
     vaultEntries,
     serviceItems,
     billingSettings,
@@ -89,6 +91,7 @@ export default async function SettingsPage({
       const ionosMailbox = session ? await getIonosMailbox(session.user.id, db) : null;
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
       const watchedPeople = showPersonalCard ? await getWatchedPeople(db) : [];
+      const emailAddressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
       // Never select valueEncrypted here — the ciphertext has no reason to
       // reach the client at all until an admin explicitly reveals one entry.
       const vaultEntries = isAdmin
@@ -109,6 +112,7 @@ export default async function SettingsPage({
         ionosMailbox,
         users,
         watchedPeople,
+        emailAddressColors,
         vaultEntries,
         serviceItems,
         billingSettings,
@@ -241,6 +245,15 @@ export default async function SettingsPage({
                 lastError={ionosMailbox?.lastError ?? null}
                 lang={lang}
               />
+            </div>
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.emailAddressColorTitle}</h2>
+            <p className="mt-1 text-sm text-soft">{t.settings.emailAddressColorDesc}</p>
+            <div className="mt-4">
+              <EmailAddressColorForm rows={emailAddressColors} lang={lang} />
             </div>
           </section>
 

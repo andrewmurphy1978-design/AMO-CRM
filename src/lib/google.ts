@@ -115,6 +115,12 @@ export interface EmailSummary {
   from: string;
   fromEmail: string; // the bare address, e.g. for the andrewmurphy.online highlight
   toRaw: string; // raw To header (can list several addresses) — for matching, e.g. the Personal page's watched-address check
+  // Gmail sets this to whichever of the account's own addresses/aliases a
+  // message actually arrived at (more reliable than To/Cc, which show the
+  // sender's own addressing and can list addresses that aren't the
+  // account's at all). Optional so an EmailInboxCache snapshot cached
+  // before this field existed still parses with zero backfill.
+  deliveredTo?: string;
   subject: string;
   snippet: string;
   date: string; // ISO datetime the message was received
@@ -218,6 +224,7 @@ async function fetchEmailSummary(accessToken: string, id: string): Promise<Email
     from: formatFrom(fromHeader),
     fromEmail: extractEmailAddress(fromHeader),
     toRaw: extractHeader(headers, "To"),
+    deliveredTo: extractHeader(headers, "Delivered-To").trim() || undefined,
     subject: extractHeader(headers, "Subject") || "(no subject)",
     snippet: data.snippet ?? "",
     date,

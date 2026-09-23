@@ -1106,6 +1106,23 @@ model PersonalWatchEmail {
   @@map("personal_watch_emails")
 }
 
+// The color-coding table behind the Email list's "which of my own
+// addresses was this delivered to" dot — Andrew's Gmail inbox receives
+// mail addressed to several aliases plus the forwarded IONOS mailbox, and
+// this lets him assign each one a distinct color from Settings rather
+// than the app guessing. Global like PersonalWatchPerson above, not
+// per-user, since it describes the one shared inbox, not a per-viewer
+// preference.
+model EmailAddressColor {
+  id        String   @id @default(cuid())
+  address   String   @unique
+  color     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("email_address_colors")
+}
+
 // Same idea as EmailLink, but for a Google Calendar event (keyed off its
 // event id) — links an appointment to a client, project, task, and/or a
 // systeme.io booking.

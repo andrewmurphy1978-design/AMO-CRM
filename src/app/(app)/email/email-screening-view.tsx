@@ -8,6 +8,7 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { isOwnDomainEmail } from "@/lib/email-domain";
 import { isStale } from "@/lib/staleness";
 import type { EmailSummary } from "@/lib/google";
+import { resolveEmailAddressColor, type EmailAddressColorEntry } from "@/lib/email-address-match";
 import type { EmailCategory } from "@/lib/email-classifier";
 import type { EmailLinkInfo, EmailScreeningPayload } from "@/lib/email-inbox";
 import PageHeader from "../page-header";
@@ -165,6 +166,8 @@ const ROW_GRID_COLUMNS =
 function EmailRow({
   index,
   highlight,
+  dotColor,
+  dotTitle,
   primaryLabel,
   subject,
   hasAttachments,
@@ -201,6 +204,8 @@ function EmailRow({
 }: {
   index: number;
   highlight: boolean;
+  dotColor?: string | null;
+  dotTitle?: string;
   primaryLabel: string;
   subject: string;
   hasAttachments?: boolean;
@@ -246,8 +251,9 @@ function EmailRow({
   return (
     <li className={clsx("overflow-hidden transition-colors hover:bg-black/5", highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : "")}>
       <div className={clsx("grid items-center gap-2 py-1.5 pl-3 pr-4", ROW_GRID_COLUMNS)}>
-        <button type="button" onClick={openDialog} className="min-w-0 truncate text-left text-sm font-medium text-ink hover:opacity-80">
-          {primaryLabel}
+        <button type="button" onClick={openDialog} className="flex min-w-0 items-center gap-1.5 truncate text-left text-sm font-medium text-ink hover:opacity-80">
+          {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} title={dotTitle} />}
+          <span className="truncate">{primaryLabel}</span>
         </button>
         <button
           type="button"
@@ -317,6 +323,7 @@ export default function EmailScreeningView({
   projectOptions,
   taskOptions,
   programOptions,
+  addressColors,
   hour12,
   lang,
   title,
@@ -330,6 +337,7 @@ export default function EmailScreeningView({
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
   programOptions: LinkOption[];
+  addressColors: EmailAddressColorEntry[];
   hour12: boolean;
   lang: Lang;
   title: string;
@@ -565,11 +573,15 @@ export default function EmailScreeningView({
     completedSent.length === 0;
 
   function receivedRows(list: EmailSummary[], opts: { markAsRead: boolean; showComplete?: boolean; showUncomplete?: boolean; showMarkUnread?: boolean }) {
-    return list.map((email, i) => (
+    return list.map((email, i) => {
+      const dotColor = resolveEmailAddressColor(email, addressColors);
+      return (
       <EmailRow
         key={email.id}
         index={i}
         highlight={isOwnDomainEmail(email.fromEmail)}
+        dotColor={dotColor}
+        dotTitle={dotColor ? email.deliveredTo || email.toRaw : undefined}
         primaryLabel={email.from}
         subject={email.subject}
         hasAttachments={email.hasAttachments}
@@ -607,7 +619,8 @@ export default function EmailScreeningView({
         markReadLabel={t.email.markRead}
         markUnreadLabel={t.email.markUnread}
       />
-    ));
+      );
+    });
   }
 
   function sentRows(list: typeof sentAwaitingReply, opts: { showComplete?: boolean; showUncomplete?: boolean }) {
