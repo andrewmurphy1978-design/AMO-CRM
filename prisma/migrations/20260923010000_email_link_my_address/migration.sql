@@ -1,0 +1,1 @@
+ALTER TABLE "email_links" ADD COLUMN IF NOT EXISTS "myAddress" TEXT;

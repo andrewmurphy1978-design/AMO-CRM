@@ -923,6 +923,11 @@ model EmailLink {
   fromLabel   String?
   messageDate DateTime?
   gmailLink   String?
+  // Which of the account's own addresses/aliases this message was
+  // received at (or sent from) — captured at link time so the Linked
+  // Emails card can show the same colored dot as the Email list without a
+  // live Gmail call (see EmailSummary.deliveredTo / SentEmailSummary.fromEmail).
+  myAddress   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

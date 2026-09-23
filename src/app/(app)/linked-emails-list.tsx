@@ -6,6 +6,7 @@ import { formatClockTime } from "@/lib/calendar-time";
 import type { EmailDetail } from "@/actions/email-messages";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email/email-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email/email-compose-dialog";
+import { colorForAddress, type EmailAddressColorEntry } from "@/lib/email-address-match";
 
 export interface LinkedEmailRow {
   id: string;
@@ -14,6 +15,7 @@ export interface LinkedEmailRow {
   fromLabel: string | null;
   messageDate: string | null; // ISO
   gmailLink: string | null;
+  myAddress: string | null;
 }
 
 // The "Linked emails" card's row list, shared by the Contact and Affiliate
@@ -27,6 +29,7 @@ export interface LinkedEmailRow {
 // server-side before fetching.
 export default function LinkedEmailsList({
   emailLinks,
+  addressColors,
   noLinkedEmailsLabel,
   dateLocale,
   intlLocale,
@@ -35,6 +38,7 @@ export default function LinkedEmailsList({
   emailComposeLabels,
 }: {
   emailLinks: LinkedEmailRow[];
+  addressColors: EmailAddressColorEntry[];
   noLinkedEmailsLabel: string;
   dateLocale: Locale | undefined;
   intlLocale: string;
@@ -51,9 +55,10 @@ export default function LinkedEmailsList({
 
   return (
     <>
-      <ul className="overflow-hidden rounded-lg border border-card-border">
+      <ul className="max-h-[520px] overflow-y-auto overflow-x-hidden rounded-lg border border-card-border">
         {emailLinks.map((link, i) => {
           const date = link.messageDate ? new Date(link.messageDate) : null;
+          const dotColor = colorForAddress(link.myAddress, addressColors);
           return (
             <li key={link.id} style={{ backgroundColor: i % 2 === 0 ? "#fdf4ff" : "#fae8ff" }}>
               <button
@@ -63,7 +68,10 @@ export default function LinkedEmailsList({
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-ink">{link.subject || "—"}</p>
-                  <p className="truncate text-xs text-soft">{link.fromLabel}</p>
+                  <p className="flex min-w-0 items-center gap-1.5 truncate text-xs text-soft">
+                    {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} title={link.myAddress ?? undefined} />}
+                    <span className="truncate">{link.fromLabel}</span>
+                  </p>
                 </div>
                 {date && (
                   <span className="shrink-0 whitespace-nowrap pt-0.5 text-right text-xs leading-4 text-soft">

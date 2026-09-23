@@ -394,6 +394,11 @@ export interface SentEmailSummary {
   // (rather than dropped) so the Email page can show it under Completed
   // instead of it just vanishing.
   status: "awaiting" | "completed";
+  // Which of the account's own addresses/aliases this was sent from — the
+  // Email list's colored-dot match for Sent rows (see EmailSummary's
+  // deliveredTo comment for the received-side equivalent). Optional so a
+  // cached snapshot from before this field existed still parses.
+  fromEmail?: string;
 }
 
 // Recently sent messages whose thread hasn't seen a reply yet — a
@@ -434,7 +439,7 @@ export async function getSentAwaitingReplies(
     const results = await Promise.all(
       threadIds.map(async (threadId): Promise<SentEmailSummary | null> => {
         const res = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+          `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=To&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
         if (!res.ok) {
@@ -461,6 +466,7 @@ export async function getSentAwaitingReplies(
 
         const headers = lastMessage.payload?.headers;
         const toHeader = extractHeader(headers, "To");
+        const fromHeader = extractHeader(headers, "From");
         const dateHeader = extractHeader(headers, "Date");
         const parsedDateHeader = dateHeader ? new Date(dateHeader) : null;
         const date =
@@ -479,6 +485,7 @@ export async function getSentAwaitingReplies(
           date,
           link: `https://mail.google.com/mail/u/0/#sent/${threadId}`,
           status: stillAwaiting ? "awaiting" : "completed",
+          fromEmail: extractEmailAddress(fromHeader) || undefined,
         };
       })
     );

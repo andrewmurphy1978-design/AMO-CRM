@@ -180,13 +180,14 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
   // risks Cloudflare's per-invocation subrequest cap. Re-fetching here is
   // gated on staleness so repeat views of the same program within the
   // window don't re-hit Short.io on every load.
-  const { program, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { program, hour12, addressColors } = await withScopedPrismaClient(async (db) => {
     let program = await db.affiliateProgram.findUnique({
       where: { id },
       include: { emailLinks: { orderBy: { messageDate: "desc" } } },
     });
     const hour12 = await getHour12(session, db);
-    if (!program) return { program, hour12 };
+    const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
+    if (!program) return { program, hour12, addressColors };
 
     const needsStats = isAdmin && (program.shortioLinkId || program.shortioLinkIdFr) && isShortIoStatsStale(program.shortioStatsSyncedAt);
 
@@ -225,7 +226,7 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
       }
     }
 
-    return { program, hour12 };
+    return { program, hour12, addressColors };
   });
   if (!program) notFound();
   const styles = statusStyle(program.affiliateStatus);
@@ -393,7 +394,9 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
                 fromLabel: link.fromLabel,
                 messageDate: link.messageDate ? link.messageDate.toISOString() : null,
                 gmailLink: link.gmailLink,
+                myAddress: link.myAddress,
               }))}
+              addressColors={addressColors}
               noLinkedEmailsLabel={t.marketing.noLinkedEmailsYet}
               dateLocale={dateLocale}
               intlLocale={intlLocale}

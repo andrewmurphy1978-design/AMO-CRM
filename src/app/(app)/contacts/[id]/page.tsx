@@ -201,6 +201,7 @@ export default async function ContactDetailPage({
   const {
     contact,
     hour12,
+    addressColors,
     calendarEvents,
     calendarEventLinks,
     calendarContactOptions,
@@ -231,7 +232,7 @@ export default async function ContactDetailPage({
         subscriptions: { orderBy: { startedAt: "desc" } },
         courseEnrollments: { orderBy: { enrolledAt: "desc" } },
         communityMemberships: { orderBy: { joinedAt: "desc" } },
-        emailLinks: { orderBy: { messageDate: "desc" }, take: 20 },
+        emailLinks: { orderBy: { messageDate: "desc" } },
         socialLinks: { orderBy: { createdAt: "asc" } },
         extraAddresses: { orderBy: { order: "asc" } },
         messagingAccounts: { orderBy: { order: "asc" } },
@@ -267,12 +268,14 @@ export default async function ContactDetailPage({
       take: 100,
       select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
     });
+    const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
 
     return {
       contact,
       hour12,
       calendarEvents,
       calendarEventLinks,
+      addressColors,
       calendarContactOptions: allContacts.map((c) => ({
         id: c.id,
         label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "",
@@ -703,7 +706,9 @@ export default async function ContactDetailPage({
                 fromLabel: link.fromLabel,
                 messageDate: link.messageDate ? link.messageDate.toISOString() : null,
                 gmailLink: link.gmailLink,
+                myAddress: link.myAddress,
               }))}
+              addressColors={addressColors}
               noLinkedEmailsLabel={t.contactDetail.noLinkedEmails}
               dateLocale={dateLocale}
               intlLocale={intlLocale}

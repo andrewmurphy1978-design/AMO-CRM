@@ -63,7 +63,12 @@ export function parseIonosSentRecordId(id: string): string | null {
 // "completed" the same way Gmail's own sentAwaitingReply list is split),
 // mapped into the same SentEmailSummary shape the rest of the Email page
 // already works with.
-export async function listIonosSentRecords(db: PrismaClient, userId: string, maxResults: number): Promise<SentEmailSummary[]> {
+export async function listIonosSentRecords(
+  db: PrismaClient,
+  userId: string,
+  maxResults: number,
+  mailboxAddress?: string | null
+): Promise<SentEmailSummary[]> {
   const rows = await db.sentEmailRecord.findMany({
     where: { userId },
     orderBy: { sentAt: "desc" },
@@ -79,5 +84,9 @@ export async function listIonosSentRecords(db: PrismaClient, userId: string, max
     date: r.sentAt.toISOString(),
     link: "https://mail.ionos.com/",
     status: r.status as "awaiting" | "completed",
+    // Every send recorded here went out over the one IONOS mailbox's own
+    // SMTP credentials, so there's no per-message header to read it from
+    // the way Gmail's fromEmail is (see getSentAwaitingReplies).
+    fromEmail: mailboxAddress ?? undefined,
   }));
 }

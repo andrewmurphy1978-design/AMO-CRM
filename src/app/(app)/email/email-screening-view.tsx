@@ -8,7 +8,7 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { isOwnDomainEmail } from "@/lib/email-domain";
 import { isStale } from "@/lib/staleness";
 import type { EmailSummary } from "@/lib/google";
-import { resolveEmailAddressColor, type EmailAddressColorEntry } from "@/lib/email-address-match";
+import { resolveEmailAddressColor, colorForAddress, primaryReceivedAddress, type EmailAddressColorEntry } from "@/lib/email-address-match";
 import type { EmailCategory } from "@/lib/email-classifier";
 import type { EmailLinkInfo, EmailScreeningPayload } from "@/lib/email-inbox";
 import PageHeader from "../page-header";
@@ -176,6 +176,7 @@ function EmailRow({
   importantLabel,
   link,
   threadId,
+  myAddress,
   linkInfo,
   linkSummaryText,
   linkedTo,
@@ -214,6 +215,7 @@ function EmailRow({
   importantLabel: string;
   link: string;
   threadId: string;
+  myAddress?: string | null;
   linkInfo: EmailLinkInfo | undefined;
   linkSummaryText: string | null;
   linkedTo: { name: string; href: string } | null;
@@ -283,6 +285,7 @@ function EmailRow({
             fromLabel={primaryLabel}
             date={dateIso}
             link={link}
+            myAddress={myAddress}
             contacts={contactOptions}
             projects={projectOptions}
             tasks={taskOptions}
@@ -582,6 +585,7 @@ export default function EmailScreeningView({
         highlight={isOwnDomainEmail(email.fromEmail)}
         dotColor={dotColor}
         dotTitle={dotColor ? email.deliveredTo || email.toRaw : undefined}
+        myAddress={primaryReceivedAddress(email)}
         primaryLabel={email.from}
         subject={email.subject}
         hasAttachments={email.hasAttachments}
@@ -624,17 +628,22 @@ export default function EmailScreeningView({
   }
 
   function sentRows(list: typeof sentAwaitingReply, opts: { showComplete?: boolean; showUncomplete?: boolean }) {
-    return list.map((s, i) => (
+    return list.map((s, i) => {
+      const dotColor = colorForAddress(s.fromEmail, addressColors);
+      return (
       <EmailRow
         key={s.id}
         index={i}
         highlight={false}
+        dotColor={dotColor}
+        dotTitle={dotColor ? s.fromEmail : undefined}
         primaryLabel={s.to}
         subject={s.subject}
         attachmentLabel={t.email.hasAttachment}
         importantLabel={t.email.isImportant}
         link={s.link}
         threadId={s.threadId}
+        myAddress={s.fromEmail ?? null}
         linkInfo={data?.linksByThread[s.threadId]}
         linkSummaryText={linkSummaryText(data?.linksByThread[s.threadId])}
         linkedTo={linkedTo(data?.linksByThread[s.threadId])}
@@ -662,7 +671,8 @@ export default function EmailScreeningView({
         markReadLabel={t.email.markRead}
         markUnreadLabel={t.email.markUnread}
       />
-    ));
+      );
+    });
   }
 
   // Explicit order (not just CATEGORY_ORDER) so "Sent — awaiting reply"

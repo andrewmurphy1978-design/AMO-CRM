@@ -5,6 +5,7 @@ import { getEmailClassifications, type EmailCategory } from "@/lib/email-classif
 import { getIonosMailbox, recordIonosResult } from "@/lib/mail/ionos";
 import { listRecentImapMessages, type ImapMessageSummary } from "@/lib/mail/imap";
 import { reconcileIonosSentRecords, listIonosSentRecords } from "@/lib/mail/sent-records";
+import { primaryReceivedAddress } from "@/lib/email-address-match";
 
 // Wraps one IMAP message into the same EmailSummary shape the rest of the
 // Email page already works with — "ionos:<uid>" keeps every id disjoint
@@ -75,6 +76,7 @@ interface AutoLinkCandidate {
   fromLabel: string;
   date: string;
   link: string;
+  myAddress: string | null;
 }
 
 async function autoLinkToContacts(db: PrismaClient, candidates: AutoLinkCandidate[]): Promise<void> {
@@ -141,6 +143,7 @@ async function autoLinkToContacts(db: PrismaClient, candidates: AutoLinkCandidat
         fromLabel: candidate.fromLabel,
         messageDate: new Date(candidate.date),
         gmailLink: candidate.link,
+        myAddress: candidate.myAddress,
       },
     });
   }
@@ -211,6 +214,7 @@ async function autoLinkToAffiliatePrograms(db: PrismaClient, candidates: AutoLin
         fromLabel: candidate.fromLabel,
         messageDate: new Date(candidate.date),
         gmailLink: candidate.link,
+        myAddress: candidate.myAddress,
       },
     });
   }
@@ -333,7 +337,8 @@ export async function getCachedInbox(db: PrismaClient, userId: string): Promise<
   // separately from the Gmail-only emails column: independently
   // refreshable, and this always reflects reconcileIonosSentRecords'
   // latest awaiting/completed status rather than a stale JSON snapshot.
-  const ionosSent = await listIonosSentRecords(db, userId, 15);
+  const mailboxForSent = await getIonosMailbox(userId, db);
+  const ionosSent = await listIonosSentRecords(db, userId, 15, mailboxForSent?.address);
   return {
     emails: mergeEmailSources(gmailEmails, ionosEmails),
     sentAwaitingReply: [...gmailSent, ...ionosSent],
@@ -413,6 +418,7 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
     fromLabel: e.from,
     date: e.date,
     link: e.link,
+    myAddress: primaryReceivedAddress(e),
   }));
   const sentCandidates = sentList.map((s) => ({
     threadId: s.threadId,
@@ -421,6 +427,7 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
     fromLabel: s.to,
     date: s.date,
     link: s.link,
+    myAddress: s.fromEmail ?? null,
   }));
 
   await Promise.all([
@@ -448,7 +455,7 @@ export async function refreshEmailInboxCache(db: PrismaClient, userId: string, a
     create: { userId, emails: emailsJson, sentAwaitingReply: sentJson, fetchedAt, ionosEmails: ionosJson, ionosFetchedAt },
   });
 
-  const ionosSentList = mailbox ? await listIonosSentRecords(db, userId, 15) : [];
+  const ionosSentList = mailbox ? await listIonosSentRecords(db, userId, 15, mailbox.address) : [];
   return { emails: mergedEmails, sentAwaitingReply: [...sentList, ...ionosSentList], fetchedAt: fetchedAt.toISOString() };
 }
 

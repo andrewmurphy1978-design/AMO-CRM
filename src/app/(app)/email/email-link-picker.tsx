@@ -12,6 +12,7 @@ export default function EmailLinkPicker({
   fromLabel,
   date,
   link,
+  myAddress,
   contacts,
   projects,
   tasks,
@@ -29,6 +30,7 @@ export default function EmailLinkPicker({
   fromLabel: string;
   date: string;
   link: string;
+  myAddress?: string | null;
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
@@ -55,7 +57,7 @@ export default function EmailLinkPicker({
     await saveEmailLink(
       threadId,
       { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId, affiliateProgramId: values.affiliateProgramId },
-      { subject, fromLabel, date, link }
+      { subject, fromLabel, date, link, myAddress }
     );
     onSaved?.(values);
   }
