@@ -44,6 +44,15 @@ jobs:
       # there's nothing to duplicate here — only lint needs its own step.
       - run: npx eslint src
 
+      # Exposed to the app (NEXT_PUBLIC_*, inlined at build time) so the
+      # "Your CRM link" card in Settings can show which commit is actually
+      # live — the fastest way to tell a deploy landed short of checking
+      # this workflow's own run history.
+      - name: Set build info
+        run: |
+          echo "NEXT_PUBLIC_BUILD_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Deploy to Cloudflare Workers
         run: npm run cf:deploy
         env:
