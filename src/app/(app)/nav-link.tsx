@@ -53,6 +53,19 @@ export default function NavLink({
   return (
     <Link
       href={href}
+      // None of these routes have a loading.tsx boundary, and every one
+      // does real Prisma work behind auth() — Next's default Link
+      // prefetch has no suspense boundary to stop at, so it runs each
+      // destination's *full* server-rendered page (every query and all)
+      // in the background as soon as the link is on screen, which for a
+      // nav rendering every route at once means every page's data gets
+      // fetched on every navigation whether the user goes there or not.
+      // That's exactly the kind of concurrent-request pressure this app
+      // has hit Cloudflare's Error 1102 resource limit from before (see
+      // withScopedPrismaClient's own comments) — disabling it here trades
+      // a little perceived navigation speed for not silently multiplying
+      // the DB load on every single page view.
+      prefetch={false}
       title={collapsed ? label : undefined}
       aria-label={collapsed ? label : undefined}
       className={clsx(

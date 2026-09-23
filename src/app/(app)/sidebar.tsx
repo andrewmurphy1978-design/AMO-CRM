@@ -40,23 +40,27 @@ export default function Sidebar({
   // collapsed/expanded toggle below — before this, the sidebar (in either
   // state) was `hidden` under the `sm` breakpoint entirely, so there was no
   // way at all to navigate between pages on a phone besides the browser's
-  // back button. `sticky top-0` pins it in place so it stays visible while
-  // the main content scrolls, instead of scrolling away with the page as
-  // an ordinary flex child would. Height is `h-dvh` (dynamic viewport
+  // back button. `fixed inset-y-0 left-0` pins it directly to the visual
+  // viewport so it can never scroll with the page, on any route — `sticky`
+  // (tried first) depends on no ancestor doing anything unusual with
+  // overflow/transform and on correctly sizing itself against a scrolling
+  // ancestor, both easy to get subtly wrong on a per-page basis with real
+  // page content; `fixed` sidesteps that whole class of bug by anchoring
+  // straight to the viewport regardless of any of that. Since it's out of
+  // normal flow, app-shell.tsx compensates with matching `pl-14` on the
+  // content column below `sm`. Height is `h-dvh` (dynamic viewport
   // height), not `h-screen` (100vh) — on a phone, 100vh is measured
   // against the *largest* possible viewport (address bar hidden), taller
   // than what's actually visible when the bar is showing, so a h-screen
-  // rail's own bottom (the sign-out button) rendered below the real fold,
-  // and the mismatch between the cached 100vh box and the actual visible
-  // area as the browser chrome shows/hides made the whole rail appear to
-  // scroll. `env(safe-area-inset-bottom)` padding on the sign-out row
-  // additionally clears the home-indicator/gesture-bar strip on phones
-  // that have one. The logo always shows here regardless of `hideLogo`
-  // (unlike the desktop aside below) — that prop only hides it when the
-  // Dashboard's own header shows the full lockup instead, which never
-  // happens on this narrow a screen.
+  // rail's own bottom (the sign-out button) rendered below the real fold.
+  // `env(safe-area-inset-bottom)` padding on the sign-out row additionally
+  // clears the home-indicator/gesture-bar strip on phones that have one.
+  // The logo always shows here regardless of `hideLogo` (unlike the
+  // desktop aside below) — that prop only hides it when the Dashboard's
+  // own header shows the full lockup instead, which never happens on this
+  // narrow a screen.
   const mobileRail = (
-    <aside className="sticky top-0 z-10 flex h-dvh w-14 shrink-0 flex-col bg-amo-green sm:hidden">
+    <aside className="fixed inset-y-0 left-0 z-10 flex h-dvh w-14 shrink-0 flex-col bg-amo-green sm:hidden">
       <div className="flex h-14 shrink-0 items-center justify-center border-b border-white/10">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-7 w-7 object-contain" />

@@ -55,7 +55,13 @@ export default function AppShell({
         hideLogo={pathname === "/"}
       />
 
-      <div className="relative flex flex-1 flex-col">
+      {/* `pl-14` (only below `sm`) reserves the width the fixed-position
+          mobile rail no longer claims through normal flex flow now that
+          it's taken out of document flow — see Sidebar's mobileRail. The
+          background layers inside are `position: fixed` themselves, so
+          this padding doesn't shift them; they get their own matching
+          offset from the `max-width: 639px` rule in globals.css. */}
+      <div className="relative flex flex-1 flex-col pl-14 sm:pl-0">
         <div className="amo-bg-image amo-bg-image--app" />
         <div className="amo-bg-overlay amo-bg-overlay--app" />
         <main className="relative z-10 flex-1 p-4 sm:p-8">{children}</main>
