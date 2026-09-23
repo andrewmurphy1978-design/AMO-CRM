@@ -179,19 +179,32 @@ export default function CalendarShell({
   // Guards against an older request's response landing after a newer one
   // (e.g. clicking Refresh right after switching views) and clobbering it.
   const requestIdRef = useRef(0);
+  // Aborts whichever fetch this replaces — without this, clicking Next
+  // several times in quick succession (e.g. paging weeks forward) left
+  // every earlier request running to completion server-side instead of
+  // cancelling it, each one opening its own Hyperdrive connection via
+  // withScopedPrismaClient. A handful of those landing together is the
+  // same concurrent-connection pattern already fixed elsewhere in this
+  // app for tripping Cloudflare's Error 1102 — abort keeps only the
+  // latest navigation's request actually in flight.
+  const abortRef = useRef<AbortController | null>(null);
 
   const fetchEvents = useCallback(async (start: Date, end: Date) => {
     const requestId = ++requestIdRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     try {
       const params = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() });
-      const res = await fetch(`/api/calendar/events?${params.toString()}`);
+      const res = await fetch(`/api/calendar/events?${params.toString()}`, { signal: controller.signal });
       if (!res.ok || requestId !== requestIdRef.current) return;
       const data = (await res.json()) as { events?: CalendarEventSummary[]; links?: Record<string, EventLinkValues> };
       setEvents(data.events ?? []);
       setLinks(data.links ?? {});
     } catch {
-      // Keep showing the last known events rather than clearing them.
+      // Keep showing the last known events rather than clearing them —
+      // this also swallows the AbortError from a superseded request.
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
