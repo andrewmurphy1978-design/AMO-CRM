@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import clsx from "@/lib/clsx";
 import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
 import { fetchEmailDetail, downloadEmailAttachment, type EmailDetail } from "@/actions/email-messages";
@@ -165,7 +166,14 @@ export default function EmailDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="relative flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
+        className={clsx(
+          "relative flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl",
+          // Only switches to a fixed, generous height once there's real
+          // content to lay out — while loading/erroring, the dialog stays
+          // small (shrink-to-fit, capped) instead of popping in at full
+          // size around a single line of text.
+          detail ? "h-[88vh]" : "max-h-[85vh]"
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: color }} />
@@ -184,14 +192,20 @@ export default function EmailDialog({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          {loading ? (
-            <p className="text-sm text-soft">{labels.loading}</p>
-          ) : loadError ? (
-            <p className="text-sm text-red-600">{loadError === "not_connected" ? labels.notConnected : labels.loadFailed}</p>
-          ) : (
-            <>
-              <div className="min-w-0 space-y-0.5 text-sm text-ink">
+        {loading || loadError ? (
+          <div className="min-h-0 flex-1 p-5">
+            <p className="text-sm text-soft">
+              {loading ? labels.loading : loadError === "not_connected" ? labels.notConnected : labels.loadFailed}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Fixed, non-scrolling header row — metadata on the left,
+                the read-only link summary on the right, side by side
+                instead of stacked, so this row stays short and the body
+                below gets the rest of the dialog's height. */}
+            <div className="flex shrink-0 gap-4 px-5 pb-3">
+              <div className="min-w-0 flex-1 space-y-0.5 text-sm text-ink">
                 <p>
                   <span className="text-soft">{labels.from}: </span>
                   {detail?.from.name ? `${detail.from.name} <${detail.from.email}>` : detail?.from.email}
@@ -209,56 +223,62 @@ export default function EmailDialog({
                   </p>
                 )}
                 {dateLabel && <p className="text-soft">{dateLabel}</p>}
+
+                {detail && detail.attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1.5">
+                    {detail.attachments.map((a, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handleDownload(target.id, i)}
+                        disabled={downloadingIndex === i}
+                        title={a.filename}
+                        className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink hover:bg-black/5 disabled:opacity-60"
+                      >
+                        <AttachmentIcon />
+                        <span className="max-w-[10rem] truncate">{a.filename}</span>
+                        <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {target.linkConfig && (
-                <div className="mt-2">
+                <div className="w-64 shrink-0 border-l border-card-border pl-4">
                   <EmailLinkSummary
                     current={target.linkConfig.current}
                     linkLabel={target.linkConfig.labels.link}
                     noneLabel={target.linkConfig.labels.none}
                     editLabel={target.linkConfig.labels.edit}
-                    onEdit={() => setLinkExpanded(true)}
+                    onEdit={() => setLinkExpanded((v) => !v)}
                   />
                 </div>
               )}
+            </div>
 
-              {detail && detail.attachments.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {detail.attachments.map((a, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleDownload(target.id, i)}
-                      disabled={downloadingIndex === i}
-                      title={a.filename}
-                      className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink hover:bg-black/5 disabled:opacity-60"
-                    >
-                      <AttachmentIcon />
-                      <span className="max-w-[10rem] truncate">{a.filename}</span>
-                      <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-4 flex min-w-0 gap-4">
-                <div className="min-w-0 flex-1">
-                  {detail?.html || detail?.text ? (
-                    <EmailBodyFrame html={detail.html} text={detail.text} showRemoteImagesLabel={labels.showRemoteImages} />
-                  ) : (
-                    <p className="text-sm text-soft">{labels.noContent}</p>
-                  )}
-                </div>
-                {linkExpanded && target.linkConfig && (
-                  <div className="w-64 shrink-0 border-l border-card-border pl-4">
-                    <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
-                  </div>
+            {/* The body fills the rest of the dialog's height — its own
+                iframe (see EmailBodyFrame) is the dialog's only scrollbar.
+                The link editor, when open, sits beside it in the same
+                right-hand column the summary above occupies, so it reads
+                as "below the summary" even though it's a separate row —
+                and the body's own width shrinks only while that's open. */}
+            <div className="flex min-h-0 flex-1 gap-4 px-5 pb-5">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                {detail?.html || detail?.text ? (
+                  <EmailBodyFrame html={detail.html} text={detail.text} showRemoteImagesLabel={labels.showRemoteImages} />
+                ) : (
+                  <p className="flex h-full items-center justify-center text-center text-sm text-soft">{labels.noContent}</p>
                 )}
               </div>
-            </>
-          )}
-        </div>
+              {linkExpanded && target.linkConfig && (
+                <div className="w-64 shrink-0 overflow-y-auto border-l border-card-border pl-4">
+                  <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         <div className="flex shrink-0 items-center justify-between border-t border-card-border px-5 py-3">
           <a
