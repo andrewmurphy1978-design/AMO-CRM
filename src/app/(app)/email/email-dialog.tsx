@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
 import { fetchEmailDetail, downloadEmailAttachment, type EmailDetail } from "@/actions/email-messages";
 import { NO_ADDRESS_COLOR, contrastTextColor } from "@/lib/email-address-match";
 import EmailBodyFrame from "./email-body-frame";
+import { EmailLinkSummary, EmailLinkEditor, type EmailLinkConfig } from "./email-link-fields";
 import type { ComposeMode } from "./email-compose-dialog";
 import { GmailIcon, IonosIcon } from "./mail-brand-icons";
 
@@ -25,17 +26,18 @@ export interface EmailDialogLabels {
   reply: string;
   replyAll: string;
   forward: string;
+  markComplete: string;
 }
 
 export interface EmailDialogTarget {
   id: string;
   link: string; // the row's already-known Gmail thread URL — the dialog's own "Open in Gmail" fallback
-  // Both computed by the caller at click time (it already has the row's own
+  // Computed by the caller at click time (it already has the row's own
   // dot color and linked-entity data — see email-screening-view.tsx) rather
   // than recomputed here, so this dialog doesn't need addressColors/contact
   // option lists threaded into every place it's opened from.
   dotColor?: string | null;
-  linkSection?: ReactNode;
+  linkConfig?: EmailLinkConfig;
 }
 
 const AttachmentIcon = () => (
@@ -76,6 +78,7 @@ export default function EmailDialog({
   target,
   onClose,
   onReply,
+  onComplete,
   dateLocale,
   intlLocale,
   hour12,
@@ -84,6 +87,7 @@ export default function EmailDialog({
   target: EmailDialogTarget | null;
   onClose: () => void;
   onReply: (detail: EmailDetail, mode: ComposeMode) => void;
+  onComplete?: () => void;
   dateLocale: Locale | undefined;
   intlLocale: string;
   hour12: boolean;
@@ -93,6 +97,7 @@ export default function EmailDialog({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<EmailDetail | null>(null);
   const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
+  const [linkExpanded, setLinkExpanded] = useState(false);
 
   useEffect(() => {
     if (!target) return;
@@ -101,6 +106,7 @@ export default function EmailDialog({
     setLoading(true);
     setLoadError(null);
     setDetail(null);
+    setLinkExpanded(false);
     fetchEmailDetail(target.id).then((result) => {
       if (cancelled) return;
       if ("error" in result) {
@@ -175,30 +181,37 @@ export default function EmailDialog({
             <p className="text-sm text-red-600">{loadError === "not_connected" ? labels.notConnected : labels.loadFailed}</p>
           ) : (
             <>
-              <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
-                <div className="min-w-0 space-y-0.5 text-sm text-ink">
-                  <p>
-                    <span className="text-soft">{labels.from}: </span>
-                    {detail?.from.name ? `${detail.from.name} <${detail.from.email}>` : detail?.from.email}
+              <div className="min-w-0 space-y-0.5 text-sm text-ink">
+                <p>
+                  <span className="text-soft">{labels.from}: </span>
+                  {detail?.from.name ? `${detail.from.name} <${detail.from.email}>` : detail?.from.email}
+                </p>
+                {detail && detail.to.length > 0 && (
+                  <p className="truncate">
+                    <span className="text-soft">{labels.to}: </span>
+                    {detail.to.join(", ")}
                   </p>
-                  {detail && detail.to.length > 0 && (
-                    <p className="truncate">
-                      <span className="text-soft">{labels.to}: </span>
-                      {detail.to.join(", ")}
-                    </p>
-                  )}
-                  {detail && detail.cc.length > 0 && (
-                    <p className="truncate">
-                      <span className="text-soft">{labels.cc}: </span>
-                      {detail.cc.join(", ")}
-                    </p>
-                  )}
-                  {dateLabel && <p className="text-soft">{dateLabel}</p>}
-                </div>
-                {target.linkSection && (
-                  <div className="min-w-0 border-t border-card-border pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">{target.linkSection}</div>
                 )}
+                {detail && detail.cc.length > 0 && (
+                  <p className="truncate">
+                    <span className="text-soft">{labels.cc}: </span>
+                    {detail.cc.join(", ")}
+                  </p>
+                )}
+                {dateLabel && <p className="text-soft">{dateLabel}</p>}
               </div>
+
+              {target.linkConfig && (
+                <div className="mt-2">
+                  <EmailLinkSummary
+                    current={target.linkConfig.current}
+                    linkLabel={target.linkConfig.labels.link}
+                    noneLabel={target.linkConfig.labels.none}
+                    editLabel={target.linkConfig.labels.edit}
+                    onEdit={() => setLinkExpanded(true)}
+                  />
+                </div>
+              )}
 
               {detail && detail.attachments.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1.5">
@@ -219,11 +232,18 @@ export default function EmailDialog({
                 </div>
               )}
 
-              <div className="mt-4">
-                {detail?.html || detail?.text ? (
-                  <EmailBodyFrame html={detail.html} text={detail.text} showRemoteImagesLabel={labels.showRemoteImages} />
-                ) : (
-                  <p className="text-sm text-soft">{labels.noContent}</p>
+              <div className="mt-4 flex min-w-0 gap-4">
+                <div className="min-w-0 flex-1">
+                  {detail?.html || detail?.text ? (
+                    <EmailBodyFrame html={detail.html} text={detail.text} showRemoteImagesLabel={labels.showRemoteImages} />
+                  ) : (
+                    <p className="text-sm text-soft">{labels.noContent}</p>
+                  )}
+                </div>
+                {linkExpanded && target.linkConfig && (
+                  <div className="w-64 shrink-0 border-l border-card-border pl-4">
+                    <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
+                  </div>
                 )}
               </div>
             </>
@@ -241,40 +261,49 @@ export default function EmailDialog({
             {isIonos ? labels.openWebmail : labels.openInGmail} ↗
           </a>
           {detail && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              {onComplete && (
+                <button
+                  type="button"
+                  onClick={onComplete}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
+                  </svg>
+                  {labels.markComplete}
+                </button>
+              )}
               <button
                 type="button"
-                title={labels.reply}
-                aria-label={labels.reply}
                 onClick={() => onReply(detail, "reply")}
-                className="rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
+                className="flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
                 </svg>
+                {labels.reply}
               </button>
               <button
                 type="button"
-                title={labels.replyAll}
-                aria-label={labels.replyAll}
                 onClick={() => onReply(detail, "replyAll")}
-                className="rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
+                className="flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15 7 10m0 0 5-5M7 10h9a6 6 0 0 1 6 6v1.5" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 15 3 10m5-5-5 5" />
                 </svg>
+                {labels.replyAll}
               </button>
               <button
                 type="button"
-                title={labels.forward}
-                aria-label={labels.forward}
                 onClick={() => onReply(detail, "forward")}
-                className="rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
+                className="flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3" />
                 </svg>
+                {labels.forward}
               </button>
             </div>
           )}

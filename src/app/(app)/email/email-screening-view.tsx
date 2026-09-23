@@ -18,6 +18,7 @@ import EmailTime from "./email-time";
 import EmailQuickActions, { type EmailQuickActionMode } from "../email-quick-actions";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email-compose-dialog";
+import type { EmailLinkConfig } from "./email-link-fields";
 import { fetchEmailDetail, type EmailDetail } from "@/actions/email-messages";
 import type { LinkValues, LinkDialogLabels } from "../link-dialog";
 import { EMAIL_SECTION_COLORS } from "../email-section-colors";
@@ -137,6 +138,10 @@ function MarkReadButton({ onClick, title }: { onClick: () => void; title: string
   );
 }
 
+// A filled dot badge (the standard "unread" indicator most mail clients
+// use) instead of MarkReadButton's checkmark — same envelope base, a
+// distinctly different mark inside it so the two read apart at a glance
+// rather than as near-identical envelopes.
 function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: string }) {
   return (
     <button type="button" onClick={onClick} title={title} className="shrink-0 rounded p-1 text-soft hover:bg-black/10 hover:text-ink">
@@ -146,6 +151,7 @@ function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: stri
           strokeLinejoin="round"
           d="M2.25 6.75c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125H3.375A1.125 1.125 0 0 1 2.25 17.25V6.75Zm0 0 9.75 6.75 9.75-6.75"
         />
+        <circle cx="19" cy="5.5" r="3.25" fill="currentColor" stroke="none" />
       </svg>
     </button>
   );
@@ -510,46 +516,34 @@ export default function EmailScreeningView({
     return null;
   }
 
-  // The Email/Compose dialogs' right-column "Linked to" section — same
-  // EmailLinkPicker every row already uses, plus a visible current-summary
-  // line so the link is readable without hovering (unlike the row's own
-  // icon-only affordance).
-  function buildLinkSection(threadId: string, subject: string, fromLabel: string, dateIso: string, link: string, myAddress: string | null): ReactNode {
+  // The Email/Compose dialogs' "Linked to" config — same contact/project/
+  // task/program data every row's EmailLinkPicker already uses, bundled up
+  // for EmailLinkSummary/EmailLinkEditor to render inline (see
+  // email-link-fields.tsx) instead of behind a modal.
+  function buildLinkConfig(threadId: string, subject: string, fromLabel: string, dateIso: string, link: string, myAddress: string | null): EmailLinkConfig {
     const info = data?.linksByThread[threadId];
-    const current = linkedTo(info);
-    return (
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-soft">{linkLabels.link}</p>
-        <div className="mt-1 flex items-center gap-2">
-          {current ? (
-            <Link href={current.href} className="min-w-0 truncate text-sm font-medium text-emerald-700 hover:underline">
-              {current.name}
-            </Link>
-          ) : (
-            <span className="truncate text-sm text-soft">{linkLabels.none}</span>
-          )}
-          <EmailLinkPicker
-            threadId={threadId}
-            subject={subject}
-            fromLabel={fromLabel}
-            date={dateIso}
-            link={link}
-            myAddress={myAddress}
-            contacts={contactOptions}
-            projects={projectOptions}
-            tasks={taskOptions}
-            programs={programOptions}
-            initialContactId={info?.contactId ?? ""}
-            initialProjectId={info?.projectId ?? ""}
-            initialTaskId={info?.taskId ?? ""}
-            initialProgramId={info?.affiliateProgramId ?? ""}
-            summary={linkSummaryText(info)}
-            labels={linkLabels}
-            onSaved={() => markLinked(threadId)}
-          />
-        </div>
-      </div>
-    );
+    return {
+      threadId,
+      subject,
+      fromLabel,
+      date: dateIso,
+      link,
+      myAddress,
+      contacts: contactOptions,
+      projects: projectOptions,
+      tasks: taskOptions,
+      programs: programOptions,
+      initial: {
+        contactId: info?.contactId ?? "",
+        projectId: info?.projectId ?? "",
+        taskId: info?.taskId ?? "",
+        bookingId: "",
+        affiliateProgramId: info?.affiliateProgramId ?? "",
+      },
+      current: linkedTo(info),
+      labels: linkLabels,
+      onSaved: () => markLinked(threadId),
+    };
   }
 
   // Reply/forward's colored header and "Linked to" section both key off the
@@ -565,7 +559,7 @@ export default function EmailScreeningView({
       message,
       mode,
       dotColor: resolveEmailAddressColor(emailLike, addressColors),
-      linkSection: buildLinkSection(
+      linkConfig: buildLinkConfig(
         message.threadId,
         message.subject,
         message.from.name || message.from.email,
@@ -678,7 +672,7 @@ export default function EmailScreeningView({
             id: email.id,
             link: email.link,
             dotColor,
-            linkSection: buildLinkSection(email.threadId, email.subject, email.from, email.date, email.link, primaryReceivedAddress(email)),
+            linkConfig: buildLinkConfig(email.threadId, email.subject, email.from, email.date, email.link, primaryReceivedAddress(email)),
           })
         }
         onQuickAction={(mode) => openComposeFor(email.id, mode)}
@@ -734,7 +728,7 @@ export default function EmailScreeningView({
             id: s.id,
             link: s.link,
             dotColor,
-            linkSection: buildLinkSection(s.threadId, s.subject, s.to, s.date, s.link, s.fromEmail ?? null),
+            linkConfig: buildLinkConfig(s.threadId, s.subject, s.to, s.date, s.link, s.fromEmail ?? null),
           })
         }
         onQuickAction={(mode) => openComposeFor(s.id, mode)}
@@ -831,6 +825,14 @@ export default function EmailScreeningView({
           setOpenMessage(null);
           setComposeTarget(composeTargetFrom(detail, mode));
         }}
+        onComplete={
+          openMessage
+            ? () => {
+                markComplete(openMessage.id);
+                setOpenMessage(null);
+              }
+            : undefined
+        }
         dateLocale={dateLocale}
         intlLocale={intlLocale}
         hour12={hour12}

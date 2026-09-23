@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import RichTextarea from "@/components/rich-textarea";
 import { sendEmailAction } from "@/actions/email-messages";
 import type { EmailDetail } from "@/actions/email-messages";
 import { buildQuotedReply } from "@/lib/mail/mime-build";
 import { NO_ADDRESS_COLOR, contrastTextColor } from "@/lib/email-address-match";
+import { EmailLinkSummary, EmailLinkEditor, type EmailLinkConfig } from "./email-link-fields";
 
 export type ComposeMode = "reply" | "replyAll" | "forward";
 
@@ -13,9 +14,9 @@ export interface EmailComposeTarget {
   message: EmailDetail;
   mode: ComposeMode;
   // Both computed by the caller at click time — same reasoning as
-  // EmailDialogTarget's own dotColor/linkSection (see that file's comment).
+  // EmailDialogTarget's own dotColor/linkConfig (see that file's comment).
   dotColor?: string | null;
-  linkSection?: ReactNode;
+  linkConfig?: EmailLinkConfig;
 }
 
 export interface EmailComposeLabels {
@@ -103,9 +104,12 @@ export default function EmailComposeDialog({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
+  const [linkExpanded, setLinkExpanded] = useState(false);
 
   useEffect(() => {
     if (!target) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLinkExpanded(false);
     const { message, mode } = target;
     const selfAddress = message.replyIdentity.accountAddress.toLowerCase();
 
@@ -123,7 +127,6 @@ export default function EmailComposeDialog({
     const sender = message.from.name ? `${message.from.name} <${message.from.email}>` : message.from.email;
     const { html: quoted } = buildQuotedReply(message, mode === "forward" ? "forward" : "reply", labels.quotedHeader.replace("{sender}", sender));
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTo(nextTo);
     setCc(nextCc);
     setSubject(subjectWithPrefix(message.subject, mode === "forward" ? "Fwd" : "Re"));
@@ -213,7 +216,9 @@ export default function EmailComposeDialog({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
+        className={`flex max-h-[85vh] w-full flex-col overflow-hidden overflow-x-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl transition-[max-width] ${
+          linkExpanded && target.linkConfig ? "max-w-[61rem]" : "max-w-2xl"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4" style={{ backgroundColor: color, color: fg }}>
@@ -233,7 +238,10 @@ export default function EmailComposeDialog({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-5">
+          {/* Bounded to just these four fields (not the whole form) so the
+              link column's height never stretches to match the body below —
+              it only ever spans down to the Subject line. */}
           <div className="grid gap-4 sm:grid-cols-[2fr_1fr]">
             <div className="min-w-0 space-y-2">
               <div className="flex items-center gap-2 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm">
@@ -274,7 +282,27 @@ export default function EmailComposeDialog({
                   className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
                 />
               </div>
+            </div>
 
+            {target.linkConfig && (
+              <div className="min-w-0 border-t border-card-border pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                <EmailLinkSummary
+                  current={target.linkConfig.current}
+                  linkLabel={target.linkConfig.labels.link}
+                  noneLabel={target.linkConfig.labels.none}
+                  editLabel={target.linkConfig.labels.edit}
+                  onEdit={() => setLinkExpanded(true)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* The body area — grows a side panel (rather than the whole grid
+              above) only once the link editor is opened, so the compose
+              body's own width never changes: the dialog widens by exactly
+              the panel's width instead of squeezing the body to fit it. */}
+          <div className="mt-4 flex min-w-0 gap-4">
+            <div className="min-w-0 flex-1 space-y-2">
               <RichTextarea value={html} onChange={setHtml} className="min-h-[220px]" />
 
               {attachments.length > 0 && (
@@ -313,8 +341,10 @@ export default function EmailComposeDialog({
               {error && <p className="text-sm text-red-600">{error}</p>}
             </div>
 
-            {target.linkSection && (
-              <div className="min-w-0 border-t border-card-border pt-4 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">{target.linkSection}</div>
+            {linkExpanded && target.linkConfig && (
+              <div className="w-72 shrink-0 border-l border-card-border pl-4">
+                <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
+              </div>
             )}
           </div>
         </div>
