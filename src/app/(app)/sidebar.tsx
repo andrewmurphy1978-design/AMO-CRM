@@ -40,9 +40,15 @@ export default function Sidebar({
   // collapsed/expanded toggle below — before this, the sidebar (in either
   // state) was `hidden` under the `sm` breakpoint entirely, so there was no
   // way at all to navigate between pages on a phone besides the browser's
-  // back button.
+  // back button. `sticky top-0 h-screen` (same as the desktop aside below)
+  // pins it in place so it stays visible while the main content scrolls,
+  // instead of scrolling away with the page as an ordinary flex child
+  // would. Sign-out lives here too, as an icon at the bottom — this used
+  // to be its own separate "CRM" + text-link header bar above the main
+  // content (app-shell.tsx); folding both into the rail means there's only
+  // ever one mobile nav surface, not two stacked on top of each other.
   const mobileRail = (
-    <aside className="flex w-14 shrink-0 flex-col bg-amo-green sm:hidden">
+    <aside className="sticky top-0 z-10 flex h-screen w-14 shrink-0 flex-col bg-amo-green sm:hidden">
       <div className="flex h-14 shrink-0 items-center justify-center border-b border-white/10">
         {!hideLogo && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -54,6 +60,22 @@ export default function Sidebar({
           <NavLink key={item.href} href={item.href} label={item.label} collapsed />
         ))}
       </nav>
+      <form action={signOutAction} className="shrink-0 border-t border-white/10 p-2">
+        <button
+          type="submit"
+          aria-label={signOutLabel}
+          title={signOutLabel}
+          className="flex w-full items-center justify-center rounded-md p-2 text-amo-muted transition-colors hover:bg-white/10 hover:text-amo-white"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-5 w-5">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3-6 3 3m0 0-3 3m3-3H9"
+            />
+          </svg>
+        </button>
+      </form>
     </aside>
   );
 

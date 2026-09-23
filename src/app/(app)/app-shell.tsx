@@ -2,11 +2,8 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Sidebar from "./sidebar";
-
-const AMO_BADGE_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596c0abdbde8.23945126_AMOBadgeTransparent.png";
 
 export default function AppShell({
   navItems,
@@ -61,18 +58,6 @@ export default function AppShell({
       <div className="relative flex flex-1 flex-col">
         <div className="amo-bg-image amo-bg-image--app" />
         <div className="amo-bg-overlay amo-bg-overlay--app" />
-        <header className="relative z-10 flex items-center justify-between bg-amo-green px-4 py-3 sm:hidden">
-          <Link href="/" className="flex items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-7 w-7 object-contain" />
-            <span className="font-display text-sm font-semibold text-amo-white">CRM</span>
-          </Link>
-          <form action={signOutAction}>
-            <button type="submit" className="text-xs font-medium text-amo-muted">
-              {signOutLabel}
-            </button>
-          </form>
-        </header>
         <main className="relative z-10 flex-1 p-4 sm:p-8">{children}</main>
       </div>
     </div>
