@@ -2,12 +2,14 @@
 
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { getValidAccessToken, getGoogleConnection, getDrafts, fetchGmailDraftRaw, deleteGmailDraft, sendGmailMessage } from "@/lib/google";
+import { getValidAccessToken, getGoogleConnection, getDrafts, fetchGmailDraftRaw, deleteGmailDraft, sendGmailMessage, createGmailDraft } from "@/lib/google";
 import { getIonosMailbox } from "@/lib/mail/ionos";
-import { listDraftMessages, fetchImapMessageRaw, deleteImapMessage } from "@/lib/mail/imap";
+import { listDraftMessages, fetchImapMessageRaw, deleteImapMessage, appendImapMessage } from "@/lib/mail/imap";
 import { parseMessage } from "@/lib/mail/mime-parse";
 import { buildMimeMessage } from "@/lib/mail/mime-build";
 import { sendViaSmtp } from "@/lib/mail/smtp";
+import { loadIdentities } from "./email-messages";
+import type { MailSource } from "@/lib/mail/identity";
 
 export type DraftSource = "gmail" | "ionos";
 
@@ -271,5 +273,85 @@ export async function discardDraftAction(id: string, source: DraftSource): Promi
     const accessToken = await getValidAccessToken(session.user.id, db);
     if (!accessToken) return;
     await deleteGmailDraft(accessToken, id);
+  });
+}
+
+export interface CreateDraftInput {
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  html: string;
+  attachments: { filename: string; mimeType: string; base64: string }[];
+  // Which identity to save the draft under — required (unlike
+  // sendEmailAction's fromOverride) since a fresh compose has no original
+  // message to resolve a default from; the compose dialog always sends
+  // whichever identity its own From field currently shows. Still
+  // validated against the user's real identities, never trusted outright.
+  from: { source: MailSource; accountAddress: string };
+  inReplyToId?: string | null;
+  threadId?: string | null;
+  messageIdHeader?: string | null;
+  references?: string[];
+}
+
+// The Compose dialog's "Save as draft" for a brand-new/reply/forward
+// message being composed (as opposed to sendDraftAction, which approves
+// an *existing* Drafts-folder row) — builds the same MIME every send path
+// does and files it as a draft on whichever identity was chosen.
+export async function createDraftAction(input: CreateDraftInput): Promise<{ error: string } | { success: true }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  // Unlike sendEmailAction, a draft is allowed to have no recipient yet —
+  // "save it and add the To address later" is normal draft usage in every
+  // mail client, so this only validates the from identity below.
+
+  return withScopedPrismaClient(async (db) => {
+    const identities = await loadIdentities(session.user.id, db);
+    const identity = identities.find(
+      (id) => id.source === input.from.source && id.accountAddress.toLowerCase() === input.from.accountAddress.toLowerCase()
+    );
+    if (!identity) return { error: "not_connected" };
+
+    const { raw } = buildMimeMessage({
+      fromName: identity.displayName,
+      fromEmail: identity.accountAddress,
+      to: input.to,
+      cc: input.cc,
+      bcc: input.bcc,
+      subject: input.subject,
+      html: input.html,
+      inReplyTo: input.messageIdHeader ?? null,
+      references: input.references ?? [],
+      attachments: input.attachments,
+      includeBccHeader: identity.source === "gmail",
+    });
+
+    if (identity.source === "ionos") {
+      const mailbox = await getIonosMailbox(session.user.id, db);
+      if (!mailbox) return { error: "not_connected" };
+      try {
+        await appendImapMessage(
+          {
+            host: mailbox.credentials.imapHost,
+            port: mailbox.credentials.imapPort,
+            security: mailbox.credentials.imapSecurity,
+            username: mailbox.credentials.username,
+            password: mailbox.credentials.password,
+          },
+          "Drafts",
+          raw
+        );
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
+      }
+      return { success: true };
+    }
+
+    const accessToken = await getValidAccessToken(session.user.id, db);
+    if (!accessToken) return { error: "not_connected" };
+    const result = await createGmailDraft(accessToken, raw, input.threadId ?? undefined);
+    if ("error" in result) return { error: result.error };
+    return { success: true };
   });
 }

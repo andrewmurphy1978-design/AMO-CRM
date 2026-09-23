@@ -20,6 +20,8 @@ import EmailScreeningForm from "./email-screening-form";
 import ApiKeyVaultForm from "./api-key-vault-form";
 import ServicePriceListForm from "./service-price-list-form";
 import BillingSettingsForm from "./billing-settings-form";
+import EmailComposePreferencesForm from "./email-compose-preferences-form";
+import EmailSignaturesForm from "./email-signatures-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -68,9 +70,19 @@ export default async function SettingsPage({
     vaultEntries,
     serviceItems,
     billingSettings,
+    emailSignatures,
   } = await withScopedPrismaClient(async (db) => {
       const currentUser = session
-        ? await db.user.findUnique({ where: { id: session.user.id }, select: { timeFormat: true, emailScreeningInstructions: true } })
+        ? await db.user.findUnique({
+            where: { id: session.user.id },
+            select: {
+              timeFormat: true,
+              emailScreeningInstructions: true,
+              defaultComposeSource: true,
+              defaultFontFamily: true,
+              defaultFontSize: true,
+            },
+          })
         : null;
       const integration = await db.integrationSetting.findUnique({
         where: { provider: "systeme_io" },
@@ -101,6 +113,7 @@ export default async function SettingsPage({
       const billingSettings = isAdmin
         ? await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } })
         : null;
+      const emailSignatures = isAdmin ? await db.emailSignature.findMany({ orderBy: { createdAt: "asc" } }) : [];
       return {
         currentUser,
         integration,
@@ -116,9 +129,14 @@ export default async function SettingsPage({
         vaultEntries,
         serviceItems,
         billingSettings,
+        emailSignatures,
       };
     });
   const hour12 = currentUser?.timeFormat === "HOUR12";
+  const mailAccounts: { source: string; address: string }[] = [
+    ...(googleConnection?.email ? [{ source: "gmail", address: googleConnection.email }] : []),
+    ...(ionosMailbox ? [{ source: "ionos", address: ionosMailbox.address }] : []),
+  ];
   const makeMetadata = (makeIntegration?.metadata as MakeMetadata | null) ?? {};
   const shortioMetadata = (shortioIntegration?.metadata as ShortIoMetadata | null) ?? {};
   const bufferLabels: Record<BufferProvider, string> = {
@@ -168,6 +186,23 @@ export default async function SettingsPage({
             </div>
             {currentUser && <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />}
           </section>
+
+          {currentUser && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.emailComposeSettings.title}</h2>
+              <p className="mt-1 text-sm text-soft">{t.emailComposeSettings.description}</p>
+              <div className="mt-4">
+                <EmailComposePreferencesForm
+                  lang={lang}
+                  accounts={mailAccounts}
+                  defaultComposeSource={currentUser.defaultComposeSource}
+                  defaultFontFamily={currentUser.defaultFontFamily}
+                  defaultFontSize={currentUser.defaultFontSize}
+                />
+              </div>
+            </section>
+          )}
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
@@ -326,6 +361,17 @@ export default async function SettingsPage({
               )}
             </div>
           </section>
+
+          {isAdmin && mailAccounts.length > 0 && (
+            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">{t.emailSignatures.title}</h2>
+              <p className="mt-1 text-sm text-soft">{t.emailSignatures.description}</p>
+              <div className="mt-4">
+                <EmailSignaturesForm signatures={emailSignatures} accounts={mailAccounts} lang={lang} />
+              </div>
+            </section>
+          )}
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />

@@ -19,8 +19,9 @@ import EmailQuickActions, { type EmailQuickActionMode } from "../email-quick-act
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email-compose-dialog";
 import type { EmailLinkConfig } from "./email-link-fields";
-import { fetchEmailDetail, type EmailDetail } from "@/actions/email-messages";
+import { fetchEmailDetail, listMailIdentitiesAction, type EmailDetail } from "@/actions/email-messages";
 import { fetchDraftsAction, fetchDraftDetailAction, type DraftRow } from "@/actions/email-drafts";
+import type { MailSource } from "@/lib/mail/identity";
 import { GmailIcon, IonosIcon } from "./mail-brand-icons";
 import type { LinkValues, LinkDialogLabels } from "../link-dialog";
 import { EMAIL_SECTION_COLORS } from "../email-section-colors";
@@ -344,6 +345,9 @@ export default function EmailScreeningView({
   dateLocale,
   location,
   headerActions,
+  defaultComposeSource,
+  defaultFontFamily,
+  defaultFontSize,
 }: {
   initialData: EmailScreeningPayload | null;
   connected: boolean;
@@ -358,6 +362,9 @@ export default function EmailScreeningView({
   dateLocale: Locale | undefined;
   location: string;
   headerActions?: ReactNode;
+  defaultComposeSource: string | null;
+  defaultFontFamily: string | null;
+  defaultFontSize: string | null;
 }) {
   const t = getDict(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
@@ -424,6 +431,12 @@ export default function EmailScreeningView({
         references: [],
         replyIdentity: { source: result.source, accountAddress: result.fromAddress, displayName: null },
         deliveredTo: result.fromAddress,
+        // A single-entry list, not the user's full identity set — a
+        // draft's account is fixed by which folder it's sitting in
+        // (Gmail's own Drafts vs the IONOS mailbox's), so the From field
+        // stays locked the same way it always has, unlike new/reply/
+        // forward's now-editable dropdown.
+        availableIdentities: [{ source: result.source, accountAddress: result.fromAddress, displayName: null }],
       },
       mode: "draft",
       dotColor,
@@ -460,6 +473,16 @@ export default function EmailScreeningView({
       location={location}
       actions={
         <>
+          <button
+            type="button"
+            onClick={openNewCompose}
+            className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4 shrink-0">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+            </svg>
+            {t.email.newEmail}
+          </button>
           {headerActions}
           {loading && (
             <span className="inline-flex items-center gap-1.5 text-xs text-amo-white/80">
@@ -560,6 +583,41 @@ export default function EmailScreeningView({
   function markUncomplete(id: string) {
     setCompletedOverrides((prev) => ({ ...prev, [id]: null }));
     postJson("/api/email/mark-uncomplete", id);
+  }
+
+  // The Email page's own "New email" button — no original message to pull
+  // an identity from (unlike reply/forward), so this asks for the user's
+  // real connected identities directly and preselects whichever one
+  // Settings' "Default account for new emails" names, still changeable in
+  // the dialog's own From dropdown.
+  async function openNewCompose() {
+    try {
+      const identities = await listMailIdentitiesAction();
+      if (identities.length === 0) return;
+      const identity = (defaultComposeSource && identities.find((id) => id.source === (defaultComposeSource as MailSource))) || identities[0];
+      setComposeTarget({
+        message: {
+          id: "",
+          threadId: "",
+          subject: "",
+          from: { name: identity.displayName ?? "", email: identity.accountAddress },
+          to: [],
+          cc: [],
+          date: null,
+          html: null,
+          text: null,
+          attachments: [],
+          messageIdHeader: null,
+          references: [],
+          replyIdentity: identity,
+          deliveredTo: identity.accountAddress,
+          availableIdentities: identities,
+        },
+        mode: "new",
+      });
+    } catch {
+      setToast(emailDialogLabels.loadFailed);
+    }
   }
 
   // The row-level Reply/Reply All/Forward icons need the message's full
@@ -1029,6 +1087,16 @@ export default function EmailScreeningView({
           setToast(emailComposeLabels.discardedToast);
           refreshDrafts();
         }}
+        onDraftSaved={() => {
+          setComposeTarget(null);
+          setToast(emailComposeLabels.draftSavedToast);
+          refreshDrafts();
+        }}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+        hour12={hour12}
+        defaultFontFamily={defaultFontFamily}
+        defaultFontSize={defaultFontSize}
         labels={emailComposeLabels}
       />
 

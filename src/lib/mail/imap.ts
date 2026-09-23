@@ -118,6 +118,41 @@ class ImapSession {
     }
   }
 
+  // APPEND needs manual control of IMAP's literal continuation handshake
+  // (RFC 3501 §6.3.11) that command() doesn't handle for any of this
+  // client's other verbs: send the tag+APPEND line ending in the
+  // literal's byte count, wait for the server's "+" continuation prompt,
+  // write exactly that many raw bytes (plus the trailing CRLF that
+  // completes the command line), then read the final tagged response the
+  // normal way. `raw`'s length is used directly as the byte count — same
+  // one-char-one-byte assumption openMailSocket's own write() already
+  // makes for every other raw block this client/smtp.ts sends (buildMimeMessage's
+  // output is always base64/7bit-safe, so this holds).
+  async appendLiteral(mailbox: string, flags: string, raw: string): Promise<ImapTaggedResponse> {
+    const tag = this.nextTag();
+    await this.sock.write(`${tag} APPEND ${quoteImapString(mailbox)} (${flags}) {${raw.length}}\r\n`);
+    const cont = await this.sock.readLine();
+    if (!cont.startsWith("+")) {
+      throw new ImapCommandError(`APPEND: server didn't send a continuation prompt: ${cont}`);
+    }
+    await this.sock.write(raw);
+    await this.sock.write("\r\n");
+    const untagged: LogicalLine[] = [];
+    for (;;) {
+      const line = await readLogicalLine(this.sock);
+      if (line.text.startsWith("* ")) {
+        untagged.push(sliceLogicalLine(line, 2));
+        continue;
+      }
+      if (line.text.startsWith(`${tag} `)) {
+        const rest = line.text.slice(tag.length + 1);
+        const m = rest.match(/^(OK|NO|BAD)\b(.*)$/i);
+        if (!m) throw new ImapCommandError(`Malformed IMAP tagged response: ${line.text}`);
+        return { status: m[1].toUpperCase() as "OK" | "NO" | "BAD", text: m[2].trim(), untagged };
+      }
+    }
+  }
+
   async readGreeting(): Promise<void> {
     const line = await readLogicalLine(this.sock);
     if (!line.text.startsWith("* OK") && !line.text.startsWith("* PREAUTH")) {
@@ -360,6 +395,23 @@ export async function listDraftMessages(cfg: ImapConfig, maxResults: number): Pr
     return await listRecentImapMessages(cfg, maxResults, "Drafts");
   } catch {
     return [];
+  }
+}
+
+// The Compose dialog's "Save as draft" for an IONOS identity — files a
+// freshly built MIME message straight into the Drafts mailbox via IMAP
+// APPEND (\Draft flag), since SMTP has no concept of drafts at all. New
+// protocol code this client didn't previously need (sending was always
+// SMTP-only until now) — like every other socket-based path in this
+// file, raw TCP is blocked in this sandbox, so this can only be verified
+// once deployed (see socket.ts's own header comment).
+export async function appendImapMessage(cfg: ImapConfig, folder: string, raw: string): Promise<void> {
+  const session = await connectAndLogin(cfg);
+  try {
+    expect(await session.appendLiteral(folder, "\\Draft", raw), `APPEND ${folder}`);
+  } finally {
+    await session.command("LOGOUT").catch(() => {});
+    await session.close();
   }
 }
 

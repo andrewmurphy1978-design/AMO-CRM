@@ -55,6 +55,19 @@ model User {
   // my accountant as Needs a reply". Never required; screening works
   // fine with the built-in categories alone when this is empty.
   emailScreeningInstructions String?    @db.Text
+  // Which connected mail account (MailSource: "gmail" | "ionos") the New
+  // Email compose dialog's From field preselects — still changeable per
+  // message via that field's own dropdown. Null (no preference set, or
+  // only one account connected) falls back to the same default-identity
+  // order src/lib/mail/identity.ts already uses.
+  defaultComposeSource       String?
+  // The compose editor's starting font, applied as the RichTextarea's own
+  // base style (never baked into typed content) so a fresh reply/forward/
+  // new email starts in the user's preferred look — an inline override
+  // inside the body (e.g. pasted content) still wins, same as any CSS
+  // default. Null on either uses the browser's own default serif/14px.
+  defaultFontFamily          String?
+  defaultFontSize            String?
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @updatedAt
 
@@ -937,6 +950,45 @@ model EmailLink {
   @@index([taskId])
   @@index([affiliateProgramId])
   @@map("email_links")
+}
+
+// A reusable compose-editor sign-off, auto-inserted into the Email
+// compose dialog's body for New/Reply/Forward — RTF (this app's usual
+// contentEditable rich text, same as RichTextarea everywhere else),
+// stored as HTML. One user's whole team currently shares both mail
+// accounts (no per-user scoping the way EmailLink itself has none), so
+// this has no userId either — every signature is visible/assignable by
+// anyone with Settings access.
+model EmailSignature {
+  id   String @id @default(cuid())
+  name String // the Settings list's own label, e.g. "New emails"
+  // Two full bodies rather than one translated at render time — a
+  // signature's wording (title, closing line) is often genuinely
+  // different between languages, not a mechanical translation, so both
+  // are edited directly in Settings. resolveComposeSignatureAction picks
+  // whichever matches the composing user's own language.
+  htmlEn String @db.Text
+  htmlFr String @db.Text
+
+  // Which connected mail account(s) (MailSource values, "gmail"/"ionos")
+  // this applies to — an empty array means "every connected account",
+  // not "none", so the common "one signature for all my accounts" case
+  // needs no per-account rows.
+  accounts String[]
+
+  // A signature can serve more than one compose mode at once (today's
+  // seed data uses one for New and a separate one for Reply+Forward, but
+  // nothing requires that split) — resolveComposeSignature (see
+  // src/actions/email-signatures.ts) picks the first match when more than
+  // one signature qualifies for the same account+mode.
+  useForNew     Boolean @default(false)
+  useForReply   Boolean @default(false)
+  useForForward Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_signatures")
 }
 
 // One row per program on the "AI Tools" / "Training Programs" / "Business

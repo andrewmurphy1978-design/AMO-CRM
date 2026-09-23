@@ -103,7 +103,15 @@ export default function LinkedEmailsList({
         labels={emailDialogLabels}
       />
 
-      <EmailComposeDialog target={composeTarget} onClose={() => setComposeTarget(null)} onSent={() => setComposeTarget(null)} labels={emailComposeLabels} />
+      <EmailComposeDialog
+        target={composeTarget}
+        onClose={() => setComposeTarget(null)}
+        onSent={() => setComposeTarget(null)}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+        hour12={hour12}
+        labels={emailComposeLabels}
+      />
     </>
   );
 }

@@ -25,42 +25,50 @@ export default async function EmailPage() {
   // page load; only the client-side Refresh button (or a first-ever visit
   // with no cache row yet) spends a live Gmail/Claude call, via
   // /api/email/inbox.
-  const { connected, hour12, contacts, projects, tasks, affiliatePrograms, addressColors, initialData } = await withScopedPrismaClient(async (db) => {
-    const accessToken = session ? await getValidAccessToken(session.user.id, db) : null;
-    const hour12 = await getHour12(session, db);
-    const contacts = await db.contact.findMany({
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      take: 300,
-      select: { id: true, firstName: true, lastName: true, email: true },
-    });
-    const projects = await db.project.findMany({
-      orderBy: { name: "asc" },
-      take: 300,
-      select: { id: true, name: true, contactId: true },
-    });
-    const tasks = await db.task.findMany({
-      where: { status: { not: "DONE" } },
-      orderBy: { title: "asc" },
-      take: 300,
-      select: { id: true, title: true, projectId: true },
-    });
-    const affiliatePrograms = await db.affiliateProgram.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    });
-    const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
+  const { connected, hour12, contacts, projects, tasks, affiliatePrograms, addressColors, initialData, composePrefs } = await withScopedPrismaClient(
+    async (db) => {
+      const accessToken = session ? await getValidAccessToken(session.user.id, db) : null;
+      const hour12 = await getHour12(session, db);
+      const composePrefs = session
+        ? await db.user.findUnique({
+            where: { id: session.user.id },
+            select: { defaultComposeSource: true, defaultFontFamily: true, defaultFontSize: true },
+          })
+        : null;
+      const contacts = await db.contact.findMany({
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+        take: 300,
+        select: { id: true, firstName: true, lastName: true, email: true },
+      });
+      const projects = await db.project.findMany({
+        orderBy: { name: "asc" },
+        take: 300,
+        select: { id: true, name: true, contactId: true },
+      });
+      const tasks = await db.task.findMany({
+        where: { status: { not: "DONE" } },
+        orderBy: { title: "asc" },
+        take: 300,
+        select: { id: true, title: true, projectId: true },
+      });
+      const affiliatePrograms = await db.affiliateProgram.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      });
+      const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
 
-    let initialData: EmailScreeningPayload | null = null;
-    if (accessToken && session) {
-      const snapshot = await getCachedInbox(db, session.user.id);
-      if (snapshot) {
-        const extras = await getScreeningExtras(db, snapshot, session.user.id);
-        initialData = { ...snapshot, ...extras };
+      let initialData: EmailScreeningPayload | null = null;
+      if (accessToken && session) {
+        const snapshot = await getCachedInbox(db, session.user.id);
+        if (snapshot) {
+          const extras = await getScreeningExtras(db, snapshot, session.user.id);
+          initialData = { ...snapshot, ...extras };
+        }
       }
-    }
 
-    return { connected: accessToken !== null, hour12, contacts, projects, tasks, affiliatePrograms, addressColors, initialData };
-  });
+      return { connected: accessToken !== null, hour12, contacts, projects, tasks, affiliatePrograms, addressColors, initialData, composePrefs };
+    }
+  );
 
   const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c) }));
   const projectOptions = projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId }));
@@ -81,6 +89,9 @@ export default async function EmailPage() {
       title={t.email.title}
       dateLocale={dateLocale}
       location={t.dashboard.myLocation}
+      defaultComposeSource={composePrefs?.defaultComposeSource ?? null}
+      defaultFontFamily={composePrefs?.defaultFontFamily ?? null}
+      defaultFontSize={composePrefs?.defaultFontSize ?? null}
       headerActions={
         <>
           <a

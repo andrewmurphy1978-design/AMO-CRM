@@ -23,6 +23,16 @@ export interface OutgoingMessage {
   references?: string[];
   messageIdDomain?: string; // domain used to generate a fresh Message-ID, e.g. "andrewmurphy.online"
   attachments?: OutgoingAttachment[];
+  // Gmail's messages.send needs a Bcc header in the raw MIME to know who
+  // to deliver to at all — Gmail strips that header before the message
+  // reaches anyone's inbox, including the bcc'd addresses' own copies, so
+  // the sender is the only one who ever sees it (a documented, relied-on
+  // Gmail API behavior). Nothing else does that stripping: the IONOS/SMTP
+  // path builds its own RCPT TO envelope directly (see sendViaSmtp), so a
+  // Bcc header in that same raw body would leak the blind-copied
+  // addresses to every recipient, To/Cc included. Defaults to true;
+  // sendEmailAction passes false for the ionos branch.
+  includeBccHeader?: boolean;
 }
 
 function base64ToBinary(bytes: Uint8Array): string {
@@ -84,17 +94,25 @@ export function htmlToPlainText(html: string): string {
 
 // Wraps a previous message's text as a ">"-quoted block, and its HTML as
 // a left-bordered blockquote — for the compose dialog's reply/forward
-// body, prefilled above this.
+// body, prefilled above this. The header is a full From/To/Date block
+// (the same three lines every desktop mail client prints above a quoted
+// original), not just a one-line "X wrote:" — same for reply and
+// forward, so `mode` no longer changes anything here.
 export function buildQuotedReply(
-  original: Pick<ParsedMessage, "from" | "date" | "html" | "text">,
-  mode: "reply" | "forward",
-  quotedHeaderText: string // pre-formatted "On {date}, {sender} wrote:" (or forward equivalent), built by the caller so this stays locale-agnostic
+  original: Pick<ParsedMessage, "from" | "date" | "html" | "text"> & { to: string[] },
+  labels: {
+    from: string; // "From" / "De"
+    to: string; // "To" / "À"
+    date: string; // "Date" / "Date"
+    dateValue: string; // pre-formatted date/time, built by the caller so this stays locale-agnostic
+  }
 ): { html: string } {
   const senderLabel = original.from.name ? `${original.from.name} &lt;${original.from.email}&gt;` : original.from.email;
+  const toLabel = escapeHtml(original.to.join(", "));
   const body = original.html ?? (original.text ? `<pre style="white-space:pre-wrap">${escapeHtml(original.text)}</pre>` : "");
-  const header = mode === "forward" ? quotedHeaderText.replace("{sender}", senderLabel) : quotedHeaderText.replace("{sender}", senderLabel);
+  const headerLines = [`${labels.from}: ${senderLabel}`, `${labels.to}: ${toLabel}`, `${labels.date}: ${escapeHtml(labels.dateValue)}`];
   return {
-    html: `<p></p><p style="color:#6b7280;font-size:13px">${header}</p><blockquote style="margin:0;padding-left:12px;border-left:3px solid #d1d5db;color:#374151">${body}</blockquote>`,
+    html: `<p style="color:#6b7280;font-size:13px;margin:0 0 8px 0">${headerLines.join("<br>")}</p><blockquote style="margin:0;padding-left:12px;border-left:3px solid #d1d5db;color:#374151">${body}</blockquote>`,
   };
 }
 
@@ -115,7 +133,7 @@ export function buildMimeMessage(msg: OutgoingMessage): { raw: string; messageId
     `To: ${msg.to.map((a) => `<${a}>`).join(", ")}`,
   ];
   if (msg.cc.length > 0) headers.push(`Cc: ${msg.cc.map((a) => `<${a}>`).join(", ")}`);
-  if (msg.bcc.length > 0) headers.push(`Bcc: ${msg.bcc.map((a) => `<${a}>`).join(", ")}`);
+  if (msg.bcc.length > 0 && msg.includeBccHeader !== false) headers.push(`Bcc: ${msg.bcc.map((a) => `<${a}>`).join(", ")}`);
   headers.push(`Subject: ${encodeHeaderValue(msg.subject)}`);
   headers.push(`Date: ${new Date().toUTCString().replace("GMT", "+0000")}`);
   headers.push(`Message-ID: ${messageId}`);

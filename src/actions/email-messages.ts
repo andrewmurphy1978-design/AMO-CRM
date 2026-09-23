@@ -79,6 +79,10 @@ export interface EmailDetail {
   // the Email Dialog's colored-header match (see EmailSummary.deliveredTo
   // in google.ts for the list-view equivalent).
   deliveredTo: string;
+  // Every identity the compose dialog's From dropdown can offer for this
+  // message — replyIdentity is just whichever of these resolveReplyIdentity
+  // picked as the default.
+  availableIdentities: MailIdentity[];
 }
 
 // Every mail identity this user currently has, in preference order — Gmail
@@ -86,7 +90,7 @@ export interface EmailDetail {
 // resolveReplyIdentity picks between them based on the original message's
 // own headers, not this order — this order only matters as the last-
 // resort fallback when nothing else matches.
-async function loadIdentities(userId: string, db: PrismaClient): Promise<MailIdentity[]> {
+export async function loadIdentities(userId: string, db: PrismaClient): Promise<MailIdentity[]> {
   // Sequential, not Promise.all — two Prisma reads landing at once against
   // the same Hyperdrive connection is exactly what trips Cloudflare's
   // Error 1102 (same lesson documented throughout this codebase, e.g.
@@ -97,6 +101,36 @@ async function loadIdentities(userId: string, db: PrismaClient): Promise<MailIde
   if (google?.email) identities.push({ source: "gmail", accountAddress: google.email, displayName: null });
   if (ionos) identities.push({ source: "ionos", accountAddress: ionos.address, displayName: ionos.displayName });
   return identities;
+}
+
+// The Compose dialog's "New email" From dropdown has no original message
+// to resolve an identity from — this is the plain list of everything the
+// user could send as, used both there and (for reply/forward/replyAll) as
+// EmailDetail.availableIdentities below.
+export async function listMailIdentitiesAction(): Promise<MailIdentity[]> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  return withScopedPrismaClient((db) => loadIdentities(session.user.id, db));
+}
+
+// Validates a client-supplied "send from this identity instead" choice
+// against the user's own real identities before trusting it — the From
+// field is editable in the compose dialog (reply/replyAll/forward/new),
+// but never taken at face value the way resolveReplyIdentity's own
+// header-based guess is: an address that doesn't match one of this user's
+// connected accounts is silently ignored (falls back to the normal
+// resolution) rather than erroring, since a stale dropdown selection
+// (e.g. a mailbox disconnected mid-compose) shouldn't block sending.
+function applyFromOverride(
+  resolved: MailIdentity,
+  override: { source: MailSource; accountAddress: string } | null | undefined,
+  identities: MailIdentity[]
+): MailIdentity {
+  if (!override) return resolved;
+  const match = identities.find(
+    (id) => id.source === override.source && id.accountAddress.toLowerCase() === override.accountAddress.toLowerCase()
+  );
+  return match ?? resolved;
 }
 
 // The Email Dialog's "open a message" call — fetches the full RFC 5322
@@ -134,6 +168,7 @@ export async function fetchEmailDetail(id: string): Promise<EmailDetail | { erro
         references: [],
         replyIdentity: { source: "ionos", accountAddress: mailbox?.address ?? "", displayName: mailbox?.displayName ?? null },
         deliveredTo: mailbox?.address ?? "",
+        availableIdentities: await loadIdentities(session.user.id, db),
       };
     }
 
@@ -167,6 +202,7 @@ export async function fetchEmailDetail(id: string): Promise<EmailDetail | { erro
       references: parsed.references,
       replyIdentity,
       deliveredTo: parsed.deliveredTo,
+      availableIdentities: identities,
     };
   });
 }
@@ -178,7 +214,12 @@ export interface SendEmailInput {
   references: string[];
   to: string[];
   cc: string[];
+  bcc: string[];
   subject: string;
+  // A client-chosen "send from this instead" identity — see
+  // applyFromOverride's own comment for why this is validated, not
+  // trusted. Omitted/null keeps the normal resolveReplyIdentity result.
+  fromOverride?: { source: MailSource; accountAddress: string } | null;
   html: string;
   attachments: { filename: string; mimeType: string; base64: string }[];
 }
@@ -201,7 +242,9 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
     if (identities.length === 0) return { error: "not_connected" };
 
     // Re-derive the reply identity from the original message rather than
-    // trusting anything the client sent about it.
+    // trusting anything the client sent about it — a client-chosen
+    // fromOverride is then layered on top, but only once it's checked
+    // against this same identities list (see applyFromOverride).
     let replyIdentity = identities[0];
     if (input.inReplyToId) {
       const original = await fetchOriginal(input.inReplyToId, accessToken, mailbox);
@@ -213,6 +256,7 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
         );
       }
     }
+    replyIdentity = applyFromOverride(replyIdentity, input.fromOverride, identities);
 
     if (input.to.length === 0) return { error: "recipient_required" };
 
@@ -221,12 +265,13 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
       fromEmail: replyIdentity.accountAddress,
       to: input.to,
       cc: input.cc,
-      bcc: [],
+      bcc: input.bcc,
       subject: input.subject,
       html: input.html,
       inReplyTo: input.messageIdHeader,
       references: input.references,
       attachments: input.attachments,
+      includeBccHeader: replyIdentity.source === "gmail",
     });
 
     if (replyIdentity.source === "ionos") {
@@ -240,7 +285,7 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
             username: mailbox.credentials.username,
             password: mailbox.credentials.password,
           },
-          { from: replyIdentity.accountAddress, to: input.to, cc: input.cc, bcc: [], raw }
+          { from: replyIdentity.accountAddress, to: input.to, cc: input.cc, bcc: input.bcc, raw }
         );
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);

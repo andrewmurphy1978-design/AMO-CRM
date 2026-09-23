@@ -317,6 +317,28 @@ export async function sendGmailMessage(
   return { id: data.id, threadId: data.threadId };
 }
 
+// The Compose dialog's "Save as draft" for a Gmail identity — same raw
+// MIME buildMimeMessage always produces, just handed to drafts.create
+// instead of messages.send. Passing threadId keeps a draft reply filed
+// under its original thread the same way sendGmailMessage's does.
+export async function createGmailDraft(
+  accessToken: string,
+  raw: string,
+  threadId?: string
+): Promise<{ id: string } | { error: string }> {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/drafts", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: { raw: encodeBinaryStringToBase64Url(raw), ...(threadId ? { threadId } : {}) } }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    return { error: `Gmail draft save failed (${res.status})${body ? `: ${body.slice(0, 300)}` : ""}` };
+  }
+  const data = (await res.json()) as { id: string };
+  return { id: data.id };
+}
+
 // Takes the access token directly rather than fetching it internally —
 // this (and getUpcomingEvents below) runs inside a <Suspense> boundary
 // alongside other independent boundaries that Next.js renders

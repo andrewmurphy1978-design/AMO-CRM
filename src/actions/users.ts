@@ -237,6 +237,48 @@ export async function saveTimeFormat(
   return { success: t.actions.timeFormatSaved };
 }
 
+// Which connected mail account (MailSource: "gmail" | "ionos") the New
+// Email compose dialog's From field preselects — see User.defaultComposeSource's
+// own schema comment. Empty string clears the preference back to "no
+// preference" (falls back to the same default-identity order
+// src/lib/mail/identity.ts already uses).
+export async function saveDefaultComposeAccount(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const value = String(formData.get("defaultComposeSource") ?? "");
+  const defaultComposeSource = value === "gmail" || value === "ionos" ? value : null;
+
+  await withScopedPrismaClient((db) => db.user.update({ where: { id: session.user.id }, data: { defaultComposeSource } }));
+  revalidatePath("/settings");
+
+  return { success: t.actions.composeAccountSaved };
+}
+
+// The compose editor's starting font — see User.defaultFontFamily/
+// defaultFontSize's own schema comment. Both empty clears the preference
+// back to the browser's own default.
+export async function saveDefaultComposeFont(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const defaultFontFamily = String(formData.get("defaultFontFamily") ?? "").trim() || null;
+  const defaultFontSize = String(formData.get("defaultFontSize") ?? "").trim() || null;
+
+  await withScopedPrismaClient((db) => db.user.update({ where: { id: session.user.id }, data: { defaultFontFamily, defaultFontSize } }));
+  revalidatePath("/settings");
+
+  return { success: t.actions.composeFontSaved };
+}
+
 // Free-text rules layered on top of the Email page's Claude classification
 // prompt (see src/lib/email-classifier.ts) — per-user since each team
 // member's inbox is their own. Empty is valid (clears it back to the
