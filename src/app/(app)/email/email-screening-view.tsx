@@ -13,17 +13,16 @@ import type { EmailCategory } from "@/lib/email-classifier";
 import type { EmailLinkInfo, EmailScreeningPayload } from "@/lib/email-inbox";
 import PageHeader from "../page-header";
 import RefreshButton from "../refresh-button";
-import EmailLinkPicker, { type LinkOption } from "./email-link-picker";
+import { type LinkOption } from "./email-link-picker";
 import EmailTime from "./email-time";
-import EmailQuickActions, { type EmailQuickActionMode } from "../email-quick-actions";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email-compose-dialog";
 import type { EmailLinkConfig } from "./email-link-fields";
-import { fetchEmailDetail, listMailIdentitiesAction, type EmailDetail } from "@/actions/email-messages";
+import { listMailIdentitiesAction, type EmailDetail } from "@/actions/email-messages";
 import { fetchDraftsAction, fetchDraftDetailAction, type DraftRow } from "@/actions/email-drafts";
 import type { MailSource } from "@/lib/mail/identity";
 import { GmailIcon, IonosIcon } from "./mail-brand-icons";
-import type { LinkValues, LinkDialogLabels } from "../link-dialog";
+import type { LinkValues } from "../link-dialog";
 import { EMAIL_SECTION_COLORS } from "../email-section-colors";
 
 export type { EmailScreeningPayload };
@@ -49,132 +48,14 @@ function Spinner({ className }: { className?: string }) {
   );
 }
 
-function AttachmentIcon({ className, title }: { className?: string; title: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
-      <title>{title}</title>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94a3 3 0 1 1 4.243 4.242L9.564 17.31a1.5 1.5 0 0 1-2.122-2.12l8.485-8.486"
-      />
-    </svg>
-  );
-}
-
-function ImportantIcon({ className, title }: { className?: string; title: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <title>{title}</title>
-      <path
-        fillRule="evenodd"
-        d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5a1 1 0 0 1 1 1v4.5a1 1 0 1 1-2 0V8a1 1 0 0 1 1-1Zm0 9.25a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
-
-function CompleteButton({ onClick, title }: { onClick: () => void; title: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className="shrink-0 rounded p-1 text-emerald-600 hover:bg-emerald-600/10 hover:text-emerald-700"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
-      </svg>
-    </button>
-  );
-}
-
-// The Completed section's own check — filled (white check on a solid
-// green background) instead of the plain outline used to mark something
-// done, so it reads as "this is done, click to undo" rather than as
-// another "mark done" prompt.
-function UncompleteButton({ onClick, title }: { onClick: () => void; title: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className="shrink-0 rounded-full bg-emerald-600 p-1 text-white hover:bg-emerald-700"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
-      </svg>
-    </button>
-  );
-}
-
-// Same white-check-on-green look as UncompleteButton, but non-interactive —
-// used for a sent thread Gmail marked completed by detecting a reply. That
-// state isn't something this app can undo, so it gets the same "done"
-// marker without a click handler, rather than no icon at all.
-function CompletedBadge({ title }: { title: string }) {
-  return (
-    <span title={title} className="flex shrink-0 items-center justify-center rounded-full bg-emerald-600 p-1 text-white">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
-      </svg>
-    </span>
-  );
-}
-
-// The Recently Read section's "put it back" action — reopens the message
-// into whichever category it was in before it was opened.
-// A one-click "I've seen this, no need to open it" action on an unread
-// row — same envelope glyph as MarkUnreadButton below (its opposite
-// action), with a checkmark added so the two read at a glance as a pair
-// rather than as unrelated icons.
-function MarkReadButton({ onClick, title }: { onClick: () => void; title: string }) {
-  return (
-    <button type="button" onClick={onClick} title={title} className="shrink-0 rounded p-1 text-soft hover:bg-black/10 hover:text-ink">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M2.25 6.75c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125H3.375A1.125 1.125 0 0 1 2.25 17.25V6.75Zm0 0 9.75 6.75 9.75-6.75"
-        />
-        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 12 2.25 2.25L15.75 9" />
-      </svg>
-    </button>
-  );
-}
-
-// A filled dot badge (the standard "unread" indicator most mail clients
-// use) instead of MarkReadButton's checkmark — same envelope base, a
-// distinctly different mark inside it so the two read apart at a glance
-// rather than as near-identical envelopes.
-function MarkUnreadButton({ onClick, title }: { onClick: () => void; title: string }) {
-  return (
-    <button type="button" onClick={onClick} title={title} className="shrink-0 rounded p-1 text-soft hover:bg-black/10 hover:text-ink">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M2.25 6.75c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125H3.375A1.125 1.125 0 0 1 2.25 17.25V6.75Zm0 0 9.75 6.75 9.75-6.75"
-        />
-        <circle cx="19" cy="5.5" r="3.25" fill="currentColor" stroke="none" />
-      </svg>
-    </button>
-  );
-}
-
-// A CSS grid instead of a flex row: each column gets a minmax() range
-// instead of a fixed pixel width, so the row always fills exactly the
-// available width (no leftover dead space, no horizontal scroll on a
-// normal desktop width) and reflows automatically whenever that width
-// changes — a browser resize or the sidebar collapsing/expanding — with
-// no JS involved. Only the subject column is allowed to actually grow
-// (1fr); every other column has a fixed practical range. The icon
-// cluster is "auto" (its own natural content width) since it's a set of
-// fixed-size buttons, not text that benefits from extra room.
-const ROW_GRID_COLUMNS =
-  "[grid-template-columns:minmax(8rem,11rem)_minmax(12rem,1fr)_minmax(7rem,11rem)_auto_minmax(4.5rem,6rem)]";
-
+// Name on the first line, subject smaller right below it, date/time at the
+// end of the row — same clean, icon-free layout the Dashboard's own Email
+// card already uses (see email-card.tsx's emailRow). No inline action
+// icons for now: opening the row (which still marks it read) is the only
+// action here, with Reply/Forward/Link/Complete all available from the
+// Email Dialog it opens. A flex row (not a fixed-width grid) so it never
+// needs more than the two text lines' natural width plus the date, which
+// keeps every row inside the viewport on a narrow/mobile screen.
 function EmailRow({
   index,
   highlight,
@@ -182,38 +63,11 @@ function EmailRow({
   dotTitle,
   primaryLabel,
   subject,
-  hasAttachments,
-  important,
-  attachmentLabel,
-  importantLabel,
-  link,
-  threadId,
-  myAddress,
-  linkInfo,
-  linkSummaryText,
-  linkedTo,
-  contactOptions,
-  projectOptions,
-  taskOptions,
-  programOptions,
-  linkLabels,
-  quickActionLabels,
   dateIso,
   hour12,
   intlLocale,
   onOpen,
   onOpenDialog,
-  onQuickAction,
-  onLinkSaved,
-  onComplete,
-  onUncomplete,
-  onMarkRead,
-  onMarkUnread,
-  completedLocked,
-  completeLabel,
-  uncompleteLabel,
-  markReadLabel,
-  markUnreadLabel,
 }: {
   index: number;
   highlight: boolean;
@@ -221,41 +75,11 @@ function EmailRow({
   dotTitle?: string;
   primaryLabel: string;
   subject: string;
-  hasAttachments?: boolean;
-  important?: boolean;
-  attachmentLabel: string;
-  importantLabel: string;
-  link: string;
-  threadId: string;
-  myAddress?: string | null;
-  linkInfo: EmailLinkInfo | undefined;
-  linkSummaryText: string | null;
-  linkedTo: { name: string; href: string } | null;
-  contactOptions: LinkOption[];
-  projectOptions: LinkOption[];
-  taskOptions: LinkOption[];
-  programOptions: LinkOption[];
-  linkLabels: LinkDialogLabels;
-  quickActionLabels: { reply: string; replyAll: string; forward: string };
   dateIso: string;
   hour12: boolean;
   intlLocale: string;
   onOpen?: () => void;
   onOpenDialog: () => void;
-  onQuickAction: (mode: EmailQuickActionMode) => void;
-  onLinkSaved: (values: LinkValues) => void;
-  onComplete?: () => void;
-  onUncomplete?: () => void;
-  onMarkRead?: () => void;
-  onMarkUnread?: () => void;
-  // True for a sent thread Gmail marked completed by detecting a reply —
-  // that state can't be undone from here, so it gets a static badge
-  // instead of the clickable UncompleteButton.
-  completedLocked?: boolean;
-  completeLabel: string;
-  uncompleteLabel: string;
-  markReadLabel: string;
-  markUnreadLabel: string;
 }) {
   function openDialog() {
     onOpen?.();
@@ -264,69 +88,18 @@ function EmailRow({
 
   return (
     <li className={clsx("overflow-hidden transition-colors hover:bg-black/5", highlight ? "bg-amo-gold/20" : index % 2 === 1 ? "bg-black/[0.03]" : "")}>
-      <div className={clsx("grid items-center gap-2 py-1.5 pl-3 pr-4", ROW_GRID_COLUMNS)}>
-        <button type="button" onClick={openDialog} className="flex min-w-0 items-center gap-1.5 truncate text-left text-sm font-medium text-ink hover:opacity-80">
-          {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} title={dotTitle} />}
-          <span className="truncate">{primaryLabel}</span>
-        </button>
-        <button
-          type="button"
-          onClick={openDialog}
-          className="flex min-w-0 items-center gap-1 truncate text-left text-sm text-soft hover:opacity-80"
-        >
-          {hasAttachments && <AttachmentIcon className="h-3.5 w-3.5 shrink-0" title={attachmentLabel} />}
-          {important && <ImportantIcon className="h-3.5 w-3.5 shrink-0 text-red-600" title={importantLabel} />}
-          <span className="truncate">{subject}</span>
-        </button>
-        <span className="min-w-0 truncate text-right text-xs font-medium">
-          {linkedTo && (
-            <Link href={linkedTo.href} className="text-emerald-700 hover:underline">
-              {linkedTo.name}
-            </Link>
-          )}
-        </span>
-        {/* This icon cluster (link/complete/mark-unread/reply-forward) is
-            kept tighter than the grid's own gap-2 between columns — these
-            read as one grouped set of actions, not separate columns — but
-            not so tight that the Complete and Mark-unread icons (both
-            shown together in Recently Read) crowd each other. */}
-        <div className="flex items-center gap-1.5">
-          <EmailLinkPicker
-            threadId={threadId}
-            subject={subject}
-            fromLabel={primaryLabel}
-            date={dateIso}
-            link={link}
-            myAddress={myAddress}
-            contacts={contactOptions}
-            projects={projectOptions}
-            tasks={taskOptions}
-            programs={programOptions}
-            initialContactId={linkInfo?.contactId ?? ""}
-            initialProjectId={linkInfo?.projectId ?? ""}
-            initialTaskId={linkInfo?.taskId ?? ""}
-            initialProgramId={linkInfo?.affiliateProgramId ?? ""}
-            summary={linkSummaryText}
-            labels={linkLabels}
-            onSaved={onLinkSaved}
-          />
-          {onComplete && <CompleteButton onClick={onComplete} title={completeLabel} />}
-          {onUncomplete && <UncompleteButton onClick={onUncomplete} title={uncompleteLabel} />}
-          {!onUncomplete && completedLocked && <CompletedBadge title={completeLabel} />}
-          {/* A fixed-width slot even when neither action applies to this
-              section (e.g. Sent — awaiting reply, Completed) — otherwise
-              the reply/forward icons after it would shift left/right
-              depending on which section a row belongs to. */}
-          <span className="flex w-6 shrink-0 justify-center">
-            {onMarkRead && <MarkReadButton onClick={onMarkRead} title={markReadLabel} />}
-            {onMarkUnread && <MarkUnreadButton onClick={onMarkUnread} title={markUnreadLabel} />}
-          </span>
-          <EmailQuickActions labels={quickActionLabels} onOpen={onOpen} onAction={onQuickAction} />
+      <button type="button" onClick={openDialog} className="flex w-full min-w-0 items-start gap-2 px-3 py-2 text-left">
+        <div className="min-w-0 flex-1">
+          <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-ink">
+            {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} title={dotTitle} />}
+            <span className="truncate">{primaryLabel}</span>
+          </p>
+          <p className="truncate text-xs text-soft">{subject}</p>
         </div>
-        <span className="whitespace-nowrap text-right text-xs text-soft">
+        <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
           <EmailTime iso={dateIso} hour12={hour12} intlLocale={intlLocale} />
         </span>
-      </div>
+      </button>
     </li>
   );
 }
@@ -520,11 +293,6 @@ export default function EmailScreeningView({
     postJson("/api/email/mark-read", id);
   }
 
-  function markUnread(id: string) {
-    setReadOverrides((prev) => ({ ...prev, [id]: null }));
-    postJson("/api/email/mark-unread", id);
-  }
-
   function markLinked(threadId: string) {
     setLinkOverrides((prev) => ({ ...prev, [threadId]: true }));
   }
@@ -580,11 +348,6 @@ export default function EmailScreeningView({
     postJson("/api/email/mark-complete", id);
   }
 
-  function markUncomplete(id: string) {
-    setCompletedOverrides((prev) => ({ ...prev, [id]: null }));
-    postJson("/api/email/mark-uncomplete", id);
-  }
-
   // The Email page's own "New email" button — no original message to pull
   // an identity from (unlike reply/forward), so this asks for the user's
   // real connected identities directly and preselects whichever one
@@ -620,23 +383,6 @@ export default function EmailScreeningView({
     }
   }
 
-  // The row-level Reply/Reply All/Forward icons need the message's full
-  // detail (From/To/Cc/body/identity) to prefill compose, which the list
-  // view never fetches — same fetchEmailDetail call the Email Dialog
-  // itself makes when opened.
-  async function openComposeFor(id: string, mode: ComposeMode) {
-    try {
-      const result = await fetchEmailDetail(id);
-      if ("error" in result) return;
-      setComposeTarget(composeTargetFrom(result, mode));
-    } catch {
-      // A rejected call (e.g. a transient Cloudflare/Hyperdrive error)
-      // otherwise fails silently — there's no loading state tied to this
-      // one, but the row's icon click would do nothing with no feedback.
-      setToast(emailDialogLabels.loadFailed);
-    }
-  }
-
   const linkLabels = {
     link: t.linkPicker.link,
     edit: t.linkPicker.edit,
@@ -654,7 +400,6 @@ export default function EmailScreeningView({
     searchPlaceholder: t.linkPicker.searchPlaceholder,
     noResults: t.linkPicker.noResults,
   };
-  const quickActionLabels = { reply: t.dashboard.emailReply, replyAll: t.dashboard.emailReplyAll, forward: t.dashboard.emailForward };
   const emailDialogLabels: EmailDialogLabels = t.emailDialog;
   const emailComposeLabels: EmailComposeLabels = t.emailCompose;
   const categoryLabels: Record<EmailCategory, string> = {
@@ -663,12 +408,6 @@ export default function EmailScreeningView({
     CAN_WAIT: t.email.categoryCanWait,
     LOW_PRIORITY: t.email.categoryLowPriority,
   };
-
-  function linkSummaryText(link: EmailLinkInfo | undefined): string | null {
-    if (!link) return null;
-    const name = link.contactName || link.projectName || link.taskName || link.affiliateProgramName;
-    return name ? t.linkPicker.linkedTo(name) : null;
-  }
 
   function linkedTo(link: EmailLinkInfo | undefined): { name: string; href: string } | null {
     if (!link) return null;
@@ -827,7 +566,7 @@ export default function EmailScreeningView({
     completedEmails.length === 0 &&
     completedSent.length === 0;
 
-  function receivedRows(list: EmailSummary[], opts: { markAsRead: boolean; showComplete?: boolean; showUncomplete?: boolean; showMarkUnread?: boolean }) {
+  function receivedRows(list: EmailSummary[], opts: { markAsRead: boolean }) {
     return list.map((email, i) => {
       const dotColor = resolveEmailAddressColor(email, addressColors);
       return (
@@ -837,24 +576,8 @@ export default function EmailScreeningView({
         highlight={isOwnDomainEmail(email.fromEmail)}
         dotColor={dotColor}
         dotTitle={dotColor ? email.deliveredTo || email.toRaw : undefined}
-        myAddress={primaryReceivedAddress(email)}
         primaryLabel={email.from}
         subject={email.subject}
-        hasAttachments={email.hasAttachments}
-        important={email.important}
-        attachmentLabel={t.email.hasAttachment}
-        importantLabel={t.email.isImportant}
-        link={email.link}
-        threadId={email.threadId}
-        linkInfo={data?.linksByThread[email.threadId]}
-        linkSummaryText={linkSummaryText(data?.linksByThread[email.threadId])}
-        linkedTo={linkedTo(data?.linksByThread[email.threadId])}
-        contactOptions={contactOptions}
-        projectOptions={projectOptions}
-        taskOptions={taskOptions}
-        programOptions={programOptions}
-        linkLabels={linkLabels}
-        quickActionLabels={quickActionLabels}
         dateIso={email.date}
         hour12={hour12}
         intlLocale={intlLocale}
@@ -867,26 +590,12 @@ export default function EmailScreeningView({
             linkConfig: buildLinkConfig(email.threadId, email.subject, email.from, email.date, email.link, primaryReceivedAddress(email)),
           })
         }
-        onQuickAction={(mode) => openComposeFor(email.id, mode)}
-        onLinkSaved={(values) => applyLinkSave(email.threadId, values)}
-        onComplete={opts.showComplete ? () => markComplete(email.id) : undefined}
-        onUncomplete={opts.showUncomplete ? () => markUncomplete(email.id) : undefined}
-        // Only the still-unread categorized sections (the ones markAsRead
-        // also applies to) get a one-click "mark as read" — Recently Read
-        // is already read and shows the opposite (mark as unread) action
-        // instead, and Completed has no Complete/read pairing to fit into.
-        onMarkRead={opts.markAsRead ? () => markRead(email.id) : undefined}
-        onMarkUnread={opts.showMarkUnread ? () => markUnread(email.id) : undefined}
-        completeLabel={t.email.markComplete}
-        uncompleteLabel={t.email.markUncomplete}
-        markReadLabel={t.email.markRead}
-        markUnreadLabel={t.email.markUnread}
       />
       );
     });
   }
 
-  function sentRows(list: typeof sentAwaitingReply, opts: { showComplete?: boolean; showUncomplete?: boolean }) {
+  function sentRows(list: typeof sentAwaitingReply) {
     return list.map((s, i) => {
       const dotColor = colorForAddress(s.fromEmail, addressColors);
       return (
@@ -898,20 +607,6 @@ export default function EmailScreeningView({
         dotTitle={dotColor ? s.fromEmail : undefined}
         primaryLabel={s.to}
         subject={s.subject}
-        attachmentLabel={t.email.hasAttachment}
-        importantLabel={t.email.isImportant}
-        link={s.link}
-        threadId={s.threadId}
-        myAddress={s.fromEmail ?? null}
-        linkInfo={data?.linksByThread[s.threadId]}
-        linkSummaryText={linkSummaryText(data?.linksByThread[s.threadId])}
-        linkedTo={linkedTo(data?.linksByThread[s.threadId])}
-        contactOptions={contactOptions}
-        projectOptions={projectOptions}
-        taskOptions={taskOptions}
-        programOptions={programOptions}
-        linkLabels={linkLabels}
-        quickActionLabels={quickActionLabels}
         dateIso={s.date}
         hour12={hour12}
         intlLocale={intlLocale}
@@ -923,19 +618,6 @@ export default function EmailScreeningView({
             linkConfig: buildLinkConfig(s.threadId, s.subject, s.to, s.date, s.link, s.fromEmail ?? null),
           })
         }
-        onQuickAction={(mode) => openComposeFor(s.id, mode)}
-        onLinkSaved={(values) => applyLinkSave(s.threadId, values)}
-        onComplete={opts.showComplete ? () => markComplete(s.id) : undefined}
-        // A thread with status "completed" got that way because Gmail
-        // shows a reply arrived — that can't be undone from here, so only
-        // a thread manually completed while still "awaiting" gets an
-        // uncomplete button.
-        onUncomplete={opts.showUncomplete && s.status === "awaiting" ? () => markUncomplete(s.id) : undefined}
-        completedLocked={opts.showUncomplete && s.status === "completed"}
-        completeLabel={t.email.markComplete}
-        uncompleteLabel={t.email.markUncomplete}
-        markReadLabel={t.email.markRead}
-        markUnreadLabel={t.email.markUnread}
       />
       );
     });
@@ -953,16 +635,16 @@ export default function EmailScreeningView({
   const completedCount = completedEmails.length + completedSent.length;
   const orderedSections: { key: string; heading: string; count: number; rows: React.ReactNode; dim?: boolean }[] = [
     ...(needsReplyGroup
-      ? [{ key: "NEEDS_REPLY", heading: categoryLabels.NEEDS_REPLY, count: needsReplyGroup.emails.length, rows: receivedRows(needsReplyGroup.emails, { markAsRead: true, showComplete: true }) }]
+      ? [{ key: "NEEDS_REPLY", heading: categoryLabels.NEEDS_REPLY, count: needsReplyGroup.emails.length, rows: receivedRows(needsReplyGroup.emails, { markAsRead: true }) }]
       : []),
     ...(awaitingSent.length > 0
-      ? [{ key: "SENT_AWAITING_REPLY", heading: t.email.sentAwaitingReply, count: awaitingSent.length, rows: sentRows(awaitingSent, { showComplete: true }) }]
+      ? [{ key: "SENT_AWAITING_REPLY", heading: t.email.sentAwaitingReply, count: awaitingSent.length, rows: sentRows(awaitingSent) }]
       : []),
     ...restGroups.map((g) => ({
       key: g.category,
       heading: categoryLabels[g.category],
       count: g.emails.length,
-      rows: receivedRows(g.emails, { markAsRead: true, showComplete: true }),
+      rows: receivedRows(g.emails, { markAsRead: true }),
     })),
     ...(recentlyRead.length > 0
       ? [
@@ -970,7 +652,7 @@ export default function EmailScreeningView({
             key: "RECENTLY_READ",
             heading: t.email.recentlyRead,
             count: recentlyRead.length,
-            rows: receivedRows(recentlyRead, { markAsRead: false, showComplete: true, showMarkUnread: true }),
+            rows: receivedRows(recentlyRead, { markAsRead: false }),
             dim: true,
           },
         ]
@@ -981,7 +663,7 @@ export default function EmailScreeningView({
             key: "RECENTLY_LINKED",
             heading: t.email.recentlyLinked,
             count: recentlyLinked.length,
-            rows: receivedRows(recentlyLinked, { markAsRead: false, showComplete: true, showMarkUnread: true }),
+            rows: receivedRows(recentlyLinked, { markAsRead: false }),
             dim: true,
           },
         ]
@@ -992,10 +674,7 @@ export default function EmailScreeningView({
             key: "COMPLETED",
             heading: t.email.completed,
             count: completedCount,
-            rows: [
-              ...receivedRows(completedEmails, { markAsRead: false, showUncomplete: true }),
-              ...sentRows(completedSent, { showUncomplete: true }),
-            ],
+            rows: [...receivedRows(completedEmails, { markAsRead: false }), ...sentRows(completedSent)],
             dim: true,
           },
         ]
@@ -1048,7 +727,7 @@ export default function EmailScreeningView({
               <h2 className={`text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
             </div>
-            <ul className={`overflow-x-auto bg-card-bg ${section.dim ? "opacity-80" : ""}`}>{section.rows}</ul>
+            <ul className={`bg-card-bg ${section.dim ? "opacity-80" : ""}`}>{section.rows}</ul>
           </section>
         );
       })}
