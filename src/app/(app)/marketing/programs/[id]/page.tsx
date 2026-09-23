@@ -22,6 +22,7 @@ import DeleteAffiliateProgramButton from "../delete-button";
 import CreateShortIoLinkButton from "../create-shortio-link-button";
 import RefreshStatsButton from "../refresh-stats-button";
 import LastSynced from "./last-synced";
+import LinkedEmailsList from "../../../linked-emails-list";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -169,6 +170,7 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
+  const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
 
   const isAdmin = session?.user.role === "ADMIN";
   // Detailed per-program stats (country/referrer/browser breakdown, daily
@@ -371,32 +373,22 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
 
         <div className="space-y-6">
           <Card color="linkedEmails" title={t.contactDetail.linkedEmailsTitle}>
-            {program.emailLinks.length === 0 ? (
-              <p className="text-sm text-soft">{t.marketing.noLinkedEmailsYet}</p>
-            ) : (
-              <ul className="divide-y divide-card-border">
-                {program.emailLinks.map((link) => (
-                  <li key={link.id} className="py-2">
-                    {link.gmailLink ? (
-                      <a
-                        href={link.gmailLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block truncate text-sm font-medium text-ink hover:underline"
-                      >
-                        {link.subject || "—"}
-                      </a>
-                    ) : (
-                      <span className="block truncate text-sm font-medium text-ink">{link.subject || "—"}</span>
-                    )}
-                    <p className="truncate text-xs text-soft">
-                      {link.fromLabel}
-                      {link.messageDate && ` · ${format(link.messageDate, "PP", { locale: dateLocale })}`}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <LinkedEmailsList
+              emailLinks={program.emailLinks.map((link) => ({
+                id: link.id,
+                gmailThreadId: link.gmailThreadId,
+                subject: link.subject,
+                fromLabel: link.fromLabel,
+                messageDate: link.messageDate ? link.messageDate.toISOString() : null,
+                gmailLink: link.gmailLink,
+              }))}
+              noLinkedEmailsLabel={t.marketing.noLinkedEmailsYet}
+              dateLocale={dateLocale}
+              intlLocale={intlLocale}
+              hour12={hour12}
+              emailDialogLabels={t.emailDialog}
+              emailComposeLabels={t.emailCompose}
+            />
           </Card>
         </div>
       </div>

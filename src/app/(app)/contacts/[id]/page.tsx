@@ -24,6 +24,7 @@ import PlatformIcon from "@/components/platform-icon";
 import PageHeader from "../../page-header";
 import Card from "@/components/section-card";
 import LocalTimeCard from "@/components/local-time-card";
+import LinkedEmailsList from "../../linked-emails-list";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -682,27 +683,22 @@ export default async function ContactDetailPage({
           />
 
           <Card color="linkedEmails" title={t.contactDetail.linkedEmailsTitle}>
-            {contact.emailLinks.length === 0 ? (
-              <p className="text-sm text-soft">{t.contactDetail.noLinkedEmails}</p>
-            ) : (
-              <ul className="space-y-3">
-                {contact.emailLinks.map((link) => (
-                  <li key={link.id} className="text-sm">
-                    {link.gmailLink ? (
-                      <a href={link.gmailLink} target="_blank" rel="noopener noreferrer" className="text-ink hover:underline">
-                        {link.subject || "—"}
-                      </a>
-                    ) : (
-                      <p className="text-ink">{link.subject || "—"}</p>
-                    )}
-                    <p className="text-xs text-soft">
-                      {link.fromLabel}
-                      {link.messageDate && ` · ${format(link.messageDate, "PPp", { locale: dateLocale })}`}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <LinkedEmailsList
+              emailLinks={contact.emailLinks.map((link) => ({
+                id: link.id,
+                gmailThreadId: link.gmailThreadId,
+                subject: link.subject,
+                fromLabel: link.fromLabel,
+                messageDate: link.messageDate ? link.messageDate.toISOString() : null,
+                gmailLink: link.gmailLink,
+              }))}
+              noLinkedEmailsLabel={t.contactDetail.noLinkedEmails}
+              dateLocale={dateLocale}
+              intlLocale={intlLocale}
+              hour12={hour12}
+              emailDialogLabels={t.emailDialog}
+              emailComposeLabels={t.emailCompose}
+            />
           </Card>
 
           <Card color="purchases" title={t.contactDetail.purchasesTitle}>
