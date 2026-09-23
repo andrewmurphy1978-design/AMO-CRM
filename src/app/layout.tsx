@@ -35,9 +35,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${displayFont.variable} ${bodyFont.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${displayFont.variable} ${bodyFont.variable} ${geistMono.variable} h-full overflow-x-hidden antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      {/* overflow-x-hidden here (and on html above) is a hard backstop, not
+          a fix for any one page: if ANY page's content is even a pixel
+          wider than the viewport — a table, a badge row, unbreakable text —
+          the whole document becomes horizontally pannable on mobile, and a
+          `position: fixed` element (the mobile sidebar rail) is anchored to
+          that wider, pannable layout viewport rather than the actual
+          screen, so it visibly drifts sideways as the page pans. This
+          clips any such overflow at the document level instead of letting
+          it silently turn into "the fixed sidebar scrolls" on whichever
+          page happens to have it, page by page. */}
+      <body className="min-h-full flex flex-col overflow-x-hidden">{children}</body>
     </html>
   );
 }
