@@ -98,6 +98,20 @@ body {
   background: linear-gradient(180deg, rgba(250, 249, 244, 0.92) 0%, rgba(250, 249, 244, 0.86) 100%);
 }
 
+@media (max-width: 639px) {
+  .amo-bg-image--app,
+  .amo-bg-overlay--app {
+    /* Below `sm`, the desktop sidebar is hidden but the mobile rail
+       (`sidebar.tsx`'s `mobileRail`, `w-14` = 56px) is still shown — with
+       no offset here, this fixed/inset:0 layer covers the full viewport
+       width, including the rail, and (at z-index 1, above the rail's
+       `z-index: auto`) paints over it, washing out its green background.
+       Same failure mode as the desktop case above, just at the rail's own
+       fixed width instead of `--sidebar-w`. */
+    left: 3.5rem;
+  }
+}
+
 @media (min-width: 640px) {
   .amo-bg-image--app,
   .amo-bg-overlay--app {

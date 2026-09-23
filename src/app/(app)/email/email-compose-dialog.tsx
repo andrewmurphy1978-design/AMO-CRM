@@ -466,6 +466,36 @@ export default function EmailComposeDialog({
                 className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
               />
             </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <label className="flex w-fit shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94a3 3 0 1 1 4.243 4.242L9.564 17.31a1.5 1.5 0 0 1-2.122-2.12l8.485-8.486"
+                  />
+                </svg>
+                {labels.attach}
+                <input type="file" multiple className="hidden" onChange={(e) => handleFilesSelected(e.target.files)} />
+              </label>
+              {attachments.map((a, i) => (
+                <span key={i} className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink">
+                  <span className="max-w-[10rem] truncate">{a.filename}</span>
+                  <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(i)}
+                    title={labels.removeAttachment.replace("{name}", a.filename)}
+                    className="ml-0.5 rounded-full p-0.5 text-soft hover:bg-black/10 hover:text-ink"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
+                      <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
+                    </svg>
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
 
           {target.linkConfig && (
@@ -487,39 +517,6 @@ export default function EmailComposeDialog({
         <div className="flex min-h-0 flex-1 gap-4 overflow-hidden px-5 pb-5">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
             <RichTextarea value={html} onChange={setHtml} className="min-h-[220px]" defaultFontFamily={defaultFontFamily} defaultFontSize={defaultFontSize} />
-
-            {attachments.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {attachments.map((a, i) => (
-                  <span key={i} className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink">
-                    <span className="max-w-[10rem] truncate">{a.filename}</span>
-                    <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(i)}
-                      title={labels.removeAttachment.replace("{name}", a.filename)}
-                      className="ml-0.5 rounded-full p-0.5 text-soft hover:bg-black/10 hover:text-ink"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
-                        <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
-                      </svg>
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <label className="mt-2 flex w-fit shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94a3 3 0 1 1 4.243 4.242L9.564 17.31a1.5 1.5 0 0 1-2.122-2.12l8.485-8.486"
-                />
-              </svg>
-              {labels.attach}
-              <input type="file" multiple className="hidden" onChange={(e) => handleFilesSelected(e.target.files)} />
-            </label>
 
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           </div>

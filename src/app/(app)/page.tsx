@@ -389,163 +389,183 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left column: email, projects, tasks, activity. */}
-        <div className="space-y-6">
+      {/* A single flat grid (not three separately-flowing column divs) so
+          each card can carry its own placement: no col-start below `lg`
+          stacks every card full-width in DOM order (the mobile reading
+          order the user asked for — Email, Calendar, Projects, Tasks,
+          Social, then the right-column widgets). At `lg`+, `lg:col-start-*`
+          alone (deliberately no row-start) pins each card to its original
+          column while leaving its row auto — CSS grid's auto-placement then
+          packs each column top-to-bottom independently, exactly like the
+          old per-column flex flow, instead of syncing row heights across
+          columns (which, tried first, left a large blank gap under any
+          column whose cards were shorter than the tallest column's row —
+          e.g. under the compact Calendar/Weather cards next to the Email
+          card's own fixed 820px height). */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
+        <div className="lg:col-start-1">
           <EmailCard initialData={emailInitialData} connected={googleAccessToken !== null} hour12={hour12} lang={lang} labels={emailLabels} />
-
-          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.dashboardProjectsTitle}</h2>
-            {activeProjects.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.dashboard.noActiveProjects}</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {activeProjects.map((project) => (
-                  <li key={project.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-lime" />
-                    <div>
-                      <Link
-                        href={`/projects/${project.id}`}
-                        className="font-medium text-ink hover:text-emerald-700 hover:underline"
-                      >
-                        {project.name}
-                      </Link>
-                      <p className="text-xs text-soft">
-                        {project.contact.firstName ?? project.contact.email}
-                        {project.dueDate && ` · ${t.dashboard.due} ${formatDistanceToNow(project.dueDate, { addSuffix: true, locale: dateLocale })}`}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.upcomingTasks}</h2>
-            {dueSoonTasks.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.dashboard.noUpcomingTasks}</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {dueSoonTasks.map((task) => (
-                  <li key={task.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-teal" />
-                    <div>
-                      <Link
-                        href={`/projects/${task.projectId}`}
-                        className="font-medium text-ink hover:text-emerald-700 hover:underline"
-                      >
-                        {task.title}
-                      </Link>
-                      <p className="text-xs text-soft">
-                        {task.project.name} · {task.project.contact.firstName ?? task.project.contact.email}
-                        {task.dueDate && ` · ${t.dashboard.due} ${formatDistanceToNow(task.dueDate, { addSuffix: true, locale: dateLocale })}`}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.recentActivity}</h2>
-            {recentActivity.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.dashboard.noActivity}</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {recentActivity.map((entry) => (
-                  <li key={entry.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-blue" />
-                    <div>
-                      <p className="text-ink">{entry.message}</p>
-                      <p className="text-xs text-soft">
-                        {formatDistanceToNow(entry.createdAt, { addSuffix: true, locale: dateLocale })}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
         </div>
 
-        {/* Middle column: calendar, automations, social analytics. */}
-        <div className="space-y-6">
+        <div className="lg:col-start-2">
           <Suspense fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}>
             <CalendarCardServer accessToken={googleAccessToken} lang={lang} hour12={hour12} labels={calendarLabels} />
           </Suspense>
+        </div>
 
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm lg:col-start-1">
+          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.dashboardProjectsTitle}</h2>
+          {activeProjects.length === 0 ? (
+            <p className="mt-3 text-sm text-soft">{t.dashboard.noActiveProjects}</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {activeProjects.map((project) => (
+                <li key={project.id} className="flex items-start gap-3 text-sm">
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-lime" />
+                  <div>
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="font-medium text-ink hover:text-emerald-700 hover:underline"
+                    >
+                      {project.name}
+                    </Link>
+                    <p className="text-xs text-soft">
+                      {project.contact.firstName ?? project.contact.email}
+                      {project.dueDate && ` · ${t.dashboard.due} ${formatDistanceToNow(project.dueDate, { addSuffix: true, locale: dateLocale })}`}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm lg:col-start-1">
+          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.upcomingTasks}</h2>
+          {dueSoonTasks.length === 0 ? (
+            <p className="mt-3 text-sm text-soft">{t.dashboard.noUpcomingTasks}</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {dueSoonTasks.map((task) => (
+                <li key={task.id} className="flex items-start gap-3 text-sm">
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-teal" />
+                  <div>
+                    <Link
+                      href={`/projects/${task.projectId}`}
+                      className="font-medium text-ink hover:text-emerald-700 hover:underline"
+                    >
+                      {task.title}
+                    </Link>
+                    <p className="text-xs text-soft">
+                      {task.project.name} · {task.project.contact.firstName ?? task.project.contact.email}
+                      {task.dueDate && ` · ${t.dashboard.due} ${formatDistanceToNow(task.dueDate, { addSuffix: true, locale: dateLocale })}`}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="lg:col-start-2">
           <SocialCard
             snapshots={socialSnapshots}
             labels={socialLabels}
             isAdmin={session?.user.role === "ADMIN"}
             dateLocale={dateLocale}
           />
-
-          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.automationsTitle}</h2>
-            {automationEntries.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.dashboard.noAutomationRuns}</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {automationEntries.map((entry) =>
-                  entry.kind === "run" ? (
-                    <li key={entry.run.id} className="flex items-start gap-3 text-sm">
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
-                      <div className="flex-1">
-                        <p className="text-ink">
-                          <span className="font-medium">{entry.run.source === "make" ? "Make" : "Zapier"}</span>
-                          {entry.run.name ? ` · ${entry.run.name}` : ""}
-                        </p>
-                        {entry.run.message && <p className="text-xs text-soft">{entry.run.message}</p>}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-medium text-red-600">{t.dashboard.automationError}</span>
-                        <p className="text-xs text-soft">{formatSmartDateTime(entry.run.occurredAt, dateLocale, t)}</p>
-                      </div>
-                    </li>
-                  ) : (
-                    <li key={`${entry.source}-${entry.name}-${entry.latest.getTime()}`} className="flex items-start gap-3 text-sm">
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                      <div className="flex-1">
-                        <p className="text-ink">
-                          <span className="font-medium">{entry.source === "make" ? "Make" : "Zapier"}</span>
-                          {entry.name ? ` · ${entry.name}` : ""}
-                        </p>
-                        <p className="text-xs text-soft">{t.dashboard.automationSuccessCount(entry.count)}</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-medium text-emerald-700">{t.dashboard.automationSuccess}</span>
-                        <p className="text-xs text-soft">{formatSmartDateTime(entry.latest, dateLocale, t)}</p>
-                      </div>
-                    </li>
-                  )
-                )}
-              </ul>
-            )}
-          </div>
         </div>
 
-        {/* Right column: general info. Each card fetches real, sometimes
-            slow, external data — Suspense lets the rest of the dashboard
-            (and the nav switch to get here) render immediately instead of
-            waiting on all three. */}
-        <div className="space-y-6">
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm lg:col-start-1">
+          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.recentActivity}</h2>
+          {recentActivity.length === 0 ? (
+            <p className="mt-3 text-sm text-soft">{t.dashboard.noActivity}</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {recentActivity.map((entry) => (
+                <li key={entry.id} className="flex items-start gap-3 text-sm">
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-blue" />
+                  <div>
+                    <p className="text-ink">{entry.message}</p>
+                    <p className="text-xs text-soft">
+                      {formatDistanceToNow(entry.createdAt, { addSuffix: true, locale: dateLocale })}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm lg:col-start-2">
+          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.automationsTitle}</h2>
+          {automationEntries.length === 0 ? (
+            <p className="mt-3 text-sm text-soft">{t.dashboard.noAutomationRuns}</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {automationEntries.map((entry) =>
+                entry.kind === "run" ? (
+                  <li key={entry.run.id} className="flex items-start gap-3 text-sm">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                    <div className="flex-1">
+                      <p className="text-ink">
+                        <span className="font-medium">{entry.run.source === "make" ? "Make" : "Zapier"}</span>
+                        {entry.run.name ? ` · ${entry.run.name}` : ""}
+                      </p>
+                      {entry.run.message && <p className="text-xs text-soft">{entry.run.message}</p>}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-medium text-red-600">{t.dashboard.automationError}</span>
+                      <p className="text-xs text-soft">{formatSmartDateTime(entry.run.occurredAt, dateLocale, t)}</p>
+                    </div>
+                  </li>
+                ) : (
+                  <li key={`${entry.source}-${entry.name}-${entry.latest.getTime()}`} className="flex items-start gap-3 text-sm">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                    <div className="flex-1">
+                      <p className="text-ink">
+                        <span className="font-medium">{entry.source === "make" ? "Make" : "Zapier"}</span>
+                        {entry.name ? ` · ${entry.name}` : ""}
+                      </p>
+                      <p className="text-xs text-soft">{t.dashboard.automationSuccessCount(entry.count)}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-medium text-emerald-700">{t.dashboard.automationSuccess}</span>
+                      <p className="text-xs text-soft">{formatSmartDateTime(entry.latest, dateLocale, t)}</p>
+                    </div>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+        </div>
+
+        {/* Right-column widgets: each fetches real, sometimes slow,
+            external data — Suspense lets the rest of the dashboard render
+            immediately instead of waiting on all of them. */}
+        <div className="lg:col-start-3">
           <Suspense fallback={<CardSkeleton title={t.dashboard.weatherTitle} />}>
             <WeatherCardServer lang={lang} labels={weatherLabels} />
           </Suspense>
+        </div>
+        <div className="lg:col-start-3">
           <WorldClocks title="World clocks" hour12={hour12} />
+        </div>
+        <div className="lg:col-start-3">
           <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
             <NewsCardServer labels={newsLabels} />
           </Suspense>
+        </div>
+        <div className="lg:col-start-3">
           <Suspense fallback={<CardSkeleton title={t.dashboard.sportsTitle} />}>
             <SportsCardServer labels={sportsLabels} lang={lang} hour12={hour12} />
           </Suspense>
+        </div>
+        <div className="lg:col-start-3">
           <Suspense fallback={<CardSkeleton title={t.dashboard.marketsTitle} />}>
             <MarketsCardServer labels={marketsLabels} />
           </Suspense>
