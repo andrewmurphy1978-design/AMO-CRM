@@ -24,12 +24,12 @@ const STAGE_COLORS: Record<string, string> = {
   PERSONAL: "bg-violet-50 text-violet-700",
 };
 
-// Alternate row shade for the Contacts list only — darker and far less
-// saturated than the app-wide "#7fa898" stripe used on Projects/Invoices/
-// Tasks, so the stage/tag pills' own pastel colors (bg-emerald-50,
-// bg-sky-50, etc.) read clearly against it instead of competing with a
-// similarly vivid green.
-const ALT_ROW_BG = "#5d7168";
+// Contacts list row stripe — same dark shade as the app-wide "#7fa898"
+// alternate row (Projects/Invoices/Tasks), but the light stripe here is a
+// touch lighter than their shared "#f4faf6" so the stage/tag pills' own
+// pastel colors (bg-emerald-50, bg-sky-50, etc.) read clearly against it.
+const LIGHT_ROW_BG = "#f8fbf9";
+const ALT_ROW_BG = "#7fa898";
 
 function toArray(value: string | string[] | undefined): string[] {
   if (!value) return [];
@@ -301,7 +301,7 @@ export default async function ContactsPage({
               key={contact.id}
               href={`/contacts/${contact.id}`}
               className="block px-4 py-3"
-              style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : ALT_ROW_BG }}
+              style={{ backgroundColor: i % 2 === 0 ? LIGHT_ROW_BG : ALT_ROW_BG }}
             >
               {/* Name on its own single line, flag (no country name) at the
                   top right. Below that: the stage pill under the name (left)
@@ -379,7 +379,7 @@ export default async function ContactsPage({
               const languageTags = contact.tags.filter((ct) => isLanguageTag(ct.tag.name));
               const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
               return (
-                <tr key={contact.id} className="group relative" style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : ALT_ROW_BG }}>
+                <tr key={contact.id} className="group relative" style={{ backgroundColor: i % 2 === 0 ? LIGHT_ROW_BG : ALT_ROW_BG }}>
                   <td className="truncate px-4 py-3">
                     {/* The whole row is clickable via this link stretching over
                         it (position:relative on the <tr> above makes it the
