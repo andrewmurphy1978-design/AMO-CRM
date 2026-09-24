@@ -46,6 +46,24 @@ function NextArrowIcon() {
   );
 }
 
+// Mobile contact card: the contact's own photo when there is one, otherwise
+// a generic person glyph — either way, a fixed-size marker before the name.
+function ContactIcon({ avatarUrl }: { avatarUrl: string | null }) {
+  if (avatarUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />;
+  }
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5 shrink-0 text-soft">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M17.982 18.725A7.488 7.488 0 0 0 12 15.75a7.488 7.488 0 0 0-5.982 2.975m11.964 0a9 9 0 1 0-11.964 0m11.964 0A8.966 8.966 0 0 1 12 21a8.966 8.966 0 0 1-5.982-2.275M15 9.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+      />
+    </svg>
+  );
+}
+
 type SortField = "name" | "country" | "stage" | "source";
 const SORT_FIELDS: SortField[] = ["name", "country", "stage", "source"];
 const PAGE_SIZE = 100;
@@ -223,8 +241,18 @@ export default async function ContactsPage({
         dateLocale={dateLocale}
         location={t.dashboard.myLocation}
         actions={
-          <Link href="/contacts/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
-            {t.contacts.newContact}
+          <Link
+            href="/contacts/new"
+            title={t.contacts.newContact}
+            aria-label={t.contacts.newContact}
+            className="btn-primary flex items-center justify-center rounded-lg p-1.5 shadow-sm sm:justify-start sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm sm:font-semibold"
+          >
+            {/* Same Add-button convention as Email/Calendar: a bare square
+                icon on mobile, label restored at sm+. */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+            </svg>
+            <span className="hidden sm:inline">{t.contacts.newContact}</span>
           </Link>
         }
       />
@@ -259,32 +287,35 @@ export default async function ContactsPage({
               style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}
             >
               {/* Name on its own single line, flag (no country name) at the
-                  top right with the language pill stacked under it — then
-                  the first email, then the first phone number with the
-                  stage pill right-aligned beside it. Only one of each
+                  top right. Below that: the stage pill under the name (left)
+                  and the language pill under the flag (right), on the same
+                  line. Then the first email, then the first phone number
+                  with the source right-aligned beside it. Only one of each
                   multi-value field (email/phone/language) is shown here;
                   the full set is still on the Contact Info page. */}
               <div className="flex items-start justify-between gap-2">
-                <p className="min-w-0 flex-1 truncate font-medium text-ink">
-                  {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
+                <p className="flex min-w-0 flex-1 items-center gap-1.5 truncate font-medium text-ink">
+                  <ContactIcon avatarUrl={contact.avatarUrl} />
+                  <span className="truncate">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</span>
                 </p>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  {contact.country && <CountryFlag country={contact.country} />}
-                  {languageTags[0] && (
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(languageTags[0].tag.name)]}`}>
-                      {languageTags[0].tag.name}
-                    </span>
-                  )}
-                </div>
+                {contact.country && <CountryFlag country={contact.country} />}
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
+                  {STAGE_LABELS[contact.stage]}
+                </span>
+                {languageTags[0] && (
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(languageTags[0].tag.name)]}`}>
+                    {languageTags[0].tag.name}
+                  </span>
+                )}
               </div>
               <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
               <div className="mt-0.5 flex items-center justify-between gap-2">
                 <p className="min-w-0 flex-1 truncate text-sm text-ink/70">
                   <PhoneDisplay value={contact.phone} country={contact.country} showFlag={false} />
                 </p>
-                <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
-                  {STAGE_LABELS[contact.stage]}
-                </span>
+                <span className="shrink-0 text-xs text-ink/70">{contact.source ?? "—"}</span>
               </div>
             </Link>
           );

@@ -521,12 +521,9 @@ export default function EmailScreeningView({
             <span className="hidden sm:inline">{t.email.newEmail}</span>
           </button>
           {headerActions}
-          {loading && (
-            <span className="inline-flex items-center gap-1.5 text-xs text-amo-white/80">
-              <Spinner className="h-3.5 w-3.5" />
-              {t.email.screening}
-            </span>
-          )}
+          {/* The Refresh button's own icon spinning is enough to show it's
+              working — no separate "Screening emails" status text next to
+              it, on mobile or desktop. */}
           <RefreshButton
             onClick={refresh}
             loading={loading}

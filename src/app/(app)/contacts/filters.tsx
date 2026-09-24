@@ -1,8 +1,13 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import MultiSelect from "@/components/multi-select";
+
+// How long to wait after the last keystroke before re-querying — short
+// enough to feel live, long enough that a fast typist doesn't fire a
+// server round trip (and a full-page navigation) on every single letter.
+const SEARCH_DEBOUNCE_MS = 300;
 
 export default function ContactFilters({
   q,
@@ -39,6 +44,7 @@ export default function ContactFilters({
   // the same stale prop and clobber the other's selection).
   const [stages, setStages] = useState(selectedStages);
   const [tags, setTags] = useState(selectedTags);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function push(nextStages: string[], nextTags: string[], nextQ: string) {
     const params = new URLSearchParams();
@@ -51,20 +57,26 @@ export default function ContactFilters({
   return (
     // No Filter button: every field applies itself the moment it changes —
     // the two MultiSelects already do (onChange fires per click), and the
-    // text field applies on blur/Enter (a real "change" event, not every
-    // keystroke, which would fire a full page navigation per letter typed).
-    // `flex-nowrap` + tight `gap-2` on mobile keeps all three fields on one
-    // line; `sm:flex-wrap sm:gap-3` restores the original roomier desktop
-    // layout, where there was always space to spare.
+    // text field re-queries a short debounce after each keystroke (so it
+    // reads as "live" without firing a full page navigation on every
+    // single letter) or immediately on Enter. `flex-nowrap` + tight `gap-2`
+    // on mobile keeps all three fields on one line; `sm:flex-wrap sm:gap-3`
+    // restores the original roomier desktop layout, where there was always
+    // space to spare.
     <form className="flex flex-nowrap items-center gap-2 sm:flex-wrap sm:gap-3">
       <input
         type="search"
         value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={() => push(stages, tags, text)}
+        onChange={(e) => {
+          const value = e.target.value;
+          setText(value);
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = setTimeout(() => push(stages, tags, value), SEARCH_DEBOUNCE_MS);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
             e.preventDefault();
+            if (debounceRef.current) clearTimeout(debounceRef.current);
             push(stages, tags, text);
           }
         }}
