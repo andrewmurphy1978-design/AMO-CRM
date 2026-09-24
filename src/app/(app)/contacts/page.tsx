@@ -298,7 +298,7 @@ export default async function ContactsPage({
           pill, so it repeats here, on its own line right below the fields
           (ContactFilters renders the same `trailing` node on desktop instead,
           at the end of the filter row). */}
-      <div className="flex items-center gap-2 sm:hidden">{paginationInfo}</div>
+      <div className="flex items-center justify-between gap-2 sm:hidden">{paginationInfo}</div>
 
       {/* Mobile: stacked cards instead of a cramped multi-column table. */}
       <ScrollableList className="divide-y divide-card-border rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
@@ -308,7 +308,7 @@ export default async function ContactsPage({
             <Link
               key={contact.id}
               href={`/contacts/${contact.id}`}
-              className="block px-4 py-3"
+              className="block px-3 py-1.5"
               style={{ backgroundColor: i % 2 === 0 ? LIGHT_ROW_BG : ALT_ROW_BG }}
             >
               {/* Name on its own single line, flag (no country name) at the

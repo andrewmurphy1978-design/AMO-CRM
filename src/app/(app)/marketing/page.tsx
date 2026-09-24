@@ -74,7 +74,7 @@ function AffiliateProgramCard({
                 <Link
                   key={p.id}
                   href={`/marketing/programs/${p.id}`}
-                  className={`block scroll-mt-24 border-l-4 px-3 py-2 ${styles.row} ${styles.border} hover:brightness-95`}
+                  className={`block scroll-mt-24 border-l-4 px-2 py-1 ${styles.row} ${styles.border} hover:brightness-95`}
                 >
                   <div className="flex items-center gap-2">
                     {p.iconUrl ? (
@@ -229,7 +229,10 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   );
 
   return (
-    <div className="space-y-6">
+    // Mobile: tighter gap-2 rhythm throughout, same as the Contacts page —
+    // most noticeably between the header and the filter row, which used
+    // to sit a full 24px below it for no reason. Desktop keeps gap-6.
+    <div className="flex flex-col gap-2 sm:gap-6">
       <PageHeader
         title={t.marketing.title}
         hour12={hour12}
