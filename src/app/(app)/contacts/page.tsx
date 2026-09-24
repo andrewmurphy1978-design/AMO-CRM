@@ -212,7 +212,10 @@ export default async function ContactsPage({
   const paginationInfo = (
     <>
       {totalPages > 1 && (
-        <div className="ml-auto flex items-center gap-2 text-sm">
+        // Mobile only: smaller text for "Page x of x" — it and the
+        // shown-count pill share this line with the filter fields' own
+        // pager row and don't need to be as prominent as on desktop.
+        <div className="ml-auto flex items-center gap-2 text-xs sm:text-sm">
           {page > 1 ? (
             <Link
               href={pageHref(page - 1)}
@@ -242,7 +245,9 @@ export default async function ContactsPage({
           )}
         </div>
       )}
-      <span className={`rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800 ${totalPages > 1 ? "" : "ml-auto"}`}>
+      <span
+        className={`rounded-full bg-amo-lime/15 px-3 py-1.5 text-xs font-semibold text-emerald-800 sm:text-sm ${totalPages > 1 ? "" : "ml-auto"}`}
+      >
         {t.contacts.shownRange(rangeStart, rangeEnd, total)}
       </span>
     </>
