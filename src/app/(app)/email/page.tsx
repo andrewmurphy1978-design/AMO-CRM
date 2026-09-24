@@ -8,6 +8,7 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import EmailScreeningView from "./email-screening-view";
 import { GmailIcon, IonosIcon } from "./mail-brand-icons";
+import MailAppLinksMenu from "./mail-app-links-menu";
 
 function contactLabel(c: { firstName: string | null; lastName: string | null; email: string | null }): string {
   const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
@@ -94,25 +95,31 @@ export default async function EmailPage() {
       defaultFontSize={composePrefs?.defaultFontSize ?? null}
       headerActions={
         <>
+          {/* Mobile only: Gmail + IONOS collapse into one dropdown trigger —
+              two full buttons here alongside New email and Refresh left no
+              room for the page title (see MailAppLinksMenu's own comment). */}
+          <MailAppLinksMenu
+            triggerLabel={t.dashboard.openEmails}
+            gmailLabel={t.dashboard.openInGmail}
+            ionosLabel={t.dashboard.openIonosWebmail}
+          />
           <a
             href="https://mail.google.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+            className="btn-primary hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:flex sm:text-sm"
           >
             <GmailIcon className="h-4 w-4 shrink-0" />
-            {/* Mobile only: icon-only — see the "New email" button's own
-                comment in email-screening-view.tsx for why. */}
-            <span className="hidden sm:inline">{t.dashboard.openInGmail}</span>
+            {t.dashboard.openInGmail}
           </a>
           <a
             href="https://mail.ionos.com/"
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+            className="btn-primary hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:flex sm:text-sm"
           >
             <IonosIcon className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{t.dashboard.openIonosWebmail}</span>
+            {t.dashboard.openIonosWebmail}
           </a>
         </>
       }

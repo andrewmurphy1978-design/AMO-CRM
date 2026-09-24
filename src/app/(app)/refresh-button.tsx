@@ -9,6 +9,7 @@ export default function RefreshButton({
   loadingLabel,
   variant = "default",
   hideLabelOnMobile = false,
+  compactOnMobile = false,
 }: {
   onClick: () => void;
   loading: boolean;
@@ -23,10 +24,17 @@ export default function RefreshButton({
   // icon-only below `sm` without changing every other "header" variant
   // caller's (e.g. Calendar's) mobile appearance.
   hideLabelOnMobile?: boolean;
+  // Same opt-in reasoning as hideLabelOnMobile: shrinks this button's own
+  // padding below `sm` (the Email page's header has several action
+  // buttons competing for space with the page title) without touching
+  // every other "header" variant caller.
+  compactOnMobile?: boolean;
 }) {
   const className =
     variant === "header"
-      ? "btn-primary inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm disabled:opacity-60 sm:text-sm"
+      ? compactOnMobile
+        ? "btn-primary inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold shadow-sm disabled:opacity-60 sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm"
+        : "btn-primary inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm disabled:opacity-60 sm:text-sm"
       : "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-soft transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-60";
   return (
     <button type="button" onClick={onClick} disabled={loading} className={className}>

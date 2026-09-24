@@ -338,7 +338,7 @@ function EmailRow({
           linking, and marking complete stay reachable from the Email
           Dialog this row opens. Tighter padding than the desktop row so
           the card doesn't waste width on a narrow screen. */}
-      <button type="button" onClick={openDialog} className="flex w-full min-w-0 items-start gap-2 px-2.5 py-1.5 text-left sm:hidden">
+      <button type="button" onClick={openDialog} className="flex w-full min-w-0 items-start gap-2 px-2 py-1 text-left sm:hidden">
         <div className="min-w-0 flex-1">
           <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-ink">
             {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} title={dotTitle} />}
@@ -499,15 +499,16 @@ export default function EmailScreeningView({
           <button
             type="button"
             onClick={openNewCompose}
-            className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+            className="btn-primary flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold shadow-sm sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4 shrink-0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
             </svg>
-            {/* Mobile only: icon-only, so the header's four action buttons
-                (this one, Open Gmail, Open IONOS Webmail, Refresh) stop
-                forcing the whole page wider than the viewport — that's
-                what was dragging the sidebar out of view on mobile.
+            {/* Mobile only: icon-only and tighter padding, so the header's
+                action buttons (this one, the Gmail/IONOS dropdown, Refresh)
+                stop forcing the whole page wider than the viewport — that's
+                what was dragging the sidebar out of view on mobile, and
+                what was squeezing the page title down to a sliver.
                 Desktop/tablet (sm+) keeps the label, unchanged. */}
             <span className="hidden sm:inline">{t.email.newEmail}</span>
           </button>
@@ -525,6 +526,7 @@ export default function EmailScreeningView({
             loadingLabel={t.email.refreshing}
             variant="header"
             hideLabelOnMobile
+            compactOnMobile
           />
         </>
       }
@@ -1038,7 +1040,7 @@ export default function EmailScreeningView({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       {header}
 
       {drafts.length > 0 && (
@@ -1056,7 +1058,7 @@ export default function EmailScreeningView({
           {/* Mobile only (below `sm`): tighter padding, and the count badge
               sits right beside the title instead of being pushed to the
               far edge of the card. */}
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 sm:hidden ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
+          <div className={`flex items-center gap-1 px-2 py-1 sm:hidden ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
             <h2 className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}
@@ -1089,7 +1091,7 @@ export default function EmailScreeningView({
                 <button
                   type="button"
                   onClick={() => openDraft(draft)}
-                  className="flex w-full min-w-0 items-start gap-2 px-2.5 py-1.5 text-left hover:bg-black/[0.03] sm:hidden"
+                  className="flex w-full min-w-0 items-start gap-2 px-2 py-1 text-left hover:bg-black/[0.03] sm:hidden"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-ink">{draft.to || t.email.draftNoRecipient}</p>
@@ -1119,7 +1121,7 @@ export default function EmailScreeningView({
             {/* Mobile only (below `sm`): tighter padding, and the count
                 badge sits right beside the title instead of being pushed
                 to the far edge of the card. */}
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 sm:hidden ${color.headerBg}`}>
+            <div className={`flex items-center gap-1 px-2 py-1 sm:hidden ${color.headerBg}`}>
               <h2 className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
             </div>
