@@ -13,6 +13,7 @@ import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import ContactFilters from "./filters";
 import ScrollableList from "./scrollable-list";
+import DeleteToast from "./delete-toast";
 
 const STAGE_COLORS: Record<string, string> = {
   LEAD: "bg-emerald-50 text-emerald-700",
@@ -22,6 +23,13 @@ const STAGE_COLORS: Record<string, string> = {
   UNSUBSCRIBED: "bg-red-50 text-red-600",
   PERSONAL: "bg-violet-50 text-violet-700",
 };
+
+// Alternate row shade for the Contacts list only — darker and far less
+// saturated than the app-wide "#7fa898" stripe used on Projects/Invoices/
+// Tasks, so the stage/tag pills' own pastel colors (bg-emerald-50,
+// bg-sky-50, etc.) read clearly against it instead of competing with a
+// similarly vivid green.
+const ALT_ROW_BG = "#5d7168";
 
 function toArray(value: string | string[] | undefined): string[] {
   if (!value) return [];
@@ -114,9 +122,17 @@ function TagPills({ tags, vertical }: { tags: { tagId: string; tag: { name: stri
 export default async function ContactsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string | string[]; tag?: string | string[]; sort?: string; dir?: string; page?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    stage?: string | string[];
+    tag?: string | string[];
+    sort?: string;
+    dir?: string;
+    page?: string;
+    deleted?: string;
+  }>;
 }) {
-  const { q, stage, tag, sort, dir, page: pageParam } = await searchParams;
+  const { q, stage, tag, sort, dir, page: pageParam, deleted } = await searchParams;
   const stages = toArray(stage);
   const selectedTags = toArray(tag);
   const sortField: SortField | null = SORT_FIELDS.includes(sort as SortField) ? (sort as SortField) : null;
@@ -235,6 +251,7 @@ export default async function ContactsPage({
     // the header and the filter row, which used to sit a full 24px below
     // it for no reason) — desktop keeps the original spacious gap-6.
     <div className="flex flex-col gap-2 sm:gap-6">
+      <DeleteToast message={deleted} />
       <PageHeader
         title={t.contacts.title}
         hour12={hour12}
@@ -284,7 +301,7 @@ export default async function ContactsPage({
               key={contact.id}
               href={`/contacts/${contact.id}`}
               className="block px-4 py-3"
-              style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}
+              style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : ALT_ROW_BG }}
             >
               {/* Name on its own single line, flag (no country name) at the
                   top right. Below that: the stage pill under the name (left)
@@ -362,7 +379,7 @@ export default async function ContactsPage({
               const languageTags = contact.tags.filter((ct) => isLanguageTag(ct.tag.name));
               const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
               return (
-                <tr key={contact.id} className="group relative" style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}>
+                <tr key={contact.id} className="group relative" style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : ALT_ROW_BG }}>
                   <td className="truncate px-4 py-3">
                     {/* The whole row is clickable via this link stretching over
                         it (position:relative on the <tr> above makes it the

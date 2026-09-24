@@ -11,7 +11,7 @@ import { countryToCode } from "@/lib/country-flag";
 import { normalizeRegionForCountry } from "@/lib/regions";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getValidAccessToken } from "@/lib/google";
-import { pushContactToGoogle } from "@/lib/google-contacts";
+import { pushContactToGoogle, deleteGoogleContact } from "@/lib/google-contacts";
 
 // Google Contacts import (see google-contacts.ts) leaves email null for a
 // phone-only personal contact, and Contact.email is nullable in the schema
@@ -610,13 +610,61 @@ export async function updateContact(
   return { success: `${t.actions.contactUpdated}${result.syncStatus}` };
 }
 
-export async function deleteContact(contactId: string) {
+export async function deleteContact(contactId: string): Promise<never> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
-  await withScopedPrismaClient((db) => db.contact.delete({ where: { id: contactId } }));
+  const syncStatus = await withScopedPrismaClient(async (db) => {
+    const contact = await db.contact.findUnique({
+      where: { id: contactId },
+      select: { systemeIoId: true, googleContactId: true },
+    });
+
+    // Best-effort deletes on the linked services first, while the contact's
+    // own ids are still around to look them up by — never fails the CRM
+    // delete itself, but reported either way so "Contact deleted" doesn't
+    // leave the user guessing whether the other side actually got it too.
+    let status = "";
+    if (contact?.systemeIoId) {
+      try {
+        const client = await getSystemeIoClient(db);
+        if (client) {
+          await client.deleteContact(contact.systemeIoId);
+          status += t.actions.contactDeletedSystemeIoSynced;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "unknown error";
+        status += t.actions.contactDeletedSystemeIoWarning(message);
+      }
+    }
+
+    if (contact?.googleContactId) {
+      try {
+        const accessToken = await getValidAccessToken(session.user.id, db);
+        if (accessToken) {
+          const result = await deleteGoogleContact(accessToken, contact.googleContactId);
+          status += result.error ? t.actions.contactDeletedGoogleWarning(result.error) : t.actions.contactDeletedGoogleSynced;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "unknown error";
+        status += t.actions.contactDeletedGoogleWarning(message);
+      }
+    }
+
+    await db.contact.delete({ where: { id: contactId } });
+    return status;
+  });
+
   revalidatePath("/contacts");
-  redirect("/contacts");
+  // A Server Action's own page re-renders automatically once the action
+  // resolves — since this contact is now gone, staying on `/contacts/[id]`
+  // would just re-render into that route's own "not found" page, wiping
+  // out any client-side toast state in the process. Redirecting here
+  // (server-side, before the client ever gets a chance to render that) and
+  // carrying the message as a query param is what lets the Contacts list
+  // show it instead.
+  redirect(`/contacts?deleted=${encodeURIComponent(`${t.actions.contactDeleted}${syncStatus}`)}`);
 }
 
 export async function addTagToContact(contactId: string, tagName: string) {

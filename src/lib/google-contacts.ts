@@ -445,3 +445,12 @@ export async function pushContactToGoogle(
   if (!res.ok) return { error: await describeError(res) };
   return {};
 }
+
+export async function deleteGoogleContact(accessToken: string, resourceName: string): Promise<{ error?: string }> {
+  const res = await fetch(`https://people.googleapis.com/v1/${resourceName}:deleteContact`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return { error: await describeError(res) };
+  return {};
+}

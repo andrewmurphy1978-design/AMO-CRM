@@ -242,6 +242,10 @@ export class SystemeIoClient {
     await this.mutate("DELETE", `/contacts/${contactId}/tags/${tagId}`);
   }
 
+  async deleteContact(contactId: number): Promise<void> {
+    await this.mutate("DELETE", `/contacts/${contactId}`);
+  }
+
   async createTag(name: string): Promise<SystemeIoTag> {
     const data = await this.mutate<Record<string, unknown>>("POST", "/tags", { name });
     return mapTag(data);
