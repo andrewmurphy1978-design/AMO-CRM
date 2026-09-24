@@ -150,14 +150,9 @@ export default function CalendarShell({
   const containerRef = useRef<HTMLDivElement>(null);
   // Starts from a rough calc() estimate (header + page padding) so there's
   // no flash of an unstyled/collapsed box before the first measurement, then
-  // refines to the container's *actual* distance from the bottom of the
+  // refines to the container's *actual* distance from the top of the
   // viewport — robust to whatever the surrounding page layout does, instead
-  // of a magic number that silently drifts (that's what previously left a
-  // gap under the grid: the estimate wasn't ever recomputed against reality).
-  // dvh, not vh, for the same reason the sidebar uses it (see layout.tsx):
-  // on mobile, vh is sized against the browser's largest possible chrome
-  // state, taller than what's actually on screen once the address bar is
-  // showing.
+  // of a magic number that silently drifts.
   const [height, setHeight] = useState("calc(100dvh - 180px)");
 
   useEffect(() => {
@@ -168,23 +163,23 @@ export default function CalendarShell({
       // gap this container should leave at the bottom matches its own
       // distance from the top of the viewport's visible content area.
       const bottomPadding = window.innerWidth >= 640 ? 32 : 16;
-      // visualViewport.height tracks the *actually visible* area on mobile
-      // (accounting for the address bar/toolbar showing or hiding);
-      // window.innerHeight doesn't reliably do that on every mobile
-      // browser, which is what was leaving extra unusable space below the
-      // widget — the container was sized taller than what's really on
-      // screen, so reaching its bottom meant scrolling the whole page
-      // instead of just the widget.
-      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-      setHeight(`${Math.max(320, viewportHeight - top - bottomPadding)}px`);
+      // calc() with dvh — not a plain pixel height computed from
+      // window.innerHeight or even visualViewport.height — is what makes
+      // this robust on mobile. Either of those is a one-time JS snapshot:
+      // scrolling the page collapses the browser's address bar, which
+      // grows the *actually visible* area, but nothing tells this effect
+      // to re-run at that exact moment, so the container stayed sized to
+      // the smaller pre-scroll viewport and left real blank space below it
+      // that the page could then scroll into. dvh is a live CSS value the
+      // browser itself keeps in sync with the true visible area, no JS
+      // re-measurement required — `top` is the only piece that genuinely
+      // needs a one-time JS measurement, since CSS has no way to know a
+      // sibling header's rendered height in advance.
+      setHeight(`calc(100dvh - ${top + bottomPadding}px)`);
     }
     measure();
     window.addEventListener("resize", measure);
-    window.visualViewport?.addEventListener("resize", measure);
-    return () => {
-      window.removeEventListener("resize", measure);
-      window.visualViewport?.removeEventListener("resize", measure);
-    };
+    return () => window.removeEventListener("resize", measure);
   }, []);
 
   const { days, rangeStart, rangeEnd } = rangeForView(view, anchor);

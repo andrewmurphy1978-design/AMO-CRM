@@ -43,16 +43,19 @@ function EventPill({
         e.stopPropagation();
         onRequestEdit(event);
       }}
-      className="flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 text-[9px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 sm:text-xs"
+      className="flex cursor-pointer items-center overflow-hidden rounded px-1.5 py-0.5 text-[9px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 sm:flex-col sm:items-stretch sm:py-1 sm:text-xs"
       style={{ backgroundColor: color.bg, color: color.fg }}
       title={event.title}
     >
-      <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
+      {/* Mobile only: the whole event is one truncated line — no time, no
+          linked info — so several events actually fit in a day cell
+          instead of one long title wrapping and eating the whole
+          available height. Desktop keeps the richer stacked layout. */}
+      <span className="min-w-0 flex-1 truncate sm:hidden">{event.title}</span>
+
+      <span className="hidden min-w-0 whitespace-normal break-words sm:block">{event.title}</span>
       {!event.allDay && event.start && (
-        // Mobile only: Month packs the most days on screen at once of any
-        // view, so its event text goes "a lot smaller (but readable)" —
-        // desktop keeps the original size.
-        <p className="text-[8px] font-normal opacity-90 sm:text-[10px]">
+        <p className="hidden font-normal opacity-90 sm:block sm:text-[10px]">
           {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
         </p>
       )}
@@ -61,7 +64,7 @@ function EventPill({
         contactById={contactById}
         projectById={projectById}
         taskById={taskById}
-        className="mt-3 truncate text-[9px] font-normal opacity-90 sm:text-xs"
+        className="mt-3 hidden truncate text-xs font-normal opacity-90 sm:block"
       />
     </div>
   );
@@ -115,7 +118,9 @@ export default function MonthView({
         {weekdayLabels.map((label, i) => (
           <div
             key={label}
-            className={`border-l border-card-border py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-soft first:border-l-0 sm:text-xs ${i % 2 === 0 ? "bg-card-bg" : "bg-[#f0efe8]"}`}
+            // Mobile only: just enough padding to not look cramped —
+            // desktop's roomier py-2 is unchanged.
+            className={`border-l border-card-border py-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-soft first:border-l-0 sm:py-2 sm:text-xs ${i % 2 === 0 ? "bg-card-bg" : "bg-[#f0efe8]"}`}
           >
             {label}
           </div>
