@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { format, formatDistanceToNow } from "date-fns";
 import { getDateLocale } from "@/lib/i18n/date-locale";
-import { weatherCodeEmoji, weatherCodeLabel, DEFAULT_WEATHER_COORDS, type WeatherSnapshot } from "@/lib/weather";
+import {
+  weatherCodeEmoji,
+  weatherCodeLabel,
+  DEFAULT_WEATHER_COORDS,
+  type WeatherSnapshot,
+} from "@/lib/weather";
 import RefreshButton from "./refresh-button";
 
 export interface WeatherLabels {
@@ -51,9 +56,10 @@ export default function WeatherCard({
   function locateAndRefresh() {
     if (typeof navigator !== "undefined" && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (pos) => refresh({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        (pos) =>
+          refresh({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
         () => refresh(),
-        { timeout: 5000 }
+        { timeout: 5000 },
       );
     } else {
       refresh();
@@ -76,23 +82,36 @@ export default function WeatherCard({
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
-        <RefreshButton onClick={locateAndRefresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
+        <h2 className="font-display text-lg font-semibold text-ink">
+          {labels.title}
+        </h2>
+        <RefreshButton
+          onClick={locateAndRefresh}
+          loading={loading}
+          label={labels.refresh}
+          loadingLabel={labels.refreshing}
+        />
       </div>
-      {weather?.cityLabel && <p className="text-xs font-medium text-soft">{weather.cityLabel}</p>}
+      {weather?.cityLabel && (
+        <p className="text-xs font-medium text-soft">{weather.cityLabel}</p>
+      )}
       {!weather ? (
-        <p className="mt-3 text-sm text-soft">{labels.unavailable}</p>
+        <p className="mt-1.5 sm:mt-3 text-sm text-soft">{labels.unavailable}</p>
       ) : (
-        <div className="mt-3">
+        <div className="mt-1.5 sm:mt-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-3">
-              <span className="text-4xl">{weatherCodeEmoji(weather.weatherCode)}</span>
+              <span className="text-4xl">
+                {weatherCodeEmoji(weather.weatherCode)}
+              </span>
               <div>
                 <p className="font-display text-3xl font-semibold text-ink">
                   {weather.temperature}
                   {degree}
                 </p>
-                <p className="text-sm text-soft">{weatherCodeLabel(weather.weatherCode, lang)}</p>
+                <p className="text-sm text-soft">
+                  {weatherCodeLabel(weather.weatherCode, lang)}
+                </p>
               </div>
             </div>
 
@@ -134,21 +153,31 @@ export default function WeatherCard({
           {weather.daily.length > 0 && (
             <div className="mt-4 grid grid-cols-5 gap-1 border-t border-card-border pt-3">
               {weather.daily.map((day) => (
-                <div key={day.date} className="flex flex-col items-center gap-0.5 text-center">
+                <div
+                  key={day.date}
+                  className="flex flex-col items-center gap-0.5 text-center"
+                >
                   <span className="text-[11px] font-medium uppercase text-soft">
                     {format(new Date(day.date), "EEE", { locale: dateLocale })}
                   </span>
-                  <span className="text-lg">{weatherCodeEmoji(day.weatherCode)}</span>
-                  <span className="text-base font-medium text-ink">{day.highTemp}°</span>
+                  <span className="text-lg">
+                    {weatherCodeEmoji(day.weatherCode)}
+                  </span>
+                  <span className="text-base font-medium text-ink">
+                    {day.highTemp}°
+                  </span>
                   <span className="text-sm text-soft">{day.lowTemp}°</span>
                 </div>
               ))}
             </div>
           )}
 
-          <p className="mt-3 text-xs text-soft">
+          <p className="mt-1.5 sm:mt-3 text-xs text-soft">
             {labels.updatedPrefix}{" "}
-            {formatDistanceToNow(new Date(weather.fetchedAt), { addSuffix: true, locale: dateLocale })}
+            {formatDistanceToNow(new Date(weather.fetchedAt), {
+              addSuffix: true,
+              locale: dateLocale,
+            })}
           </p>
         </div>
       )}

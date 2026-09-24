@@ -619,11 +619,11 @@ export default async function DashboardPage() {
               {t.dashboard.dashboardProjectsTitle}
             </h2>
             {activeProjects.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">
+              <p className="mt-1.5 sm:mt-3 text-sm text-soft">
                 {t.dashboard.noActiveProjects}
               </p>
             ) : (
-              <ul className="mt-3 space-y-3">
+              <ul className="mt-1.5 sm:mt-3 space-y-3">
                 {activeProjects.map((project) => (
                   <li
                     key={project.id}
@@ -655,11 +655,11 @@ export default async function DashboardPage() {
               {t.dashboard.upcomingTasks}
             </h2>
             {dueSoonTasks.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">
+              <p className="mt-1.5 sm:mt-3 text-sm text-soft">
                 {t.dashboard.noUpcomingTasks}
               </p>
             ) : (
-              <ul className="mt-3 space-y-3">
+              <ul className="mt-1.5 sm:mt-3 space-y-3">
                 {dueSoonTasks.map((task) => (
                   <li key={task.id} className="flex items-start gap-3 text-sm">
                     <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-teal" />
@@ -699,9 +699,11 @@ export default async function DashboardPage() {
               {t.dashboard.recentActivity}
             </h2>
             {recentActivity.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.dashboard.noActivity}</p>
+              <p className="mt-1.5 sm:mt-3 text-sm text-soft">
+                {t.dashboard.noActivity}
+              </p>
             ) : (
-              <ul className="mt-3 space-y-3">
+              <ul className="mt-1.5 sm:mt-3 space-y-3">
                 {recentActivity.map((entry) => (
                   <li key={entry.id} className="flex items-start gap-3 text-sm">
                     <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-blue" />
@@ -726,11 +728,11 @@ export default async function DashboardPage() {
               {t.dashboard.automationsTitle}
             </h2>
             {automationEntries.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">
+              <p className="mt-1.5 sm:mt-3 text-sm text-soft">
                 {t.dashboard.noAutomationRuns}
               </p>
             ) : (
-              <ul className="mt-3 space-y-2">
+              <ul className="mt-1.5 sm:mt-3 space-y-2">
                 {automationEntries.map((entry) =>
                   entry.kind === "run" ? (
                     <li

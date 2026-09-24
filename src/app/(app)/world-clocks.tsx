@@ -13,7 +13,13 @@ const CLOCKS = [
   { label: "New Zealand", timeZone: "Pacific/Auckland" },
 ] as const;
 
-export default function WorldClocks({ title, hour12 = false }: { title: string; hour12?: boolean }) {
+export default function WorldClocks({
+  title,
+  hour12 = false,
+}: {
+  title: string;
+  hour12?: boolean;
+}) {
   const [now, setNow] = useState<Date | null>(() => new Date());
 
   useEffect(() => {
@@ -25,10 +31,15 @@ export default function WorldClocks({ title, hour12 = false }: { title: string; 
     <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
-      <div className="mt-3 grid grid-cols-4 gap-1.5">
+      <div className="mt-1.5 sm:mt-3 grid grid-cols-4 gap-1.5">
         {CLOCKS.map((clock) => (
-          <div key={clock.timeZone} className="rounded-lg bg-black/5 px-1.5 py-1.5 text-center">
-            <p className="text-[10px] font-medium uppercase tracking-wide text-soft">{clock.label}</p>
+          <div
+            key={clock.timeZone}
+            className="rounded-lg bg-black/5 px-1.5 py-1.5 text-center"
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wide text-soft">
+              {clock.label}
+            </p>
             <p className="font-display text-sm font-semibold text-ink">
               {now
                 ? new Intl.DateTimeFormat("en-US", {

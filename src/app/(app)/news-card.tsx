@@ -5,7 +5,15 @@ import RefreshButton from "./refresh-button";
 import { countryFlagUrl, QUEBEC_FLAG_URL } from "@/lib/flags";
 import type { NewsDigest, NewsCategoryKey } from "@/lib/news";
 
-const CATEGORY_ORDER: NewsCategoryKey[] = ["local", "montreal", "quebec", "canada", "us", "europe", "world"];
+const CATEGORY_ORDER: NewsCategoryKey[] = [
+  "local",
+  "montreal",
+  "quebec",
+  "canada",
+  "us",
+  "europe",
+  "world",
+];
 
 const CATEGORY_FLAGS: Partial<Record<NewsCategoryKey, string>> = {
   quebec: QUEBEC_FLAG_URL,
@@ -22,7 +30,13 @@ export interface NewsLabels {
   categories: Record<NewsCategoryKey, string>;
 }
 
-export default function NewsCard({ initial, labels }: { initial: NewsDigest | null; labels: NewsLabels }) {
+export default function NewsCard({
+  initial,
+  labels,
+}: {
+  initial: NewsDigest | null;
+  labels: NewsLabels;
+}) {
   const [digest, setDigest] = useState(initial);
   const [loading, setLoading] = useState(false);
 
@@ -44,13 +58,20 @@ export default function NewsCard({ initial, labels }: { initial: NewsDigest | nu
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
-        <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
+        <h2 className="font-display text-lg font-semibold text-ink">
+          {labels.title}
+        </h2>
+        <RefreshButton
+          onClick={refresh}
+          loading={loading}
+          label={labels.refresh}
+          loadingLabel={labels.refreshing}
+        />
       </div>
       {!hasAnyItems ? (
-        <p className="mt-3 text-sm text-soft">{labels.unavailable}</p>
+        <p className="mt-1.5 sm:mt-3 text-sm text-soft">{labels.unavailable}</p>
       ) : (
-        <div className="mt-3 divide-y divide-card-border">
+        <div className="mt-1.5 sm:mt-3 divide-y divide-card-border">
           {CATEGORY_ORDER.map((key) => {
             const category = digest?.categories.find((c) => c.key === key);
             if (!category || category.items.length === 0) return null;
@@ -64,7 +85,11 @@ export default function NewsCard({ initial, labels }: { initial: NewsDigest | nu
                   ) : (
                     flag && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={flag} alt="" className="h-3 w-4 rounded-[1px] object-cover" />
+                      <img
+                        src={flag}
+                        alt=""
+                        className="h-3 w-4 rounded-[1px] object-cover"
+                      />
                     )
                   )}
                 </p>

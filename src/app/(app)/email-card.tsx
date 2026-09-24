@@ -541,7 +541,7 @@ export default function EmailCard({
         </div>
 
         {!connected ? (
-          <p className="mt-3 text-sm text-soft">
+          <p className="mt-1.5 sm:mt-3 text-sm text-soft">
             {labels.notConnected}{" "}
             <Link
               href="/settings"
@@ -552,12 +552,12 @@ export default function EmailCard({
             </Link>
           </p>
         ) : loading && !data ? (
-          <div className="mt-3 flex items-center justify-center gap-2 py-6 text-sm text-soft">
+          <div className="mt-1.5 sm:mt-3 flex items-center justify-center gap-2 py-6 text-sm text-soft">
             <Spinner className="h-5 w-5" />
             {labels.screening}
           </div>
         ) : (
-          <div className="mt-3 flex flex-col gap-3">
+          <div className="mt-1.5 sm:mt-3 flex flex-col gap-3">
             {nothingToShow && (
               <p className="text-sm text-soft">{labels.noItems}</p>
             )}

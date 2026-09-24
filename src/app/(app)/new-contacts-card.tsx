@@ -252,7 +252,7 @@ export default function NewContactsCard({
           </h2>
         </div>
 
-        <div className="mt-3 flex flex-col gap-3">
+        <div className="mt-1.5 sm:mt-3 flex flex-col gap-3">
           {nothingToShow && (
             <p className="text-sm text-soft">{labels.noneYet}</p>
           )}

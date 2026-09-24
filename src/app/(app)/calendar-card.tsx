@@ -315,7 +315,7 @@ function ThreeDayGrid({
     // overflow-y-auto scroller (header/all-day made sticky) instead of
     // being three independent sibling rows — see day-grid-view.tsx for
     // why that's what keeps every row's day columns pixel-identical.
-    <div className="mt-3 overflow-hidden rounded-xl border border-card-border">
+    <div className="mt-1.5 sm:mt-3 overflow-hidden rounded-xl border border-card-border">
       <div
         ref={scrollRef}
         className="overflow-y-auto"
@@ -455,7 +455,7 @@ function UpcomingTable({
   }
 
   return (
-    <div className="mt-3 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-card-border">
+    <div className="mt-1.5 sm:mt-3 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-card-border">
       <table className="w-full border-collapse text-xs">
         <tbody>
           {days.map((day, i) => (
@@ -651,7 +651,7 @@ export default function CalendarCard({
           )}
         </div>
         {!connected ? (
-          <p className="mt-3 text-sm text-soft">
+          <p className="mt-1.5 sm:mt-3 text-sm text-soft">
             {labels.notConnected}{" "}
             <Link
               href="/settings"
