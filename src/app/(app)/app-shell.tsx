@@ -43,7 +43,16 @@ export default function AppShell({
   const shellStyle = { "--sidebar-w": collapsed ? "4rem" : "16rem" } as CSSProperties;
 
   return (
-    <div className="flex min-h-screen" style={shellStyle}>
+    // min-h-dvh, not min-h-screen (100vh): vh is sized against the
+    // largest possible mobile viewport (address bar hidden), taller than
+    // what's actually visible once the address bar shows. Every page
+    // inherits its minimum height from this one root wrapper, so a page
+    // whose real content is shorter than that inflated vh value (a short
+    // Contacts list, or the Calendar widget once its own internal sizing
+    // is otherwise correct) stretched to fill it anyway — leaving genuine
+    // blank space below the real content that the page could then scroll
+    // into, on every page at once, not anything specific to Calendar.
+    <div className="flex min-h-dvh" style={shellStyle}>
       <Sidebar
         navItems={navItems}
         userName={userName}

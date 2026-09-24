@@ -9,16 +9,22 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 // header or filter row above it changes height. `scrollbarGutter: "stable"`
 // reserves the vertical scrollbar's width up front, so it appearing never
 // shrinks the available width and forces an unwanted horizontal scrollbar.
+//
+// The height itself is a `calc(100dvh - Npx)` string, not a `window.innerHeight`
+// px value: `dvh` stays live as the browser's own CSS engine tracks it, so it
+// shrinks/grows with the mobile address bar in real time — a `resize`-driven
+// `window.innerHeight` read only catches up on the next resize event, which is
+// exactly what left a lingering blank-space-below-the-list gap on mobile.
 export default function ScrollableList({ children, className }: { children: ReactNode; className?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState("calc(100vh - 260px)");
+  const [height, setHeight] = useState("calc(100dvh - 260px)");
 
   useEffect(() => {
     function measure() {
       if (!containerRef.current) return;
       const top = containerRef.current.getBoundingClientRect().top;
       const bottomPadding = window.innerWidth >= 640 ? 32 : 16;
-      setHeight(`${Math.max(240, window.innerHeight - top - bottomPadding)}px`);
+      setHeight(`max(240px, calc(100dvh - ${top + bottomPadding}px))`);
     }
     measure();
     window.addEventListener("resize", measure);

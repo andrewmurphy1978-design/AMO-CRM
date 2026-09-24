@@ -18,8 +18,10 @@ export default async function LoginPage({
 
   const { callbackUrl } = await searchParams;
 
+  // min-h-dvh, not min-h-screen — see app-shell.tsx's own comment on why
+  // 100vh is unreliable on mobile.
   return (
-    <div className="relative flex min-h-screen items-center justify-center px-4">
+    <div className="relative flex min-h-dvh items-center justify-center px-4">
       <div className="amo-bg-image amo-bg-image--login" />
       <div className="amo-bg-overlay" />
 

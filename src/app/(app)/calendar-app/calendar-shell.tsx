@@ -290,14 +290,18 @@ export default function CalendarShell({
             <button
               type="button"
               onClick={() => requestCreate()}
-              className="btn-primary flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold shadow-sm sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm"
+              title={labels.addEvent}
+              aria-label={labels.addEvent}
+              className="btn-primary flex items-center justify-center rounded-lg p-1.5 shadow-sm sm:justify-start sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm sm:font-semibold"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
               </svg>
               {/* Add event used to sit centered in the calendar's own
                   toolbar row — moved into the header like every other
-                  page's create action, icon-only on mobile. */}
+                  page's create action. Mobile: bare icon in a square
+                  button, matching the header's other icon-only buttons
+                  (Refresh, Open Google Calendar) exactly. */}
               <span className="hidden sm:inline">{labels.addEvent}</span>
             </button>
             {headerActions}

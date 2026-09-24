@@ -28,6 +28,24 @@ function toArray(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
+// Same chevron glyphs as the Calendar page's Previous/Next buttons
+// (calendar-shell.tsx), for a consistent arrow style app-wide.
+function PrevArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function NextArrowIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
 type SortField = "name" | "country" | "stage" | "source";
 const SORT_FIELDS: SortField[] = ["name", "country", "stage", "source"];
 const PAGE_SIZE = 100;
@@ -189,11 +207,11 @@ export default async function ContactsPage({
                     aria-label={t.contacts.previousPage}
                     className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-ink hover:bg-black/5"
                   >
-                    ←
+                    <PrevArrowIcon />
                   </Link>
                 ) : (
                   <span aria-label={t.contacts.previousPage} className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft opacity-50">
-                    ←
+                    <PrevArrowIcon />
                   </span>
                 )}
                 <span className="text-soft">{t.contacts.pageOf(page, totalPages)}</span>
@@ -203,11 +221,11 @@ export default async function ContactsPage({
                     aria-label={t.contacts.nextPage}
                     className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-ink hover:bg-black/5"
                   >
-                    →
+                    <NextArrowIcon />
                   </Link>
                 ) : (
                   <span aria-label={t.contacts.nextPage} className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft opacity-50">
-                    →
+                    <NextArrowIcon />
                   </span>
                 )}
               </div>
