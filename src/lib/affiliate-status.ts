@@ -106,6 +106,26 @@ export function statusStyle(status: string | null | undefined): { badge: string;
   return UNKNOWN_STATUS_STYLE;
 }
 
+// Mobile-only shorter wording for the status pill — the full values above
+// stay as-is everywhere else (desktop table, the edit form's own select,
+// etc.), this is purely a smaller label for a pill that has to fit next to
+// the program name on a narrow screen. Values already short (e.g. "Link
+// acquired", "Pending approval") aren't listed, so they fall through to
+// the status itself unchanged.
+const SHORT_STATUS_LABEL: Partial<Record<AffiliateStatusValue, string>> = {
+  "Approved - affiliate link active": "Approved",
+  "Application route to verify": "Verify route",
+  "Fallback active - no affiliate program": "No program",
+  "Fallback active - Declined": "Declined",
+  "Fallback active - Blocked": "Blocked",
+};
+
+export function shortStatusLabel(status: string | null | undefined): string {
+  if (!status) return "—";
+  if (isAffiliateStatusValue(status)) return SHORT_STATUS_LABEL[status] ?? status;
+  return status;
+}
+
 // Type options depend on which of the 3 tabs a program is filed under.
 // Training Programs' categories are bilingual (a separate French program
 // often exists alongside the English one), so each of its 3 base types

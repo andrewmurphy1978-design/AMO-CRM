@@ -7,7 +7,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
-import { statusGroupOf, statusStyle, type AffiliateStatusGroup } from "@/lib/affiliate-status";
+import { statusGroupOf, statusStyle, shortStatusLabel, type AffiliateStatusGroup } from "@/lib/affiliate-status";
 import PageHeader from "../page-header";
 import Card, { type CardColor } from "@/components/section-card";
 import SyncShortIoButton from "./programs/sync-shortio-button";
@@ -54,6 +54,12 @@ function AffiliateProgramCard({
 }) {
   return (
     <Card color={color} title={title}>
+      {/* Mobile: Card's own p-4 is a lot of dead space between the card's
+          border and the list right at the point where mobile most needs
+          to fit more on screen — cancel it (-m-4) and put back a smaller,
+          fixed amount (p-2) instead. Desktop is unaffected (m-0 p-0 here
+          just leaves Card's original p-4 as the only padding). */}
+      <div className="-m-4 p-2 sm:m-0 sm:p-0">
       {programs.length === 0 ? (
         <p className="text-sm text-soft">{t.marketing.noAffiliateProgramsYet}</p>
       ) : (
@@ -84,9 +90,9 @@ function AffiliateProgramCard({
                       <span className="h-5 w-5 shrink-0" />
                     )}
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{p.name}</span>
-                    <span className={`inline-flex shrink-0 items-center gap-1 truncate rounded-full px-2 py-0.5 text-[10px] font-medium ${styles.badge}`}>
-                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${styles.dot}`} />
-                      <span className="max-w-[7rem] truncate">{p.affiliateStatus || "—"}</span>
+                    <span className={`inline-flex shrink-0 items-center gap-1 truncate rounded-full px-1.5 py-0.5 text-[9px] font-medium ${styles.badge}`}>
+                      <span className={`h-1 w-1 shrink-0 rounded-full ${styles.dot}`} />
+                      <span className="max-w-[5.5rem] truncate">{shortStatusLabel(p.affiliateStatus)}</span>
                     </span>
                   </div>
                   <div className="mt-0.5 flex items-center justify-between gap-2 pl-7 text-xs text-ink/70">
@@ -175,6 +181,7 @@ function AffiliateProgramCard({
           </div>
         </>
       )}
+      </div>
     </Card>
   );
 }
