@@ -173,8 +173,50 @@ export default async function ContactsPage({
     return `/contacts?${params.toString()}`;
   }
 
+  const paginationInfo = (
+    <>
+      {totalPages > 1 && (
+        <div className="ml-auto flex items-center gap-2 text-sm">
+          {page > 1 ? (
+            <Link
+              href={pageHref(page - 1)}
+              aria-label={t.contacts.previousPage}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-ink hover:bg-black/5"
+            >
+              <PrevArrowIcon />
+            </Link>
+          ) : (
+            <span aria-label={t.contacts.previousPage} className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft opacity-50">
+              <PrevArrowIcon />
+            </span>
+          )}
+          <span className="text-soft">{t.contacts.pageOf(page, totalPages)}</span>
+          {page < totalPages ? (
+            <Link
+              href={pageHref(page + 1)}
+              aria-label={t.contacts.nextPage}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-ink hover:bg-black/5"
+            >
+              <NextArrowIcon />
+            </Link>
+          ) : (
+            <span aria-label={t.contacts.nextPage} className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft opacity-50">
+              <NextArrowIcon />
+            </span>
+          )}
+        </div>
+      )}
+      <span className={`rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800 ${totalPages > 1 ? "" : "ml-auto"}`}>
+        {t.contacts.shownRange(rangeStart, rangeEnd, total)}
+      </span>
+    </>
+  );
+
   return (
-    <div className="space-y-6">
+    // Mobile: a tighter gap-2 rhythm throughout (most noticeably between
+    // the header and the filter row, which used to sit a full 24px below
+    // it for no reason) — desktop keeps the original spacious gap-6.
+    <div className="flex flex-col gap-2 sm:gap-6">
       <PageHeader
         title={t.contacts.title}
         hour12={hour12}
@@ -196,54 +238,19 @@ export default async function ContactsPage({
         searchPlaceholder={t.contacts.searchPlaceholder}
         allStagesLabel={t.contacts.allStages}
         allTagsLabel={t.contacts.allTags}
-        filterLabel={t.common.filter}
-        trailing={
-          <>
-            {totalPages > 1 && (
-              <div className="ml-auto flex items-center gap-2 text-sm">
-                {page > 1 ? (
-                  <Link
-                    href={pageHref(page - 1)}
-                    aria-label={t.contacts.previousPage}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-ink hover:bg-black/5"
-                  >
-                    <PrevArrowIcon />
-                  </Link>
-                ) : (
-                  <span aria-label={t.contacts.previousPage} className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft opacity-50">
-                    <PrevArrowIcon />
-                  </span>
-                )}
-                <span className="text-soft">{t.contacts.pageOf(page, totalPages)}</span>
-                {page < totalPages ? (
-                  <Link
-                    href={pageHref(page + 1)}
-                    aria-label={t.contacts.nextPage}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-ink hover:bg-black/5"
-                  >
-                    <NextArrowIcon />
-                  </Link>
-                ) : (
-                  <span aria-label={t.contacts.nextPage} className="flex h-8 w-8 items-center justify-center rounded-lg border border-card-border text-soft opacity-50">
-                    <NextArrowIcon />
-                  </span>
-                )}
-              </div>
-            )}
-            <span
-              className={`rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800 ${totalPages > 1 ? "" : "ml-auto"}`}
-            >
-              {t.contacts.shownRange(rangeStart, rangeEnd, total)}
-            </span>
-          </>
-        }
+        trailing={paginationInfo}
       />
+
+      {/* Mobile only: the filter row has no room left for the pager/shown
+          pill, so it repeats here, on its own line right below the fields
+          (ContactFilters renders the same `trailing` node on desktop instead,
+          at the end of the filter row). */}
+      <div className="flex items-center gap-2 sm:hidden">{paginationInfo}</div>
 
       {/* Mobile: stacked cards instead of a cramped multi-column table. */}
       <ScrollableList className="divide-y divide-card-border rounded-lg border border-card-border bg-card-bg shadow-sm sm:hidden">
         {contacts.map((contact, i) => {
           const languageTags = contact.tags.filter((ct) => isLanguageTag(ct.tag.name));
-          const otherTags = contact.tags.filter((ct) => !isLanguageTag(ct.tag.name));
           return (
             <Link
               key={contact.id}
@@ -251,41 +258,34 @@ export default async function ContactsPage({
               className="block px-4 py-3"
               style={{ backgroundColor: i % 2 === 0 ? "#f4faf6" : "#7fa898" }}
             >
+              {/* Name on its own single line, flag (no country name) at the
+                  top right with the language pill stacked under it — then
+                  the first email, then the first phone number with the
+                  stage pill right-aligned beside it. Only one of each
+                  multi-value field (email/phone/language) is shown here;
+                  the full set is still on the Contact Info page. */}
               <div className="flex items-start justify-between gap-2">
-                <p className="flex items-center gap-2 font-medium text-ink">
-                  {contact.avatarUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={contact.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
-                  )}
+                <p className="min-w-0 flex-1 truncate font-medium text-ink">
                   {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}
                 </p>
-                <span className="shrink-0 text-xs text-ink/70">{contact.source ?? "—"}</span>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  {contact.country && <CountryFlag country={contact.country} />}
+                  {languageTags[0] && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(languageTags[0].tag.name)]}`}>
+                      {languageTags[0].tag.name}
+                    </span>
+                  )}
+                </div>
               </div>
               <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
-              <p className="mt-0.5 text-sm text-ink/70">
-                <PhoneDisplay value={contact.phone} country={contact.country} />
-                {contact.country && (
-                  <>
-                    {" · "}
-                    <CountryFlag country={contact.country} /> {countryFullName(contact.country)}
-                  </>
-                )}
-              </p>
-              <div className="mt-2">
-                <span className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
+              <div className="mt-0.5 flex items-center justify-between gap-2">
+                <p className="min-w-0 flex-1 truncate text-sm text-ink/70">
+                  <PhoneDisplay value={contact.phone} country={contact.country} showFlag={false} />
+                </p>
+                <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
                   {STAGE_LABELS[contact.stage]}
                 </span>
               </div>
-              {languageTags.length > 0 && (
-                <div className="mt-1.5">
-                  <TagPills tags={languageTags} />
-                </div>
-              )}
-              {otherTags.length > 0 && (
-                <div className="mt-1.5">
-                  <TagPills tags={otherTags} />
-                </div>
-              )}
             </Link>
           );
         })}

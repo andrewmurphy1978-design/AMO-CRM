@@ -13,7 +13,6 @@ export default function ContactFilters({
   searchPlaceholder,
   allStagesLabel,
   allTagsLabel,
-  filterLabel,
   trailing,
 }: {
   q: string;
@@ -24,10 +23,10 @@ export default function ContactFilters({
   searchPlaceholder: string;
   allStagesLabel: string;
   allTagsLabel: string;
-  filterLabel: string;
-  // Rendered at the end of the same flex-wrap row as the filter controls
-  // (the shown-count pill + New contact button) rather than on their own
-  // line above it.
+  // Rendered at the end of the same row as the filter controls on desktop
+  // (the Previous/Next pager + shown-count pill) — on mobile the caller
+  // renders this same content again, below the filter row instead, since
+  // there's no room left for it on the single filter line.
   trailing?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -50,19 +49,27 @@ export default function ContactFilters({
   }
 
   return (
-    <form
-      className="flex flex-wrap gap-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        push(stages, tags, text);
-      }}
-    >
+    // No Filter button: every field applies itself the moment it changes —
+    // the two MultiSelects already do (onChange fires per click), and the
+    // text field applies on blur/Enter (a real "change" event, not every
+    // keystroke, which would fire a full page navigation per letter typed).
+    // `flex-nowrap` + tight `gap-2` on mobile keeps all three fields on one
+    // line; `sm:flex-wrap sm:gap-3` restores the original roomier desktop
+    // layout, where there was always space to spare.
+    <form className="flex flex-nowrap items-center gap-2 sm:flex-wrap sm:gap-3">
       <input
         type="search"
         value={text}
         onChange={(e) => setText(e.target.value)}
+        onBlur={() => push(stages, tags, text)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            push(stages, tags, text);
+          }
+        }}
         placeholder={searchPlaceholder}
-        className="w-64 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+        className="w-24 min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30 sm:w-64 sm:flex-none sm:px-3 sm:py-2"
       />
       <MultiSelect
         options={stageOptions}
@@ -82,13 +89,10 @@ export default function ContactFilters({
           push(stages, next, text);
         }}
       />
-      <button
-        type="submit"
-        className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
-      >
-        {filterLabel}
-      </button>
-      {trailing}
+      {/* Desktop only: the pager + shown-count pill ride the end of this
+          same row, as before. Mobile has no room left on the line, so the
+          caller renders this same `trailing` node again, below the form. */}
+      <div className="hidden sm:contents">{trailing}</div>
     </form>
   );
 }

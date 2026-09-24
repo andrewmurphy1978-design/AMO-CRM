@@ -504,16 +504,19 @@ export default function EmailScreeningView({
           <button
             type="button"
             onClick={openNewCompose}
-            className="btn-primary flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold shadow-sm sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm"
+            title={t.email.newEmail}
+            aria-label={t.email.newEmail}
+            className="btn-primary flex items-center justify-center rounded-lg p-1.5 shadow-sm sm:justify-start sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm sm:font-semibold"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
             </svg>
-            {/* Mobile only: icon-only and tighter padding, so the header's
-                action buttons (this one, the Gmail/IONOS dropdown, Refresh)
-                stop forcing the whole page wider than the viewport — that's
-                what was dragging the sidebar out of view on mobile, and
-                what was squeezing the page title down to a sliver.
+            {/* Mobile: bare icon in a square button, same convention as
+                every other page's Add/New action (see CalendarShell's Add
+                Event button) — a plain square icon-only button that's
+                deliberately a touch bigger than the other header buttons
+                next to it (Refresh, the Gmail/IONOS dropdown), so the
+                primary create action stays the most prominent one.
                 Desktop/tablet (sm+) keeps the label, unchanged. */}
             <span className="hidden sm:inline">{t.email.newEmail}</span>
           </button>
