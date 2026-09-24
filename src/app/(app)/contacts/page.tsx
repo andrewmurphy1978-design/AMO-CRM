@@ -25,10 +25,12 @@ const STAGE_COLORS: Record<string, string> = {
 };
 
 // Contacts list row stripe — same dark shade as the app-wide "#7fa898"
-// alternate row (Projects/Invoices/Tasks), but the light stripe here is a
-// touch lighter than their shared "#f4faf6" so the stage/tag pills' own
-// pastel colors (bg-emerald-50, bg-sky-50, etc.) read clearly against it.
-const LIGHT_ROW_BG = "#f8fbf9";
+// alternate row (Projects/Invoices/Tasks). The light stripe is NOT their
+// shared near-white "#f4faf6": the stage/tag pills' own pastel backgrounds
+// (bg-emerald-50, bg-sky-50, etc.) are themselves nearly white, so a
+// lighter row just blends into them — a visibly (if still light) tinted
+// row is what makes the paler pill actually read as its own patch of color.
+const LIGHT_ROW_BG = "#dce8e0";
 const ALT_ROW_BG = "#7fa898";
 
 function toArray(value: string | string[] | undefined): string[] {
