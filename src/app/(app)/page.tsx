@@ -15,6 +15,7 @@ import SportsCardServer from "./sports-card-server";
 import MarketsCardServer from "./markets-card-server";
 import EmailCard from "./email-card";
 import CalendarCardServer from "./calendar-card-server";
+import NewContactsCard from "./new-contacts-card";
 import { getCachedInbox, getScreeningExtras, type EmailScreeningPayload } from "@/lib/email-inbox";
 import SocialCard from "./social-card";
 import { getValidAccessToken } from "@/lib/google";
@@ -123,6 +124,7 @@ export default async function DashboardPage() {
     dueSoonTasks,
     activeProjects,
     recentActivity,
+    newContactsList,
     integration,
     recentRuns,
     googleAccessToken,
@@ -163,6 +165,16 @@ export default async function DashboardPage() {
       take: 8,
       include: { contact: true, project: true },
     });
+    // Feeds the new-contacts Dashboard card (today/yesterday/this week
+    // buckets computed below, once we're back on plain JS Dates) — capped
+    // well above what the card actually renders (2/2/5) since a busy week
+    // can still have more than that per bucket.
+    const newContactsList = await db.contact.findMany({
+      where: { createdAt: { gte: sevenDaysAgo } },
+      orderBy: { createdAt: "desc" },
+      take: 60,
+      include: { tags: { include: { tag: true } } },
+    });
     const integration = await db.integrationSetting.findUnique({
       where: { provider: "systeme_io" },
     });
@@ -200,6 +212,7 @@ export default async function DashboardPage() {
       dueSoonTasks,
       activeProjects,
       recentActivity,
+      newContactsList,
       integration,
       recentRuns,
       googleAccessToken,
@@ -209,6 +222,21 @@ export default async function DashboardPage() {
     };
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
+
+  // Same 3 buckets the card's own sections are keyed by — computed here
+  // (not inside the DB callback) since isToday/isYesterday just need plain
+  // JS Dates, not another query.
+  const newContactsToday = newContactsList.filter((c) => isToday(c.createdAt));
+  const newContactsYesterday = newContactsList.filter((c) => isYesterday(c.createdAt));
+  const newContactsThisWeek = newContactsList.filter((c) => !isToday(c.createdAt) && !isYesterday(c.createdAt));
+  const newContactsLabels = {
+    title: t.dashboard.newContactsTitle,
+    openContacts: t.dashboard.openContacts,
+    today: t.dashboard.newContactsToday,
+    yesterday: t.dashboard.newContactsYesterday,
+    thisWeek: t.dashboard.newContactsThisWeek,
+    noneYet: t.dashboard.newContactsNoneYet,
+  };
 
   const weatherLabels = {
     title: t.dashboard.weatherTitle,
@@ -413,7 +441,21 @@ export default async function DashboardPage() {
           </Suspense>
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-1">
+        {/* Top of column 3 on desktop; on mobile (single-column stacking)
+            this puts it right below the Calendar card, per the user's own
+            placement — Projects/Tasks (also moved to col-start-3 below,
+            right after this in DOM) then follow it in both layouts. */}
+        <div className="lg:col-start-3">
+          <NewContactsCard
+            today={newContactsToday}
+            yesterday={newContactsYesterday}
+            thisWeek={newContactsThisWeek}
+            stageLabels={t.stages}
+            labels={newContactsLabels}
+          />
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-3">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
           <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.dashboardProjectsTitle}</h2>
           {activeProjects.length === 0 ? (
@@ -441,7 +483,7 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-1">
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-3">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
           <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.upcomingTasks}</h2>
           {dueSoonTasks.length === 0 ? (
