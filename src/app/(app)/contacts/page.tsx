@@ -212,10 +212,11 @@ export default async function ContactsPage({
   const paginationInfo = (
     <>
       {totalPages > 1 && (
-        // Mobile only: smaller text for "Page x of x" — it and the
-        // shown-count pill share this line with the filter fields' own
-        // pager row and don't need to be as prominent as on desktop.
-        <div className="ml-auto flex items-center gap-2 text-xs sm:text-sm">
+        // Mobile: smaller text (it shares this line with the shown-count
+        // pill and doesn't need to be as prominent as on desktop) and
+        // left-aligned instead of pushed to the far right — `sm:ml-auto`
+        // restores the original right-aligned desktop position.
+        <div className="flex items-center gap-2 text-xs sm:ml-auto sm:text-sm">
           {page > 1 ? (
             <Link
               href={pageHref(page - 1)}
@@ -337,7 +338,7 @@ export default async function ContactsPage({
               <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
               <div className="mt-0.5 flex items-center justify-between gap-2">
                 <p className="min-w-0 flex-1 truncate text-sm text-ink/70">
-                  <PhoneDisplay value={contact.phone} country={contact.country} showFlag={false} />
+                  <PhoneDisplay value={contact.phone} country={contact.country} />
                 </p>
                 <span className="shrink-0 text-xs text-ink/70">{contact.source ?? "—"}</span>
               </div>

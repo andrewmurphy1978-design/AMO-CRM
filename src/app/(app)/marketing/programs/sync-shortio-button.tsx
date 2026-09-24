@@ -26,6 +26,8 @@ export default function SyncShortIoButton({ lang }: { lang: Lang }) {
       <button
         type="button"
         disabled={pending}
+        title={pending ? t.marketing.shortioSyncing : t.marketing.shortioSyncNow}
+        aria-label={pending ? t.marketing.shortioSyncing : t.marketing.shortioSyncNow}
         onClick={() => {
           setResult(null);
           setStatsUpdatedTotal(0);
@@ -47,9 +49,27 @@ export default function SyncShortIoButton({ lang }: { lang: Lang }) {
             if (!outcome.error) router.refresh();
           });
         }}
-        className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
+        className="btn-primary flex items-center justify-center gap-1.5 rounded-lg p-1.5 shadow-sm disabled:opacity-60 sm:px-4 sm:py-2 sm:text-sm sm:font-semibold"
       >
-        {pending ? t.marketing.shortioSyncing : t.marketing.shortioSyncNow}
+        {/* Mobile: bare icon, same convention as every other header
+            button — this one was previously full-width text only, which
+            squeezed the page title down to nothing once a second header
+            button (Add Program) joined it. Desktop/tablet (sm+) keeps
+            the label, unchanged. */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.75}
+          className={`h-3.5 w-3.5 shrink-0 ${pending ? "animate-spin" : ""}`}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+          />
+        </svg>
+        <span className="hidden sm:inline">{pending ? t.marketing.shortioSyncing : t.marketing.shortioSyncNow}</span>
       </button>
       {result?.error && <p className="mt-1 text-sm text-red-600">{result.error}</p>}
       {result && !result.error && (

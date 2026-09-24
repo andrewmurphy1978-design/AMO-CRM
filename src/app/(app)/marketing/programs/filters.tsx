@@ -26,6 +26,12 @@ export default function AffiliateProgramFilters({
   const pathname = usePathname();
   const [text, setText] = useState(q);
 
+  const allOptions = [{ value: null, label: allCategoriesLabel, count: allCategoriesCount }, ...categoryOptions] as {
+    value: string | null;
+    label: string;
+    count: number;
+  }[];
+
   function push(nextQ: string, nextCategory: string | null) {
     const params = new URLSearchParams();
     if (nextQ) params.set("q", nextQ);
@@ -34,8 +40,11 @@ export default function AffiliateProgramFilters({
   }
 
   return (
+    // Mobile: the search field and category picker share one line
+    // (`flex-nowrap` + tight `gap-2`) — desktop keeps the original roomier
+    // `flex-wrap`/`gap-3`, where there was always space to spare.
     <form
-      className="flex flex-wrap items-center gap-3"
+      className="flex flex-nowrap items-center gap-2 sm:flex-wrap sm:gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         push(text, category);
@@ -47,16 +56,26 @@ export default function AffiliateProgramFilters({
         onChange={(e) => setText(e.target.value)}
         onBlur={() => push(text, category)}
         placeholder={searchPlaceholder}
-        className="w-64 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+        className="w-24 min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30 sm:w-64 sm:flex-none sm:px-3 sm:py-2"
       />
-      <div className="flex flex-wrap gap-2">
-        {(
-          [{ value: null, label: allCategoriesLabel, count: allCategoriesCount }, ...categoryOptions] as {
-            value: string | null;
-            label: string;
-            count: number;
-          }[]
-        ).map((opt) => (
+
+      {/* Mobile: the All/AI Tools/Training/Business Opportunities pills
+          collapse into one combo-box, so they don't compete with the
+          search field for the single line. Desktop keeps the pill row. */}
+      <select
+        value={category ?? ""}
+        onChange={(e) => push(text, e.target.value || null)}
+        className="w-28 min-w-0 shrink-0 rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30 sm:hidden"
+      >
+        {allOptions.map((opt) => (
+          <option key={opt.value ?? "ALL"} value={opt.value ?? ""}>
+            {opt.label} ({opt.count})
+          </option>
+        ))}
+      </select>
+
+      <div className="hidden flex-wrap gap-2 sm:flex">
+        {allOptions.map((opt) => (
           <button
             key={opt.value ?? "ALL"}
             type="button"
@@ -80,7 +99,9 @@ export default function AffiliateProgramFilters({
           </button>
         ))}
       </div>
-      {trailing}
+      {/* Desktop only: the shown-count pill rides the end of this same
+          row, as before. Mobile has no room left on the line. */}
+      <div className="hidden sm:contents">{trailing}</div>
     </form>
   );
 }

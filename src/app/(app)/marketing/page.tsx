@@ -53,19 +53,53 @@ function AffiliateProgramCard({
   dateLocale: Locale | undefined;
 }) {
   return (
-    <Card
-      color={color}
-      title={title}
-      actions={
-        <Link href="/marketing/programs/new" className="text-xs font-semibold text-white hover:underline">
-          + {t.marketing.newProgram}
-        </Link>
-      }
-    >
+    <Card color={color} title={title}>
       {programs.length === 0 ? (
         <p className="text-sm text-soft">{t.marketing.noAffiliateProgramsYet}</p>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+          {/* Mobile: 2-line rows instead of the desktop table — no column
+              headings, just what fits. Line 1: logo, name, status
+              (right-aligned). Line 2: tab/type, follow-up (right-aligned). */}
+          <div className="divide-y divide-card-border sm:hidden">
+            {programs.map((p) => {
+              const styles = statusStyle(p.affiliateStatus);
+              const typeLine = [tabTitle(p.tab, t), p.type].filter(Boolean).join(" / ") || "—";
+              const followUp = p.followUpNeeded
+                ? p.followUpDate
+                  ? format(p.followUpDate, "PP", { locale: dateLocale })
+                  : t.marketing.followUpYes
+                : t.marketing.followUpNo;
+              return (
+                <Link
+                  key={p.id}
+                  href={`/marketing/programs/${p.id}`}
+                  className={`block scroll-mt-24 border-l-4 px-3 py-2 ${styles.row} ${styles.border} hover:brightness-95`}
+                >
+                  <div className="flex items-center gap-2">
+                    {p.iconUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.iconUrl} alt="" className="h-5 w-5 shrink-0 rounded-full object-contain" />
+                    ) : (
+                      <span className="h-5 w-5 shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{p.name}</span>
+                    <span className={`inline-flex shrink-0 items-center gap-1 truncate rounded-full px-2 py-0.5 text-[10px] font-medium ${styles.badge}`}>
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${styles.dot}`} />
+                      <span className="max-w-[7rem] truncate">{p.affiliateStatus || "—"}</span>
+                    </span>
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-between gap-2 pl-7 text-xs text-ink/70">
+                    <span className="min-w-0 flex-1 truncate">{typeLine}</span>
+                    <span className="shrink-0">{followUp}</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* Desktop/tablet: full table, unchanged. */}
+          <div className="hidden overflow-x-auto sm:block">
           {/* table-fixed + a shared colgroup (same widths in every card's own
               table) is what actually keeps columns aligned card to card —
               the default auto layout sizes each table's columns off its own
@@ -138,7 +172,8 @@ function AffiliateProgramCard({
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </Card>
   );
@@ -187,6 +222,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   }));
   const totalCount = tabCounts.reduce((sum, row) => sum + row._count._all, 0);
 
+  const shownPill = (
+    <span className="ml-auto rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
+      {t.marketing.shown(affiliatePrograms.length)}
+    </span>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -195,11 +236,26 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         dateLocale={dateLocale}
         location={t.dashboard.myLocation}
         actions={
-          session?.user.role === "ADMIN" ? (
-            <div className="flex flex-wrap items-start gap-2">
-              <SyncShortIoButton lang={lang} />
-            </div>
-          ) : undefined
+          // Mobile only: tight grouping so the Add Program icon doesn't
+          // fight the page title for room — same `sm:contents` trick as
+          // Email/Calendar/Contacts' own header actions, which drops this
+          // wrapper's box at sm+ so desktop spacing is unchanged.
+          <div className="flex flex-wrap items-start gap-2 sm:contents">
+            <Link
+              href="/marketing/programs/new"
+              title={t.marketing.newProgram}
+              aria-label={t.marketing.newProgram}
+              className="btn-primary flex items-center justify-center rounded-lg p-1.5 shadow-sm sm:justify-start sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm sm:font-semibold"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+              </svg>
+              {/* Mobile: bare icon, same convention as every other page's
+                  Add/New action. Desktop/tablet (sm+) keeps the label. */}
+              <span className="hidden sm:inline">{t.marketing.newProgram}</span>
+            </Link>
+            {session?.user.role === "ADMIN" && <SyncShortIoButton lang={lang} />}
+          </div>
         }
       />
 
@@ -210,12 +266,14 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
         allCategoriesCount={totalCount}
         allCategoriesLabel={t.marketing.filterAll}
         searchPlaceholder={t.marketing.nameFilterPlaceholder}
-        trailing={
-          <span className="ml-auto rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
-            {t.marketing.shown(affiliatePrograms.length)}
-          </span>
-        }
+        trailing={shownPill}
       />
+
+      {/* Mobile only: the filter row has no room left for the shown-count
+          pill, so it repeats here, on its own line right below the fields
+          (AffiliateProgramFilters renders the same `trailing` node on
+          desktop instead, at the end of the filter row). */}
+      <div className="flex sm:hidden">{shownPill}</div>
 
       <AffiliateProgramCard color="marketingActive" title={t.marketing.activeLinksTitle} programs={grouped.ACTIVE} t={t} dateLocale={dateLocale} />
       <AffiliateProgramCard color="marketingPending" title={t.marketing.pendingLinksTitle} programs={grouped.PENDING} t={t} dateLocale={dateLocale} />
