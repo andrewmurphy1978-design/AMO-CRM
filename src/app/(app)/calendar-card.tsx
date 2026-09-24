@@ -472,7 +472,7 @@ export default function CalendarCard({
   const tableEvents = eventsByDay.slice(3);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
+    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       {/* Same relative-flex + absolutely-centered-link shape as the Email
           card's own header, so this button looks and sits identically to

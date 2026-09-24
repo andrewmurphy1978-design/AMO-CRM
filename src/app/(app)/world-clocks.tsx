@@ -22,7 +22,7 @@ export default function WorldClocks({ title, hour12 = false }: { title: string; 
   }, []);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
+    <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
       <div className="mt-3 grid grid-cols-4 gap-1.5">

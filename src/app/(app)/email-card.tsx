@@ -1,14 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import clsx from "@/lib/clsx";
 import RefreshButton from "./refresh-button";
 import { isOwnDomainEmail } from "@/lib/email-domain";
 import { isStale } from "@/lib/staleness";
+import { resolveEmailAddressColor, colorForAddress, type EmailAddressColorEntry } from "@/lib/email-address-match";
 import type { EmailSummary, SentEmailSummary } from "@/lib/google";
 import type { EmailScreeningPayload } from "@/lib/email-inbox";
 import { EMAIL_SECTION_COLORS } from "./email-section-colors";
+import { getDateLocale } from "@/lib/i18n/date-locale";
+import { getDict } from "@/lib/i18n/dictionaries";
+import type { EmailDetail } from "@/actions/email-messages";
+import EmailDialog, { type EmailDialogTarget } from "./email/email-dialog";
+import EmailComposeDialog, { type EmailComposeTarget, type ComposeMode } from "./email/email-compose-dialog";
 
 export interface EmailLabels {
   title: string;
@@ -18,17 +25,10 @@ export interface EmailLabels {
   notConnected: string;
   connectInSettings: string;
   noItems: string;
-  openEmails: string;
   categoryNeedsReply: string;
   categoryNeedsAttention: string;
   awaitingResponse: string;
 }
-
-// Fixed to roughly match the Calendar card's own height (its 3-day grid
-// and upcoming table are both fixed-height scroll boxes, so its total
-// height barely moves) — this card's last section scrolls internally
-// instead of pushing the card taller.
-const CARD_HEIGHT = 820;
 
 function Spinner({ className }: { className?: string }) {
   return (
@@ -58,14 +58,17 @@ export default function EmailCard({
   connected,
   hour12,
   lang,
+  addressColors,
   labels,
 }: {
   initialData: EmailScreeningPayload | null;
   connected: boolean;
   hour12: boolean;
   lang: "en" | "fr";
+  addressColors: EmailAddressColorEntry[];
   labels: EmailLabels;
 }) {
+  const router = useRouter();
   const [data, setData] = useState(initialData);
   // No cache yet on the very first-ever visit — start "loading" so the
   // effect below can kick off the initial screen without a synchronous
@@ -73,7 +76,11 @@ export default function EmailCard({
   // past that) — same shape as the Email page's own cold-start effect.
   const [loading, setLoading] = useState(() => connected && (!initialData || isStale(initialData.fetchedAt)));
   const [readOverrides, setReadOverrides] = useState<Record<string, boolean>>({});
+  const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
+  const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
+  const dateLocale = getDateLocale(lang);
+  const t = getDict(lang);
 
   async function runScreening() {
     try {
@@ -111,6 +118,16 @@ export default function EmailCard({
     }).catch(() => {});
   }
 
+  // No contact/project/task/program option lists are threaded into this
+  // compact card (unlike the full Email page), so the dialogs' "Linked to"
+  // section simply doesn't render here — omitting linkConfig entirely is
+  // exactly what both dialogs already treat as "no link picker available"
+  // (see email-dialog.tsx / email-compose-dialog.tsx).
+  function composeTargetFrom(message: EmailDetail, mode: ComposeMode): EmailComposeTarget {
+    const toRaw = [...message.to, ...message.cc].join(", ");
+    return { message, mode, dotColor: resolveEmailAddressColor({ deliveredTo: message.deliveredTo, toRaw }, addressColors) };
+  }
+
   const isRead = (id: string): boolean => readOverrides[id] || Boolean(data?.readStates[id]);
   // Anything marked Completed on the Email page must disappear from here
   // too — this card previously never checked completions at all, so a
@@ -127,17 +144,19 @@ export default function EmailCard({
   const nothingToShow = needsReply.length === 0 && awaitingSent.length === 0 && needsAttention.length === 0;
 
   // Name/Object stacked (Object smaller, right below) plus the date on
-  // the right — no action icons here; opening the row is the only action,
-  // same as clicking a row on the full Email page's own dialog would do.
+  // the right — clicking a row opens the same Email View Dialog the Email
+  // page itself opens, instead of deep-linking out to Gmail.
   function emailRow(email: EmailSummary, i: number) {
+    const dotColor = resolveEmailAddressColor(email, addressColors);
     return (
       <li key={email.id}>
-        <a
-          href={email.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => markRead(email.id)}
-          className={`flex min-w-0 items-start gap-2 px-2 py-1.5 hover:opacity-80 ${
+        <button
+          type="button"
+          onClick={() => {
+            markRead(email.id);
+            setOpenMessage({ id: email.id, link: email.link, dotColor });
+          }}
+          className={`flex w-full min-w-0 items-start gap-2 px-2 py-1.5 text-left hover:opacity-80 ${
             isOwnDomainEmail(email.fromEmail) ? "bg-amo-gold/20" : i % 2 === 1 ? "bg-black/[0.03]" : ""
           }`}
         >
@@ -146,127 +165,154 @@ export default function EmailCard({
             <p className="truncate text-xs text-soft">{email.subject}</p>
           </div>
           <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">{formatEmailDate(email.date, hour12, intlLocale)}</span>
-        </a>
+        </button>
       </li>
     );
   }
 
   function sentRow(item: SentEmailSummary, i: number) {
+    const dotColor = colorForAddress(item.fromEmail, addressColors);
     return (
       <li key={item.id}>
-        <a
-          href={item.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`flex min-w-0 items-start gap-2 px-2 py-1.5 hover:opacity-80 ${i % 2 === 1 ? "bg-black/[0.03]" : ""}`}
+        <button
+          type="button"
+          onClick={() => setOpenMessage({ id: item.id, link: item.link, dotColor })}
+          className={`flex w-full min-w-0 items-start gap-2 px-2 py-1.5 text-left hover:opacity-80 ${i % 2 === 1 ? "bg-black/[0.03]" : ""}`}
         >
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-ink">{item.to}</p>
             <p className="truncate text-xs text-soft">{item.subject}</p>
           </div>
           <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">{formatEmailDate(item.date, hour12, intlLocale)}</span>
-        </a>
+        </button>
       </li>
     );
   }
 
   return (
-    <div
-      className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5"
-      style={{ height: CARD_HEIGHT }}
-    >
+    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <div className="relative flex shrink-0 items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
-        {connected && (
-          <Link
-            href="/email"
-            title={labels.openEmails}
-            aria-label={labels.openEmails}
-            className="btn-primary absolute left-1/2 flex -translate-x-1/2 items-center justify-center rounded-lg p-1.5 shadow-sm sm:px-3 sm:py-1.5 sm:text-xs sm:font-semibold"
-          >
-            {/* Mobile: bare icon, same convention as every other page's
-                header actions. Desktop/tablet (sm+) keeps the label, unchanged. */}
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 sm:hidden">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M2.25 6.75c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125H3.375A1.125 1.125 0 0 1 2.25 17.25V6.75Zm0 0 9.75 6.75 9.75-6.75"
-              />
-            </svg>
-            <span className="hidden sm:inline">{labels.openEmails}</span>
-          </Link>
-        )}
-        {connected && (
-          <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} hideLabelOnMobile />
+      {/* No more a header "Open Emails" button — clicking anywhere on the
+          card that isn't a row or the Refresh button now does the same
+          thing (see the outer onClick below). `display:contents` keeps
+          this purely an event boundary, not a layout box: it sits inside
+          the flex column exactly as if this div weren't here at all. The
+          two dialogs are deliberately rendered as this div's *siblings*
+          (outside it), so a click inside either of them never bubbles up
+          into this card's own "go to /email" handler. */}
+      <div
+        role="button"
+        tabIndex={connected ? 0 : -1}
+        onClick={() => connected && router.push("/email")}
+        onKeyDown={(e) => {
+          if (connected && (e.key === "Enter" || e.key === " ")) router.push("/email");
+        }}
+        className={clsx("contents", connected && "cursor-pointer")}
+      >
+        <div className="relative flex shrink-0 items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
+          {connected && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} hideLabelOnMobile />
+            </div>
+          )}
+        </div>
+
+        {!connected ? (
+          <p className="mt-3 text-sm text-soft">
+            {labels.notConnected}{" "}
+            <Link href="/settings" onClick={(e) => e.stopPropagation()} className="font-semibold text-emerald-700 underline">
+              {labels.connectInSettings}
+            </Link>
+          </p>
+        ) : loading && !data ? (
+          <div className="mt-3 flex items-center justify-center gap-2 py-6 text-sm text-soft">
+            <Spinner className="h-5 w-5" />
+            {labels.screening}
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-col gap-3">
+            {nothingToShow && <p className="text-sm text-soft">{labels.noItems}</p>}
+
+            {needsReply.length > 0 && (
+              <section className="overflow-hidden rounded-xl border border-card-border">
+                <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerBg}`}>
+                  <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerText}`}>
+                    {labels.categoryNeedsReply}
+                  </h3>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.NEEDS_REPLY.badgeBg} ${EMAIL_SECTION_COLORS.NEEDS_REPLY.badgeText}`}
+                  >
+                    {needsReply.length}
+                  </span>
+                </div>
+                <ul className="bg-card-bg" onClick={(e) => e.stopPropagation()}>
+                  {needsReply.map((e, i) => emailRow(e, i))}
+                </ul>
+              </section>
+            )}
+
+            {awaitingSent.length > 0 && (
+              <section className="overflow-hidden rounded-xl border border-card-border">
+                <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerBg}`}>
+                  <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerText}`}>
+                    {labels.awaitingResponse}
+                  </h3>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.badgeBg} ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.badgeText}`}
+                  >
+                    {awaitingSent.length}
+                  </span>
+                </div>
+                <ul className="bg-card-bg" onClick={(e) => e.stopPropagation()}>
+                  {awaitingSent.map((s, i) => sentRow(s, i))}
+                </ul>
+              </section>
+            )}
+
+            {needsAttention.length > 0 && (
+              <section className="overflow-hidden rounded-xl border border-card-border">
+                <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg}`}>
+                  <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerText}`}>
+                    {labels.categoryNeedsAttention}
+                  </h3>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.badgeBg} ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.badgeText}`}
+                  >
+                    {needsAttention.length}
+                  </span>
+                </div>
+                <ul className="bg-card-bg" onClick={(e) => e.stopPropagation()}>
+                  {needsAttention.map((e, i) => emailRow(e, i))}
+                </ul>
+              </section>
+            )}
+          </div>
         )}
       </div>
 
-      {!connected ? (
-        <p className="mt-3 text-sm text-soft">
-          {labels.notConnected}{" "}
-          <Link href="/settings" className="font-semibold text-emerald-700 underline">
-            {labels.connectInSettings}
-          </Link>
-        </p>
-      ) : loading && !data ? (
-        <div className="mt-3 flex flex-1 items-center justify-center gap-2 text-sm text-soft">
-          <Spinner className="h-5 w-5" />
-          {labels.screening}
-        </div>
-      ) : (
-        <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3">
-          {nothingToShow && <p className="text-sm text-soft">{labels.noItems}</p>}
+      <EmailDialog
+        target={openMessage}
+        onClose={() => setOpenMessage(null)}
+        onReply={(detail, mode) => {
+          setOpenMessage(null);
+          setComposeTarget(composeTargetFrom(detail, mode));
+        }}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+        hour12={hour12}
+        labels={t.emailDialog}
+      />
 
-          {needsReply.length > 0 && (
-            <section className="shrink-0 overflow-hidden rounded-xl border border-card-border">
-              <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerBg}`}>
-                <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerText}`}>
-                  {labels.categoryNeedsReply}
-                </h3>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.NEEDS_REPLY.badgeBg} ${EMAIL_SECTION_COLORS.NEEDS_REPLY.badgeText}`}
-                >
-                  {needsReply.length}
-                </span>
-              </div>
-              <ul className="bg-card-bg">{needsReply.map((e, i) => emailRow(e, i))}</ul>
-            </section>
-          )}
-
-          {awaitingSent.length > 0 && (
-            <section className="shrink-0 overflow-hidden rounded-xl border border-card-border">
-              <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerBg}`}>
-                <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerText}`}>
-                  {labels.awaitingResponse}
-                </h3>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.badgeBg} ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.badgeText}`}
-                >
-                  {awaitingSent.length}
-                </span>
-              </div>
-              <ul className="bg-card-bg">{awaitingSent.map((s, i) => sentRow(s, i))}</ul>
-            </section>
-          )}
-
-          {needsAttention.length > 0 && (
-            <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-card-border">
-              <div className={`flex shrink-0 items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg}`}>
-                <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerText}`}>
-                  {labels.categoryNeedsAttention}
-                </h3>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.badgeBg} ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.badgeText}`}
-                >
-                  {needsAttention.length}
-                </span>
-              </div>
-              <ul className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-card-bg">{needsAttention.map((e, i) => emailRow(e, i))}</ul>
-            </section>
-          )}
-        </div>
-      )}
+      <EmailComposeDialog
+        target={composeTarget}
+        onClose={() => setComposeTarget(null)}
+        onSent={() => setComposeTarget(null)}
+        dateLocale={dateLocale}
+        intlLocale={intlLocale}
+        hour12={hour12}
+        labels={t.emailCompose}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 export default function CardSkeleton({ title }: { title: string }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
+    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
       <div className="mt-4 animate-pulse space-y-2">

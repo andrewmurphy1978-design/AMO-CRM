@@ -73,7 +73,7 @@ export default function WeatherCard({
   const windUnitLabel = weather?.windUnit === "mph" ? "mph" : "km/h";
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
+    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>

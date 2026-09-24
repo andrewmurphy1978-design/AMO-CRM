@@ -2,7 +2,13 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { formatDistanceToNow, format, isToday, isYesterday, type Locale } from "date-fns";
+import {
+  formatDistanceToNow,
+  format,
+  isToday,
+  isYesterday,
+  type Locale,
+} from "date-fns";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -16,7 +22,11 @@ import MarketsCardServer from "./markets-card-server";
 import EmailCard from "./email-card";
 import CalendarCardServer from "./calendar-card-server";
 import NewContactsCard from "./new-contacts-card";
-import { getCachedInbox, getScreeningExtras, type EmailScreeningPayload } from "@/lib/email-inbox";
+import {
+  getCachedInbox,
+  getScreeningExtras,
+  type EmailScreeningPayload,
+} from "@/lib/email-inbox";
 import SocialCard from "./social-card";
 import { getValidAccessToken } from "@/lib/google";
 import { getLatestSocialSnapshots } from "@/lib/social";
@@ -32,16 +42,29 @@ const AMO_LOGO_URL =
 // "about 8 hours ago" is vague for something you'd want to check against a
 // posting schedule — this gives "Today at 3:15 PM" / "Yesterday at 9:00 AM" /
 // "Sep 12 at 9:00 AM" instead.
-function formatSmartDateTime(date: Date, dateLocale: Locale | undefined, t: ReturnType<typeof getDict>): string {
+function formatSmartDateTime(
+  date: Date,
+  dateLocale: Locale | undefined,
+  t: ReturnType<typeof getDict>,
+): string {
   const time = format(date, "p", { locale: dateLocale });
   if (isToday(date)) return t.dashboard.todayAt(time);
   if (isYesterday(date)) return t.dashboard.yesterdayAt(time);
-  return t.dashboard.dateAt(format(date, "MMM d", { locale: dateLocale }), time);
+  return t.dashboard.dateAt(
+    format(date, "MMM d", { locale: dateLocale }),
+    time,
+  );
 }
 
 type AutomationEntry =
   | { kind: "run"; run: AutomationRun }
-  | { kind: "successGroup"; source: string; name: string | null; count: number; latest: Date };
+  | {
+      kind: "successGroup";
+      source: string;
+      name: string | null;
+      count: number;
+      latest: Date;
+    };
 
 // Make's execution history can't tell us which specific post/platform ran
 // (the scenario doesn't log that anywhere once a queue item is processed —
@@ -58,12 +81,22 @@ function groupAutomationRuns(runs: AutomationRun[]): AutomationEntry[] {
       continue;
     }
     const last = entries[entries.length - 1];
-    if (last?.kind === "successGroup" && last.source === run.source && last.name === run.name) {
+    if (
+      last?.kind === "successGroup" &&
+      last.source === run.source &&
+      last.name === run.name
+    ) {
       last.count += 1;
       if (run.occurredAt > last.latest) last.latest = run.occurredAt;
       continue;
     }
-    entries.push({ kind: "successGroup", source: run.source, name: run.name, count: 1, latest: run.occurredAt });
+    entries.push({
+      kind: "successGroup",
+      source: run.source,
+      name: run.name,
+      count: 1,
+      latest: run.occurredAt,
+    });
   }
   return entries;
 }
@@ -131,11 +164,16 @@ export default async function DashboardPage() {
     socialSnapshots,
     hour12,
     emailInitialData,
+    addressColors,
   } = await withScopedPrismaClient(async (db) => {
     const contactCount = await db.contact.count();
     const clientCount = await db.contact.count({ where: { stage: "CLIENT" } });
-    const newContactCount = await db.contact.count({ where: { createdAt: { gte: sevenDaysAgo } } });
-    const activeProjectCount = await db.project.count({ where: { status: "ACTIVE" } });
+    const newContactCount = await db.contact.count({
+      where: { createdAt: { gte: sevenDaysAgo } },
+    });
+    const activeProjectCount = await db.project.count({
+      where: { status: "ACTIVE" },
+    });
     const openTaskCount = await db.task.count({
       where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
     });
@@ -156,7 +194,10 @@ export default async function DashboardPage() {
     });
     const activeProjects = await db.project.findMany({
       where: { status: "ACTIVE" },
-      orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
+      orderBy: [
+        { dueDate: { sort: "asc", nulls: "last" } },
+        { updatedAt: "desc" },
+      ],
       take: 5,
       include: { contact: true },
     });
@@ -182,9 +223,17 @@ export default async function DashboardPage() {
       orderBy: { occurredAt: "desc" },
       take: 30,
     });
-    const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
+    const googleAccessToken = session
+      ? await getValidAccessToken(session.user.id, db)
+      : null;
     const socialSnapshots = await getLatestSocialSnapshots(db);
     const hour12 = await getHour12(session, db);
+    // Same address-color lookup the Email page's own dialogs use for their
+    // colored header strip — fetched here too now that this card opens
+    // those same dialogs instead of deep-linking out to Gmail.
+    const addressColors = await db.emailAddressColor.findMany({
+      orderBy: { order: "asc" },
+    });
 
     // Reads the same cached inbox snapshot the Email page maintains — no
     // live Gmail/Claude call here, just a DB read, so this can share this
@@ -197,7 +246,11 @@ export default async function DashboardPage() {
         ? await (async () => {
             const snapshot = await getCachedInbox(db, session.user.id);
             if (!snapshot) return null;
-            const extras = await getScreeningExtras(db, snapshot, session.user.id);
+            const extras = await getScreeningExtras(
+              db,
+              snapshot,
+              session.user.id,
+            );
             return { ...snapshot, ...extras };
           })()
         : null;
@@ -219,6 +272,7 @@ export default async function DashboardPage() {
       socialSnapshots,
       hour12,
       emailInitialData,
+      addressColors,
     };
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
@@ -227,8 +281,12 @@ export default async function DashboardPage() {
   // (not inside the DB callback) since isToday/isYesterday just need plain
   // JS Dates, not another query.
   const newContactsToday = newContactsList.filter((c) => isToday(c.createdAt));
-  const newContactsYesterday = newContactsList.filter((c) => isYesterday(c.createdAt));
-  const newContactsThisWeek = newContactsList.filter((c) => !isToday(c.createdAt) && !isYesterday(c.createdAt));
+  const newContactsYesterday = newContactsList.filter((c) =>
+    isYesterday(c.createdAt),
+  );
+  const newContactsThisWeek = newContactsList.filter(
+    (c) => !isToday(c.createdAt) && !isYesterday(c.createdAt),
+  );
   const newContactsLabels = {
     title: t.dashboard.newContactsTitle,
     openContacts: t.dashboard.openContacts,
@@ -296,7 +354,6 @@ export default async function DashboardPage() {
     notConnected: t.dashboard.emailNotConnected,
     connectInSettings: t.dashboard.emailConnectInSettings,
     noItems: t.dashboard.emailNoItems,
-    openEmails: t.dashboard.openEmails,
     categoryNeedsReply: t.email.categoryNeedsReply,
     categoryNeedsAttention: t.email.categoryNeedsAttention,
     awaitingResponse: t.dashboard.emailAwaitingResponse,
@@ -378,7 +435,7 @@ export default async function DashboardPage() {
   } as const;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-2 sm:space-y-8">
       <PageHeader
         title={t.dashboard.title}
         hour12={hour12}
@@ -387,37 +444,56 @@ export default async function DashboardPage() {
         logoUrl={AMO_LOGO_URL}
       />
 
-      {!integration?.apiKeyEncrypted && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {t.dashboard.notConnected}{" "}
-          <Link href="/settings" className="font-semibold underline">
-            {t.dashboard.connectInSettings}
-          </Link>{" "}
-          {t.dashboard.connectSuffix}
+      {/* Mobile: main's own p-4 (see app-shell.tsx) puts a 16px gap between
+          every card here and both the sidebar and the right edge of the
+          screen — cancelled (-mx-4) and replaced with a tighter 8px
+          (px-2) just for this page. Desktop is unaffected (mx-0/px-0
+          leaves main's own sm:p-8 as the only inset, same as every other
+          page). */}
+      <div className="-mx-4 space-y-2 px-2 sm:mx-0 sm:space-y-8 sm:px-0">
+        {!integration?.apiKeyEncrypted && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {t.dashboard.notConnected}{" "}
+            <Link href="/settings" className="font-semibold underline">
+              {t.dashboard.connectInSettings}
+            </Link>{" "}
+            {t.dashboard.connectSuffix}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
+          {stats.map((stat) => (
+            <Link
+              key={stat.label}
+              href={stat.href}
+              className="group relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 transition-all duration-200 hover:-translate-y-1 hover:border-amo-lime/40 hover:shadow-[0_12px_28px_rgba(46,204,113,0.15)]"
+            >
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+              <div
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${colorClasses[stat.color]}`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  className="h-5 w-5"
+                >
+                  {stat.icon}
+                </svg>
+              </div>
+              <p className="mt-4 font-display text-2xl font-semibold text-ink">
+                {stat.value}
+              </p>
+              <p className="mt-1 text-sm text-soft">{stat.label}</p>
+              {stat.sub && (
+                <p className="mt-0.5 text-xs text-soft">{stat.sub}</p>
+              )}
+            </Link>
+          ))}
         </div>
-      )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {stats.map((stat) => (
-          <Link
-            key={stat.label}
-            href={stat.href}
-            className="group relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 transition-all duration-200 hover:-translate-y-1 hover:border-amo-lime/40 hover:shadow-[0_12px_28px_rgba(46,204,113,0.15)]"
-          >
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-            <div className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${colorClasses[stat.color]}`}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
-                {stat.icon}
-              </svg>
-            </div>
-            <p className="mt-4 font-display text-2xl font-semibold text-ink">{stat.value}</p>
-            <p className="mt-1 text-sm text-soft">{stat.label}</p>
-            {stat.sub && <p className="mt-0.5 text-xs text-soft">{stat.sub}</p>}
-          </Link>
-        ))}
-      </div>
-
-      {/* A single flat grid (not three separately-flowing column divs) so
+        {/* A single flat grid (not three separately-flowing column divs) so
           each card can carry its own placement: no col-start below `lg`
           stacks every card full-width in DOM order (the mobile reading
           order the user asked for — Email, Calendar, Projects, Tasks,
@@ -430,187 +506,264 @@ export default async function DashboardPage() {
           column whose cards were shorter than the tallest column's row —
           e.g. under the compact Calendar/Weather cards next to the Email
           card's own fixed 820px height). */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
-        <div className="lg:col-start-1">
-          <EmailCard initialData={emailInitialData} connected={googleAccessToken !== null} hour12={hour12} lang={lang} labels={emailLabels} />
-        </div>
+        <div className="grid grid-cols-1 items-start gap-2 sm:gap-6 lg:grid-cols-3">
+          <div className="lg:col-start-1">
+            <EmailCard
+              initialData={emailInitialData}
+              connected={googleAccessToken !== null}
+              hour12={hour12}
+              lang={lang}
+              addressColors={addressColors}
+              labels={emailLabels}
+            />
+          </div>
 
-        <div className="lg:col-start-2">
-          <Suspense fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}>
-            <CalendarCardServer accessToken={googleAccessToken} lang={lang} hour12={hour12} labels={calendarLabels} />
-          </Suspense>
-        </div>
+          <div className="lg:col-start-2">
+            <Suspense
+              fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}
+            >
+              <CalendarCardServer
+                accessToken={googleAccessToken}
+                lang={lang}
+                hour12={hour12}
+                labels={calendarLabels}
+              />
+            </Suspense>
+          </div>
 
-        {/* Top of column 3 on desktop; on mobile (single-column stacking)
+          {/* Top of column 3 on desktop; on mobile (single-column stacking)
             this puts it right below the Calendar card, per the user's own
             placement — Projects/Tasks (also moved to col-start-3 below,
             right after this in DOM) then follow it in both layouts. */}
-        <div className="lg:col-start-3">
-          <NewContactsCard
-            today={newContactsToday}
-            yesterday={newContactsYesterday}
-            thisWeek={newContactsThisWeek}
-            stageLabels={t.stages}
-            labels={newContactsLabels}
-          />
-        </div>
+          <div className="lg:col-start-3">
+            <NewContactsCard
+              today={newContactsToday}
+              yesterday={newContactsYesterday}
+              thisWeek={newContactsThisWeek}
+              stageLabels={t.stages}
+              labels={newContactsLabels}
+            />
+          </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-3">
-          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.dashboardProjectsTitle}</h2>
-          {activeProjects.length === 0 ? (
-            <p className="mt-3 text-sm text-soft">{t.dashboard.noActiveProjects}</p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {activeProjects.map((project) => (
-                <li key={project.id} className="flex items-start gap-3 text-sm">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-lime" />
-                  <div>
-                    <Link
-                      href={`/projects/${project.id}`}
-                      className="font-medium text-ink hover:text-emerald-700 hover:underline"
-                    >
-                      {project.name}
-                    </Link>
-                    <p className="text-xs text-soft">
-                      {project.contact.firstName ?? project.contact.email}
-                      {project.dueDate && ` · ${t.dashboard.due} ${formatDistanceToNow(project.dueDate, { addSuffix: true, locale: dateLocale })}`}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-3">
-          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.upcomingTasks}</h2>
-          {dueSoonTasks.length === 0 ? (
-            <p className="mt-3 text-sm text-soft">{t.dashboard.noUpcomingTasks}</p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {dueSoonTasks.map((task) => (
-                <li key={task.id} className="flex items-start gap-3 text-sm">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-teal" />
-                  <div>
-                    <Link
-                      href={`/projects/${task.projectId}`}
-                      className="font-medium text-ink hover:text-emerald-700 hover:underline"
-                    >
-                      {task.title}
-                    </Link>
-                    <p className="text-xs text-soft">
-                      {task.project.name} · {task.project.contact.firstName ?? task.project.contact.email}
-                      {task.dueDate && ` · ${t.dashboard.due} ${formatDistanceToNow(task.dueDate, { addSuffix: true, locale: dateLocale })}`}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="lg:col-start-2">
-          <SocialCard
-            snapshots={socialSnapshots}
-            labels={socialLabels}
-            isAdmin={session?.user.role === "ADMIN"}
-            dateLocale={dateLocale}
-          />
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-1">
-          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.recentActivity}</h2>
-          {recentActivity.length === 0 ? (
-            <p className="mt-3 text-sm text-soft">{t.dashboard.noActivity}</p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {recentActivity.map((entry) => (
-                <li key={entry.id} className="flex items-start gap-3 text-sm">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-blue" />
-                  <div>
-                    <p className="text-ink">{entry.message}</p>
-                    <p className="text-xs text-soft">
-                      {formatDistanceToNow(entry.createdAt, { addSuffix: true, locale: dateLocale })}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-2">
-          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-          <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.automationsTitle}</h2>
-          {automationEntries.length === 0 ? (
-            <p className="mt-3 text-sm text-soft">{t.dashboard.noAutomationRuns}</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {automationEntries.map((entry) =>
-                entry.kind === "run" ? (
-                  <li key={entry.run.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
-                    <div className="flex-1">
-                      <p className="text-ink">
-                        <span className="font-medium">{entry.run.source === "make" ? "Make" : "Zapier"}</span>
-                        {entry.run.name ? ` · ${entry.run.name}` : ""}
+          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-3">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {t.dashboard.dashboardProjectsTitle}
+            </h2>
+            {activeProjects.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">
+                {t.dashboard.noActiveProjects}
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {activeProjects.map((project) => (
+                  <li
+                    key={project.id}
+                    className="flex items-start gap-3 text-sm"
+                  >
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-lime" />
+                    <div>
+                      <Link
+                        href={`/projects/${project.id}`}
+                        className="font-medium text-ink hover:text-emerald-700 hover:underline"
+                      >
+                        {project.name}
+                      </Link>
+                      <p className="text-xs text-soft">
+                        {project.contact.firstName ?? project.contact.email}
+                        {project.dueDate &&
+                          ` · ${t.dashboard.due} ${formatDistanceToNow(project.dueDate, { addSuffix: true, locale: dateLocale })}`}
                       </p>
-                      {entry.run.message && <p className="text-xs text-soft">{entry.run.message}</p>}
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-medium text-red-600">{t.dashboard.automationError}</span>
-                      <p className="text-xs text-soft">{formatSmartDateTime(entry.run.occurredAt, dateLocale, t)}</p>
                     </div>
                   </li>
-                ) : (
-                  <li key={`${entry.source}-${entry.name}-${entry.latest.getTime()}`} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                    <div className="flex-1">
-                      <p className="text-ink">
-                        <span className="font-medium">{entry.source === "make" ? "Make" : "Zapier"}</span>
-                        {entry.name ? ` · ${entry.name}` : ""}
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-3">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {t.dashboard.upcomingTasks}
+            </h2>
+            {dueSoonTasks.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">
+                {t.dashboard.noUpcomingTasks}
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {dueSoonTasks.map((task) => (
+                  <li key={task.id} className="flex items-start gap-3 text-sm">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-teal" />
+                    <div>
+                      <Link
+                        href={`/projects/${task.projectId}`}
+                        className="font-medium text-ink hover:text-emerald-700 hover:underline"
+                      >
+                        {task.title}
+                      </Link>
+                      <p className="text-xs text-soft">
+                        {task.project.name} ·{" "}
+                        {task.project.contact.firstName ??
+                          task.project.contact.email}
+                        {task.dueDate &&
+                          ` · ${t.dashboard.due} ${formatDistanceToNow(task.dueDate, { addSuffix: true, locale: dateLocale })}`}
                       </p>
-                      <p className="text-xs text-soft">{t.dashboard.automationSuccessCount(entry.count)}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-medium text-emerald-700">{t.dashboard.automationSuccess}</span>
-                      <p className="text-xs text-soft">{formatSmartDateTime(entry.latest, dateLocale, t)}</p>
                     </div>
                   </li>
-                )
-              )}
-            </ul>
-          )}
-        </div>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        {/* Right-column widgets: each fetches real, sometimes slow,
+          <div className="lg:col-start-2">
+            <SocialCard
+              snapshots={socialSnapshots}
+              labels={socialLabels}
+              isAdmin={session?.user.role === "ADMIN"}
+              dateLocale={dateLocale}
+            />
+          </div>
+
+          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-1">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {t.dashboard.recentActivity}
+            </h2>
+            {recentActivity.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.dashboard.noActivity}</p>
+            ) : (
+              <ul className="mt-3 space-y-3">
+                {recentActivity.map((entry) => (
+                  <li key={entry.id} className="flex items-start gap-3 text-sm">
+                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-blue" />
+                    <div>
+                      <p className="text-ink">{entry.message}</p>
+                      <p className="text-xs text-soft">
+                        {formatDistanceToNow(entry.createdAt, {
+                          addSuffix: true,
+                          locale: dateLocale,
+                        })}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-2">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {t.dashboard.automationsTitle}
+            </h2>
+            {automationEntries.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">
+                {t.dashboard.noAutomationRuns}
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {automationEntries.map((entry) =>
+                  entry.kind === "run" ? (
+                    <li
+                      key={entry.run.id}
+                      className="flex items-start gap-3 text-sm"
+                    >
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                      <div className="flex-1">
+                        <p className="text-ink">
+                          <span className="font-medium">
+                            {entry.run.source === "make" ? "Make" : "Zapier"}
+                          </span>
+                          {entry.run.name ? ` · ${entry.run.name}` : ""}
+                        </p>
+                        {entry.run.message && (
+                          <p className="text-xs text-soft">
+                            {entry.run.message}
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-medium text-red-600">
+                          {t.dashboard.automationError}
+                        </span>
+                        <p className="text-xs text-soft">
+                          {formatSmartDateTime(
+                            entry.run.occurredAt,
+                            dateLocale,
+                            t,
+                          )}
+                        </p>
+                      </div>
+                    </li>
+                  ) : (
+                    <li
+                      key={`${entry.source}-${entry.name}-${entry.latest.getTime()}`}
+                      className="flex items-start gap-3 text-sm"
+                    >
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <div className="flex-1">
+                        <p className="text-ink">
+                          <span className="font-medium">
+                            {entry.source === "make" ? "Make" : "Zapier"}
+                          </span>
+                          {entry.name ? ` · ${entry.name}` : ""}
+                        </p>
+                        <p className="text-xs text-soft">
+                          {t.dashboard.automationSuccessCount(entry.count)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-medium text-emerald-700">
+                          {t.dashboard.automationSuccess}
+                        </span>
+                        <p className="text-xs text-soft">
+                          {formatSmartDateTime(entry.latest, dateLocale, t)}
+                        </p>
+                      </div>
+                    </li>
+                  ),
+                )}
+              </ul>
+            )}
+          </div>
+
+          {/* Right-column widgets: each fetches real, sometimes slow,
             external data — Suspense lets the rest of the dashboard render
             immediately instead of waiting on all of them. */}
-        <div className="lg:col-start-3">
-          <Suspense fallback={<CardSkeleton title={t.dashboard.weatherTitle} />}>
-            <WeatherCardServer lang={lang} labels={weatherLabels} />
-          </Suspense>
-        </div>
-        <div className="lg:col-start-3">
-          <WorldClocks title="World clocks" hour12={hour12} />
-        </div>
-        <div className="lg:col-start-3">
-          <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
-            <NewsCardServer labels={newsLabels} />
-          </Suspense>
-        </div>
-        <div className="lg:col-start-3">
-          <Suspense fallback={<CardSkeleton title={t.dashboard.sportsTitle} />}>
-            <SportsCardServer labels={sportsLabels} lang={lang} hour12={hour12} />
-          </Suspense>
-        </div>
-        <div className="lg:col-start-3">
-          <Suspense fallback={<CardSkeleton title={t.dashboard.marketsTitle} />}>
-            <MarketsCardServer labels={marketsLabels} />
-          </Suspense>
+          <div className="lg:col-start-3">
+            <Suspense
+              fallback={<CardSkeleton title={t.dashboard.weatherTitle} />}
+            >
+              <WeatherCardServer lang={lang} labels={weatherLabels} />
+            </Suspense>
+          </div>
+          <div className="lg:col-start-3">
+            <WorldClocks title="World clocks" hour12={hour12} />
+          </div>
+          <div className="lg:col-start-3">
+            <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
+              <NewsCardServer labels={newsLabels} />
+            </Suspense>
+          </div>
+          <div className="lg:col-start-3">
+            <Suspense
+              fallback={<CardSkeleton title={t.dashboard.sportsTitle} />}
+            >
+              <SportsCardServer
+                labels={sportsLabels}
+                lang={lang}
+                hour12={hour12}
+              />
+            </Suspense>
+          </div>
+          <div className="lg:col-start-3">
+            <Suspense
+              fallback={<CardSkeleton title={t.dashboard.marketsTitle} />}
+            >
+              <MarketsCardServer labels={marketsLabels} />
+            </Suspense>
+          </div>
         </div>
       </div>
     </div>

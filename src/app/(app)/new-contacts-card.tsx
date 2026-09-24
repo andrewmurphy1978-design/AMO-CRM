@@ -153,7 +153,7 @@ export default function NewContactsCard({
   const nothingToShow = today.length === 0 && yesterday.length === 0 && thisWeek.length === 0;
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
+    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <div className="relative flex shrink-0 items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
