@@ -154,7 +154,11 @@ export default function CalendarShell({
   // viewport — robust to whatever the surrounding page layout does, instead
   // of a magic number that silently drifts (that's what previously left a
   // gap under the grid: the estimate wasn't ever recomputed against reality).
-  const [height, setHeight] = useState("calc(100vh - 180px)");
+  // dvh, not vh, for the same reason the sidebar uses it (see layout.tsx):
+  // on mobile, vh is sized against the browser's largest possible chrome
+  // state, taller than what's actually on screen once the address bar is
+  // showing.
+  const [height, setHeight] = useState("calc(100dvh - 180px)");
 
   useEffect(() => {
     function measure() {
@@ -164,11 +168,23 @@ export default function CalendarShell({
       // gap this container should leave at the bottom matches its own
       // distance from the top of the viewport's visible content area.
       const bottomPadding = window.innerWidth >= 640 ? 32 : 16;
-      setHeight(`${Math.max(320, window.innerHeight - top - bottomPadding)}px`);
+      // visualViewport.height tracks the *actually visible* area on mobile
+      // (accounting for the address bar/toolbar showing or hiding);
+      // window.innerHeight doesn't reliably do that on every mobile
+      // browser, which is what was leaving extra unusable space below the
+      // widget — the container was sized taller than what's really on
+      // screen, so reaching its bottom meant scrolling the whole page
+      // instead of just the widget.
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      setHeight(`${Math.max(320, viewportHeight - top - bottomPadding)}px`);
     }
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
   }, []);
 
   const { days, rangeStart, rangeEnd } = rangeForView(view, anchor);
@@ -403,65 +419,74 @@ export default function CalendarShell({
             </svg>
           </button>
         </div>
-        <p className="min-w-0 flex-1 truncate font-display text-xs font-semibold text-ink">{rangeLabel}</p>
+        {/* No `truncate` here on purpose — the user asked for the full
+            range to show rather than clip with an ellipsis; without it,
+            min-w-0 still lets this shrink and simply wrap instead of
+            forcing the row wider than the viewport. */}
+        <p className="min-w-0 flex-1 font-display text-xs font-semibold text-ink">{rangeLabel}</p>
         {loading && <span className="shrink-0 text-xs text-soft">…</span>}
         <ViewModeMenu value={view} onChange={setView} options={viewButtons} />
       </div>
 
-      {view === "table" ? (
-        <TableView
-          days={days}
-          eventsByDay={eventsByDay}
-          links={links}
-          contactById={contactById}
-          projectById={projectById}
-          taskById={taskById}
-          dateLocale={dateLocale}
-          hour12={hour12}
-          intlLocale={intlLocale}
-          noEventsLabel={labels.noEvents}
-          onRequestEdit={requestEdit}
-        />
-      ) : (
-        <div className="-mx-4 -mb-4 min-h-0 flex-1 sm:-mx-8 sm:-mb-8">
-          <div className="h-full p-2">
-            {view === "month" ? (
-              <MonthView
-                weeks={Array.from({ length: 6 }, (_, w) => days.slice(w * 7, w * 7 + 7))}
-                eventsByDay={Array.from({ length: 6 }, (_, w) => eventsByDay.slice(w * 7, w * 7 + 7))}
-                links={links}
-                contactById={contactById}
-                projectById={projectById}
-                taskById={taskById}
-                monthAnchor={anchor}
-                dateLocale={dateLocale}
-                hour12={hour12}
-                intlLocale={intlLocale}
-                weekdayLabels={weekdayLabels}
-                onRequestEdit={requestEdit}
-                onRequestCreate={requestCreate}
-              />
-            ) : (
-              <DayGridView
-                days={days}
-                eventsByDay={eventsByDay}
-                links={links}
-                contactById={contactById}
-                projectById={projectById}
-                taskById={taskById}
-                dateLocale={dateLocale}
-                hour12={hour12}
-                intlLocale={intlLocale}
-                todayLabel={labels.todayColumn}
-                tomorrowLabel={labels.tomorrowColumn}
-                noEventsLabel={labels.noEvents}
-                onRequestEdit={requestEdit}
-                onRequestCreate={requestCreate}
-              />
-            )}
-          </div>
+      {/* Every view sits in this same flex-1/min-h-0 box so its own
+          internal scroller (never the outer page) is what scrolls — Table
+          view previously sat outside this wrapper with no height limit of
+          its own, so its full list of days/events just kept growing the
+          whole page instead of scrolling in place, leaving the widget's
+          real content stranded above a tall blank gap once the page
+          scrolled past it. */}
+      <div className="-mx-4 -mb-4 min-h-0 flex-1 sm:-mx-8 sm:-mb-8">
+        <div className="h-full p-2">
+          {view === "table" ? (
+            <TableView
+              days={days}
+              eventsByDay={eventsByDay}
+              links={links}
+              contactById={contactById}
+              projectById={projectById}
+              taskById={taskById}
+              dateLocale={dateLocale}
+              hour12={hour12}
+              intlLocale={intlLocale}
+              noEventsLabel={labels.noEvents}
+              onRequestEdit={requestEdit}
+            />
+          ) : view === "month" ? (
+            <MonthView
+              weeks={Array.from({ length: 6 }, (_, w) => days.slice(w * 7, w * 7 + 7))}
+              eventsByDay={Array.from({ length: 6 }, (_, w) => eventsByDay.slice(w * 7, w * 7 + 7))}
+              links={links}
+              contactById={contactById}
+              projectById={projectById}
+              taskById={taskById}
+              monthAnchor={anchor}
+              dateLocale={dateLocale}
+              hour12={hour12}
+              intlLocale={intlLocale}
+              weekdayLabels={weekdayLabels}
+              onRequestEdit={requestEdit}
+              onRequestCreate={requestCreate}
+            />
+          ) : (
+            <DayGridView
+              days={days}
+              eventsByDay={eventsByDay}
+              links={links}
+              contactById={contactById}
+              projectById={projectById}
+              taskById={taskById}
+              dateLocale={dateLocale}
+              hour12={hour12}
+              intlLocale={intlLocale}
+              todayLabel={labels.todayColumn}
+              tomorrowLabel={labels.tomorrowColumn}
+              noEventsLabel={labels.noEvents}
+              onRequestEdit={requestEdit}
+              onRequestCreate={requestCreate}
+            />
+          )}
         </div>
-      )}
+      </div>
 
       <EventViewDialog
         eventId={viewTarget}

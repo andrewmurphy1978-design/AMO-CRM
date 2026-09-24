@@ -43,13 +43,16 @@ function EventPill({
         e.stopPropagation();
         onRequestEdit(event);
       }}
-      className="flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90"
+      className="flex cursor-pointer flex-col overflow-hidden rounded px-1.5 py-1 text-[9px] font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 sm:text-xs"
       style={{ backgroundColor: color.bg, color: color.fg }}
       title={event.title}
     >
       <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
       {!event.allDay && event.start && (
-        <p className="text-[10px] font-normal opacity-90">
+        // Mobile only: Month packs the most days on screen at once of any
+        // view, so its event text goes "a lot smaller (but readable)" —
+        // desktop keeps the original size.
+        <p className="text-[8px] font-normal opacity-90 sm:text-[10px]">
           {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
         </p>
       )}
@@ -58,7 +61,7 @@ function EventPill({
         contactById={contactById}
         projectById={projectById}
         taskById={taskById}
-        className="mt-3 truncate text-xs font-normal opacity-90"
+        className="mt-3 truncate text-[9px] font-normal opacity-90 sm:text-xs"
       />
     </div>
   );
@@ -112,7 +115,7 @@ export default function MonthView({
         {weekdayLabels.map((label, i) => (
           <div
             key={label}
-            className={`border-l border-card-border py-2 text-center text-xs font-semibold uppercase tracking-wide text-soft first:border-l-0 ${i % 2 === 0 ? "bg-card-bg" : "bg-[#f0efe8]"}`}
+            className={`border-l border-card-border py-2 text-center text-[10px] font-semibold uppercase tracking-wide text-soft first:border-l-0 sm:text-xs ${i % 2 === 0 ? "bg-card-bg" : "bg-[#f0efe8]"}`}
           >
             {label}
           </div>
@@ -130,10 +133,10 @@ export default function MonthView({
                 <p
                   className={
                     isToday(day)
-                      ? "shrink-0 text-sm font-bold text-amo-lime"
+                      ? "shrink-0 text-xs font-bold text-amo-lime sm:text-sm"
                       : isSameMonth(day, monthAnchor)
-                        ? "shrink-0 text-sm font-medium text-ink"
-                        : "shrink-0 text-sm text-soft/50"
+                        ? "shrink-0 text-xs font-medium text-ink sm:text-sm"
+                        : "shrink-0 text-xs text-soft/50 sm:text-sm"
                   }
                 >
                   {format(day, "d", { locale: dateLocale })}

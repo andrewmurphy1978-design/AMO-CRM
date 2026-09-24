@@ -35,6 +35,19 @@ function minutesSinceGridStart(date: Date): number {
 // segment shows the title/time, and only the last carries the link
 // button, so a widened event reads as one shape that jogs wider partway
 // down rather than several unrelated boxes.
+// Mobile only: the fewer day-columns a view shows, the more horizontal
+// room each one has, so event text can afford to be bigger — Day (1
+// column) reads like Table view's own "biggest" tier, Week (7 columns)
+// gets the smallest of this group (Month, a separate component, goes
+// smaller still). Desktop's own sizing ("sm:" below) never varies by
+// column count — only mobile's base (unprefixed) classes do.
+function eventTextSizeClasses(dayCount: number): { title: string; time: string } {
+  if (dayCount <= 1) return { title: "text-sm sm:text-xs", time: "text-xs sm:text-[10px]" };
+  if (dayCount <= 3) return { title: "text-[13px] sm:text-xs", time: "text-[11px] sm:text-[10px]" };
+  if (dayCount <= 5) return { title: "text-xs sm:text-xs", time: "text-[10px] sm:text-[10px]" };
+  return { title: "text-[11px] sm:text-xs", time: "text-[9px] sm:text-[10px]" };
+}
+
 function EventBlock({
   event,
   style,
@@ -46,6 +59,8 @@ function EventBlock({
   contactById,
   projectById,
   taskById,
+  titleClassName,
+  timeClassName,
   onRequestEdit,
 }: {
   event: CalendarEventSummary;
@@ -58,6 +73,8 @@ function EventBlock({
   contactById: Record<string, string>;
   projectById: Record<string, string>;
   taskById: Record<string, string>;
+  titleClassName: string;
+  timeClassName: string;
   onRequestEdit: (event: CalendarEventSummary) => void;
 }) {
   const color = eventColor(event.colorId);
@@ -70,14 +87,14 @@ function EventBlock({
         onRequestEdit(event);
       }}
       style={{ ...style, backgroundColor: color.bg, color: color.fg }}
-      className={`absolute flex cursor-pointer flex-col overflow-hidden px-1.5 py-1 text-xs font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
+      className={`absolute flex cursor-pointer flex-col overflow-hidden px-1.5 py-1 font-medium leading-tight shadow-sm transition-opacity hover:opacity-90 ${titleClassName} ${isFirst ? "rounded-t" : ""} ${isLast ? "rounded-b" : ""}`}
       title={event.title}
     >
       {isFirst && (
         <>
           <span className="min-w-0 whitespace-normal break-words">{event.title}</span>
           {!event.allDay && event.start && (
-            <p className="text-[10px] font-normal opacity-90">
+            <p className={`font-normal opacity-90 ${timeClassName}`}>
               {formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}
             </p>
           )}
@@ -105,6 +122,8 @@ function DayColumn({
   projectById,
   taskById,
   noEventsLabel,
+  titleClassName,
+  timeClassName,
   onRequestEdit,
   onRequestCreate,
 }: {
@@ -118,6 +137,8 @@ function DayColumn({
   projectById: Record<string, string>;
   taskById: Record<string, string>;
   noEventsLabel: string;
+  titleClassName: string;
+  timeClassName: string;
   onRequestEdit: (event: CalendarEventSummary) => void;
   onRequestCreate: (date: Date, allDay?: boolean) => void;
 }) {
@@ -189,6 +210,8 @@ function DayColumn({
               contactById={contactById}
               projectById={projectById}
               taskById={taskById}
+              titleClassName={titleClassName}
+              timeClassName={timeClassName}
               style={{ top, height, left: `${(seg.col / seg.cols) * 100}%`, width: `${(seg.span / seg.cols) * 100}%` }}
             />
           );
@@ -253,6 +276,7 @@ export default function DayGridView({
   const allDayByDay = eventsByDay.map((events) => events.filter((e) => e.allDay));
   const hourMarks = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR }, (_, i) => GRID_START_HOUR + i);
   const hasAllDay = allDayByDay.some((list) => list.length > 0);
+  const { title: eventTitleClassName, time: eventTimeClassName } = eventTextSizeClasses(days.length);
 
   return (
     // Header, all-day strip, and hour grid used to be three independent
@@ -280,7 +304,13 @@ export default function DayGridView({
               <p className="hidden truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft sm:block">
                 {isToday(day) ? todayLabel : isTomorrow(day) ? tomorrowLabel : format(day, "EEE", { locale: dateLocale })}
               </p>
-              <p className={isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}>
+              {/* Mobile only: day number alone, no month — the weekday
+                  line above already says which day this is, and there's
+                  no room to spare. Desktop keeps "24 Sep". */}
+              <p className={`sm:hidden ${isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}`}>
+                {format(day, "d", { locale: dateLocale })}
+              </p>
+              <p className={`hidden sm:block ${isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}`}>
                 {format(day, "d MMM", { locale: dateLocale })}
               </p>
             </div>
@@ -351,6 +381,8 @@ export default function DayGridView({
               projectById={projectById}
               taskById={taskById}
               noEventsLabel={noEventsLabel}
+              titleClassName={eventTitleClassName}
+              timeClassName={eventTimeClassName}
               onRequestEdit={onRequestEdit}
               onRequestCreate={onRequestCreate}
             />
