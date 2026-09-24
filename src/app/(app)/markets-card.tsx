@@ -114,7 +114,7 @@ export default function MarketsCard({
       snapshot.commodities.some((c) => c.price !== null));
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>

@@ -171,19 +171,35 @@ export default function EmailCard({
   }
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm" style={{ height: CARD_HEIGHT }}>
+    <div
+      className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5"
+      style={{ height: CARD_HEIGHT }}
+    >
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
       <div className="relative flex shrink-0 items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
         {connected && (
           <Link
             href="/email"
-            className="btn-primary absolute left-1/2 -translate-x-1/2 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm"
+            title={labels.openEmails}
+            aria-label={labels.openEmails}
+            className="btn-primary absolute left-1/2 flex -translate-x-1/2 items-center justify-center rounded-lg p-1.5 shadow-sm sm:px-3 sm:py-1.5 sm:text-xs sm:font-semibold"
           >
-            {labels.openEmails}
+            {/* Mobile: bare icon, same convention as every other page's
+                header actions. Desktop/tablet (sm+) keeps the label, unchanged. */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 sm:hidden">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2.25 6.75c0-.621.504-1.125 1.125-1.125h17.25c.621 0 1.125.504 1.125 1.125v10.5c0 .621-.504 1.125-1.125 1.125H3.375A1.125 1.125 0 0 1 2.25 17.25V6.75Zm0 0 9.75 6.75 9.75-6.75"
+              />
+            </svg>
+            <span className="hidden sm:inline">{labels.openEmails}</span>
           </Link>
         )}
-        {connected && <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />}
+        {connected && (
+          <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} hideLabelOnMobile />
+        )}
       </div>
 
       {!connected ? (

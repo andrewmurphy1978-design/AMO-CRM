@@ -374,7 +374,7 @@ export default async function DashboardPage() {
           <Link
             key={stat.label}
             href={stat.href}
-            className="group relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-amo-lime/40 hover:shadow-[0_12px_28px_rgba(46,204,113,0.15)]"
+            className="group relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 transition-all duration-200 hover:-translate-y-1 hover:border-amo-lime/40 hover:shadow-[0_12px_28px_rgba(46,204,113,0.15)]"
           >
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
             <div className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${colorClasses[stat.color]}`}>
@@ -413,7 +413,7 @@ export default async function DashboardPage() {
           </Suspense>
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm lg:col-start-1">
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-1">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
           <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.dashboardProjectsTitle}</h2>
           {activeProjects.length === 0 ? (
@@ -441,7 +441,7 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm lg:col-start-1">
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-1">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
           <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.upcomingTasks}</h2>
           {dueSoonTasks.length === 0 ? (
@@ -478,7 +478,7 @@ export default async function DashboardPage() {
           />
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm lg:col-start-1">
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-1">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
           <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.recentActivity}</h2>
           {recentActivity.length === 0 ? (
@@ -500,7 +500,7 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm lg:col-start-2">
+        <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5 lg:col-start-2">
           <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
           <h2 className="font-display text-lg font-semibold text-ink">{t.dashboard.automationsTitle}</h2>
           {automationEntries.length === 0 ? (

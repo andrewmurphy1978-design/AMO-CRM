@@ -472,22 +472,35 @@ export default function CalendarCard({
   const tableEvents = eventsByDay.slice(3);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+      {/* Same relative-flex + absolutely-centered-link shape as the Email
+          card's own header, so this button looks and sits identically to
+          "Open Emails" on desktop, not just shares its classes. */}
+      <div className="relative flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
-        {connected ? (
-          <Link href="/calendar-app" className="text-xs font-medium text-emerald-700 hover:underline sm:text-sm">
-            {labels.openInCalendar}
+        {connected && (
+          <Link
+            href="/calendar-app"
+            title={labels.openInCalendar}
+            aria-label={labels.openInCalendar}
+            className="btn-primary absolute left-1/2 flex -translate-x-1/2 items-center justify-center rounded-lg p-1.5 shadow-sm sm:px-3 sm:py-1.5 sm:text-xs sm:font-semibold"
+          >
+            {/* Mobile: bare icon, same convention as every other page's
+                header actions. Desktop/tablet (sm+) keeps the label. */}
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-3.5 w-3.5 shrink-0 sm:hidden">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6.75 3v2.25m10.5-2.25v2.25M3.75 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h12a2.25 2.25 0 0 1 2.25 2.25v11.25m-16.5 0a2.25 2.25 0 0 0 2.25 2.25h12a2.25 2.25 0 0 0 2.25-2.25m-16.5 0v-7.5a2.25 2.25 0 0 1 2.25-2.25h12a2.25 2.25 0 0 1 2.25 2.25v7.5"
+              />
+            </svg>
+            <span className="hidden sm:inline">{labels.openInCalendar}</span>
           </Link>
-        ) : (
-          <span />
         )}
-        <div className="justify-self-end">
-          {connected && (
-            <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
-          )}
-        </div>
+        {connected && (
+          <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} hideLabelOnMobile />
+        )}
       </div>
       {!connected ? (
         <p className="mt-3 text-sm text-soft">
