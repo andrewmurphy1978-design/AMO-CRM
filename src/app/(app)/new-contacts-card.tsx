@@ -152,7 +152,11 @@ function ContactRow({
         <p className="min-w-0 flex-1 truncate text-sm text-ink/70">
           <PhoneDisplay value={contact.phone} country={contact.country} />
         </p>
-        <span className="shrink-0 text-xs text-ink/70">
+        {/* Mobile: smaller than the rest of the row (text-[10px] instead
+            of text-xs) — the phone number is what matters here and this
+            frees up a bit more of the row's width for it. Desktop (sm+)
+            keeps the original size. */}
+        <span className="shrink-0 text-[10px] text-ink/70 sm:text-xs">
           {contact.source ?? "—"}
         </span>
       </div>
