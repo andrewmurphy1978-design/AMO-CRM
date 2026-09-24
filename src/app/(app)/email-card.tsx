@@ -7,15 +7,25 @@ import clsx from "@/lib/clsx";
 import RefreshButton from "./refresh-button";
 import { isOwnDomainEmail } from "@/lib/email-domain";
 import { isStale } from "@/lib/staleness";
-import { resolveEmailAddressColor, colorForAddress, type EmailAddressColorEntry } from "@/lib/email-address-match";
+import {
+  resolveEmailAddressColor,
+  colorForAddress,
+  primaryReceivedAddress,
+  type EmailAddressColorEntry,
+} from "@/lib/email-address-match";
 import type { EmailSummary, SentEmailSummary } from "@/lib/google";
-import type { EmailScreeningPayload } from "@/lib/email-inbox";
+import type { EmailScreeningPayload, EmailLinkInfo } from "@/lib/email-inbox";
 import { EMAIL_SECTION_COLORS } from "./email-section-colors";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getDict } from "@/lib/i18n/dictionaries";
 import type { EmailDetail } from "@/actions/email-messages";
 import EmailDialog, { type EmailDialogTarget } from "./email/email-dialog";
-import EmailComposeDialog, { type EmailComposeTarget, type ComposeMode } from "./email/email-compose-dialog";
+import EmailComposeDialog, {
+  type EmailComposeTarget,
+  type ComposeMode,
+} from "./email/email-compose-dialog";
+import type { EmailLinkConfig } from "./email/email-link-fields";
+import type { LinkOption, LinkValues } from "./link-dialog";
 
 export interface EmailLabels {
   title: string;
@@ -32,7 +42,13 @@ export interface EmailLabels {
 
 function Spinner({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className={clsx("animate-spin", className)}>
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      className={clsx("animate-spin", className)}
+    >
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -45,12 +61,31 @@ function Spinner({ className }: { className?: string }) {
 // "3:15 PM" for something received today, "Sep 12, 3:15 PM" otherwise —
 // matches the user's own 24h/12h preference (see the Date/Time card and
 // Calendar) rather than a locale default.
-function formatEmailDate(iso: string, hour12: boolean, intlLocale: string): string {
+function formatEmailDate(
+  iso: string,
+  hour12: boolean,
+  intlLocale: string,
+): string {
   const date = new Date(iso);
-  const time = new Intl.DateTimeFormat(intlLocale, { hour: "numeric", minute: "2-digit", hour12 }).format(date);
+  const time = new Intl.DateTimeFormat(intlLocale, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12,
+  }).format(date);
   if (date.toDateString() === new Date().toDateString()) return time;
-  const day = new Intl.DateTimeFormat(intlLocale, { month: "short", day: "numeric" }).format(date);
+  const day = new Intl.DateTimeFormat(intlLocale, {
+    month: "short",
+    day: "numeric",
+  }).format(date);
   return `${day}, ${time}`;
+}
+
+function postJson(url: string, id: string): void {
+  fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  }).catch(() => {});
 }
 
 export default function EmailCard({
@@ -59,6 +94,10 @@ export default function EmailCard({
   hour12,
   lang,
   addressColors,
+  contactOptions,
+  projectOptions,
+  taskOptions,
+  programOptions,
   labels,
 }: {
   initialData: EmailScreeningPayload | null;
@@ -66,6 +105,10 @@ export default function EmailCard({
   hour12: boolean;
   lang: "en" | "fr";
   addressColors: EmailAddressColorEntry[];
+  contactOptions: LinkOption[];
+  projectOptions: LinkOption[];
+  taskOptions: LinkOption[];
+  programOptions: LinkOption[];
   labels: EmailLabels;
 }) {
   const router = useRouter();
@@ -74,13 +117,42 @@ export default function EmailCard({
   // effect below can kick off the initial screen without a synchronous
   // setState call of its own (the fetch's first `await` already defers
   // past that) — same shape as the Email page's own cold-start effect.
-  const [loading, setLoading] = useState(() => connected && (!initialData || isStale(initialData.fetchedAt)));
-  const [readOverrides, setReadOverrides] = useState<Record<string, boolean>>({});
-  const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
-  const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
+  const [loading, setLoading] = useState(
+    () => connected && (!initialData || isStale(initialData.fetchedAt)),
+  );
+  const [readOverrides, setReadOverrides] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [completedOverrides, setCompletedOverrides] = useState<
+    Record<string, string | null>
+  >({});
+  const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(
+    null,
+  );
+  const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(
+    null,
+  );
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
   const dateLocale = getDateLocale(lang);
   const t = getDict(lang);
+
+  const linkLabels = {
+    link: t.linkPicker.link,
+    edit: t.linkPicker.edit,
+    none: t.linkPicker.none,
+    contact: t.linkPicker.contact,
+    project: t.linkPicker.project,
+    task: t.linkPicker.task,
+    booking: t.linkPicker.booking,
+    affiliateProgram: t.linkPicker.affiliateProgram,
+    save: t.linkPicker.save,
+    saving: t.linkPicker.saving,
+    cancel: t.linkPicker.cancel,
+    clear: t.linkPicker.clear,
+    title: t.linkPicker.titleWithAffiliateProgram,
+    searchPlaceholder: t.linkPicker.searchPlaceholder,
+    noResults: t.linkPicker.noResults,
+  };
 
   async function runScreening() {
     try {
@@ -104,44 +176,189 @@ export default function EmailCard({
   useEffect(() => {
     // Runs once on mount: either there's no cache yet, or what's cached is
     // older than the 15-minute stale window (see @/lib/staleness).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (connected && (!initialData || isStale(initialData.fetchedAt))) runScreening();
+    if (connected && (!initialData || isStale(initialData.fetchedAt))) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      runScreening();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function markRead(id: string) {
     setReadOverrides((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
-    fetch("/api/email/mark-read", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id }),
-    }).catch(() => {});
+    postJson("/api/email/mark-read", id);
   }
 
-  // No contact/project/task/program option lists are threaded into this
-  // compact card (unlike the full Email page), so the dialogs' "Linked to"
-  // section simply doesn't render here — omitting linkConfig entirely is
-  // exactly what both dialogs already treat as "no link picker available"
-  // (see email-dialog.tsx / email-compose-dialog.tsx).
-  function composeTargetFrom(message: EmailDetail, mode: ComposeMode): EmailComposeTarget {
+  function markComplete(id: string) {
+    setCompletedOverrides((prev) =>
+      prev[id] ? prev : { ...prev, [id]: new Date().toISOString() },
+    );
+    postJson("/api/email/mark-complete", id);
+  }
+
+  // Same reconstruction the Email page's own valuesToLinkInfo does — the
+  // option lists' own labels stand in for the real DB row's names so the
+  // dialog's "Linked to" line updates instantly, without waiting on a
+  // refetch.
+  function valuesToLinkInfo(values: LinkValues): EmailLinkInfo {
+    const contact = contactOptions.find((c) => c.id === values.contactId);
+    const project = projectOptions.find((p) => p.id === values.projectId);
+    const task = taskOptions.find((tk) => tk.id === values.taskId);
+    const program = programOptions.find(
+      (p) => p.id === values.affiliateProgramId,
+    );
+    return {
+      contactId: values.contactId,
+      projectId: values.projectId,
+      taskId: values.taskId,
+      affiliateProgramId: values.affiliateProgramId,
+      contactName: contact?.label ?? "",
+      projectName: project?.label ?? "",
+      taskName: task?.label ?? "",
+      affiliateProgramName: program?.label ?? "",
+      linkedAt: new Date().toISOString(),
+    };
+  }
+
+  function linkedTo(
+    link: EmailLinkInfo | undefined,
+  ): { name: string; href: string } | null {
+    if (!link) return null;
+    if (link.contactName)
+      return { name: link.contactName, href: `/contacts/${link.contactId}` };
+    if (link.projectName)
+      return { name: link.projectName, href: `/projects/${link.projectId}` };
+    if (link.affiliateProgramName)
+      return {
+        name: link.affiliateProgramName,
+        href: `/marketing#${link.affiliateProgramId}`,
+      };
+    if (link.taskName)
+      return {
+        name: link.taskName,
+        href: `/projects/${link.projectId}/tasks/${link.taskId}/edit`,
+      };
+    return null;
+  }
+
+  function applyLinkSave(threadId: string, values: LinkValues) {
+    const info = valuesToLinkInfo(values);
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            linksByThread: { ...prev.linksByThread, [threadId]: info },
+          }
+        : prev,
+    );
+    const current = linkedTo(info);
+    setOpenMessage((prev) =>
+      prev && prev.linkConfig?.threadId === threadId
+        ? {
+            ...prev,
+            linkConfig: { ...prev.linkConfig, current, initial: values },
+          }
+        : prev,
+    );
+    setComposeTarget((prev) =>
+      prev && prev.linkConfig?.threadId === threadId
+        ? {
+            ...prev,
+            linkConfig: { ...prev.linkConfig, current, initial: values },
+          }
+        : prev,
+    );
+  }
+
+  // Same shape the Email page's own dialogs build — the "Linked to"
+  // contact/project/task/program picker, so a message links identically
+  // whether opened from here or from the Email page itself.
+  function buildLinkConfig(
+    threadId: string,
+    subject: string,
+    fromLabel: string,
+    dateIso: string,
+    link: string,
+    myAddress: string | null,
+  ): EmailLinkConfig {
+    const info = data?.linksByThread[threadId];
+    return {
+      threadId,
+      subject,
+      fromLabel,
+      date: dateIso,
+      link,
+      myAddress,
+      contacts: contactOptions,
+      projects: projectOptions,
+      tasks: taskOptions,
+      programs: programOptions,
+      initial: {
+        contactId: info?.contactId ?? "",
+        projectId: info?.projectId ?? "",
+        taskId: info?.taskId ?? "",
+        bookingId: "",
+        affiliateProgramId: info?.affiliateProgramId ?? "",
+      },
+      current: linkedTo(info),
+      labels: linkLabels,
+      onSaved: (values) => applyLinkSave(threadId, values),
+    };
+  }
+
+  function composeTargetFrom(
+    message: EmailDetail,
+    mode: ComposeMode,
+  ): EmailComposeTarget {
     const toRaw = [...message.to, ...message.cc].join(", ");
-    return { message, mode, dotColor: resolveEmailAddressColor({ deliveredTo: message.deliveredTo, toRaw }, addressColors) };
+    const emailLike = { deliveredTo: message.deliveredTo, toRaw };
+    const dateIso = message.date ?? new Date().toISOString();
+    const link = `https://mail.google.com/mail/u/0/#inbox/${message.threadId}`;
+    return {
+      message,
+      mode,
+      dotColor: resolveEmailAddressColor(emailLike, addressColors),
+      linkConfig: buildLinkConfig(
+        message.threadId,
+        message.subject,
+        message.from.name || message.from.email,
+        dateIso,
+        link,
+        primaryReceivedAddress(emailLike),
+      ),
+    };
   }
 
-  const isRead = (id: string): boolean => readOverrides[id] || Boolean(data?.readStates[id]);
-  // Anything marked Completed on the Email page must disappear from here
-  // too — this card previously never checked completions at all, so a
-  // thread completed there kept counting here, inflating these three
-  // counts past what the Email page itself shows for the same data.
-  const isCompleted = (id: string): boolean => Boolean(data?.completions[id]);
+  const isRead = (id: string): boolean =>
+    readOverrides[id] || Boolean(data?.readStates[id]);
+  const isCompleted = (id: string): boolean => {
+    const override = completedOverrides[id];
+    return override !== undefined
+      ? override !== null
+      : Boolean(data?.completions[id]);
+  };
   const emails = data?.emails ?? [];
   // Only threads still genuinely awaiting a reply — sentAwaitingReply now
   // also carries ones Gmail shows a reply has arrived on (so the Email
   // page can list them under Completed), which don't belong in this card.
-  const awaitingSent = (data?.sentAwaitingReply ?? []).filter((s) => s.status === "awaiting" && !isCompleted(s.id));
-  const needsReply = emails.filter((e) => !isCompleted(e.id) && !isRead(e.id) && data?.classifications[e.id] === "NEEDS_REPLY");
-  const needsAttention = emails.filter((e) => !isCompleted(e.id) && !isRead(e.id) && data?.classifications[e.id] === "NEEDS_ATTENTION");
-  const nothingToShow = needsReply.length === 0 && awaitingSent.length === 0 && needsAttention.length === 0;
+  const awaitingSent = (data?.sentAwaitingReply ?? []).filter(
+    (s) => s.status === "awaiting" && !isCompleted(s.id),
+  );
+  const needsReply = emails.filter(
+    (e) =>
+      !isCompleted(e.id) &&
+      !isRead(e.id) &&
+      data?.classifications[e.id] === "NEEDS_REPLY",
+  );
+  const needsAttention = emails.filter(
+    (e) =>
+      !isCompleted(e.id) &&
+      !isRead(e.id) &&
+      data?.classifications[e.id] === "NEEDS_ATTENTION",
+  );
+  const nothingToShow =
+    needsReply.length === 0 &&
+    awaitingSent.length === 0 &&
+    needsAttention.length === 0;
 
   // Name/Object stacked (Object smaller, right below) plus the date on
   // the right — clicking a row opens the same Email View Dialog the Email
@@ -154,17 +371,37 @@ export default function EmailCard({
           type="button"
           onClick={() => {
             markRead(email.id);
-            setOpenMessage({ id: email.id, link: email.link, dotColor });
+            setOpenMessage({
+              id: email.id,
+              link: email.link,
+              dotColor,
+              linkConfig: buildLinkConfig(
+                email.threadId,
+                email.subject,
+                email.from,
+                email.date,
+                email.link,
+                primaryReceivedAddress(email),
+              ),
+            });
           }}
           className={`flex w-full min-w-0 items-start gap-2 px-2 py-1.5 text-left hover:opacity-80 ${
-            isOwnDomainEmail(email.fromEmail) ? "bg-amo-gold/20" : i % 2 === 1 ? "bg-black/[0.03]" : ""
+            isOwnDomainEmail(email.fromEmail)
+              ? "bg-amo-gold/20"
+              : i % 2 === 1
+                ? "bg-black/[0.03]"
+                : ""
           }`}
         >
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-ink">{email.from}</p>
+            <p className="truncate text-sm font-medium text-ink">
+              {email.from}
+            </p>
             <p className="truncate text-xs text-soft">{email.subject}</p>
           </div>
-          <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">{formatEmailDate(email.date, hour12, intlLocale)}</span>
+          <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
+            {formatEmailDate(email.date, hour12, intlLocale)}
+          </span>
         </button>
       </li>
     );
@@ -176,14 +413,30 @@ export default function EmailCard({
       <li key={item.id}>
         <button
           type="button"
-          onClick={() => setOpenMessage({ id: item.id, link: item.link, dotColor })}
+          onClick={() =>
+            setOpenMessage({
+              id: item.id,
+              link: item.link,
+              dotColor,
+              linkConfig: buildLinkConfig(
+                item.threadId,
+                item.subject,
+                item.to,
+                item.date,
+                item.link,
+                item.fromEmail ?? null,
+              ),
+            })
+          }
           className={`flex w-full min-w-0 items-start gap-2 px-2 py-1.5 text-left hover:opacity-80 ${i % 2 === 1 ? "bg-black/[0.03]" : ""}`}
         >
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-ink">{item.to}</p>
             <p className="truncate text-xs text-soft">{item.subject}</p>
           </div>
-          <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">{formatEmailDate(item.date, hour12, intlLocale)}</span>
+          <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
+            {formatEmailDate(item.date, hour12, intlLocale)}
+          </span>
         </button>
       </li>
     );
@@ -205,15 +458,24 @@ export default function EmailCard({
         tabIndex={connected ? 0 : -1}
         onClick={() => connected && router.push("/email")}
         onKeyDown={(e) => {
-          if (connected && (e.key === "Enter" || e.key === " ")) router.push("/email");
+          if (connected && (e.key === "Enter" || e.key === " "))
+            router.push("/email");
         }}
         className={clsx("contents", connected && "cursor-pointer")}
       >
         <div className="relative flex shrink-0 items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">
+            {labels.title}
+          </h2>
           {connected && (
             <div onClick={(e) => e.stopPropagation()}>
-              <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} hideLabelOnMobile />
+              <RefreshButton
+                onClick={refresh}
+                loading={loading}
+                label={labels.refresh}
+                loadingLabel={labels.refreshing}
+                hideLabelOnMobile
+              />
             </div>
           )}
         </div>
@@ -221,7 +483,11 @@ export default function EmailCard({
         {!connected ? (
           <p className="mt-3 text-sm text-soft">
             {labels.notConnected}{" "}
-            <Link href="/settings" onClick={(e) => e.stopPropagation()} className="font-semibold text-emerald-700 underline">
+            <Link
+              href="/settings"
+              onClick={(e) => e.stopPropagation()}
+              className="font-semibold text-emerald-700 underline"
+            >
               {labels.connectInSettings}
             </Link>
           </p>
@@ -232,12 +498,18 @@ export default function EmailCard({
           </div>
         ) : (
           <div className="mt-3 flex flex-col gap-3">
-            {nothingToShow && <p className="text-sm text-soft">{labels.noItems}</p>}
+            {nothingToShow && (
+              <p className="text-sm text-soft">{labels.noItems}</p>
+            )}
 
             {needsReply.length > 0 && (
               <section className="overflow-hidden rounded-xl border border-card-border">
-                <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerBg}`}>
-                  <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerText}`}>
+                <div
+                  className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerBg}`}
+                >
+                  <h3
+                    className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_REPLY.headerText}`}
+                  >
                     {labels.categoryNeedsReply}
                   </h3>
                   <span
@@ -254,8 +526,12 @@ export default function EmailCard({
 
             {awaitingSent.length > 0 && (
               <section className="overflow-hidden rounded-xl border border-card-border">
-                <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerBg}`}>
-                  <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerText}`}>
+                <div
+                  className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerBg}`}
+                >
+                  <h3
+                    className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerText}`}
+                  >
                     {labels.awaitingResponse}
                   </h3>
                   <span
@@ -272,8 +548,12 @@ export default function EmailCard({
 
             {needsAttention.length > 0 && (
               <section className="overflow-hidden rounded-xl border border-card-border">
-                <div className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg}`}>
-                  <h3 className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerText}`}>
+                <div
+                  className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg}`}
+                >
+                  <h3
+                    className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerText}`}
+                  >
                     {labels.categoryNeedsAttention}
                   </h3>
                   <span
@@ -298,6 +578,14 @@ export default function EmailCard({
           setOpenMessage(null);
           setComposeTarget(composeTargetFrom(detail, mode));
         }}
+        onComplete={
+          openMessage
+            ? () => {
+                markComplete(openMessage.id);
+                setOpenMessage(null);
+              }
+            : undefined
+        }
         dateLocale={dateLocale}
         intlLocale={intlLocale}
         hour12={hour12}

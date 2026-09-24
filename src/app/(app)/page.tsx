@@ -129,6 +129,17 @@ function daysFromNow(days: number): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
+// Same shape as the Email/Calendar pages' own local copies of this — feeds
+// the Email card's "Linked to" contact picker.
+function contactLabel(c: {
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+}): string {
+  const name = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+  return name || c.email || "";
+}
+
 export default async function DashboardPage() {
   const session = await auth();
   const lang = await getLang();
@@ -165,6 +176,10 @@ export default async function DashboardPage() {
     hour12,
     emailInitialData,
     addressColors,
+    linkContacts,
+    linkProjects,
+    linkTasks,
+    linkAffiliatePrograms,
   } = await withScopedPrismaClient(async (db) => {
     const contactCount = await db.contact.count();
     const clientCount = await db.contact.count({ where: { stage: "CLIENT" } });
@@ -234,6 +249,30 @@ export default async function DashboardPage() {
     const addressColors = await db.emailAddressColor.findMany({
       orderBy: { order: "asc" },
     });
+    // Same full option lists (not the filtered/limited ones above) the
+    // Email page's own "Linked to" contact/project/task/program picker
+    // uses — this card opens the identical dialog, so it needs the same
+    // full lists to offer, not the Dashboard's own top-5/last-7-days ones.
+    const linkContacts = await db.contact.findMany({
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      take: 300,
+      select: { id: true, firstName: true, lastName: true, email: true },
+    });
+    const linkProjects = await db.project.findMany({
+      orderBy: { name: "asc" },
+      take: 300,
+      select: { id: true, name: true, contactId: true },
+    });
+    const linkTasks = await db.task.findMany({
+      where: { status: { not: "DONE" } },
+      orderBy: { title: "asc" },
+      take: 300,
+      select: { id: true, title: true, projectId: true },
+    });
+    const linkAffiliatePrograms = await db.affiliateProgram.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
 
     // Reads the same cached inbox snapshot the Email page maintains — no
     // live Gmail/Claude call here, just a DB read, so this can share this
@@ -273,9 +312,34 @@ export default async function DashboardPage() {
       hour12,
       emailInitialData,
       addressColors,
+      linkContacts,
+      linkProjects,
+      linkTasks,
+      linkAffiliatePrograms,
     };
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
+
+  // Feeds the Email card's "Linked to" picker — same option shapes the
+  // Email page itself builds from the equivalent full-list queries above.
+  const emailLinkContactOptions = linkContacts.map((c) => ({
+    id: c.id,
+    label: contactLabel(c),
+  }));
+  const emailLinkProjectOptions = linkProjects.map((p) => ({
+    id: p.id,
+    label: p.name,
+    contactId: p.contactId,
+  }));
+  const emailLinkTaskOptions = linkTasks.map((tk) => ({
+    id: tk.id,
+    label: tk.title,
+    projectId: tk.projectId,
+  }));
+  const emailLinkProgramOptions = linkAffiliatePrograms.map((p) => ({
+    id: p.id,
+    label: p.name,
+  }));
 
   // Same 3 buckets the card's own sections are keyed by — computed here
   // (not inside the DB callback) since isToday/isYesterday just need plain
@@ -514,6 +578,10 @@ export default async function DashboardPage() {
               hour12={hour12}
               lang={lang}
               addressColors={addressColors}
+              contactOptions={emailLinkContactOptions}
+              projectOptions={emailLinkProjectOptions}
+              taskOptions={emailLinkTaskOptions}
+              programOptions={emailLinkProgramOptions}
               labels={emailLabels}
             />
           </div>
