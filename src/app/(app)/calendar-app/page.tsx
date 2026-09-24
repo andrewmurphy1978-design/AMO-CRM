@@ -123,10 +123,12 @@ export default async function CalendarAppPage() {
       href="https://calendar.google.com/"
       target="_blank"
       rel="noopener noreferrer"
-      className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm"
+      className="btn-primary flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold shadow-sm sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm"
     >
-      <GoogleCalendarIcon className="h-4 w-4 shrink-0" />
-      {t.calendarApp.openGoogleCalendar}
+      <GoogleCalendarIcon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+      {/* Mobile only: icon-only, matching the Email page's header buttons —
+          see CalendarShell's own header actions comment for why. */}
+      <span className="hidden sm:inline">{t.calendarApp.openGoogleCalendar}</span>
     </a>
   );
 

@@ -21,6 +21,7 @@ import RefreshButton from "../refresh-button";
 import DayGridView from "./day-grid-view";
 import MonthView from "./month-view";
 import TableView from "./table-view";
+import ViewModeMenu from "./view-mode-menu";
 
 type ViewMode = "month" | "week" | "5day" | "3day" | "day" | "table";
 
@@ -270,10 +271,35 @@ export default function CalendarShell({
         dateLocale={dateLocale}
         location={location}
         actions={
-          <>
+          // Mobile only: this wrapper groups the action buttons with a much
+          // tighter gap than PageHeader's own gap-3 — same trick as the
+          // Email page's header (see its own comment for why `sm:contents`
+          // is what keeps desktop's spacing exactly as it was).
+          <div className="flex items-center gap-1 sm:contents">
+            <button
+              type="button"
+              onClick={() => requestCreate()}
+              className="btn-primary flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold shadow-sm sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+              </svg>
+              {/* Add event used to sit centered in the calendar's own
+                  toolbar row — moved into the header like every other
+                  page's create action, icon-only on mobile. */}
+              <span className="hidden sm:inline">{labels.addEvent}</span>
+            </button>
             {headerActions}
-            <RefreshButton onClick={refresh} loading={loading} label={refreshLabel} loadingLabel={refreshingLabel} variant="header" />
-          </>
+            <RefreshButton
+              onClick={refresh}
+              loading={loading}
+              label={refreshLabel}
+              loadingLabel={refreshingLabel}
+              variant="header"
+              hideLabelOnMobile
+              compactOnMobile
+            />
+          </div>
         }
       />
       {/* Height is measured against the container's real position (see the
@@ -284,7 +310,11 @@ export default function CalendarShell({
           content's natural size, which is what caused the grid to grow the
           whole page instead of scrolling internally before this was added. */}
       <div ref={containerRef} className="flex flex-col" style={{ height }}>
-      <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 pb-3">
+      {/* Desktop/tablet (sm+): unchanged apart from Add Event no longer
+          sitting in the now-removed center column — it moved to the page
+          header above, so this is a plain two-group flex row instead of
+          the old 3-column grid. */}
+      <div className="hidden shrink-0 items-center justify-between gap-2 pb-3 sm:flex">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -316,11 +346,6 @@ export default function CalendarShell({
           <p className="font-display text-sm font-semibold text-ink sm:text-base">{rangeLabel}</p>
           {loading && <span className="text-xs text-soft">…</span>}
         </div>
-        <div className="flex justify-center">
-          <button type="button" onClick={() => requestCreate()} className="btn-primary rounded-lg px-4 py-1.5 text-sm font-semibold shadow-sm">
-            {labels.addEvent}
-          </button>
-        </div>
         <div className="flex flex-wrap justify-end gap-1">
           {viewButtons.map((b) => (
             <button
@@ -337,6 +362,50 @@ export default function CalendarShell({
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Mobile only (below `sm`): Google Calendar mobile's own layout — a
+          small "jump to today" icon showing today's actual day-of-month
+          (not the currently viewed date), a tight Previous/Next pair with
+          no gap between them, the range label, and the view picker
+          collapsed into ViewModeMenu's dropdown. */}
+      <div className="flex shrink-0 items-center gap-2 pb-3 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setAnchor(startOfDay(new Date()))}
+          aria-label={labels.today}
+          title={labels.today}
+          className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-card-border bg-card-bg text-sm font-bold text-ink"
+        >
+          <span className="absolute -top-px left-1.5 h-1 w-1.5 rounded-full bg-soft/50" />
+          <span className="absolute -top-px right-1.5 h-1 w-1.5 rounded-full bg-soft/50" />
+          {format(new Date(), "d")}
+        </button>
+        <div className="flex shrink-0 items-center">
+          <button
+            type="button"
+            onClick={() => setAnchor((a) => stepAnchor(view, a, -1))}
+            aria-label="Previous"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-soft hover:bg-black/5"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAnchor((a) => stepAnchor(view, a, 1))}
+            aria-label="Next"
+            className="flex h-6 w-6 items-center justify-center rounded-md text-soft hover:bg-black/5"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+        <p className="min-w-0 flex-1 truncate font-display text-xs font-semibold text-ink">{rangeLabel}</p>
+        {loading && <span className="shrink-0 text-xs text-soft">…</span>}
+        <ViewModeMenu value={view} onChange={setView} options={viewButtons} />
       </div>
 
       {view === "table" ? (

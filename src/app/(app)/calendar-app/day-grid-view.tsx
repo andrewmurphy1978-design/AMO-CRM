@@ -268,10 +268,16 @@ export default function DayGridView({
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-card-border">
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
         <div ref={headerRef} className="sticky top-0 z-20 flex border-b border-card-border bg-card-bg">
-          <div className="w-14 shrink-0 bg-field-bg" />
+          <div className="w-9 shrink-0 bg-field-bg sm:w-14" />
           {days.map((day, i) => (
             <div key={i} className={`min-w-0 flex-1 border-l border-card-border py-1.5 text-center first:border-l-0 ${dayColumnBg(day, i)}`}>
-              <p className="truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft">
+              {/* Mobile only: always the abbreviated weekday (Thu/Fri, or
+                  Jeu/Ven in French) — no "Today"/"Tomorrow" text, which
+                  desktop still shows below. */}
+              <p className="truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft sm:hidden">
+                {format(day, "EEE", { locale: dateLocale })}
+              </p>
+              <p className="hidden truncate px-0.5 text-[10px] font-semibold uppercase tracking-wide text-soft sm:block">
                 {isToday(day) ? todayLabel : isTomorrow(day) ? tomorrowLabel : format(day, "EEE", { locale: dateLocale })}
               </p>
               <p className={isToday(day) ? "text-sm font-bold text-amo-lime" : "text-sm font-medium text-ink"}>
@@ -283,12 +289,16 @@ export default function DayGridView({
 
         {hasAllDay && (
           <div className="sticky z-20 flex border-b border-card-border" style={{ top: headerHeight }}>
-            <div className="w-14 shrink-0 bg-field-bg" />
+            <div className="w-9 shrink-0 bg-field-bg sm:w-14" />
             {allDayByDay.map((list, i) => (
               <div
                 key={i}
                 onClick={() => onRequestCreate(days[i], true)}
-                className={`min-w-0 flex-1 cursor-pointer space-y-0.5 border-l border-card-border p-1 first:border-l-0 ${dayColumnBg(days[i], i)}`}
+                // Mobile only: capped to ~2 event rows with its own scroll,
+                // so a day with several all-day events can't push the hour
+                // grid further down the screen than it already is — desktop
+                // keeps growing to fit every event, unchanged.
+                className={`min-w-0 flex-1 cursor-pointer space-y-0.5 overflow-y-auto border-l border-card-border p-1 first:border-l-0 max-h-11 sm:max-h-none sm:overflow-visible ${dayColumnBg(days[i], i)}`}
               >
                 {list.map((event) => {
                   const color = eventColor(event.colorId);
@@ -315,11 +325,13 @@ export default function DayGridView({
         )}
 
         <div className="relative flex" style={{ height: (GRID_END_HOUR - GRID_START_HOUR) * ROW_HEIGHT }}>
-          <div className="relative w-14 shrink-0 bg-field-bg">
+          {/* Mobile only: narrower gutter with a smaller font — just wide
+              enough for "16:00"/"4PM", not the fixed 56px desktop keeps. */}
+          <div className="relative w-9 shrink-0 bg-field-bg sm:w-14">
             {hourMarks.map((h) => (
               <span
                 key={h}
-                className="absolute right-1 -translate-y-1/2 text-xs font-medium text-soft"
+                className="absolute right-1 -translate-y-1/2 text-[9px] font-medium text-soft sm:text-xs"
                 style={{ top: (h - GRID_START_HOUR) * ROW_HEIGHT }}
               >
                 {formatHourMark(h, hour12, intlLocale)}
