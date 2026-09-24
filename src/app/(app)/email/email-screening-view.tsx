@@ -336,8 +336,9 @@ function EmailRow({
           date/time at the end of the row — no icons, since the icon
           cluster above has no room on a narrow screen. Reply/Forward,
           linking, and marking complete stay reachable from the Email
-          Dialog this row opens. */}
-      <button type="button" onClick={openDialog} className="flex w-full min-w-0 items-start gap-2 px-3 py-2 text-left sm:hidden">
+          Dialog this row opens. Tighter padding than the desktop row so
+          the card doesn't waste width on a narrow screen. */}
+      <button type="button" onClick={openDialog} className="flex w-full min-w-0 items-start gap-2 px-2.5 py-1.5 text-left sm:hidden">
         <div className="min-w-0 flex-1">
           <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-ink">
             {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} title={dotTitle} />}
@@ -1042,7 +1043,8 @@ export default function EmailScreeningView({
 
       {drafts.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
-          <div className={`flex items-center gap-2 px-4 py-2.5 ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
+          {/* Desktop/tablet (sm+): unchanged. */}
+          <div className={`hidden items-center gap-2 px-4 py-2.5 sm:flex ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
             <h2 className={`min-w-0 flex-1 text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}
@@ -1051,13 +1053,26 @@ export default function EmailScreeningView({
             </span>
             {draftsLoading && <Spinner className="h-3.5 w-3.5 shrink-0 text-white/80" />}
           </div>
+          {/* Mobile only (below `sm`): tighter padding, and the count badge
+              sits right beside the title instead of being pushed to the
+              far edge of the card. */}
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 sm:hidden ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
+            <h2 className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}
+            >
+              {drafts.length}
+            </span>
+            {draftsLoading && <Spinner className="ml-auto h-3.5 w-3.5 shrink-0 text-white/80" />}
+          </div>
           <ul className="divide-y divide-card-border bg-card-bg">
             {drafts.map((draft) => (
               <li key={draft.id}>
+                {/* Desktop/tablet (sm+): unchanged — icon, one-line "To — Subject", date on the right. */}
                 <button
                   type="button"
                   onClick={() => openDraft(draft)}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-black/[0.03]"
+                  className="hidden w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-black/[0.03] sm:flex"
                 >
                   {draft.source === "gmail" ? <GmailIcon className="h-4 w-4 shrink-0" /> : <IonosIcon className="h-4 w-4 shrink-0" />}
                   <span className="min-w-0 flex-1 truncate text-sm text-ink">
@@ -1065,6 +1080,22 @@ export default function EmailScreeningView({
                     {draft.subject && <span className="text-soft"> — {draft.subject}</span>}
                   </span>
                   <span className="shrink-0 text-xs text-soft">
+                    <EmailTime iso={draft.date} hour12={hour12} intlLocale={intlLocale} />
+                  </span>
+                </button>
+                {/* Mobile only (below `sm`): recipient on top, subject right
+                    below it, date/time at the end — same pattern as the
+                    other email rows, no icon, tighter padding. */}
+                <button
+                  type="button"
+                  onClick={() => openDraft(draft)}
+                  className="flex w-full min-w-0 items-start gap-2 px-2.5 py-1.5 text-left hover:bg-black/[0.03] sm:hidden"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-ink">{draft.to || t.email.draftNoRecipient}</p>
+                    {draft.subject && <p className="truncate text-xs text-soft">{draft.subject}</p>}
+                  </div>
+                  <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
                     <EmailTime iso={draft.date} hour12={hour12} intlLocale={intlLocale} />
                   </span>
                 </button>
@@ -1080,8 +1111,16 @@ export default function EmailScreeningView({
         const color = EMAIL_SECTION_COLORS[section.key] ?? EMAIL_SECTION_COLORS.LOW_PRIORITY;
         return (
           <section key={section.key} className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
-            <div className={`flex items-center gap-2 px-4 py-2.5 ${color.headerBg}`}>
+            {/* Desktop/tablet (sm+): unchanged — badge pinned to the far right. */}
+            <div className={`hidden items-center gap-2 px-4 py-2.5 sm:flex ${color.headerBg}`}>
               <h2 className={`min-w-0 flex-1 text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
+            </div>
+            {/* Mobile only (below `sm`): tighter padding, and the count
+                badge sits right beside the title instead of being pushed
+                to the far edge of the card. */}
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 sm:hidden ${color.headerBg}`}>
+              <h2 className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
             </div>
             <ul className={`overflow-x-auto bg-card-bg ${section.dim ? "opacity-80" : ""}`}>{section.rows}</ul>
