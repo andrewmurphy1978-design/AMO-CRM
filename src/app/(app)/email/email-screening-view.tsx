@@ -338,7 +338,7 @@ function EmailRow({
           linking, and marking complete stay reachable from the Email
           Dialog this row opens. Tighter padding than the desktop row so
           the card doesn't waste width on a narrow screen. */}
-      <button type="button" onClick={openDialog} className="flex w-full min-w-0 items-start gap-2 px-2 py-1 text-left sm:hidden">
+      <button type="button" onClick={openDialog} className="flex w-full min-w-0 items-start gap-2 px-1.5 py-0.5 text-left sm:hidden">
         <div className="min-w-0 flex-1">
           <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium text-ink">
             {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} title={dotTitle} />}
@@ -495,7 +495,12 @@ export default function EmailScreeningView({
       dateLocale={dateLocale}
       location={location}
       actions={
-        <>
+        // Mobile only: this wrapper groups the action buttons with a much
+        // tighter gap than PageHeader's own gap-3, freeing up room for the
+        // page title. `sm:contents` removes the wrapper's own box at sm+,
+        // so its children fall back to being direct flex children of
+        // PageHeader's row — desktop spacing is exactly what it always was.
+        <div className="flex items-center gap-1 sm:contents">
           <button
             type="button"
             onClick={openNewCompose}
@@ -528,7 +533,7 @@ export default function EmailScreeningView({
             hideLabelOnMobile
             compactOnMobile
           />
-        </>
+        </div>
       }
     />
   );
@@ -1040,7 +1045,7 @@ export default function EmailScreeningView({
   ];
 
   return (
-    <div className="space-y-3 sm:space-y-6">
+    <div className="space-y-2 sm:space-y-6">
       {header}
 
       {drafts.length > 0 && (
@@ -1058,7 +1063,7 @@ export default function EmailScreeningView({
           {/* Mobile only (below `sm`): tighter padding, and the count badge
               sits right beside the title instead of being pushed to the
               far edge of the card. */}
-          <div className={`flex items-center gap-1 px-2 py-1 sm:hidden ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
+          <div className={`flex items-center gap-1 px-1.5 py-0.5 sm:hidden ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
             <h2 className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}
@@ -1091,7 +1096,7 @@ export default function EmailScreeningView({
                 <button
                   type="button"
                   onClick={() => openDraft(draft)}
-                  className="flex w-full min-w-0 items-start gap-2 px-2 py-1 text-left hover:bg-black/[0.03] sm:hidden"
+                  className="flex w-full min-w-0 items-start gap-2 px-1.5 py-0.5 text-left hover:bg-black/[0.03] sm:hidden"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-ink">{draft.to || t.email.draftNoRecipient}</p>
@@ -1121,7 +1126,7 @@ export default function EmailScreeningView({
             {/* Mobile only (below `sm`): tighter padding, and the count
                 badge sits right beside the title instead of being pushed
                 to the far edge of the card. */}
-            <div className={`flex items-center gap-1 px-2 py-1 sm:hidden ${color.headerBg}`}>
+            <div className={`flex items-center gap-1 px-1.5 py-0.5 sm:hidden ${color.headerBg}`}>
               <h2 className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
             </div>
