@@ -222,13 +222,15 @@ export default async function DashboardPage() {
       include: { contact: true, project: true },
     });
     // Feeds the new-contacts Dashboard card (today/yesterday/this week
-    // buckets computed below, once we're back on plain JS Dates) — capped
-    // well above what the card actually renders (2/2/5) since a busy week
-    // can still have more than that per bucket.
+    // buckets computed below, once we're back on plain JS Dates) — every
+    // matching row, not just the card's own visible 2/2/5 rows-before-
+    // scroll, since the card's own scrollbar (not this query) is what
+    // limits what's actually on screen. The 1000 cap is just a sanity
+    // ceiling, not a real-world limit.
     const newContactsList = await db.contact.findMany({
       where: { createdAt: { gte: sevenDaysAgo } },
       orderBy: { createdAt: "desc" },
-      take: 60,
+      take: 1000,
       include: { tags: { include: { tag: true } } },
     });
     const integration = await db.integrationSetting.findUnique({
@@ -353,7 +355,6 @@ export default async function DashboardPage() {
   );
   const newContactsLabels = {
     title: t.dashboard.newContactsTitle,
-    openContacts: t.dashboard.openContacts,
     today: t.dashboard.newContactsToday,
     yesterday: t.dashboard.newContactsYesterday,
     thisWeek: t.dashboard.newContactsThisWeek,
@@ -461,7 +462,6 @@ export default async function DashboardPage() {
     noEvents: t.dashboard.calendarNoEvents,
     today: t.dashboard.calendarToday,
     tomorrow: t.dashboard.calendarTomorrow,
-    openInCalendar: t.dashboard.openInCalendar,
   };
 
   const stats = [

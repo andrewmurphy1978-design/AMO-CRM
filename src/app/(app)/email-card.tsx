@@ -19,6 +19,11 @@ import { EMAIL_SECTION_COLORS } from "./email-section-colors";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getDict } from "@/lib/i18n/dictionaries";
 import type { EmailDetail } from "@/actions/email-messages";
+import {
+  fetchDraftsAction,
+  fetchDraftDetailAction,
+  type DraftRow,
+} from "@/actions/email-drafts";
 import EmailDialog, { type EmailDialogTarget } from "./email/email-dialog";
 import EmailComposeDialog, {
   type EmailComposeTarget,
@@ -132,6 +137,7 @@ export default function EmailCard({
   const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(
     null,
   );
+  const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
   const dateLocale = getDateLocale(lang);
   const t = getDict(lang);
@@ -180,6 +186,18 @@ export default function EmailCard({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       runScreening();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // Same "Drafts awaiting approval" category the Email page shows — a
+    // draft is never part of the cached inbox snapshot (Gmail's Drafts
+    // folder is a live call of its own), so this always fetches fresh on
+    // mount rather than reading it off `data`.
+    if (!connected) return;
+    fetchDraftsAction()
+      .then(setDrafts)
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -328,6 +346,47 @@ export default function EmailCard({
     };
   }
 
+  // Same shape the Email page's own openDraft builds — a draft has no
+  // established thread yet, so (unlike a reply/forward) this never gets a
+  // linkConfig, exactly like the Email page's own version.
+  async function openDraft(draft: DraftRow) {
+    const result = await fetchDraftDetailAction(draft.id);
+    if ("error" in result) return;
+    const dotColor = colorForAddress(result.fromAddress, addressColors);
+    setComposeTarget({
+      message: {
+        id: draft.id,
+        threadId: result.threadId,
+        subject: result.subject,
+        from: { name: "", email: result.fromAddress },
+        to: result.to,
+        cc: result.cc,
+        date: null,
+        html: result.html,
+        text: result.text,
+        attachments: [],
+        messageIdHeader: null,
+        references: [],
+        replyIdentity: {
+          source: result.source,
+          accountAddress: result.fromAddress,
+          displayName: null,
+        },
+        deliveredTo: result.fromAddress,
+        availableIdentities: [
+          {
+            source: result.source,
+            accountAddress: result.fromAddress,
+            displayName: null,
+          },
+        ],
+      },
+      mode: "draft",
+      dotColor,
+      draft: { id: draft.id, source: draft.source },
+    });
+  }
+
   const isRead = (id: string): boolean =>
     readOverrides[id] || Boolean(data?.readStates[id]);
   const isCompleted = (id: string): boolean => {
@@ -356,6 +415,7 @@ export default function EmailCard({
       data?.classifications[e.id] === "NEEDS_ATTENTION",
   );
   const nothingToShow =
+    drafts.length === 0 &&
     needsReply.length === 0 &&
     awaitingSent.length === 0 &&
     needsAttention.length === 0;
@@ -500,6 +560,50 @@ export default function EmailCard({
           <div className="mt-3 flex flex-col gap-3">
             {nothingToShow && (
               <p className="text-sm text-soft">{labels.noItems}</p>
+            )}
+
+            {drafts.length > 0 && (
+              <section className="overflow-hidden rounded-xl border border-card-border">
+                <div
+                  className={`flex items-center gap-2 px-3 py-2 ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}
+                >
+                  <h3
+                    className={`text-xs font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}
+                  >
+                    {t.email.draftsTitle}
+                  </h3>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}
+                  >
+                    {drafts.length}
+                  </span>
+                </div>
+                <ul className="bg-card-bg" onClick={(e) => e.stopPropagation()}>
+                  {drafts.map((draft, i) => (
+                    <li key={draft.id}>
+                      <button
+                        type="button"
+                        onClick={() => openDraft(draft)}
+                        className={`flex w-full min-w-0 items-start gap-2 px-2 py-1.5 text-left hover:opacity-80 ${i % 2 === 1 ? "bg-black/[0.03]" : ""}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-ink">
+                            {draft.to || t.email.draftNoRecipient}
+                          </p>
+                          {draft.subject && (
+                            <p className="truncate text-xs text-soft">
+                              {draft.subject}
+                            </p>
+                          )}
+                        </div>
+                        <span className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-soft">
+                          {formatEmailDate(draft.date, hour12, intlLocale)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
 
             {needsReply.length > 0 && (
