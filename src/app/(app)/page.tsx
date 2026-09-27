@@ -514,18 +514,30 @@ export default async function DashboardPage() {
     return sum + hours;
   }, 0);
 
-  const haleyEvents = thisWeekEvents.filter((e) =>
+  // Google Calendar's own colorId values (see GOOGLE_EVENT_COLORS in
+  // src/lib/calendar-colors.ts) — Business/Children/Mommy are told apart
+  // by the color the event itself was given in Google Calendar, not by
+  // title keywords (only the Mike's-shifts match above still uses title
+  // text, since it isn't tied to a color).
+  const BASIL_COLOR_ID = "10";
+  const BANANA_COLOR_ID = "5";
+  const GRAPHITE_COLOR_ID = "8";
+
+  const businessEventCount = thisWeekEvents.filter(
+    (e) => e.colorId === BASIL_COLOR_ID,
+  ).length;
+
+  const bananaEvents = thisWeekEvents.filter(
+    (e) => e.colorId === BANANA_COLOR_ID,
+  );
+  const haleyCount = bananaEvents.filter((e) =>
     e.title.toLowerCase().includes("haley"),
-  );
-  const lukasEvents = thisWeekEvents.filter((e) =>
+  ).length;
+  const lukasCount = bananaEvents.filter((e) =>
     e.title.toLowerCase().includes("lukas"),
-  );
-  const childrenEventCount = thisWeekEvents.filter((e) => {
-    const title = e.title.toLowerCase();
-    return title.includes("haley") || title.includes("lukas");
-  }).length;
-  const mommyEventCount = thisWeekEvents.filter((e) =>
-    e.title.toLowerCase().includes("mommy"),
+  ).length;
+  const mommyEventCount = thisWeekEvents.filter(
+    (e) => e.colorId === GRAPHITE_COLOR_ID,
   ).length;
 
   const calendarSummaryLabels = {
@@ -533,19 +545,20 @@ export default async function DashboardPage() {
     thisWeekLabel: t.dashboard.calendarSummaryThisWeekLabel,
     nextWeekLabel: t.dashboard.calendarSummaryNextWeekLabel,
     newLabel: t.dashboard.calendarSummaryNewLabel,
+    businessLabel: t.dashboard.calendarSummaryBusinessLabel,
     shiftsLabel: t.dashboard.calendarSummaryShiftsLabel(Math.round(shiftHours)),
-    childrenLabel: t.dashboard.calendarSummaryChildrenLabel(
-      haleyEvents.length,
-      lukasEvents.length,
-    ),
+    haleyLabel: t.dashboard.calendarSummaryHaleyLabel,
+    lukasLabel: t.dashboard.calendarSummaryLukasLabel,
     mommyLabel: t.dashboard.calendarSummaryMommyLabel,
   };
   const calendarSummaryCounts = {
     thisWeek: thisWeekEvents.length,
     nextWeek: nextWeekEventCount,
     newEvents: newEventCount,
+    business: businessEventCount,
     shifts: shiftEvents.length,
-    children: childrenEventCount,
+    haley: haleyCount,
+    lukas: lukasCount,
     mommy: mommyEventCount,
   };
   const socialLabels = {

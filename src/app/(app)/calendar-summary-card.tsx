@@ -6,6 +6,7 @@ import {
   CALENDAR_CARD_ACCENT_DOT,
   CALENDAR_CARD_BG,
   CALENDAR_METRIC_COLORS,
+  CHILDREN_MOMMY_COLORS,
 } from "./calendar-summary-colors";
 import CalendarIcon from "./calendar-icon";
 import SubCard from "./summary-sub-card";
@@ -15,8 +16,10 @@ export interface CalendarSummaryLabels {
   thisWeekLabel: string;
   nextWeekLabel: string;
   newLabel: string;
+  businessLabel: string;
   shiftsLabel: string;
-  childrenLabel: string;
+  haleyLabel: string;
+  lukasLabel: string;
   mommyLabel: string;
 }
 
@@ -24,8 +27,10 @@ export interface CalendarSummaryCounts {
   thisWeek: number;
   nextWeek: number;
   newEvents: number;
+  business: number;
   shifts: number;
-  children: number;
+  haley: number;
+  lukas: number;
   mommy: number;
 }
 
@@ -97,23 +102,41 @@ export default function CalendarSummaryCard({
           label={labels.newLabel}
         />
         <SubCard
+          bg={CALENDAR_METRIC_COLORS.BUSINESS.bg}
+          text={CALENDAR_METRIC_COLORS.BUSINESS.text}
+          value={counts.business}
+          label={labels.businessLabel}
+        />
+        <SubCard
           bg={CALENDAR_METRIC_COLORS.SHIFTS.bg}
           text={CALENDAR_METRIC_COLORS.SHIFTS.text}
           value={counts.shifts}
           label={labels.shiftsLabel}
         />
-        <SubCard
-          bg={CALENDAR_METRIC_COLORS.CHILDREN.bg}
-          text={CALENDAR_METRIC_COLORS.CHILDREN.text}
-          value={counts.children}
-          label={labels.childrenLabel}
-        />
-        <SubCard
-          bg={CALENDAR_METRIC_COLORS.MOMMY.bg}
-          text={CALENDAR_METRIC_COLORS.MOMMY.text}
-          value={counts.mommy}
-          label={labels.mommyLabel}
-        />
+        {/* Children + Mommy share one card instead of two — split 2/3
+            Banana (children) on top, 1/3 Graphite (mommy) on the bottom,
+            the same colorIds their own counts are filtered by. Not a
+            generic SubCard since it needs two differently-colored bands
+            and 3 lines instead of one number+label pair. */}
+        <div className="flex h-14 flex-col overflow-hidden rounded-lg text-center sm:h-16">
+          <div
+            className={`flex flex-[2] flex-col items-center justify-center gap-0.5 px-1 ${CHILDREN_MOMMY_COLORS.banana.bg} ${CHILDREN_MOMMY_COLORS.banana.text}`}
+          >
+            <span className="text-[9px] font-bold leading-tight sm:text-[11px]">
+              {counts.haley} {labels.haleyLabel}
+            </span>
+            <span className="text-[9px] font-bold leading-tight sm:text-[11px]">
+              {counts.lukas} {labels.lukasLabel}
+            </span>
+          </div>
+          <div
+            className={`flex flex-1 items-center justify-center px-1 ${CHILDREN_MOMMY_COLORS.graphite.bg} ${CHILDREN_MOMMY_COLORS.graphite.text}`}
+          >
+            <span className="text-[9px] font-bold leading-tight sm:text-[11px]">
+              {counts.mommy} {labels.mommyLabel}
+            </span>
+          </div>
+        </div>
       </div>
     </button>
   );
