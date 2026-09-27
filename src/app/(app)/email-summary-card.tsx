@@ -8,6 +8,7 @@ import {
   EMAIL_CARD_BG,
 } from "./email-section-colors";
 import { fetchDraftsAction } from "@/actions/email-drafts";
+import EmailIcon from "./email-icon";
 
 export interface EmailSummaryLabels {
   title: string;
@@ -91,9 +92,12 @@ export default function EmailSummaryCard({
         className={`absolute inset-x-0 top-0 h-[3px] ${EMAIL_CARD_ACCENT_BAR}`}
       />
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-display text-lg font-semibold text-ink">
-          {labels.title}
-        </h3>
+        <div className="flex items-center gap-2">
+          <EmailIcon />
+          <h3 className="font-display text-lg font-semibold text-ink">
+            {labels.title}
+          </h3>
+        </div>
         <SubCard
           bg={EMAIL_CARD_ACCENT_DOT}
           text="text-white"

@@ -20,6 +20,7 @@ import {
   EMAIL_CARD_ACCENT_BAR,
   EMAIL_CARD_BG,
 } from "./email-section-colors";
+import EmailIcon from "./email-icon";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getDict } from "@/lib/i18n/dictionaries";
 import type { EmailDetail } from "@/actions/email-messages";
@@ -532,9 +533,12 @@ export default function EmailCard({
         className={clsx("contents", connected && "cursor-pointer")}
       >
         <div className="relative flex shrink-0 items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">
-            {labels.title}
-          </h2>
+          <div className="flex items-center gap-2">
+            <EmailIcon />
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {labels.title}
+            </h2>
+          </div>
           {connected && (
             <div onClick={(e) => e.stopPropagation()}>
               <RefreshButton
