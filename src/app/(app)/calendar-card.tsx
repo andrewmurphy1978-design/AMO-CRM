@@ -17,6 +17,11 @@ import RefreshButton from "./refresh-button";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
+import CalendarIcon from "./calendar-icon";
+import {
+  CALENDAR_CARD_ACCENT_BAR,
+  CALENDAR_CARD_BG,
+} from "./calendar-summary-colors";
 import {
   formatClockTime,
   formatHourMark,
@@ -610,8 +615,12 @@ export default function CalendarCard({
   const tableEvents = eventsByDay.slice(3);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${CALENDAR_CARD_BG}`}
+    >
+      <div
+        className={`absolute inset-x-0 top-0 h-[3px] ${CALENDAR_CARD_ACCENT_BAR}`}
+      />
       {/* No "Open Calendar" button — clicking anywhere on the card that
           isn't the Refresh button or an interactive grid/table element now
           does the same thing (same convention as the Email card).
@@ -635,9 +644,12 @@ export default function CalendarCard({
         className={clsx("contents", connected && "cursor-pointer")}
       >
         <div className="relative flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">
-            {labels.title}
-          </h2>
+          <div className="flex items-center gap-2">
+            <CalendarIcon />
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {labels.title}
+            </h2>
+          </div>
           {connected && (
             <div onClick={(e) => e.stopPropagation()}>
               <RefreshButton

@@ -7,6 +7,8 @@ import {
   format,
   isToday,
   isYesterday,
+  startOfWeek,
+  addDays,
   type Locale,
 } from "date-fns";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -22,6 +24,7 @@ import MarketsCardServer from "./markets-card-server";
 import EmailCard from "./email-card";
 import EmailSummaryCard from "./email-summary-card";
 import CalendarCardServer from "./calendar-card-server";
+import CalendarSummaryCard from "./calendar-summary-card";
 import NewContactsCard from "./new-contacts-card";
 import {
   getCachedInbox,
@@ -29,7 +32,11 @@ import {
   type EmailScreeningPayload,
 } from "@/lib/email-inbox";
 import SocialCard from "./social-card";
-import { getValidAccessToken } from "@/lib/google";
+import {
+  getValidAccessToken,
+  getCalendarEventsInRange,
+  type CalendarEventSummary,
+} from "@/lib/google";
 import { getLatestSocialSnapshots } from "@/lib/social";
 import { getHour12 } from "@/lib/time-format";
 import type { AutomationRun } from "@prisma/client";
@@ -128,6 +135,10 @@ const STAT_ICONS = {
 
 function daysFromNow(days: number): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
+function hoursAgo(hours: number): Date {
+  return new Date(Date.now() - hours * 60 * 60 * 1000);
 }
 
 // Same shape as the Email/Calendar pages' own local copies of this — feeds
@@ -451,6 +462,92 @@ export default async function DashboardPage() {
     needsAttention: emailNeedsAttention,
     canWait: emailCanWait,
   };
+
+  // Feeds the Calendar Summary stat card — a separate, explicit
+  // [this week, next week) range fetch rather than reusing the Dashboard
+  // Calendar card's own "today+15 days" query (getUpcomingEvents), so this
+  // card's counts always mean the same thing regardless of what the other
+  // card happens to have loaded.
+  const thisWeekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
+  const thisWeekEnd = addDays(thisWeekStart, 7);
+  const nextWeekEnd = addDays(thisWeekStart, 14);
+  const calendarSummaryEvents: CalendarEventSummary[] = googleAccessToken
+    ? ((await getCalendarEventsInRange(
+        googleAccessToken,
+        thisWeekStart.toISOString(),
+        nextWeekEnd.toISOString(),
+      )) ?? [])
+    : [];
+
+  function eventBucketDate(e: CalendarEventSummary): Date | null {
+    const iso = e.start ?? e.end;
+    return iso ? new Date(iso) : null;
+  }
+  const thisWeekEvents = calendarSummaryEvents.filter((e) => {
+    const d = eventBucketDate(e);
+    return d !== null && d >= thisWeekStart && d < thisWeekEnd;
+  });
+  const nextWeekEventCount = calendarSummaryEvents.filter((e) => {
+    const d = eventBucketDate(e);
+    return d !== null && d >= thisWeekEnd && d < nextWeekEnd;
+  }).length;
+
+  const last48Hours = hoursAgo(48);
+  const newEventCount = calendarSummaryEvents.filter(
+    (e) => e.created && new Date(e.created) >= last48Hours,
+  ).length;
+
+  // Andrew's own work shifts at Mike's — title match, explicitly excluding
+  // anything that also mentions Haley/Zack (e.g. a shared family event)
+  // since the count is meant to be Andrew's shifts only.
+  const shiftEvents = thisWeekEvents.filter((e) => {
+    const title = e.title.toLowerCase();
+    const isShift = title.includes("mike's") || title.includes("mikes");
+    const isShared = title.includes("haley") || title.includes("zack");
+    return isShift && !isShared;
+  });
+  const shiftHours = shiftEvents.reduce((sum, e) => {
+    if (e.allDay || !e.start || !e.end) return sum;
+    const hours =
+      (new Date(e.end).getTime() - new Date(e.start).getTime()) /
+      (1000 * 60 * 60);
+    return sum + hours;
+  }, 0);
+
+  const haleyEvents = thisWeekEvents.filter((e) =>
+    e.title.toLowerCase().includes("haley"),
+  );
+  const lukasEvents = thisWeekEvents.filter((e) =>
+    e.title.toLowerCase().includes("lukas"),
+  );
+  const childrenEventCount = thisWeekEvents.filter((e) => {
+    const title = e.title.toLowerCase();
+    return title.includes("haley") || title.includes("lukas");
+  }).length;
+  const mommyEventCount = thisWeekEvents.filter((e) =>
+    e.title.toLowerCase().includes("mommy"),
+  ).length;
+
+  const calendarSummaryLabels = {
+    title: t.dashboard.calendarSummaryTitle,
+    thisWeekLabel: t.dashboard.calendarSummaryThisWeekLabel,
+    nextWeekLabel: t.dashboard.calendarSummaryNextWeekLabel,
+    newLabel: t.dashboard.calendarSummaryNewLabel,
+    shiftsLabel: t.dashboard.calendarSummaryShiftsLabel(Math.round(shiftHours)),
+    childrenLabel: t.dashboard.calendarSummaryChildrenLabel(
+      haleyEvents.length,
+      lukasEvents.length,
+    ),
+    mommyLabel: t.dashboard.calendarSummaryMommyLabel,
+  };
+  const calendarSummaryCounts = {
+    thisWeek: thisWeekEvents.length,
+    nextWeek: nextWeekEventCount,
+    newEvents: newEventCount,
+    shifts: shiftEvents.length,
+    children: childrenEventCount,
+    mommy: mommyEventCount,
+  };
   const socialLabels = {
     title: t.dashboard.socialTitle,
     empty: t.dashboard.socialEmpty,
@@ -545,11 +642,16 @@ export default async function DashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           <EmailSummaryCard
             connected={googleAccessToken !== null}
             counts={emailSummaryCounts}
             labels={emailSummaryLabels}
+          />
+          <CalendarSummaryCard
+            connected={googleAccessToken !== null}
+            counts={calendarSummaryCounts}
+            labels={calendarSummaryLabels}
           />
           {stats.map((stat) => (
             <Link
@@ -614,7 +716,10 @@ export default async function DashboardPage() {
             />
           </div>
 
-          <div className="lg:col-start-2">
+          <div
+            id="dashboard-calendar-card"
+            className="lg:col-start-2 scroll-mt-20"
+          >
             <Suspense
               fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}
             >

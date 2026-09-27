@@ -17,6 +17,7 @@ import type { LinkOption } from "../link-dialog";
 import EventDialog, { type EventDialogLabels, type EventDialogTarget } from "./event-dialog";
 import EventViewDialog, { type EventViewDialogLabels } from "./event-view-dialog";
 import PageHeader from "../page-header";
+import CalendarIcon from "../calendar-icon";
 import RefreshButton from "../refresh-button";
 import DayGridView from "./day-grid-view";
 import MonthView from "./month-view";
@@ -280,7 +281,12 @@ export default function CalendarShell({
   return (
     <>
       <PageHeader
-        title={title}
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <CalendarIcon />
+            <span className="truncate">{title}</span>
+          </span>
+        }
         hour12={hour12}
         lang={lang}
         location={location}

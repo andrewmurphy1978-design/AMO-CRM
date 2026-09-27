@@ -629,6 +629,10 @@ export interface CalendarEventSummary {
   colorId: string | null; // Google Calendar's per-event colorId ("1".."11"), null = calendar's default color
   htmlLink: string | null; // opens this event directly in Google Calendar's own UI
   attendeeEmails: string[]; // for the Personal page's watched-address match
+  // When this event was created (not when it occurs) — Google always sets
+  // this. Feeds the Dashboard's Calendar Summary card's "new events added"
+  // count. Optional so an older cached snapshot without it still parses.
+  created?: string;
 }
 
 // Same reasoning as getRecentEmails above — takes the token directly so no
@@ -658,6 +662,7 @@ interface RawGoogleEvent {
   colorId?: string;
   htmlLink?: string;
   attendees?: { email?: string }[];
+  created?: string;
 }
 
 function mapGoogleEvent(item: RawGoogleEvent): CalendarEventSummary {
@@ -670,6 +675,7 @@ function mapGoogleEvent(item: RawGoogleEvent): CalendarEventSummary {
     colorId: item.colorId ?? null,
     htmlLink: item.htmlLink ?? null,
     attendeeEmails: (item.attendees ?? []).map((a) => a.email ?? "").filter(Boolean),
+    created: item.created,
   };
 }
 
