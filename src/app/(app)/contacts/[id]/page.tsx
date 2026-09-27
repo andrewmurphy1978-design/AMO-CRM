@@ -677,7 +677,6 @@ export default async function ContactDetailPage({
             bookings={calendarBookingLabelOptions}
             noEventsLabel={t.calendarApp.noLinkedEvents}
             hour12={hour12}
-            dateLocale={dateLocale}
             intlLocale={intlLocale}
             lang={lang}
             eventDialogLabels={t.eventDialog}
@@ -710,7 +709,7 @@ export default async function ContactDetailPage({
               }))}
               addressColors={addressColors}
               noLinkedEmailsLabel={t.contactDetail.noLinkedEmails}
-              dateLocale={dateLocale}
+              lang={lang}
               intlLocale={intlLocale}
               hour12={hour12}
               emailDialogLabels={t.emailDialog}

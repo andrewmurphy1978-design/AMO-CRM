@@ -258,7 +258,6 @@ export default async function ProjectDetailPage({
             bookings={calendarBookingLabelOptions}
             noEventsLabel={t.calendarApp.noLinkedEvents}
             hour12={hour12}
-            dateLocale={dateLocale}
             intlLocale={intlLocale}
             lang={lang}
             eventDialogLabels={t.eventDialog}

@@ -398,7 +398,7 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
               }))}
               addressColors={addressColors}
               noLinkedEmailsLabel={t.marketing.noLinkedEmailsYet}
-              dateLocale={dateLocale}
+              lang={lang}
               intlLocale={intlLocale}
               hour12={hour12}
               emailDialogLabels={t.emailDialog}

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { format, type Locale } from "date-fns";
+import { format } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
+import type { Lang } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { EmailDetail } from "@/actions/email-messages";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email/email-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email/email-compose-dialog";
@@ -31,7 +33,7 @@ export default function LinkedEmailsList({
   emailLinks,
   addressColors,
   noLinkedEmailsLabel,
-  dateLocale,
+  lang,
   intlLocale,
   hour12,
   emailDialogLabels,
@@ -40,12 +42,17 @@ export default function LinkedEmailsList({
   emailLinks: LinkedEmailRow[];
   addressColors: EmailAddressColorEntry[];
   noLinkedEmailsLabel: string;
-  dateLocale: Locale | undefined;
+  // Resolved here (client-side) from `lang` rather than taken as a raw
+  // date-fns Locale prop — a Locale carries function values, which can't
+  // cross the Server->Client boundary when this is rendered from a Server
+  // Component detail page.
+  lang: Lang;
   intlLocale: string;
   hour12: boolean;
   emailDialogLabels: EmailDialogLabels;
   emailComposeLabels: EmailComposeLabels;
 }) {
+  const dateLocale = getDateLocale(lang);
   const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
   const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
 

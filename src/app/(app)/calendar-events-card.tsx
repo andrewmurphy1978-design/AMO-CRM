@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format, type Locale } from "date-fns";
+import { format } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatTimeRange } from "@/lib/calendar-time";
 import type { EventLinkTargets } from "@/actions/calendar";
 import Card from "@/components/section-card";
 import type { Lang } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { LinkOption } from "./link-dialog";
 import EventViewDialog, { type EventViewDialogLabels } from "./calendar-app/event-view-dialog";
 import EventDialog, { type EventDialogLabels, type EventDialogTarget } from "./calendar-app/event-dialog";
@@ -29,7 +30,6 @@ export default function CalendarEventsCard({
   noEventsLabel,
   notConnectedLabel,
   hour12,
-  dateLocale,
   intlLocale,
   lang,
   eventDialogLabels,
@@ -46,13 +46,17 @@ export default function CalendarEventsCard({
   noEventsLabel: string;
   notConnectedLabel?: string;
   hour12: boolean;
-  dateLocale: Locale | undefined;
   intlLocale: string;
   lang: Lang;
   eventDialogLabels: EventDialogLabels;
   eventViewDialogLabels: EventViewDialogLabels;
   linkPickerLabels: { contact: string; project: string; task: string; booking: string; none: string; clear: string; searchPlaceholder: string; noResults: string };
 }) {
+  // Resolved here (client-side) from `lang` rather than taken as a raw
+  // date-fns Locale prop — a Locale carries function values, which can't
+  // cross the Server->Client boundary when this is rendered from a Server
+  // Component detail page.
+  const dateLocale = getDateLocale(lang);
   const router = useRouter();
   const [viewTarget, setViewTarget] = useState<string | null>(null);
   const [dialogTarget, setDialogTarget] = useState<EventDialogTarget | null>(null);
