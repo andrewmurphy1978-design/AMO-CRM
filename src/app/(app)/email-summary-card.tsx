@@ -107,13 +107,26 @@ export default function EmailSummaryCard({
       <div
         className={`absolute inset-x-0 top-0 h-[3px] ${EMAIL_CARD_ACCENT_BAR}`}
       />
-      <div className="flex items-center gap-2">
-        <EmailIcon />
-        <h3 className="font-display text-lg font-semibold text-ink">
-          {labels.title}
-        </h3>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-1.5">
+      {/* One 4-column grid for both rows: the title and the "today" card
+          share row 1 (2 columns each — "today" is the only sub-card that's
+          2 columns wide, on the same line as the Email title), then the
+          other 4 metrics go back to a single 1-column-each row, exactly
+          like before. */}
+      <div className="grid grid-cols-4 items-center gap-1.5">
+        <div className="col-span-2 flex items-center gap-2">
+          <EmailIcon />
+          <h3 className="font-display text-lg font-semibold text-ink">
+            {labels.title}
+          </h3>
+        </div>
+        <SubCard
+          bg={EMAIL_CARD_ACCENT_DOT}
+          text="text-white"
+          value={counts.today}
+          label={labels.todayLabel}
+          layout="row"
+          className="col-span-2"
+        />
         <SubCard
           bg={EMAIL_SECTION_COLORS.DRAFTS.headerBg}
           text={EMAIL_SECTION_COLORS.DRAFTS.headerText}
@@ -125,14 +138,6 @@ export default function EmailSummaryCard({
           text={EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerText}
           value={counts.awaitingReply}
           label={labels.awaitingReplyLabel}
-        />
-        <SubCard
-          bg={EMAIL_CARD_ACCENT_DOT}
-          text="text-white"
-          value={counts.today}
-          label={labels.todayLabel}
-          layout="row"
-          className="col-span-2"
         />
         <SubCard
           bg={EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg}
