@@ -5,33 +5,68 @@ import {
   EMAIL_SECTION_COLORS,
   EMAIL_CARD_ACCENT_BAR,
   EMAIL_CARD_ACCENT_DOT,
+  EMAIL_CARD_BG,
 } from "./email-section-colors";
 import { fetchDraftsAction } from "@/actions/email-drafts";
-import { getDict } from "@/lib/i18n/dictionaries";
 
 export interface EmailSummaryLabels {
   title: string;
-  today: string;
-  awaitingReply: string;
-  needsAttention: string;
-  canWait: string;
+  todayLabel: string;
+  draftsLabel: string;
+  awaitingReplyLabel: string;
+  needsAttentionLabel: string;
+  canWaitLabel: string;
 }
 
-function Dot({ className }: { className: string }) {
-  return <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${className}`} />;
+export interface EmailSummaryCounts {
+  today: number;
+  awaitingReply: number;
+  needsAttention: number;
+  canWait: number;
+}
+
+// Every sub-card shares this shape — a big number over a small label — so
+// the number always reads as the headline and the label as a caption,
+// per the "number bigger than the text" request.
+function SubCard({
+  bg,
+  text,
+  value,
+  label,
+  size = "sm",
+}: {
+  bg: string;
+  text: string;
+  value: number;
+  label: string;
+  size?: "sm" | "lg";
+}) {
+  return (
+    <div
+      className={`flex flex-col items-center justify-center rounded-lg px-1.5 py-2 text-center ${bg} ${text}`}
+    >
+      <span
+        className={`font-display font-bold leading-none ${size === "lg" ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl"}`}
+      >
+        {value}
+      </span>
+      <span className="mt-1 text-[9px] font-medium leading-tight sm:text-[10px]">
+        {label}
+      </span>
+    </div>
+  );
 }
 
 export default function EmailSummaryCard({
   connected,
-  lang,
+  counts,
   labels,
 }: {
   connected: boolean;
-  lang: "en" | "fr";
+  counts: EmailSummaryCounts;
   labels: EmailSummaryLabels;
 }) {
   const [draftsCount, setDraftsCount] = useState(0);
-  const draftsLabel = getDict(lang).dashboard.emailSummaryDrafts(draftsCount);
 
   useEffect(() => {
     if (!connected) return;
@@ -50,36 +85,49 @@ export default function EmailSummaryCard({
     <button
       type="button"
       onClick={scrollToEmailCard}
-      className="group relative w-full overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(99,102,241,0.15)] sm:p-5"
+      className={`group relative w-full overflow-hidden rounded-2xl border border-card-border p-2 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(99,102,241,0.15)] sm:p-5 ${EMAIL_CARD_BG}`}
     >
       <div
         className={`absolute inset-x-0 top-0 h-[3px] ${EMAIL_CARD_ACCENT_BAR}`}
       />
-      <h3 className="font-display text-lg font-semibold text-ink">
-        {labels.title}
-      </h3>
-      <ul className="mt-1.5 space-y-1.5 text-sm sm:mt-3">
-        <li className="flex items-start gap-2">
-          <Dot className={EMAIL_CARD_ACCENT_DOT} />
-          <span className="text-ink">{labels.today}</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <Dot className={EMAIL_SECTION_COLORS.DRAFTS.headerBg} />
-          <span className="text-ink">{draftsLabel}</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <Dot className={EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerBg} />
-          <span className="text-ink">{labels.awaitingReply}</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <Dot className={EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg} />
-          <span className="text-ink">{labels.needsAttention}</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <Dot className={EMAIL_SECTION_COLORS.CAN_WAIT.headerBg} />
-          <span className="text-ink">{labels.canWait}</span>
-        </li>
-      </ul>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="font-display text-lg font-semibold text-ink">
+          {labels.title}
+        </h3>
+        <SubCard
+          bg={EMAIL_CARD_ACCENT_DOT}
+          text="text-white"
+          value={counts.today}
+          label={labels.todayLabel}
+          size="lg"
+        />
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-1.5">
+        <SubCard
+          bg={EMAIL_SECTION_COLORS.DRAFTS.headerBg}
+          text={EMAIL_SECTION_COLORS.DRAFTS.headerText}
+          value={draftsCount}
+          label={labels.draftsLabel}
+        />
+        <SubCard
+          bg={EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerBg}
+          text={EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerText}
+          value={counts.awaitingReply}
+          label={labels.awaitingReplyLabel}
+        />
+        <SubCard
+          bg={EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg}
+          text={EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerText}
+          value={counts.needsAttention}
+          label={labels.needsAttentionLabel}
+        />
+        <SubCard
+          bg={EMAIL_SECTION_COLORS.CAN_WAIT.headerBg}
+          text={EMAIL_SECTION_COLORS.CAN_WAIT.headerText}
+          value={counts.canWait}
+          label={labels.canWaitLabel}
+        />
+      </div>
     </button>
   );
 }

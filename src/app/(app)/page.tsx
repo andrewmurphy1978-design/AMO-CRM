@@ -439,10 +439,17 @@ export default async function DashboardPage() {
   };
   const emailSummaryLabels = {
     title: t.dashboard.emailSummaryTitle,
-    today: t.dashboard.emailSummaryToday(emailToday),
-    awaitingReply: t.dashboard.emailSummaryAwaitingReply(emailAwaitingReply),
-    needsAttention: t.dashboard.emailSummaryNeedsAttention(emailNeedsAttention),
-    canWait: t.dashboard.emailSummaryCanWait(emailCanWait),
+    todayLabel: t.dashboard.emailSummaryTodayLabel,
+    draftsLabel: t.dashboard.emailSummaryDraftsLabel,
+    awaitingReplyLabel: t.dashboard.emailSummaryAwaitingReplyLabel,
+    needsAttentionLabel: t.dashboard.emailSummaryNeedsAttentionLabel,
+    canWaitLabel: t.dashboard.emailSummaryCanWaitLabel,
+  };
+  const emailSummaryCounts = {
+    today: emailToday,
+    awaitingReply: emailAwaitingReply,
+    needsAttention: emailNeedsAttention,
+    canWait: emailCanWait,
   };
   const socialLabels = {
     title: t.dashboard.socialTitle,
@@ -541,7 +548,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
           <EmailSummaryCard
             connected={googleAccessToken !== null}
-            lang={lang}
+            counts={emailSummaryCounts}
             labels={emailSummaryLabels}
           />
           {stats.map((stat) => (

@@ -18,6 +18,7 @@ import type { EmailScreeningPayload, EmailLinkInfo } from "@/lib/email-inbox";
 import {
   EMAIL_SECTION_COLORS,
   EMAIL_CARD_ACCENT_BAR,
+  EMAIL_CARD_BG,
 } from "./email-section-colors";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -506,7 +507,9 @@ export default function EmailCard({
   }
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
+    <div
+      className={`relative flex flex-col overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${EMAIL_CARD_BG}`}
+    >
       <div
         className={`absolute inset-x-0 top-0 h-[3px] ${EMAIL_CARD_ACCENT_BAR}`}
       />

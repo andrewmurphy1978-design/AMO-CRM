@@ -15,6 +15,10 @@ export interface EmailSectionColorSet {
 // per-category colors below it sits above.
 export const EMAIL_CARD_ACCENT_BAR = "bg-indigo-500";
 export const EMAIL_CARD_ACCENT_DOT = "bg-indigo-500";
+// A light tint of that same identity color, for the card's own background
+// (both the Email card and its Summary card) instead of the neutral
+// bg-card-bg every other dashboard card uses.
+export const EMAIL_CARD_BG = "bg-indigo-50";
 
 export const EMAIL_SECTION_COLORS: Record<string, EmailSectionColorSet> = {
   DRAFTS: { headerBg: "bg-orange-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
