@@ -15,7 +15,10 @@ import {
 } from "@/lib/email-address-match";
 import type { EmailSummary, SentEmailSummary } from "@/lib/google";
 import type { EmailScreeningPayload, EmailLinkInfo } from "@/lib/email-inbox";
-import { EMAIL_SECTION_COLORS } from "./email-section-colors";
+import {
+  EMAIL_SECTION_COLORS,
+  EMAIL_CARD_ACCENT_BAR,
+} from "./email-section-colors";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getDict } from "@/lib/i18n/dictionaries";
 import type { EmailDetail } from "@/actions/email-messages";
@@ -504,7 +507,9 @@ export default function EmailCard({
 
   return (
     <div className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+      <div
+        className={`absolute inset-x-0 top-0 h-[3px] ${EMAIL_CARD_ACCENT_BAR}`}
+      />
       {/* No more a header "Open Emails" button — clicking anywhere on the
           card that isn't a row or the Refresh button now does the same
           thing (see the outer onClick below). `display:contents` keeps

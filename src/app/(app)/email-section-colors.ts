@@ -9,6 +9,13 @@ export interface EmailSectionColorSet {
   badgeText: string;
 }
 
+// The Email card's own identity color — used on its top accent bar and on
+// the Email Summary stat card (which links the two visually and is what
+// the color-matching request asked for), distinct from every one of the
+// per-category colors below it sits above.
+export const EMAIL_CARD_ACCENT_BAR = "bg-indigo-500";
+export const EMAIL_CARD_ACCENT_DOT = "bg-indigo-500";
+
 export const EMAIL_SECTION_COLORS: Record<string, EmailSectionColorSet> = {
   DRAFTS: { headerBg: "bg-orange-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },
   NEEDS_REPLY: { headerBg: "bg-rose-500", headerText: "text-white", badgeBg: "bg-white/25", badgeText: "text-white" },

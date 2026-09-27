@@ -20,6 +20,7 @@ import NewsCardServer from "./news-card-server";
 import SportsCardServer from "./sports-card-server";
 import MarketsCardServer from "./markets-card-server";
 import EmailCard from "./email-card";
+import EmailSummaryCard from "./email-summary-card";
 import CalendarCardServer from "./calendar-card-server";
 import NewContactsCard from "./new-contacts-card";
 import {
@@ -159,9 +160,6 @@ export default async function DashboardPage() {
   // builds exactly one client and reuses it for the whole render instead —
   // same fix already used for the systeme.io/Buffer/Make bulk syncs.
   const {
-    contactCount,
-    clientCount,
-    newContactCount,
     activeProjectCount,
     openTaskCount,
     dueSoonTaskCount,
@@ -181,11 +179,6 @@ export default async function DashboardPage() {
     linkTasks,
     linkAffiliatePrograms,
   } = await withScopedPrismaClient(async (db) => {
-    const contactCount = await db.contact.count();
-    const clientCount = await db.contact.count({ where: { stage: "CLIENT" } });
-    const newContactCount = await db.contact.count({
-      where: { createdAt: { gte: sevenDaysAgo } },
-    });
     const activeProjectCount = await db.project.count({
       where: { status: "ACTIVE" },
     });
@@ -297,9 +290,6 @@ export default async function DashboardPage() {
         : null;
 
     return {
-      contactCount,
-      clientCount,
-      newContactCount,
       activeProjectCount,
       openTaskCount,
       dueSoonTaskCount,
@@ -342,6 +332,30 @@ export default async function DashboardPage() {
     id: p.id,
     label: p.name,
   }));
+
+  // Feeds the Email Summary stat card — same classification/completion/
+  // read-state rules the Email card itself applies to its NEEDS_ATTENTION/
+  // CAN_WAIT sections, just counted instead of rendered. Drafts aren't
+  // included here since (like the Email card) they're only ever available
+  // via a live client-side fetch — the Summary card fetches its own count.
+  const emailToday = (emailInitialData?.emails ?? []).filter((e) =>
+    isToday(new Date(e.date)),
+  ).length;
+  const emailNeedsAttention = (emailInitialData?.emails ?? []).filter(
+    (e) =>
+      !emailInitialData?.completions[e.id] &&
+      !emailInitialData?.readStates[e.id] &&
+      emailInitialData?.classifications[e.id] === "NEEDS_ATTENTION",
+  ).length;
+  const emailCanWait = (emailInitialData?.emails ?? []).filter(
+    (e) =>
+      !emailInitialData?.completions[e.id] &&
+      !emailInitialData?.readStates[e.id] &&
+      emailInitialData?.classifications[e.id] === "CAN_WAIT",
+  ).length;
+  const emailAwaitingReply = (emailInitialData?.sentAwaitingReply ?? []).filter(
+    (s) => s.status === "awaiting" && !emailInitialData?.completions[s.id],
+  ).length;
 
   // Same 3 buckets the card's own sections are keyed by — computed here
   // (not inside the DB callback) since isToday/isYesterday just need plain
@@ -423,6 +437,13 @@ export default async function DashboardPage() {
     categoryNeedsAttention: t.email.categoryNeedsAttention,
     awaitingResponse: t.dashboard.emailAwaitingResponse,
   };
+  const emailSummaryLabels = {
+    title: t.dashboard.emailSummaryTitle,
+    today: t.dashboard.emailSummaryToday(emailToday),
+    awaitingReply: t.dashboard.emailSummaryAwaitingReply(emailAwaitingReply),
+    needsAttention: t.dashboard.emailSummaryNeedsAttention(emailNeedsAttention),
+    canWait: t.dashboard.emailSummaryCanWait(emailCanWait),
+  };
   const socialLabels = {
     title: t.dashboard.socialTitle,
     empty: t.dashboard.socialEmpty,
@@ -465,14 +486,6 @@ export default async function DashboardPage() {
   };
 
   const stats = [
-    {
-      label: t.dashboard.statTotalContacts,
-      value: contactCount,
-      sub: t.dashboard.statContactsSub(clientCount, newContactCount),
-      href: "/contacts",
-      icon: STAT_ICONS.contacts,
-      color: "lime",
-    },
     {
       label: t.dashboard.statActiveProjects,
       value: activeProjectCount,
@@ -526,6 +539,11 @@ export default async function DashboardPage() {
         )}
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-4">
+          <EmailSummaryCard
+            connected={googleAccessToken !== null}
+            lang={lang}
+            labels={emailSummaryLabels}
+          />
           {stats.map((stat) => (
             <Link
               key={stat.label}
@@ -571,7 +589,10 @@ export default async function DashboardPage() {
           e.g. under the compact Calendar/Weather cards next to the Email
           card's own fixed 820px height). */}
         <div className="grid grid-cols-1 items-start gap-2 sm:gap-6 lg:grid-cols-3">
-          <div className="lg:col-start-1">
+          <div
+            id="dashboard-email-card"
+            className="lg:col-start-1 scroll-mt-20"
+          >
             <EmailCard
               initialData={emailInitialData}
               connected={googleAccessToken !== null}
