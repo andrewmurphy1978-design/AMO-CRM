@@ -4,14 +4,14 @@
 export default function EmailIcon({ className }: { className?: string }) {
   return (
     <span
-      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 ${className ?? ""}`}
+      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 ${className ?? ""}`}
     >
       <svg
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.75}
-        className="h-4 w-4"
+        className="h-6 w-6"
       >
         <path
           strokeLinecap="round"

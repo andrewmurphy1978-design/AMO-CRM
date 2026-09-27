@@ -12,6 +12,7 @@ import { resolveEmailAddressColor, colorForAddress, primaryReceivedAddress, type
 import type { EmailCategory } from "@/lib/email-classifier";
 import type { EmailLinkInfo, EmailScreeningPayload } from "@/lib/email-inbox";
 import PageHeader from "../page-header";
+import EmailIcon from "../email-icon";
 import RefreshButton from "../refresh-button";
 import EmailLinkPicker, { type LinkOption } from "./email-link-picker";
 import EmailTime from "./email-time";
@@ -490,7 +491,12 @@ export default function EmailScreeningView({
 
   const header = (
     <PageHeader
-      title={title}
+      title={
+        <span className="flex min-w-0 items-center gap-2">
+          <EmailIcon />
+          <span className="truncate">{title}</span>
+        </span>
+      }
       hour12={hour12}
       dateLocale={dateLocale}
       location={location}
@@ -1050,9 +1056,11 @@ export default function EmailScreeningView({
 
       {drafts.length > 0 && (
         <section className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
-          {/* Desktop/tablet (sm+): unchanged. */}
+          {/* Desktop/tablet (sm+): count badge sits right beside the title
+              (h2 no longer stretches with flex-1) instead of being pushed
+              to the far edge of the card. */}
           <div className={`hidden items-center gap-2 px-4 py-2.5 sm:flex ${EMAIL_SECTION_COLORS.DRAFTS.headerBg}`}>
-            <h2 className={`min-w-0 flex-1 text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
+            <h2 className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${EMAIL_SECTION_COLORS.DRAFTS.headerText}`}>{t.email.draftsTitle}</h2>
             <span
               className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${EMAIL_SECTION_COLORS.DRAFTS.badgeBg} ${EMAIL_SECTION_COLORS.DRAFTS.badgeText}`}
             >
@@ -1118,9 +1126,11 @@ export default function EmailScreeningView({
         const color = EMAIL_SECTION_COLORS[section.key] ?? EMAIL_SECTION_COLORS.LOW_PRIORITY;
         return (
           <section key={section.key} className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
-            {/* Desktop/tablet (sm+): unchanged — badge pinned to the far right. */}
+            {/* Desktop/tablet (sm+): count badge sits right beside the
+                title (h2 no longer stretches with flex-1) instead of
+                being pushed to the far edge of the card. */}
             <div className={`hidden items-center gap-2 px-4 py-2.5 sm:flex ${color.headerBg}`}>
-              <h2 className={`min-w-0 flex-1 text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
+              <h2 className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${color.headerText}`}>{section.heading}</h2>
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${color.badgeBg} ${color.badgeText}`}>{section.count}</span>
             </div>
             {/* Mobile only (below `sm`): tighter padding, and the count

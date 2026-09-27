@@ -26,29 +26,45 @@ export interface EmailSummaryCounts {
   canWait: number;
 }
 
-// Every sub-card shares this shape — a big number over a small label — so
-// the number always reads as the headline and the label as a caption,
-// per the "number bigger than the text" request.
+// Every sub-card shares this shape — a big number and a small label — so
+// the number always reads as the headline and the label as a caption, per
+// the "number bigger than the text" request. The "row" layout puts the
+// label beside the number instead of under it, for a shorter card (used
+// by the wide "today" card only).
 function SubCard({
   bg,
   text,
   value,
   label,
-  size = "sm",
+  layout = "col",
+  className,
 }: {
   bg: string;
   text: string;
   value: number;
   label: string;
-  size?: "sm" | "lg";
+  layout?: "col" | "row";
+  className?: string;
 }) {
+  if (layout === "row") {
+    return (
+      <div
+        className={`flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-center ${bg} ${text} ${className ?? ""}`}
+      >
+        <span className="font-display text-xl font-bold leading-none sm:text-2xl">
+          {value}
+        </span>
+        <span className="text-xs font-medium leading-tight sm:text-sm">
+          {label}
+        </span>
+      </div>
+    );
+  }
   return (
     <div
-      className={`flex flex-col items-center justify-center rounded-lg px-1.5 py-2 text-center ${bg} ${text}`}
+      className={`flex flex-col items-center justify-center rounded-lg px-1.5 py-2 text-center ${bg} ${text} ${className ?? ""}`}
     >
-      <span
-        className={`font-display font-bold leading-none ${size === "lg" ? "text-2xl sm:text-3xl" : "text-lg sm:text-xl"}`}
-      >
+      <span className="font-display text-lg font-bold leading-none sm:text-xl">
         {value}
       </span>
       <span className="mt-1 text-[9px] font-medium leading-tight sm:text-[10px]">
@@ -91,22 +107,13 @@ export default function EmailSummaryCard({
       <div
         className={`absolute inset-x-0 top-0 h-[3px] ${EMAIL_CARD_ACCENT_BAR}`}
       />
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <EmailIcon />
-          <h3 className="font-display text-lg font-semibold text-ink">
-            {labels.title}
-          </h3>
-        </div>
-        <SubCard
-          bg={EMAIL_CARD_ACCENT_DOT}
-          text="text-white"
-          value={counts.today}
-          label={labels.todayLabel}
-          size="lg"
-        />
+      <div className="flex items-center gap-2">
+        <EmailIcon />
+        <h3 className="font-display text-lg font-semibold text-ink">
+          {labels.title}
+        </h3>
       </div>
-      <div className="mt-3 grid grid-cols-4 gap-1.5">
+      <div className="mt-3 grid grid-cols-2 gap-1.5">
         <SubCard
           bg={EMAIL_SECTION_COLORS.DRAFTS.headerBg}
           text={EMAIL_SECTION_COLORS.DRAFTS.headerText}
@@ -118,6 +125,14 @@ export default function EmailSummaryCard({
           text={EMAIL_SECTION_COLORS.SENT_AWAITING_REPLY.headerText}
           value={counts.awaitingReply}
           label={labels.awaitingReplyLabel}
+        />
+        <SubCard
+          bg={EMAIL_CARD_ACCENT_DOT}
+          text="text-white"
+          value={counts.today}
+          label={labels.todayLabel}
+          layout="row"
+          className="col-span-2"
         />
         <SubCard
           bg={EMAIL_SECTION_COLORS.NEEDS_ATTENTION.headerBg}
