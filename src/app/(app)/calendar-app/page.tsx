@@ -6,7 +6,6 @@ import { getValidAccessToken, getCalendarEventsInRange } from "@/lib/google";
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader from "../page-header";
 import CalendarShell from "./calendar-shell";
 
@@ -40,7 +39,6 @@ export default async function CalendarAppPage() {
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
 
   // One shared client for every read below, including the one after the
@@ -139,7 +137,7 @@ export default async function CalendarAppPage() {
           <PageHeader
             title={t.calendarApp.title}
             hour12={hour12}
-            dateLocale={dateLocale}
+            lang={lang}
             location={t.dashboard.myLocation}
             actions={openInCalendarButton}
           />
@@ -159,7 +157,6 @@ export default async function CalendarAppPage() {
           tasks={taskOptions}
           bookings={bookingOptions}
           hour12={hour12}
-          dateLocale={dateLocale}
           intlLocale={intlLocale}
           lang={lang}
           title={t.calendarApp.title}

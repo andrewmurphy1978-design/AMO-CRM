@@ -57,7 +57,7 @@ export default async function TasksPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.tasksPage.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <PageHeader title={t.tasksPage.title} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
       <div className="flex items-center justify-between">
         <p className="text-sm text-soft">{t.tasksPage.shown(tasks.length)}</p>
         <Link href="/tasks/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">

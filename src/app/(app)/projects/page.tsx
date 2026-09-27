@@ -87,7 +87,7 @@ export default async function ProjectsPage({
       <PageHeader
         title={t.projects.title}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={t.dashboard.myLocation}
         actions={
           <Link href="/projects/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">

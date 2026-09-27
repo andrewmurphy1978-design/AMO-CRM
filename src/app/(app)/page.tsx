@@ -523,7 +523,7 @@ export default async function DashboardPage() {
       <PageHeader
         title={t.dashboard.title}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={t.dashboard.myLocation}
         logoUrl={AMO_LOGO_URL}
       />

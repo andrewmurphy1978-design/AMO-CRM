@@ -6,7 +6,6 @@ import { getHour12 } from "@/lib/time-format";
 import ProjectForm from "../../project-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 
 function toDateInput(value: Date | null): string {
   return value ? value.toISOString().slice(0, 10) : "";
@@ -42,7 +41,6 @@ export default async function EditProjectPage({
 
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
   const boundUpdate = updateProject.bind(null, project.id);
 
   return (
@@ -65,7 +63,6 @@ export default async function EditProjectPage({
       lang={lang}
       title={t.editProjectPage.title}
       hour12={hour12}
-      dateLocale={dateLocale}
       location={t.dashboard.myLocation}
       contacts={contacts.map((c) => ({
         id: c.id,

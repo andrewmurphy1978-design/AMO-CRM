@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Locale } from "date-fns";
 import { format } from "date-fns";
+import type { Lang } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 
 // Lives on the right side of the shared page header (small, right-aligned).
 // Full weekday date + time-with-seconds + location at sm+, unchanged.
@@ -12,13 +13,18 @@ import { format } from "date-fns";
 // the location line entirely.
 export default function DateTimeCard({
   hour12,
-  dateLocale,
+  lang,
   location,
 }: {
   hour12: boolean;
-  dateLocale: Locale | undefined;
+  // Resolved here (client-side) from the plain `lang` string rather than
+  // taking the date-fns Locale object itself as a prop — a Locale carries
+  // function values, which can't cross the Server->Client boundary when
+  // this is rendered (via PageHeader) from a Server Component page.
+  lang: Lang;
   location: string;
 }) {
+  const dateLocale = getDateLocale(lang);
   const [now, setNow] = useState<Date | null>(() => new Date());
 
   useEffect(() => {

@@ -243,7 +243,7 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
       <PageHeader
         title={t.marketing.title}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={t.dashboard.myLocation}
         actions={
           // Mobile only: tight grouping so the Add Program icon doesn't

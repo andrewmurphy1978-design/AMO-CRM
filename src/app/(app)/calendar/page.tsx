@@ -5,7 +5,6 @@ import { getHour12 } from "@/lib/time-format";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader from "../page-header";
 
 // Google's own embeddable calendar view — this is the one Google Calendar
@@ -29,7 +28,6 @@ export default async function CalendarPage() {
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
 
   // One shared client — see src/lib/prisma.ts for why.
   const { googleConnection, hour12 } = await withScopedPrismaClient(async (db) => {
@@ -43,7 +41,7 @@ export default async function CalendarPage() {
       <PageHeader
         title={t.dashboard.calendarTitle}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={t.dashboard.myLocation}
         actions={
           googleConnection?.email ? (

@@ -2,8 +2,8 @@
 
 import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import type { Locale } from "date-fns";
 import { format, formatDistanceToNow } from "date-fns";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { COUNTRIES } from "@/lib/countries";
 import { countryToCode } from "@/lib/country-flag";
@@ -109,7 +109,6 @@ export default function ContactForm({
   currentTags,
   title,
   hour12,
-  dateLocale,
   location,
   contactId,
 }: {
@@ -124,7 +123,6 @@ export default function ContactForm({
   currentTags?: string[];
   title: ReactNode;
   hour12: boolean;
-  dateLocale: Locale | undefined;
   location: string;
   // Only set on the Edit form — on a successful save, the toast redirects
   // to this contact's own info page once it's done showing. The New
@@ -134,6 +132,11 @@ export default function ContactForm({
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const t = getDict(lang);
+  // Resolved here (client-side) from `lang` rather than taken as a raw
+  // date-fns Locale prop — a Locale carries function values, which can't
+  // cross the Server->Client boundary when this is rendered from a Server
+  // Component page.
+  const dateLocale = getDateLocale(lang);
   const router = useRouter();
 
   // Resets `dismissed` the moment a new success message arrives, without an
@@ -333,7 +336,7 @@ export default function ContactForm({
       <PageHeader
         title={title}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={location}
         actions={
           <button

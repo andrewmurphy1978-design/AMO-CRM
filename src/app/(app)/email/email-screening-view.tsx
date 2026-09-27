@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import type { Locale } from "date-fns";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 import clsx from "@/lib/clsx";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { isOwnDomainEmail } from "@/lib/email-domain";
@@ -366,7 +366,6 @@ export default function EmailScreeningView({
   hour12,
   lang,
   title,
-  dateLocale,
   location,
   headerActions,
   defaultComposeSource,
@@ -383,7 +382,6 @@ export default function EmailScreeningView({
   hour12: boolean;
   lang: Lang;
   title: string;
-  dateLocale: Locale | undefined;
   location: string;
   headerActions?: ReactNode;
   defaultComposeSource: string | null;
@@ -391,6 +389,11 @@ export default function EmailScreeningView({
   defaultFontSize: string | null;
 }) {
   const t = getDict(lang);
+  // Resolved here (client-side) from `lang` rather than taken as a raw
+  // date-fns Locale prop — a Locale carries function values, which can't
+  // cross the Server->Client boundary when this is rendered from the
+  // Email page's Server Component.
+  const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
   const [data, setData] = useState(initialData);
   // No cache yet on the very first-ever visit — start "loading" straight
@@ -498,7 +501,7 @@ export default function EmailScreeningView({
         </span>
       }
       hour12={hour12}
-      dateLocale={dateLocale}
+      lang={lang}
       location={location}
       actions={
         // Mobile only: this wrapper groups the action buttons with a much

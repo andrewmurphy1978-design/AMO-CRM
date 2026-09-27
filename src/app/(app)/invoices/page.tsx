@@ -48,7 +48,7 @@ export default async function InvoicesPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.invoices.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <PageHeader title={t.invoices.title} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
 
       {needingReminder.length > 0 && (
         <section className="relative overflow-hidden rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">

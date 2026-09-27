@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { Locale } from "date-fns";
 import Link from "next/link";
+import type { Lang } from "@/lib/i18n/dictionaries";
 import DateTimeCard from "./date-time-card";
 
 // A detail page's contextual title, e.g. client name -> project name, or
@@ -44,7 +44,7 @@ export function HeaderBreadcrumb({ parts }: { parts: { label: string; href?: str
 export default function PageHeader({
   title,
   hour12,
-  dateLocale,
+  lang,
   location,
   logoUrl,
   actions,
@@ -52,7 +52,12 @@ export default function PageHeader({
 }: {
   title: ReactNode;
   hour12: boolean;
-  dateLocale: Locale | undefined;
+  // Passed through as a plain string (not the resolved date-fns Locale
+  // object) so this keeps working when PageHeader is rendered from a
+  // Server Component page: a Locale carries function values, which can't
+  // cross the Server->Client boundary as a prop. DateTimeCard (itself a
+  // Client Component) resolves the real Locale from this client-side.
+  lang: Lang;
   location: string;
   logoUrl?: string;
   actions?: ReactNode;
@@ -74,7 +79,7 @@ export default function PageHeader({
         </h1>
         <div className="flex items-center gap-3">
           {actions}
-          <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={location} />
+          <DateTimeCard hour12={hour12} lang={lang} location={location} />
         </div>
       </header>
     );
@@ -89,7 +94,7 @@ export default function PageHeader({
         ) : (
           <div className="flex shrink-0 items-center gap-3">{actions}</div>
         ))}
-      <DateTimeCard hour12={hour12} dateLocale={dateLocale} location={location} />
+      <DateTimeCard hour12={hour12} lang={lang} location={location} />
     </header>
   );
 }

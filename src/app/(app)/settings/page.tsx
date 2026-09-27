@@ -25,7 +25,6 @@ import EmailSignaturesForm from "./email-signatures-form";
 import BuildVersion from "./build-version";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getWatchedPeople, isPersonalSectionUser } from "@/lib/personal-watch";
 import PageHeader from "../page-header";
 
@@ -50,7 +49,6 @@ export default async function SettingsPage({
   const showPersonalCard = isPersonalSectionUser(session?.user.email);
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
 
   // One shared client for every read below — see the comment on the
   // equivalent block in src/app/(app)/page.tsx for why (each `prisma.x`
@@ -165,7 +163,7 @@ export default async function SettingsPage({
 
   return (
     <div className="space-y-8">
-      <PageHeader title={t.settings.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <PageHeader title={t.settings.title} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
       <p className="text-sm text-soft">{t.settings.subtitle}</p>
 
       <div className="grid gap-6 lg:grid-cols-2">

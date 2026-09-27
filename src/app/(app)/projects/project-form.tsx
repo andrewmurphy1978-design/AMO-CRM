@@ -3,7 +3,6 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import type { Locale } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import MultiSelect from "@/components/multi-select";
@@ -33,7 +32,6 @@ export default function ProjectForm({
   lang,
   title,
   hour12,
-  dateLocale,
   location,
 }: {
   action: (
@@ -47,7 +45,6 @@ export default function ProjectForm({
   lang: Lang;
   title: string;
   hour12: boolean;
-  dateLocale: Locale | undefined;
   location: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
@@ -101,7 +98,7 @@ export default function ProjectForm({
       <PageHeader
         title={title}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={location}
         actions={
           <button

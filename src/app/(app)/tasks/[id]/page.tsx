@@ -64,7 +64,7 @@ export default async function TaskDetailPage({
           />
         }
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={t.dashboard.myLocation}
       />
 

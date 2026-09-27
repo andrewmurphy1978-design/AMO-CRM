@@ -30,7 +30,7 @@ export default async function BookingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.bookings.title} hour12={hour12} dateLocale={dateLocale} location={t.dashboard.myLocation} />
+      <PageHeader title={t.bookings.title} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
       <p className="text-sm text-soft">{t.bookings.subtitle}</p>
 
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">

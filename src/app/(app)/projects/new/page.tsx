@@ -5,7 +5,6 @@ import { getHour12 } from "@/lib/time-format";
 import ProjectForm from "../project-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 
 export default async function NewProjectPage({
   searchParams,
@@ -16,7 +15,6 @@ export default async function NewProjectPage({
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
 
   // One shared client — see src/lib/prisma.ts for why.
   const { contacts, users, hour12 } = await withScopedPrismaClient(async (db) => {
@@ -37,7 +35,6 @@ export default async function NewProjectPage({
       lang={lang}
       title={t.newProjectPage.title}
       hour12={hour12}
-      dateLocale={dateLocale}
       location={t.dashboard.myLocation}
       contacts={contacts.map((c) => ({
         id: c.id,

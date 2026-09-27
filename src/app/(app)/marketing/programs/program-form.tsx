@@ -303,7 +303,6 @@ export default function AffiliateProgramForm({
   title,
   lang,
   hour12,
-  dateLocale,
   location,
   programId,
 }: {
@@ -315,7 +314,6 @@ export default function AffiliateProgramForm({
   title: string;
   lang: Lang;
   hour12: boolean;
-  dateLocale: Parameters<typeof PageHeader>[0]["dateLocale"];
   location: string;
   // Only set on the Edit form — on a successful save, the toast redirects
   // to this program's own info page once it's done showing. The New
@@ -358,7 +356,7 @@ export default function AffiliateProgramForm({
       <PageHeader
         title={title}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={location}
         actions={
           <button

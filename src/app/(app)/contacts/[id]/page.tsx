@@ -356,7 +356,7 @@ export default async function ContactDetailPage({
       <PageHeader
         title={fullName}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={t.dashboard.myLocation}
         actions={
           <div className="flex gap-2">

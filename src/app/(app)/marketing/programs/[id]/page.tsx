@@ -239,7 +239,7 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
       <PageHeader
         title={<HeaderBreadcrumb parts={[{ label: t.marketing.title, href: "/marketing" }, { label: program.name }]} />}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={t.dashboard.myLocation}
         actions={
           <>

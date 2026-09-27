@@ -4,7 +4,6 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
 import PageHeader from "../page-header";
 import { tagKind, TAG_KIND_COLORS, sortTags, isLanguageTag } from "@/lib/tag-colors";
@@ -143,7 +142,6 @@ export default async function ContactsPage({
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
   const STAGE_LABELS = t.stages;
 
   const where: Prisma.ContactWhereInput = {};
@@ -263,7 +261,7 @@ export default async function ContactsPage({
       <PageHeader
         title={t.contacts.title}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={t.dashboard.myLocation}
         actions={
           <Link

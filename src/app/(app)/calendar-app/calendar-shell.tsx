@@ -9,10 +9,10 @@ import {
   startOfDay,
   startOfMonth,
   startOfWeek,
-  type Locale,
 } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
 import type { Lang } from "@/lib/i18n/dictionaries";
+import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { LinkOption } from "../link-dialog";
 import EventDialog, { type EventDialogLabels, type EventDialogTarget } from "./event-dialog";
 import EventViewDialog, { type EventViewDialogLabels } from "./event-view-dialog";
@@ -104,7 +104,6 @@ export default function CalendarShell({
   tasks,
   bookings,
   hour12,
-  dateLocale,
   intlLocale,
   lang,
   labels,
@@ -121,7 +120,6 @@ export default function CalendarShell({
   tasks: LinkOption[];
   bookings: LinkOption[];
   hour12: boolean;
-  dateLocale: Locale | undefined;
   intlLocale: string;
   lang: Lang;
   labels: CalendarShellLabels;
@@ -131,6 +129,11 @@ export default function CalendarShell({
   refreshLabel: string;
   refreshingLabel: string;
 }) {
+  // Resolved from `lang` here (client-side) rather than taken as a raw
+  // date-fns Locale prop — a Locale carries function values, which can't
+  // cross the Server->Client boundary when this is rendered from a Server
+  // Component page.
+  const dateLocale = getDateLocale(lang);
   const [view, setView] = useState<ViewMode>("week");
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [events, setEvents] = useState(initialEvents);
@@ -279,7 +282,7 @@ export default function CalendarShell({
       <PageHeader
         title={title}
         hour12={hour12}
-        dateLocale={dateLocale}
+        lang={lang}
         location={location}
         actions={
           // Mobile only: this wrapper groups the action buttons with a much

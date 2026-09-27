@@ -6,7 +6,6 @@ import { getHour12 } from "@/lib/time-format";
 import ContactForm from "../../contact-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 
 export default async function EditContactPage({
   params,
@@ -38,7 +37,6 @@ export default async function EditContactPage({
 
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
   const boundUpdate = updateContact.bind(null, contact.id);
 
   return (
@@ -51,7 +49,6 @@ export default async function EditContactPage({
       currentTags={contact.tags.map((ct) => ct.tag.name)}
       title={t.editContactPage.title}
       hour12={hour12}
-      dateLocale={dateLocale}
       location={t.dashboard.myLocation}
       contactId={contact.id}
     />

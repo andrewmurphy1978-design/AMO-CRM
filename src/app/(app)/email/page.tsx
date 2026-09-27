@@ -5,7 +5,6 @@ import { getCachedInbox, getScreeningExtras, type EmailScreeningPayload } from "
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 import EmailScreeningView from "./email-screening-view";
 import { GmailIcon, IonosIcon } from "./mail-brand-icons";
 import MailAppLinksMenu from "./mail-app-links-menu";
@@ -19,7 +18,6 @@ export default async function EmailPage() {
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
-  const dateLocale = getDateLocale(lang);
 
   // One shared client — reads the last-fetched inbox snapshot straight
   // from the DB (see EmailInboxCache) instead of hitting Gmail on every
@@ -88,7 +86,6 @@ export default async function EmailPage() {
       hour12={hour12}
       lang={lang}
       title={t.email.title}
-      dateLocale={dateLocale}
       location={t.dashboard.myLocation}
       defaultComposeSource={composePrefs?.defaultComposeSource ?? null}
       defaultFontFamily={composePrefs?.defaultFontFamily ?? null}
