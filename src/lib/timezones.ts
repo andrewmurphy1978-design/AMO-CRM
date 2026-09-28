@@ -34,7 +34,7 @@ const FALLBACK_ZONES = [
   "Pacific/Auckland",
 ];
 
-function offsetMinutes(timeZone: string, at: Date): number {
+export function offsetMinutes(timeZone: string, at: Date): number {
   const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "shortOffset" }).formatToParts(at);
   const raw = parts.find((p) => p.type === "timeZoneName")?.value ?? "GMT+0";
   const match = raw.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
@@ -51,6 +51,16 @@ function formatOffset(offsetMin: number): string {
   const hh = String(Math.floor(abs / 60)).padStart(2, "0");
   const mm = String(abs % 60).padStart(2, "0");
   return `UTC${sign}${hh}:${mm}`;
+}
+
+// Compact form for tight display spots (World Clock widget tiles) —
+// "UTC-4" / "UTC+5:30" instead of formatOffset's zero-padded "UTC-04:00".
+export function formatOffsetShort(offsetMin: number): string {
+  const sign = offsetMin < 0 ? "-" : "+";
+  const abs = Math.abs(offsetMin);
+  const hh = Math.floor(abs / 60);
+  const mm = abs % 60;
+  return mm === 0 ? `UTC${sign}${hh}` : `UTC${sign}${hh}:${String(mm).padStart(2, "0")}`;
 }
 
 // The zone's city/region name alone (no offset) — e.g. "Toronto" for

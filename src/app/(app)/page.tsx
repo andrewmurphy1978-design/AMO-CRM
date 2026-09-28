@@ -24,8 +24,12 @@ import WeatherHeaderServer from "./weather-header-server";
 import { WeatherWidgetSkeleton } from "./header-weather-widget";
 import HeaderWorldClockWidget from "./header-world-clock-widget";
 import NewsCardServer from "./news-card-server";
+import NewsHeaderServer from "./news-header-server";
+import { NewsWidgetSkeleton } from "./header-news-widget";
 import SportsCardServer from "./sports-card-server";
 import MarketsCardServer from "./markets-card-server";
+import MarketsHeaderServer from "./markets-header-server";
+import { MarketsWidgetSkeleton } from "./header-markets-widget";
 import EmailCard from "./email-card";
 import EmailSummaryCard from "./email-summary-card";
 import CalendarCardServer from "./calendar-card-server";
@@ -51,6 +55,7 @@ import {
 import { getLatestSocialSnapshots } from "@/lib/social";
 import { getHour12 } from "@/lib/time-format";
 import { getUserWorldClockZones } from "@/lib/world-clock-zones";
+import { getUserMarketsPicks } from "@/lib/dashboard-markets-picks";
 import type { AutomationRun } from "@prisma/client";
 
 // Same full lockup used in the sidebar's expanded state elsewhere — the
@@ -178,6 +183,8 @@ export default async function DashboardPage() {
     hour12,
     worldZones,
     headerZones,
+    marketsCurrency,
+    marketsItems,
     emailInitialData,
     addressColors,
     linkContacts,
@@ -268,6 +275,7 @@ export default async function DashboardPage() {
     const socialSnapshots = await getLatestSocialSnapshots(db);
     const hour12 = await getHour12(session, db);
     const { worldZones, headerZones } = await getUserWorldClockZones(session, db);
+    const { currency: marketsCurrency, items: marketsItems } = await getUserMarketsPicks(session, db);
     // Same address-color lookup the Email page's own dialogs use for their
     // colored header strip — fetched here too now that this card opens
     // those same dialogs instead of deep-linking out to Gmail.
@@ -363,6 +371,8 @@ export default async function DashboardPage() {
       hour12,
       worldZones,
       headerZones,
+      marketsCurrency,
+      marketsItems,
       emailInitialData,
       addressColors,
       linkContacts,
@@ -764,17 +774,27 @@ export default async function DashboardPage() {
         location={t.dashboard.myLocation}
         logoUrl={AMO_LOGO_URL}
         logoAccessory={
-          <Suspense fallback={<WeatherWidgetSkeleton />}>
-            <WeatherHeaderServer lang={lang} labels={weatherLabels} />
-          </Suspense>
+          <>
+            <Suspense fallback={<WeatherWidgetSkeleton />}>
+              <WeatherHeaderServer lang={lang} labels={weatherLabels} />
+            </Suspense>
+            <Suspense fallback={<NewsWidgetSkeleton />}>
+              <NewsHeaderServer labels={newsLabels} />
+            </Suspense>
+          </>
         }
         dateTimeAccessory={
-          <HeaderWorldClockWidget
-            headerZones={headerZones}
-            allZones={worldZones}
-            hour12={hour12}
-            title={t.dashboard.worldClocksTitle}
-          />
+          <>
+            <Suspense fallback={<MarketsWidgetSkeleton />}>
+              <MarketsHeaderServer currency={marketsCurrency} items={marketsItems} labels={marketsLabels} />
+            </Suspense>
+            <HeaderWorldClockWidget
+              headerZones={headerZones}
+              allZones={worldZones}
+              hour12={hour12}
+              title={t.dashboard.worldClocksTitle}
+            />
+          </>
         }
       />
 

@@ -75,6 +75,14 @@ model User {
   // defaults still reaches anyone who never customized their own.
   worldClockZones            String[]   @default([])
   headerClockZones           String[]   @default([])
+  // The Dashboard header's condensed Markets widget: one currency (shown
+  // as "1 CAD = x <currency>") plus up to 3 other picks, each a
+  // "index:<symbol>" / "commodity:<symbol>" / "crypto:<id>" key into the
+  // pools in src/lib/markets.ts — see src/lib/dashboard-markets-picks.ts.
+  // Null/empty means "use the built-in defaults", same reasoning as the
+  // World Clock zones above.
+  marketsCurrency            String?
+  marketsItems               String[]   @default([])
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @updatedAt
 

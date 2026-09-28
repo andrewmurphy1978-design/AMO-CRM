@@ -45,7 +45,7 @@ export interface MarketsSnapshot {
   errors: string[];
 }
 
-const CURRENCY_CODES: { code: string; countryCode: string }[] = [
+export const CURRENCY_CODES: { code: string; countryCode: string }[] = [
   { code: "USD", countryCode: "us" },
   { code: "EUR", countryCode: "eu" },
   { code: "GBP", countryCode: "gb" },
@@ -68,7 +68,7 @@ export const CRYPTO_IDS: { id: string; label: string; logo: string }[] = [
 // the Stooq symbols this replaced (Stooq quietly started requiring an
 // emailed-for, CAPTCHA-gated API key in ~April 2026, which is why its free
 // endpoint started 404ing).
-const INDEX_SYMBOLS: { symbol: string; label: string; countryCode: string; currency: string }[] = [
+export const INDEX_SYMBOLS: { symbol: string; label: string; countryCode: string; currency: string }[] = [
   { symbol: "^GSPC", label: "S&P 500", countryCode: "us", currency: "USD" },
   { symbol: "^DJI", label: "Dow Jones", countryCode: "us", currency: "USD" },
   { symbol: "^IXIC", label: "Nasdaq", countryCode: "us", currency: "USD" },
@@ -80,7 +80,7 @@ const INDEX_SYMBOLS: { symbol: string; label: string; countryCode: string; curre
   { symbol: "^HSI", label: "Hang Seng", countryCode: "hk", currency: "HKD" },
 ];
 
-const COMMODITY_SYMBOLS: { symbol: string; label: string; icon: string; currency: string }[] = [
+export const COMMODITY_SYMBOLS: { symbol: string; label: string; icon: string; currency: string }[] = [
   { symbol: "GC=F", label: "Gold", icon: "🥇", currency: "USD" },
   { symbol: "BZ=F", label: "Brent crude", icon: "🛢️", currency: "USD" },
   { symbol: "CL=F", label: "WTI crude", icon: "🛢️", currency: "USD" },
@@ -204,6 +204,53 @@ async function getYahooQuotes<T extends { symbol: string; currency: string }>(
   errors: string[]
 ): Promise<(T & { price: number | null; changePct: number | null })[]> {
   return Promise.all(items.map((item) => getYahooQuote(item, errors)));
+}
+
+export interface MarketsWidgetCurrencyRow {
+  code: string;
+  countryCode: string;
+  rateFromBase: number;
+  changePct: number | null;
+}
+
+export interface MarketsWidgetItemRow {
+  key: string;
+  label: string;
+  changePct: number | null;
+}
+
+// The condensed Dashboard header Markets widget's 4 rows (1 currency + up
+// to 3 others), picked out of the same full snapshot the Markets card
+// itself renders — a pure function so it can run entirely off the already-
+// fetched snapshot, no extra network calls.
+export function pickMarketsWidgetData(
+  snapshot: MarketsSnapshot,
+  currency: string,
+  itemKeys: string[]
+): { currencyRow: MarketsWidgetCurrencyRow | null; itemRows: MarketsWidgetItemRow[] } {
+  const pair = snapshot.currencies.find((c) => c.code === currency);
+  const currencyRow: MarketsWidgetCurrencyRow | null = pair
+    ? { code: pair.code, countryCode: pair.countryCode, rateFromBase: pair.rateFromBase, changePct: pair.changePct }
+    : null;
+
+  const itemRows: MarketsWidgetItemRow[] = itemKeys.flatMap((key) => {
+    const [group, id] = key.split(/:(.+)/);
+    if (group === "index") {
+      const item = snapshot.indices.find((i) => i.symbol === id);
+      return item ? [{ key, label: item.label, changePct: item.changePct }] : [];
+    }
+    if (group === "commodity") {
+      const item = snapshot.commodities.find((c) => c.symbol === id);
+      return item ? [{ key, label: item.label, changePct: item.changePct }] : [];
+    }
+    if (group === "crypto") {
+      const item = snapshot.crypto.find((c) => c.id === id);
+      return item ? [{ key, label: item.label, changePct: item.changePct24h }] : [];
+    }
+    return [];
+  });
+
+  return { currencyRow, itemRows };
 }
 
 export async function getMarketsSnapshot(): Promise<MarketsSnapshot> {

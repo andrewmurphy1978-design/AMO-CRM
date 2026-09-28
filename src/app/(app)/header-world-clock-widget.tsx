@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { zoneShortLabel } from "@/lib/timezones";
+import { zoneShortLabel, offsetMinutes, formatOffsetShort } from "@/lib/timezones";
 
 // Replaces the old dashboard-wide World Clocks card (world-clocks.tsx) —
 // the compact pill shows the 2 zones picked in Settings (see
@@ -47,6 +47,10 @@ export default function HeaderWorldClockWidget({
       : "--:--";
   }
 
+  function offsetIn(zone: string): string {
+    return now ? formatOffsetShort(offsetMinutes(zone, now)) : "";
+  }
+
   if (headerZones.length === 0) return null;
 
   return (
@@ -57,30 +61,33 @@ export default function HeaderWorldClockWidget({
         className="flex items-center gap-3 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15"
       >
         {headerZones.map((zone) => (
-          <span key={zone} className="text-center leading-tight">
-            <span className="block text-[9px] uppercase tracking-wide opacity-75">
+          <span key={zone} className="max-w-[5.5rem] min-w-0 text-center leading-tight">
+            <span className="block truncate text-[9px] uppercase tracking-wide opacity-75">
               {zoneShortLabel(zone)}
             </span>
-            <span className="block font-display text-sm font-bold tabular-nums">
+            <span className="block truncate font-display text-sm font-bold tabular-nums">
               {timeIn(zone)}
             </span>
           </span>
         ))}
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-72 rounded-xl border border-card-border bg-card-bg p-4 text-left shadow-lg">
+        <div className="absolute right-0 top-full z-40 mt-2 w-[26rem] max-w-[calc(100vw-2rem)] rounded-xl border border-card-border bg-card-bg p-4 text-left shadow-lg">
           <h3 className="font-display text-sm font-semibold text-ink">{title}</h3>
-          <div className="mt-2 grid grid-cols-4 gap-1.5">
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
             {allZones.map((zone) => (
               <div
                 key={zone}
-                className="rounded-lg bg-black/5 px-1.5 py-1.5 text-center"
+                className="min-w-0 overflow-hidden rounded-lg bg-black/5 px-2 py-1.5 text-center"
               >
-                <p className="text-[10px] font-medium uppercase tracking-wide text-soft">
+                <p className="truncate text-[10px] font-medium uppercase tracking-wide text-soft">
                   {zoneShortLabel(zone)}
                 </p>
-                <p className="font-display text-sm font-semibold text-ink">
+                <p className="truncate font-display text-sm font-semibold text-ink">
                   {timeIn(zone)}
+                </p>
+                <p className="truncate text-[9px] font-medium text-soft/80">
+                  {offsetIn(zone)}
                 </p>
               </div>
             ))}

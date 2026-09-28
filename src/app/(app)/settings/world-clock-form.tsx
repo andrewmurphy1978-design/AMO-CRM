@@ -30,6 +30,20 @@ export default function WorldClockForm({
     setHeaderZones((h) => h.filter((z) => next.includes(z)));
   }
 
+  // `zones`' own array order is what the World Clock header widget's
+  // dropdown displays in (see effectiveWorldClockZones) — moving an entry
+  // here is the only way a user can control that order, since the
+  // MultiSelect above always appends newly-checked zones to the end.
+  function moveZone(index: number, direction: -1 | 1) {
+    setZones((z) => {
+      const target = index + direction;
+      if (target < 0 || target >= z.length) return z;
+      const next = [...z];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
   function toggleHeaderZone(zone: string) {
     setHeaderZones((h) => {
       if (h.includes(zone)) return h.filter((z) => z !== zone);
@@ -59,6 +73,45 @@ export default function WorldClockForm({
           onChange={handleZonesChange}
         />
       </div>
+
+      {zones.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-soft">
+            {t.settings.worldClockOrderLabel}
+          </p>
+          <p className="mt-1 text-xs text-soft">{t.settings.worldClockOrderDesc}</p>
+          <ul className="mt-2 divide-y divide-card-border rounded-md border border-card-border">
+            {zones.map((zone, i) => (
+              <li key={zone} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                <span className="min-w-0 truncate text-sm text-ink">
+                  <span className="mr-2 text-xs text-soft">{i + 1}.</span>
+                  {zoneShortLabel(zone)}
+                </span>
+                <span className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveZone(i, -1)}
+                    disabled={i === 0}
+                    aria-label={t.settings.worldClockMoveUp}
+                    className="rounded border border-card-border px-1.5 py-0.5 text-xs text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveZone(i, 1)}
+                    disabled={i === zones.length - 1}
+                    aria-label={t.settings.worldClockMoveDown}
+                    className="rounded border border-card-border px-1.5 py-0.5 text-xs text-ink disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    ↓
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {zones.length > 0 && (
         <div className="mt-4">

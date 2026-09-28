@@ -28,6 +28,8 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getWatchedPeople, isPersonalSectionUser } from "@/lib/personal-watch";
 import { effectiveWorldClockZones, effectiveHeaderClockZones } from "@/lib/world-clock-zones";
+import { effectiveMarketCurrency, effectiveMarketItems } from "@/lib/dashboard-markets-picks";
+import MarketsPicksForm from "./markets-picks-form";
 import PageHeader from "../page-header";
 
 interface MakeMetadata {
@@ -84,6 +86,8 @@ export default async function SettingsPage({
               defaultFontSize: true,
               worldClockZones: true,
               headerClockZones: true,
+              marketsCurrency: true,
+              marketsItems: true,
             },
           })
         : null;
@@ -141,6 +145,8 @@ export default async function SettingsPage({
     currentUser?.headerClockZones ?? [],
     worldClockZones,
   );
+  const marketsCurrency = effectiveMarketCurrency(currentUser?.marketsCurrency ?? null);
+  const marketsItems = effectiveMarketItems(currentUser?.marketsItems ?? []);
   // Set by .github/workflows/deploy.yml right before the Cloudflare build —
   // absent in local dev, where there's no deploy to report. Shown in the
   // "Your CRM link" card as the fastest way to confirm a given push
@@ -211,6 +217,13 @@ export default async function SettingsPage({
                 lang={lang}
                 initialZones={worldClockZones}
                 initialHeaderZones={headerClockZones}
+              />
+            )}
+            {currentUser && (
+              <MarketsPicksForm
+                lang={lang}
+                initialCurrency={marketsCurrency}
+                initialItems={marketsItems}
               />
             )}
           </section>

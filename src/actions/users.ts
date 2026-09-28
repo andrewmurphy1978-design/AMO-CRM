@@ -7,6 +7,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { MAX_WORLD_CLOCK_ZONES, HEADER_CLOCK_COUNT } from "@/lib/world-clock-zones";
+import { MAX_MARKET_ITEMS, MARKET_CURRENCY_OPTIONS, MARKET_ITEM_OPTIONS } from "@/lib/dashboard-markets-picks";
 
 async function requireAdmin() {
   const session = await auth();
@@ -266,6 +267,36 @@ export async function saveWorldClockSettings(
   revalidatePath("/");
 
   return { success: t.actions.worldClockSettingsSaved };
+}
+
+export async function saveMarketsSettings(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const currency = String(formData.get("marketsCurrency") ?? "");
+  const items = formData.getAll("marketsItems").map(String).filter(Boolean);
+
+  if (!(MARKET_CURRENCY_OPTIONS as readonly string[]).includes(currency)) {
+    return { error: t.actions.invalidInput };
+  }
+  if (items.length > MAX_MARKET_ITEMS || items.some((key) => !MARKET_ITEM_OPTIONS.some((o) => o.key === key))) {
+    return { error: t.actions.invalidInput };
+  }
+
+  await withScopedPrismaClient((db) =>
+    db.user.update({
+      where: { id: session.user.id },
+      data: { marketsCurrency: currency, marketsItems: items },
+    })
+  );
+  revalidatePath("/settings");
+  revalidatePath("/");
+
+  return { success: t.actions.marketsSettingsSaved };
 }
 
 // Which connected mail account (MailSource: "gmail" | "ionos") the New

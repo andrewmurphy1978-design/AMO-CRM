@@ -41,15 +41,15 @@ export default function SummarySubCard({
   if (layout === "row") {
     return (
       <div
-        className={`flex ${SUB_CARD_HEIGHT} items-center justify-center gap-2 rounded-lg px-2 py-2 text-center ${bg} ${text} ${className ?? ""}`}
+        className={`flex ${SUB_CARD_HEIGHT} min-w-0 items-center justify-center gap-2 overflow-hidden rounded-lg px-2 py-2 text-center ${bg} ${text} ${className ?? ""}`}
       >
-        <span className="flex items-baseline gap-1">
+        <span className="flex shrink-0 items-baseline gap-1">
           <span className="font-display text-xl font-bold leading-none sm:text-2xl">
             {value}
           </span>
           {hoursSuffix}
         </span>
-        <span className="text-xs font-medium leading-tight sm:text-sm">
+        <span className="min-w-0 truncate text-xs font-medium leading-tight sm:text-sm">
           {label}
         </span>
       </div>
@@ -57,7 +57,7 @@ export default function SummarySubCard({
   }
   return (
     <div
-      className={`flex ${SUB_CARD_HEIGHT} flex-col items-center justify-center rounded-lg px-1.5 py-2 text-center ${bg} ${text} ${className ?? ""}`}
+      className={`flex ${SUB_CARD_HEIGHT} min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg px-1.5 py-2 text-center ${bg} ${text} ${className ?? ""}`}
     >
       <span className="flex items-baseline gap-1">
         <span className="font-display text-lg font-bold leading-none sm:text-xl">
@@ -65,7 +65,7 @@ export default function SummarySubCard({
         </span>
         {hoursSuffix}
       </span>
-      <span className="mt-1 text-[9px] font-medium leading-tight sm:text-[10px]">
+      <span className="mt-1 line-clamp-2 w-full text-[9px] font-medium leading-tight sm:text-[10px]">
         {label}
       </span>
     </div>
