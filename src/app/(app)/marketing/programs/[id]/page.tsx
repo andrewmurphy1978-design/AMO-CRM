@@ -292,7 +292,12 @@ export default async function AffiliateProgramDetailPage({ params }: { params: P
                 <p className={LABEL_CLASS}>{t.marketing.accountPlanLabel}</p>
                 <p className="mt-1 text-sm text-ink">{program.accountPlan || "—"}</p>
               </div>
-              <div />
+              <div>
+                <p className={LABEL_CLASS}>{t.marketing.emailLabel}</p>
+                <p className="mt-1 text-sm text-ink">
+                  {[program.email, ...program.extraEmails].filter(Boolean).join(", ") || "—"}
+                </p>
+              </div>
               <div />
 
               {/* Row 3: English links + Short.io Link Created */}

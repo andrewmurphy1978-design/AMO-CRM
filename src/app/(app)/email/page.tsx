@@ -37,7 +37,7 @@ export default async function EmailPage() {
       const contacts = await db.contact.findMany({
         orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
         take: 300,
-        select: { id: true, firstName: true, lastName: true, email: true },
+        select: { id: true, firstName: true, lastName: true, email: true, extraEmails: true },
       });
       const projects = await db.project.findMany({
         orderBy: { name: "asc" },
@@ -52,7 +52,7 @@ export default async function EmailPage() {
       });
       const affiliatePrograms = await db.affiliateProgram.findMany({
         orderBy: { name: "asc" },
-        select: { id: true, name: true },
+        select: { id: true, name: true, email: true, extraEmails: true },
       });
       const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
 
@@ -69,10 +69,10 @@ export default async function EmailPage() {
     }
   );
 
-  const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c) }));
+  const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email, extraEmails: c.extraEmails }));
   const projectOptions = projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId }));
   const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId }));
-  const programOptions = affiliatePrograms.map((p) => ({ id: p.id, label: p.name }));
+  const programOptions = affiliatePrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails }));
 
   return (
     <EmailScreeningView

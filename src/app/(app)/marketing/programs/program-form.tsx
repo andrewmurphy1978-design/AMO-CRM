@@ -23,6 +23,8 @@ type AffiliateProgramFormValues = {
   name?: string;
   type?: string | null;
   iconUrl?: string | null;
+  email?: string | null;
+  extraEmails?: string[] | null;
   shortioCreated?: boolean;
   brandedLink?: string | null;
   destinationLink?: string | null;
@@ -327,6 +329,15 @@ export default function AffiliateProgramForm({
   const router = useRouter();
   const apiKey = useApiKeyField(programId, hasApiKeySaved, t);
 
+  // Same "+ Add" / remove pattern as Contact's own extraEmails field
+  // (contact-form.tsx) — an unlimited number of additional addresses
+  // beyond the primary Email field, each submitted as its own
+  // name="extraEmails" input and read back with formData.getAll.
+  const [extraEmails, setExtraEmails] = useState(() =>
+    (defaultValues?.extraEmails ?? []).map((value, id) => ({ id, value }))
+  );
+  const nextEmailId = useRef(extraEmails.length);
+
   const [dismissed, setDismissed] = useState(false);
   const [lastSuccess, setLastSuccess] = useState<string | undefined>(undefined);
   if (state?.success !== lastSuccess) {
@@ -404,6 +415,37 @@ export default function AffiliateProgramForm({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Emails — same "+ Add" list as Contact's own email field, full
+              width since the list can grow past a single column. Lets these
+              addresses be picked from the Email compose dialog's
+              To/Cc/Bcc address book. */}
+          <div className="lg:col-span-3">
+            <label className={LABEL_CLASS}>{t.marketing.emailLabel}</label>
+            <div className="mt-1 space-y-1.5">
+              <input type="email" name="email" defaultValue={defaultValues?.email ?? ""} className={`${FIELD_CLASS} mt-0`} />
+              {extraEmails.map((row) => (
+                <div key={row.id} className="flex items-center gap-1.5">
+                  <input type="email" name="extraEmails" defaultValue={row.value} className={`${FIELD_CLASS} mt-0 flex-1`} />
+                  <button
+                    type="button"
+                    onClick={() => setExtraEmails((rows) => rows.filter((r) => r.id !== row.id))}
+                    className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                    aria-label={t.contactForm.removeEntry}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setExtraEmails((rows) => [...rows, { id: nextEmailId.current++, value: "" }])}
+                className="text-xs font-semibold text-amo-lime hover:underline"
+              >
+                + {t.contactForm.addEmail}
+              </button>
+            </div>
           </div>
 
           {/* Row 2: Status, Status Details, Account / Plan */}

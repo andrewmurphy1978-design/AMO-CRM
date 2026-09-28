@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "@/lib/clsx";
 import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
@@ -10,9 +10,10 @@ import type { EmailDetail } from "@/actions/email-messages";
 import { sendDraftAction, discardDraftAction, createDraftAction, type DraftSource } from "@/actions/email-drafts";
 import { resolveComposeSignatureAction, type ComposeSignatureMode } from "@/actions/email-signatures";
 import { buildQuotedReply } from "@/lib/mail/mime-build";
-import type { MailSource } from "@/lib/mail/identity";
+import type { MailIdentity, MailSource } from "@/lib/mail/identity";
 import { NO_ADDRESS_COLOR, contrastTextColor } from "@/lib/email-address-match";
 import { EmailLinkSummary, EmailLinkEditor, type EmailLinkConfig } from "./email-link-fields";
+import type { LinkOption } from "../link-dialog";
 
 export type ComposeMode = "reply" | "replyAll" | "forward" | "draft" | "new";
 
@@ -115,9 +116,160 @@ function identityKey(id: FromIdentity): string {
   return `${id.source}:${id.accountAddress}`;
 }
 
-function parseIdentityKey(key: string): FromIdentity {
-  const idx = key.indexOf(":");
-  return { source: key.slice(0, idx) as MailSource, accountAddress: key.slice(idx + 1) };
+interface AddressBookEntry {
+  key: string;
+  label: string;
+  email: string;
+}
+
+// Flattens Contacts/Affiliate Programs (each can have a primary + several
+// extra addresses — Contact.email/extraEmails, AffiliateProgram's own
+// mirror of that pattern) into one search list for the To/Cc/Bcc
+// autocomplete below — one entry per address rather than one per
+// contact/program, so every address is individually searchable/pickable.
+function buildAddressBook(contactOptions: LinkOption[], programOptions: LinkOption[]): AddressBookEntry[] {
+  const entries: AddressBookEntry[] = [];
+  for (const opt of [...contactOptions, ...programOptions]) {
+    for (const email of [opt.email, ...(opt.extraEmails ?? [])]) {
+      if (email) entries.push({ key: `${opt.id}:${email}`, label: opt.label, email });
+    }
+  }
+  return entries;
+}
+
+// Attached beneath the To/Cc/Bcc inputs — as the user types, whatever's
+// after the last comma/semicolon is matched against the address book by
+// name or address; picking a match appends "Name <email>" (or just the
+// email, name-less) and a trailing ", " so the next address can be typed
+// right away. Closing on blur (rather than a click-outside listener) needs
+// each suggestion's onMouseDown to preventDefault, since a plain click
+// would otherwise blur the input — and dismiss the list — before the
+// click's own onClick ever fires.
+function AddressField({
+  value,
+  onChange,
+  addressBook,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  addressBook: AddressBookEntry[];
+  className: string;
+}) {
+  const [focused, setFocused] = useState(false);
+
+  const query = value
+    .slice(Math.max(value.lastIndexOf(","), value.lastIndexOf(";")) + 1)
+    .trim()
+    .toLowerCase();
+  const matches = useMemo(() => {
+    if (!query) return [];
+    const already = value.toLowerCase();
+    return addressBook
+      .filter((a) => !already.includes(a.email.toLowerCase()) && (a.label.toLowerCase().includes(query) || a.email.toLowerCase().includes(query)))
+      .slice(0, 6);
+  }, [addressBook, query, value]);
+
+  function pick(entry: AddressBookEntry) {
+    const idx = Math.max(value.lastIndexOf(","), value.lastIndexOf(";"));
+    const prefix = idx >= 0 ? `${value.slice(0, idx + 1)} ` : "";
+    onChange(`${prefix}${entry.label ? `${entry.label} <${entry.email}>` : entry.email}, `);
+  }
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setTimeout(() => setFocused(false), 120)}
+        className={`w-full ${className}`}
+      />
+      {focused && matches.length > 0 && (
+        <div className="absolute left-0 right-0 z-20 mt-1 max-h-40 overflow-y-auto rounded-md border border-card-border bg-card-bg shadow-lg">
+          {matches.map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(entry)}
+              className="block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-amo-lime/10"
+            >
+              <span className="text-ink">{entry.label}</span>
+              {entry.label && <span className="text-soft"> · </span>}
+              <span className="text-soft">{entry.email}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A real dropdown panel attached directly below the trigger — same
+// "SingleSelect" pattern used elsewhere in the app (src/components/single-select.tsx)
+// — rather than a native <select>, whose own open panel is entirely the
+// OS/browser's to draw: on mobile that's typically a full-width sheet of
+// radio buttons, not something that reads as "attached" to the field.
+function FromDropdown({
+  identities,
+  value,
+  onChange,
+}: {
+  identities: MailIdentity[];
+  value: FromIdentity | null;
+  onChange: (identity: FromIdentity) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const current = value && identities.find((id) => id.source === value.source && id.accountAddress === value.accountAddress);
+
+  return (
+    <div className="relative min-w-0 flex-1" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
+      >
+        <span className="min-w-0 flex-1 truncate text-left">
+          {current ? (current.displayName ? `${current.displayName} <${current.accountAddress}>` : current.accountAddress) : ""}
+        </span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4 shrink-0 text-soft">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 z-20 mt-1 max-h-56 overflow-y-auto rounded-md border border-card-border bg-card-bg p-1 shadow-lg">
+          {identities.map((id) => (
+            <button
+              key={identityKey(id)}
+              type="button"
+              onClick={() => {
+                onChange({ source: id.source, accountAddress: id.accountAddress });
+                setOpen(false);
+              }}
+              className={`block w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-field-bg ${
+                value && identityKey(value) === identityKey(id) ? "font-semibold text-ink" : "text-ink"
+              }`}
+            >
+              {id.displayName ? `${id.displayName} <${id.accountAddress}>` : id.accountAddress}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // New/Reply/Reply All/Forward/Draft-review compose UI, opened from the
@@ -136,6 +288,8 @@ export default function EmailComposeDialog({
   hour12,
   defaultFontFamily,
   defaultFontSize,
+  contactOptions,
+  programOptions,
   labels,
 }: {
   target: EmailComposeTarget | null;
@@ -148,8 +302,14 @@ export default function EmailComposeDialog({
   hour12: boolean;
   defaultFontFamily?: string | null;
   defaultFontSize?: string | null;
+  // Powers the To/Cc/Bcc address-book autocomplete below — optional so
+  // callers that don't have this data handy (e.g. a detail page's inline
+  // reply) still get a working, if unassisted, compose dialog.
+  contactOptions?: LinkOption[];
+  programOptions?: LinkOption[];
   labels: EmailComposeLabels;
 }) {
+  const addressBook = useMemo(() => buildAddressBook(contactOptions ?? [], programOptions ?? []), [contactOptions, programOptions]);
   const [to, setTo] = useState("");
   const [cc, setCc] = useState("");
   // Hidden by default on mobile behind an "Add cc" link (see the render
@@ -437,17 +597,7 @@ export default function EmailComposeDialog({
             <div className="flex items-center gap-2">
               <label className="w-10 shrink-0 text-sm text-soft">{labels.from}</label>
               {identities.length > 1 ? (
-                <select
-                  value={fromIdentity ? identityKey(fromIdentity) : ""}
-                  onChange={(e) => setFromIdentity(parseIdentityKey(e.target.value))}
-                  className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
-                >
-                  {identities.map((id) => (
-                    <option key={identityKey(id)} value={identityKey(id)}>
-                      {id.displayName ? `${id.displayName} <${id.accountAddress}>` : id.accountAddress}
-                    </option>
-                  ))}
-                </select>
+                <FromDropdown identities={identities} value={fromIdentity} onChange={setFromIdentity} />
               ) : (
                 <div className="min-w-0 flex-1 truncate rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink">
                   {fromIdentity?.accountAddress ?? target.message.replyIdentity.accountAddress}
@@ -457,10 +607,10 @@ export default function EmailComposeDialog({
 
             <div className="flex items-center gap-2">
               <label className="w-10 shrink-0 text-sm text-soft">{labels.to}</label>
-              <input
-                type="text"
+              <AddressField
                 value={to}
-                onChange={(e) => setTo(e.target.value)}
+                onChange={setTo}
+                addressBook={addressBook}
                 className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
               />
             </div>
@@ -470,10 +620,10 @@ export default function EmailComposeDialog({
                 its declaration); always shown at `sm` and up regardless. */}
             <div className={clsx("items-center gap-2", showCc ? "flex" : "hidden sm:flex")}>
               <label className="w-10 shrink-0 text-sm text-soft">{labels.cc}</label>
-              <input
-                type="text"
+              <AddressField
                 value={cc}
-                onChange={(e) => setCc(e.target.value)}
+                onChange={setCc}
+                addressBook={addressBook}
                 className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
               />
             </div>
@@ -481,10 +631,10 @@ export default function EmailComposeDialog({
             {showBcc && (
               <div className="flex items-center gap-2">
                 <label className="w-10 shrink-0 text-sm text-soft">{labels.bcc}</label>
-                <input
-                  type="text"
+                <AddressField
                   value={bcc}
-                  onChange={(e) => setBcc(e.target.value)}
+                  onChange={setBcc}
+                  addressBook={addressBook}
                   className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
                 />
               </div>

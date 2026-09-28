@@ -1201,6 +1201,8 @@ export default function EmailScreeningView({
         hour12={hour12}
         defaultFontFamily={defaultFontFamily}
         defaultFontSize={defaultFontSize}
+        contactOptions={contactOptions}
+        programOptions={programOptions}
         labels={emailComposeLabels}
       />
 

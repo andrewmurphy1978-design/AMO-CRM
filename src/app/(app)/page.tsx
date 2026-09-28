@@ -302,7 +302,7 @@ export default async function DashboardPage() {
     const linkContacts = await db.contact.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       take: 300,
-      select: { id: true, firstName: true, lastName: true, email: true },
+      select: { id: true, firstName: true, lastName: true, email: true, extraEmails: true },
     });
     const linkProjects = await db.project.findMany({
       orderBy: { name: "asc" },
@@ -317,7 +317,7 @@ export default async function DashboardPage() {
     });
     const linkAffiliatePrograms = await db.affiliateProgram.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, email: true, extraEmails: true },
     });
 
     // Reads the same cached inbox snapshot the Email page maintains — a
@@ -405,6 +405,8 @@ export default async function DashboardPage() {
   const emailLinkContactOptions = linkContacts.map((c) => ({
     id: c.id,
     label: contactLabel(c),
+    email: c.email,
+    extraEmails: c.extraEmails,
   }));
   const emailLinkProjectOptions = linkProjects.map((p) => ({
     id: p.id,
@@ -419,6 +421,8 @@ export default async function DashboardPage() {
   const emailLinkProgramOptions = linkAffiliatePrograms.map((p) => ({
     id: p.id,
     label: p.name,
+    email: p.email,
+    extraEmails: p.extraEmails,
   }));
 
   // Feeds the Email Summary stat card — same classification/completion/

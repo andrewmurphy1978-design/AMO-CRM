@@ -7,7 +7,8 @@ export interface LinkOption {
   label: string;
   contactId?: string | null; // set on projects and bookings — which client they belong to
   projectId?: string | null; // set on tasks — which project they belong to
-  email?: string | null; // set on contacts — for the Calendar event dialog's guest-from-contact search
+  email?: string | null; // set on contacts/programs — for the Calendar guest search and the Email compose address book
+  extraEmails?: string[] | null; // set on contacts/programs — additional addresses for the Email compose address book
 }
 
 export interface LinkDialogLabels {

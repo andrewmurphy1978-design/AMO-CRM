@@ -715,6 +715,8 @@ export default function EmailCard({
         dateLocale={dateLocale}
         intlLocale={intlLocale}
         hour12={hour12}
+        contactOptions={contactOptions}
+        programOptions={programOptions}
         labels={t.emailCompose}
       />
     </div>

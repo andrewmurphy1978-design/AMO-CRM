@@ -1038,6 +1038,11 @@ model AffiliateProgram {
 
   type            String? // one of AFFILIATE_TYPE_OPTIONS[tab] (src/lib/affiliate-status.ts) — displayed to the user as "Category"
   iconUrl         String? // small colored logo/icon shown beside the program name
+  // Contact email(s) for this program (support, affiliate manager, etc.) —
+  // same pattern as Contact.email/extraEmails — so these addresses can be
+  // picked from the Email compose dialog's To/Cc/Bcc address book.
+  email           String?
+  extraEmails     String[] @default([])
   shortioCreated  Boolean @default(false) // "Short.io Created?"
   brandedLink     String? // "go.andrewmurphy.online Link"
   destinationLink String? // "Real Destination Link"
