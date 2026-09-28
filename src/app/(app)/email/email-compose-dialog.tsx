@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import clsx from "@/lib/clsx";
 import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
 import RichTextarea from "@/components/rich-textarea";
@@ -39,6 +40,7 @@ export interface EmailComposeLabels {
   from: string;
   to: string;
   cc: string;
+  addCc: string;
   bcc: string;
   addBcc: string;
   subject: string;
@@ -150,6 +152,11 @@ export default function EmailComposeDialog({
 }) {
   const [to, setTo] = useState("");
   const [cc, setCc] = useState("");
+  // Hidden by default on mobile behind an "Add cc" link (see the render
+  // below) — but not when Cc already has a value (e.g. Reply All prefills
+  // it), since hiding an already-populated field would hide who's cc'd
+  // without any indication. Always visible at `sm` and up regardless.
+  const [showCc, setShowCc] = useState(false);
   const [bcc, setBcc] = useState("");
   const [showBcc, setShowBcc] = useState(false);
   const [subject, setSubject] = useState("");
@@ -177,6 +184,7 @@ export default function EmailComposeDialog({
     if (mode === "draft") {
       setTo(message.to.join(", "));
       setCc(message.cc.join(", "));
+      setShowCc(message.cc.length > 0);
       setSubject(message.subject);
       setHtml(message.html ?? (message.text ? `<pre style="white-space:pre-wrap">${message.text}</pre>` : ""));
       return;
@@ -196,6 +204,7 @@ export default function EmailComposeDialog({
 
     setTo(nextTo);
     setCc(nextCc);
+    setShowCc(nextCc.length > 0);
     setSubject(mode === "new" ? message.subject : subjectWithPrefix(message.subject, mode === "forward" ? "Fwd" : "Re"));
 
     // The signature lookup is async (a DB read) — everything above is set
@@ -353,19 +362,26 @@ export default function EmailComposeDialog({
   const identities = target.message.availableIdentities;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-2" onClick={onClose}>
       <div
-        className={`flex h-[88vh] w-full flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl transition-[max-width] ${
-          linkExpanded && target.linkConfig ? "max-w-[75rem]" : "max-w-4xl"
-        }`}
+        className="flex h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4" style={{ backgroundColor: color, color: fg }}>
+        <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3" style={{ backgroundColor: color, color: fg }}>
           <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold">{title}</h3>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 items-center gap-1.5">
             {target.draft && (
-              <button type="button" disabled={discarding} onClick={handleDiscard} className={`text-sm hover:underline disabled:opacity-60 ${headerBtnClass}`}>
-                {labels.discard}
+              <button
+                type="button"
+                disabled={discarding}
+                onClick={handleDiscard}
+                title={labels.discard}
+                aria-label={labels.discard}
+                className={`flex items-center justify-center rounded-lg p-2 disabled:opacity-60 ${headerBtnClass}`}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-12" />
+                </svg>
               </button>
             )}
             {!target.draft && (
@@ -373,39 +389,58 @@ export default function EmailComposeDialog({
                 type="button"
                 disabled={savingDraft}
                 onClick={handleSaveDraft}
-                className={`text-sm hover:underline disabled:opacity-60 ${headerBtnClass}`}
+                title={savingDraft ? labels.savingDraft : labels.saveDraft}
+                aria-label={savingDraft ? labels.savingDraft : labels.saveDraft}
+                className={`flex items-center justify-center rounded-lg p-2 disabled:opacity-60 ${headerBtnClass}`}
               >
-                {savingDraft ? labels.savingDraft : labels.saveDraft}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 0 1 2-2h9l3 3v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 3v5h7V3M8 21v-6h8v6" />
+                </svg>
               </button>
             )}
-            <button type="button" onClick={onClose} className={`text-sm hover:underline ${headerBtnClass}`}>
-              {labels.cancel}
+            <button
+              type="button"
+              onClick={onClose}
+              title={labels.cancel}
+              aria-label={labels.cancel}
+              className={`flex items-center justify-center rounded-lg p-2 ${headerBtnClass}`}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
+              </svg>
             </button>
             <button
               type="button"
               disabled={sending}
               onClick={handleSend}
-              className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
+              title={sending ? labels.sending : labels.send}
+              aria-label={sending ? labels.sending : labels.send}
+              className="btn-primary flex items-center justify-center rounded-lg p-2 shadow-sm disabled:opacity-60"
             >
-              {sending ? labels.sending : labels.send}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3 3l18 9-18 9 3-9Zm0 0h9" />
+              </svg>
             </button>
           </div>
         </div>
 
-        {/* Fixed, non-scrolling header row — From/To/Cc/Bcc/Subject on the
-            left, the read-only link summary on the right, side by side so
-            this row stays short and the body below gets the rest of the
-            dialog's height (the same "one scrollbar, not two" fix applied
-            to the Read Email dialog). */}
-        <div className="flex shrink-0 gap-4 px-5 pb-3 pt-4">
-          <div className="min-w-0 flex-1 space-y-2">
+        {/* Single scrollable column — From/To/Cc/Bcc/Subject, then the
+            link summary + Attach button side by side (same "beside a
+            row instead of a fixed side column" fix as the Read Email
+            dialog's own Linked-to/Show-images row), then the link editor
+            in place when open, then the body — all in plain flow so this
+            is the dialog's only scrollbar, and an unusually tall editor
+            can never clip its own Cancel/Save against the footer. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <div className="flex shrink-0 flex-col gap-1 px-4 pb-2 pt-3">
             <div className="flex items-center gap-2">
               <label className="w-10 shrink-0 text-sm text-soft">{labels.from}</label>
               {identities.length > 1 ? (
                 <select
                   value={fromIdentity ? identityKey(fromIdentity) : ""}
                   onChange={(e) => setFromIdentity(parseIdentityKey(e.target.value))}
-                  className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
+                  className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
                 >
                   {identities.map((id) => (
                     <option key={identityKey(id)} value={identityKey(id)}>
@@ -414,7 +449,7 @@ export default function EmailComposeDialog({
                   ))}
                 </select>
               ) : (
-                <div className="min-w-0 flex-1 truncate rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink">
+                <div className="min-w-0 flex-1 truncate rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink">
                   {fromIdentity?.accountAddress ?? target.message.replyIdentity.accountAddress}
                 </div>
               )}
@@ -426,23 +461,21 @@ export default function EmailComposeDialog({
                 type="text"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
+                className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Cc: hidden by default on mobile behind "Add cc" below (not
+                when it already has a value — see the showCc reasoning at
+                its declaration); always shown at `sm` and up regardless. */}
+            <div className={clsx("items-center gap-2", showCc ? "flex" : "hidden sm:flex")}>
               <label className="w-10 shrink-0 text-sm text-soft">{labels.cc}</label>
               <input
                 type="text"
                 value={cc}
                 onChange={(e) => setCc(e.target.value)}
-                className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
+                className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
               />
-              {!showBcc && (
-                <button type="button" onClick={() => setShowBcc(true)} className="shrink-0 text-xs text-soft hover:underline">
-                  {labels.addBcc}
-                </button>
-              )}
             </div>
 
             {showBcc && (
@@ -452,8 +485,27 @@ export default function EmailComposeDialog({
                   type="text"
                   value={bcc}
                   onChange={(e) => setBcc(e.target.value)}
-                  className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
+                  className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
                 />
+              </div>
+            )}
+
+            {/* Reveal links for whichever of Cc/Bcc is currently hidden —
+                Add cc only ever matters on mobile (Cc always shows at
+                `sm` and up), Add Bcc applies at every width since Bcc is
+                hidden by default regardless of screen size. */}
+            {(!showCc || !showBcc) && (
+              <div className="flex items-center gap-3 pl-12">
+                {!showCc && (
+                  <button type="button" onClick={() => setShowCc(true)} className="text-xs text-soft hover:underline sm:hidden">
+                    {labels.addCc}
+                  </button>
+                )}
+                {!showBcc && (
+                  <button type="button" onClick={() => setShowBcc(true)} className="text-xs text-soft hover:underline">
+                    {labels.addBcc}
+                  </button>
+                )}
               </div>
             )}
 
@@ -463,12 +515,23 @@ export default function EmailComposeDialog({
                 type="text"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
-                className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink"
+                className="min-w-0 flex-1 rounded-md border border-card-border bg-field-bg px-3 py-1 text-sm text-ink"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5">
-              <label className="flex w-fit shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5">
+            <div className="flex items-start justify-between gap-3 border-t border-card-border pt-2">
+              <div className="min-w-0 flex-1">
+                {target.linkConfig && (
+                  <EmailLinkSummary
+                    current={target.linkConfig.current}
+                    linkLabel={target.linkConfig.labels.link}
+                    noneLabel={target.linkConfig.labels.none}
+                    editLabel={target.linkConfig.labels.edit}
+                    onEdit={() => setLinkExpanded((v) => !v)}
+                  />
+                )}
+              </div>
+              <label className="flex w-fit shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-card-border px-2 py-1 text-xs font-medium text-ink hover:bg-black/5">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0">
                   <path
                     strokeLinecap="round"
@@ -479,53 +542,43 @@ export default function EmailComposeDialog({
                 {labels.attach}
                 <input type="file" multiple className="hidden" onChange={(e) => handleFilesSelected(e.target.files)} />
               </label>
-              {attachments.map((a, i) => (
-                <span key={i} className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink">
-                  <span className="max-w-[10rem] truncate">{a.filename}</span>
-                  <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(i)}
-                    title={labels.removeAttachment.replace("{name}", a.filename)}
-                    className="ml-0.5 rounded-full p-0.5 text-soft hover:bg-black/10 hover:text-ink"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
-                      <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
-                    </svg>
-                  </button>
-                </span>
-              ))}
             </div>
+
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                {attachments.map((a, i) => (
+                  <span key={i} className="flex items-center gap-1 rounded-full border border-card-border bg-field-bg px-2.5 py-1 text-xs text-ink">
+                    <span className="max-w-[10rem] truncate">{a.filename}</span>
+                    <span className="text-soft">({formatBytes(a.sizeBytes)})</span>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(i)}
+                      title={labels.removeAttachment.replace("{name}", a.filename)}
+                      className="ml-0.5 rounded-full p-0.5 text-soft hover:bg-black/10 hover:text-ink"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3 w-3">
+                        <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Opens in place, pushing the body down — same treatment as
+                the Read Email dialog's own link editor. */}
+            {linkExpanded && target.linkConfig && (
+              <div className="border-t border-card-border pt-2">
+                <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
+              </div>
+            )}
           </div>
 
-          {target.linkConfig && (
-            <div className="w-64 shrink-0 border-l border-card-border pl-4">
-              <EmailLinkSummary
-                current={target.linkConfig.current}
-                linkLabel={target.linkConfig.labels.link}
-                noneLabel={target.linkConfig.labels.none}
-                editLabel={target.linkConfig.labels.edit}
-                onEdit={() => setLinkExpanded((v) => !v)}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* The body fills the rest of the dialog's height and is the only
-            scrollable region — the link editor, when open, sits beside it
-            in the same right-hand column the summary above occupies. */}
-        <div className="flex min-h-0 flex-1 gap-4 overflow-hidden px-5 pb-5">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+          <div className="flex min-h-[220px] flex-1 flex-col px-4 pb-3">
             <RichTextarea value={html} onChange={setHtml} className="min-h-[220px]" defaultFontFamily={defaultFontFamily} defaultFontSize={defaultFontSize} />
 
             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
           </div>
-
-          {linkExpanded && target.linkConfig && (
-            <div className="w-64 shrink-0 overflow-y-auto border-l border-card-border pl-4">
-              <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
-            </div>
-          )}
         </div>
       </div>
     </div>

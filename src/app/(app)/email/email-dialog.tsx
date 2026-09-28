@@ -186,7 +186,7 @@ export default function EmailDialog({
   const fg = contrastTextColor(color);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2" onClick={onClose}>
       <div
         className={clsx(
           "relative flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl",
@@ -199,7 +199,7 @@ export default function EmailDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: color }} />
-        <div className="flex shrink-0 items-start justify-between gap-2 px-5 py-4">
+        <div className="flex shrink-0 items-start justify-between gap-2 px-4 py-3">
           <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold text-ink">{detail?.subject ?? ""}</h3>
           <button
             type="button"
@@ -215,7 +215,7 @@ export default function EmailDialog({
         </div>
 
         {loading || loadError ? (
-          <div className="min-h-0 flex-1 p-5">
+          <div className="min-h-0 flex-1 p-4">
             <p className="text-sm text-soft">
               {loading ? labels.loading : loadError === "not_connected" ? labels.notConnected : labels.loadFailed}
             </p>
@@ -232,7 +232,7 @@ export default function EmailDialog({
                 (e.g. with the contact search list open) makes this whole
                 block scroll — via the wrapping div above — instead of
                 clipping its own Cancel/Save against the dialog's edge. */}
-            <div className="flex shrink-0 flex-col gap-3 px-5 pb-3">
+            <div className="flex shrink-0 flex-col gap-2 px-4 pb-2">
               <div className="min-w-0 space-y-0.5 text-sm text-ink">
                 <p>
                   <span className="text-soft">{labels.from}: </span>
@@ -273,7 +273,7 @@ export default function EmailDialog({
               </div>
 
               {(target.linkConfig || (hasRemoteImages && !allowRemoteImages)) && (
-                <div className="flex items-start justify-between gap-3 border-t border-card-border pt-3">
+                <div className="flex items-start justify-between gap-3 border-t border-card-border pt-2">
                   <div className="min-w-0 flex-1">
                     {target.linkConfig && (
                       <EmailLinkSummary
@@ -306,7 +306,7 @@ export default function EmailDialog({
                   whatever room is left, same as it always does when the
                   attachments row or a long Cc list grows this section. */}
               {linkExpanded && target.linkConfig && (
-                <div className="border-t border-card-border pt-3">
+                <div className="border-t border-card-border pt-2">
                   <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
                 </div>
               )}
@@ -317,7 +317,7 @@ export default function EmailDialog({
                 only scrollbar. min-h-[220px] is its floor: enough to still
                 read a few lines rather than vanish outright when the
                 editor above has pushed it down a lot. */}
-            <div className="flex min-h-[220px] flex-1 flex-col px-5 pb-5">
+            <div className="flex min-h-[220px] flex-1 flex-col px-4 pb-3">
               {detail?.html || detail?.text ? (
                 <EmailBodyFrame html={detail.html} text={detail.text} allowRemoteImages={allowRemoteImages} />
               ) : (
@@ -327,7 +327,7 @@ export default function EmailDialog({
           </div>
         )}
 
-        <div className="flex shrink-0 items-center justify-between border-t border-card-border px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between border-t border-card-border px-4 py-2">
           <a
             href={target.link}
             target="_blank"
