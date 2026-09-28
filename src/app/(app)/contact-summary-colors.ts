@@ -18,30 +18,23 @@ export const CONTACT_NEW_COLORS = {
   THIS_WEEK: { bg: "bg-violet-500", text: "text-white" },
 } as const;
 
-// One identity color per contact source. No such convention existed
-// before this card — `source` was always shown as raw, uncolored text
-// (see contacts/page.tsx, contacts/[id]/page.tsx) — introduced here for
-// the same "count + color" sub-card treatment as everything else on this
-// card. "Other" covers a blank source or any free-text value a user typed
-// on the Contact form that isn't one of the three the app itself sets.
+// One identity color per contact source shown on the card — only the two
+// sources actually worth distinguishing at a glance (systeme.io sync vs.
+// a Google Contacts import); manual entries and anything else still count
+// toward "total contacts" but aren't broken out here. No such convention
+// existed before this card — `source` was always shown as raw, uncolored
+// text (see contacts/page.tsx, contacts/[id]/page.tsx).
 export const CONTACT_SOURCE_COLORS = {
   systemeIo: { bg: "bg-teal-600", text: "text-white" },
-  manual: { bg: "bg-slate-500", text: "text-white" },
   google: { bg: "bg-blue-600", text: "text-white" },
-  other: { bg: "bg-gray-400", text: "text-white" },
 } as const;
 
-// Solid-tile versions of new-contacts-card.tsx's own STAGE_COLORS (which
-// are light pastel badges, not meant for a bold sub-card face) — same
-// hues, kept in sync manually for the same reason as CONTACT_NEW_COLORS.
-export const CONTACT_STAGE_COLORS: Record<
-  string,
-  { bg: string; text: string }
-> = {
-  LEAD: { bg: "bg-emerald-600", text: "text-white" },
-  PROSPECT: { bg: "bg-teal-600", text: "text-white" },
-  CLIENT: { bg: "bg-sky-600", text: "text-white" },
-  PAST_CLIENT: { bg: "bg-red-400", text: "text-white" },
-  UNSUBSCRIBED: { bg: "bg-red-200", text: "text-red-900" },
-  PERSONAL: { bg: "bg-violet-500", text: "text-white" },
-};
+// The 6 ContactStage values collapse into 2 groups for the Summary card:
+// Lead/Prospect/Client (still-active sales pipeline) and Past client/
+// Unsubscribed/Personal (no longer active). Colors are new, not reused
+// from any individual stage's own color, since a group isn't any one of
+// its member stages.
+export const CONTACT_STAGE_GROUP_COLORS = {
+  active: { bg: "bg-teal-600", text: "text-white" },
+  inactive: { bg: "bg-slate-500", text: "text-white" },
+} as const;

@@ -161,7 +161,6 @@ export default async function DashboardPage() {
   const dateLocale = getDateLocale(lang);
 
   const sevenDaysAgo = daysFromNow(-7);
-  const sevenDaysFromNow = daysFromNow(7);
 
   // One shared client for every dashboard read below (counts, lists,
   // Google's token, the social snapshots loop, the user's time format) —
@@ -174,8 +173,6 @@ export default async function DashboardPage() {
   // same fix already used for the systeme.io/Buffer/Make bulk syncs.
   const {
     activeProjectCount,
-    openTaskCount,
-    dueSoonTaskCount,
     dueSoonTasks,
     activeProjects,
     recentActivity,
@@ -197,15 +194,6 @@ export default async function DashboardPage() {
   } = await withScopedPrismaClient(async (db) => {
     const activeProjectCount = await db.project.count({
       where: { status: "ACTIVE" },
-    });
-    const openTaskCount = await db.task.count({
-      where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
-    });
-    const dueSoonTaskCount = await db.task.count({
-      where: {
-        status: { in: ["TODO", "IN_PROGRESS"] },
-        dueDate: { not: null, lte: sevenDaysFromNow },
-      },
     });
     const dueSoonTasks = await db.task.findMany({
       where: {
@@ -319,8 +307,6 @@ export default async function DashboardPage() {
 
     return {
       activeProjectCount,
-      openTaskCount,
-      dueSoonTaskCount,
       dueSoonTasks,
       activeProjects,
       recentActivity,
@@ -406,26 +392,26 @@ export default async function DashboardPage() {
     noneYet: t.dashboard.newContactsNoneYet,
   };
 
-  // Feeds the Contact Summary stat card. bySource buckets the three
-  // values the app itself ever sets (see google-contacts.ts/sync.ts/
-  // contacts.ts) plus "other" for anything else (a blank source, or free
-  // text typed on the Contact form) — same reasoning as the Calendar
-  // Summary card's own colorId buckets: known values get their own color,
-  // everything else falls into a catch-all rather than being dropped.
+  // Feeds the Contact Summary stat card. bySource only breaks out the two
+  // sources worth distinguishing at a glance (systeme.io sync vs. a
+  // Google Contacts import) — manual entries and anything else still
+  // count toward `total` above, just aren't shown split out here.
   let contactsBySourceSystemeIo = 0;
-  let contactsBySourceManual = 0;
   let contactsBySourceGoogle = 0;
-  let contactsBySourceOther = 0;
   for (const group of contactsBySource) {
     const count = group._count._all;
     if (group.source === "systeme.io") contactsBySourceSystemeIo += count;
-    else if (group.source === "manual") contactsBySourceManual += count;
     else if (group.source === "google_contacts") contactsBySourceGoogle += count;
-    else contactsBySourceOther += count;
   }
-  const contactsByStageMap: Record<string, number> = {};
+  // The 6 ContactStage values collapse into 2 groups for this card: still
+  // in the sales pipeline (Lead/Prospect/Client) vs. no longer active
+  // (Past client/Unsubscribed/Personal).
+  const ACTIVE_STAGES = new Set(["LEAD", "PROSPECT", "CLIENT"]);
+  let activeStageCount = 0;
+  let inactiveStageCount = 0;
   for (const group of contactsByStage) {
-    contactsByStageMap[group.stage] = group._count._all;
+    if (ACTIVE_STAGES.has(group.stage)) activeStageCount += group._count._all;
+    else inactiveStageCount += group._count._all;
   }
   const contactSummaryLabels = {
     title: t.dashboard.contactSummaryTitle,
@@ -434,10 +420,9 @@ export default async function DashboardPage() {
     yesterdayLabel: t.dashboard.newContactsYesterday,
     thisWeekLabel: t.dashboard.newContactsThisWeek,
     sourceSystemeIoLabel: t.dashboard.contactSummarySourceSystemeIoLabel,
-    sourceManualLabel: t.dashboard.contactSummarySourceManualLabel,
     sourceGoogleLabel: t.dashboard.contactSummarySourceGoogleLabel,
-    sourceOtherLabel: t.dashboard.contactSummarySourceOtherLabel,
-    stageLabels: t.stages,
+    activeStageLabel: t.dashboard.contactSummaryActiveStageLabel,
+    inactiveStageLabel: t.dashboard.contactSummaryInactiveStageLabel,
   };
   const contactSummaryCounts = {
     total: totalContactCount,
@@ -446,11 +431,10 @@ export default async function DashboardPage() {
     thisWeek: newContactsThisWeek.length,
     bySource: {
       systemeIo: contactsBySourceSystemeIo,
-      manual: contactsBySourceManual,
       google: contactsBySourceGoogle,
-      other: contactsBySourceOther,
     },
-    byStage: contactsByStageMap,
+    activeStageCount,
+    inactiveStageCount,
   };
 
   const weatherLabels = {
@@ -699,14 +683,6 @@ export default async function DashboardPage() {
       href: "/projects?status=ACTIVE",
       icon: STAT_ICONS.projects,
       color: "blue",
-    },
-    {
-      label: t.dashboard.statOpenTasks,
-      value: openTaskCount,
-      sub: t.dashboard.statTasksSub(dueSoonTaskCount),
-      href: "/projects",
-      icon: STAT_ICONS.tasks,
-      color: "gold",
     },
   ] as const;
 

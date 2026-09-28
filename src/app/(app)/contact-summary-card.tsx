@@ -6,22 +6,10 @@ import {
   CONTACT_CARD_BG,
   CONTACT_NEW_COLORS,
   CONTACT_SOURCE_COLORS,
-  CONTACT_STAGE_COLORS,
+  CONTACT_STAGE_GROUP_COLORS,
 } from "./contact-summary-colors";
 import ContactsIcon from "./contacts-icon";
 import SubCard from "./summary-sub-card";
-
-// Fixed enum order — matches t.stages and the Prisma ContactStage enum
-// itself (see prisma/schema.prisma), not the possibly-empty subset present
-// in byStage, so every stage always gets its own pill even at 0.
-const STAGE_ORDER = [
-  "LEAD",
-  "PROSPECT",
-  "CLIENT",
-  "PAST_CLIENT",
-  "UNSUBSCRIBED",
-  "PERSONAL",
-] as const;
 
 export interface ContactSummaryLabels {
   title: string;
@@ -30,10 +18,9 @@ export interface ContactSummaryLabels {
   yesterdayLabel: string;
   thisWeekLabel: string;
   sourceSystemeIoLabel: string;
-  sourceManualLabel: string;
   sourceGoogleLabel: string;
-  sourceOtherLabel: string;
-  stageLabels: Record<string, string>;
+  activeStageLabel: string;
+  inactiveStageLabel: string;
 }
 
 export interface ContactSummaryCounts {
@@ -43,11 +30,13 @@ export interface ContactSummaryCounts {
   thisWeek: number;
   bySource: {
     systemeIo: number;
-    manual: number;
     google: number;
-    other: number;
   };
-  byStage: Record<string, number>;
+  // Sums across the 6 ContactStage values — LEAD+PROSPECT+CLIENT
+  // ("active" pipeline) and PAST_CLIENT+UNSUBSCRIBED+PERSONAL
+  // ("inactive") — computed by the caller (page.tsx).
+  activeStageCount: number;
+  inactiveStageCount: number;
 }
 
 export default function ContactSummaryCard({
@@ -72,10 +61,12 @@ export default function ContactSummaryCard({
       />
       {/* Same layout convention as the Email/Calendar Summary cards: title
           and the headline "total contacts" count share row 1 (2 columns
-          each, same line); the this-week new-contact buckets and the
-          by-source breakdown share a second row of four. By-stage doesn't
-          fit that same 4-across shape (6 stages, not 4), so it gets its
-          own flex-wrap strip below instead of forcing it into the grid. */}
+          each, same line); a single row of 4 cells below covers everything
+          else — the new-contact buckets and the by-source breakdown are
+          each one composite card (multiple colored lines stacked in a
+          fixed-height tile, same idea as the Calendar Summary card's own
+          Haley/Lukas/Mom card), and the two stage groups are plain
+          single-value SubCards. */}
       <div className="grid grid-cols-4 items-center gap-1.5">
         <div className="col-span-2 flex items-center gap-2">
           <ContactsIcon />
@@ -91,42 +82,29 @@ export default function ContactSummaryCard({
           layout="row"
           className="col-span-2"
         />
-        <SubCard
-          bg={CONTACT_NEW_COLORS.TODAY.bg}
-          text={CONTACT_NEW_COLORS.TODAY.text}
-          value={counts.today}
-          label={labels.todayLabel}
-        />
-        <SubCard
-          bg={CONTACT_NEW_COLORS.YESTERDAY.bg}
-          text={CONTACT_NEW_COLORS.YESTERDAY.text}
-          value={counts.yesterday}
-          label={labels.yesterdayLabel}
-        />
-        <SubCard
-          bg={CONTACT_NEW_COLORS.THIS_WEEK.bg}
-          text={CONTACT_NEW_COLORS.THIS_WEEK.text}
-          value={counts.thisWeek}
-          label={labels.thisWeekLabel}
-        />
-        {/* By-source breakdown — 4 equal stacked bands (not the Calendar
-            family card's 2/3+1/3 split, since no one source outweighs the
-            others here), each colored by CONTACT_SOURCE_COLORS. */}
+        {/* New contacts — 3 equal stacked bands, one per bucket. */}
         <div className="flex h-14 flex-col overflow-hidden rounded-lg text-center sm:h-16">
           {(
             [
-              ["systemeIo", labels.sourceSystemeIoLabel],
-              ["manual", labels.sourceManualLabel],
-              ["google", labels.sourceGoogleLabel],
-              ["other", labels.sourceOtherLabel],
+              [counts.today, CONTACT_NEW_COLORS.TODAY, labels.todayLabel],
+              [
+                counts.yesterday,
+                CONTACT_NEW_COLORS.YESTERDAY,
+                labels.yesterdayLabel,
+              ],
+              [
+                counts.thisWeek,
+                CONTACT_NEW_COLORS.THIS_WEEK,
+                labels.thisWeekLabel,
+              ],
             ] as const
-          ).map(([key, label]) => (
+          ).map(([value, color, label], i) => (
             <div
-              key={key}
-              className={`flex flex-1 items-center justify-center gap-0.5 px-1 ${CONTACT_SOURCE_COLORS[key].bg} ${CONTACT_SOURCE_COLORS[key].text}`}
+              key={i}
+              className={`flex flex-1 items-center justify-center gap-0.5 px-1 ${color.bg} ${color.text}`}
             >
               <span className="text-[10px] font-bold leading-none">
-                {counts.bySource[key]}
+                {value}
               </span>
               <span className="text-[7px] font-medium leading-none">
                 {label}
@@ -134,20 +112,47 @@ export default function ContactSummaryCard({
             </div>
           ))}
         </div>
-      </div>
-
-      {/* By-stage strip — one pill per Contact stage, always all 6 in
-          fixed enum order. */}
-      <div className="mt-1.5 flex flex-wrap gap-1 sm:mt-2">
-        {STAGE_ORDER.map((stage) => (
-          <span
-            key={stage}
-            className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${CONTACT_STAGE_COLORS[stage].bg} ${CONTACT_STAGE_COLORS[stage].text}`}
-          >
-            <span>{counts.byStage[stage] ?? 0}</span>
-            <span className="font-medium">{labels.stageLabels[stage]}</span>
-          </span>
-        ))}
+        {/* By-source — only systeme.io and Google Contacts are broken out
+            (manual entries and anything else still count toward the total
+            above, just not shown here). */}
+        <div className="flex h-14 flex-col overflow-hidden rounded-lg text-center sm:h-16">
+          {(
+            [
+              [
+                counts.bySource.systemeIo,
+                CONTACT_SOURCE_COLORS.systemeIo,
+                labels.sourceSystemeIoLabel,
+              ],
+              [
+                counts.bySource.google,
+                CONTACT_SOURCE_COLORS.google,
+                labels.sourceGoogleLabel,
+              ],
+            ] as const
+          ).map(([value, color, label], i) => (
+            <div
+              key={i}
+              className={`flex flex-1 items-center justify-center gap-0.5 px-1 ${color.bg} ${color.text}`}
+            >
+              <span className="text-xs font-bold leading-none">{value}</span>
+              <span className="text-[9px] font-medium leading-none">
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+        <SubCard
+          bg={CONTACT_STAGE_GROUP_COLORS.active.bg}
+          text={CONTACT_STAGE_GROUP_COLORS.active.text}
+          value={counts.activeStageCount}
+          label={labels.activeStageLabel}
+        />
+        <SubCard
+          bg={CONTACT_STAGE_GROUP_COLORS.inactive.bg}
+          text={CONTACT_STAGE_GROUP_COLORS.inactive.text}
+          value={counts.inactiveStageCount}
+          label={labels.inactiveStageLabel}
+        />
       </div>
     </button>
   );
