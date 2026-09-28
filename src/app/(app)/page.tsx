@@ -492,10 +492,24 @@ export default async function DashboardPage() {
     return d !== null && d >= thisWeekEnd && d < nextWeekEnd;
   }).length;
 
+  // Total duration of a set of events, in hours — feeds the "count + Xh"
+  // display each metric sub-card (other than the family one) shows beside
+  // its number. All-day events and any event missing a start/end have no
+  // meaningful duration, so they're skipped rather than counted as 0h.
+  function sumEventHours(events: CalendarEventSummary[]): number {
+    return events.reduce((sum, e) => {
+      if (e.allDay || !e.start || !e.end) return sum;
+      const hours =
+        (new Date(e.end).getTime() - new Date(e.start).getTime()) /
+        (1000 * 60 * 60);
+      return sum + hours;
+    }, 0);
+  }
+
   const last48Hours = hoursAgo(48);
-  const newEventCount = calendarSummaryEvents.filter(
+  const newEvents = calendarSummaryEvents.filter(
     (e) => e.created && new Date(e.created) >= last48Hours,
-  ).length;
+  );
 
   // Andrew's own work shifts at Mike's — title match, explicitly excluding
   // anything that also mentions Haley/Zack (e.g. a shared family event)
@@ -506,13 +520,6 @@ export default async function DashboardPage() {
     const isShared = title.includes("haley") || title.includes("zack");
     return isShift && !isShared;
   });
-  const shiftHours = shiftEvents.reduce((sum, e) => {
-    if (e.allDay || !e.start || !e.end) return sum;
-    const hours =
-      (new Date(e.end).getTime() - new Date(e.start).getTime()) /
-      (1000 * 60 * 60);
-    return sum + hours;
-  }, 0);
 
   // Google Calendar's own colorId values (see GOOGLE_EVENT_COLORS in
   // src/lib/calendar-colors.ts) — Business/Children/Mommy are told apart
@@ -523,9 +530,9 @@ export default async function DashboardPage() {
   const BANANA_COLOR_ID = "5";
   const GRAPHITE_COLOR_ID = "8";
 
-  const businessEventCount = thisWeekEvents.filter(
+  const businessEvents = thisWeekEvents.filter(
     (e) => e.colorId === BASIL_COLOR_ID,
-  ).length;
+  );
 
   const bananaEvents = thisWeekEvents.filter(
     (e) => e.colorId === BANANA_COLOR_ID,
@@ -546,7 +553,7 @@ export default async function DashboardPage() {
     nextWeekLabel: t.dashboard.calendarSummaryNextWeekLabel,
     newLabel: t.dashboard.calendarSummaryNewLabel,
     businessLabel: t.dashboard.calendarSummaryBusinessLabel,
-    shiftsLabel: t.dashboard.calendarSummaryShiftsLabel(Math.round(shiftHours)),
+    shiftsLabel: t.dashboard.calendarSummaryShiftsLabel,
     haleyLabel: t.dashboard.calendarSummaryHaleyLabel,
     lukasLabel: t.dashboard.calendarSummaryLukasLabel,
     mommyLabel: t.dashboard.calendarSummaryMommyLabel,
@@ -554,9 +561,12 @@ export default async function DashboardPage() {
   const calendarSummaryCounts = {
     thisWeek: thisWeekEvents.length,
     nextWeek: nextWeekEventCount,
-    newEvents: newEventCount,
-    business: businessEventCount,
+    newEvents: newEvents.length,
+    newHours: sumEventHours(newEvents),
+    business: businessEvents.length,
+    businessHours: sumEventHours(businessEvents),
     shifts: shiftEvents.length,
+    shiftsHours: sumEventHours(shiftEvents),
     haley: haleyCount,
     lukas: lukasCount,
     mommy: mommyEventCount,

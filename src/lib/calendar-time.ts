@@ -29,3 +29,15 @@ export function formatHourMark(hour: number, hour12: boolean, intlLocale: string
   const dayPeriod = parts.find((p) => p.type === "dayPeriod")?.value ?? "";
   return `${hourPart}${dayPeriod}`;
 }
+
+// A total-hours count (e.g. "40.5 hours of shifts this week") rounded to
+// the nearest quarter hour and rendered as a vulgar fraction — "40½",
+// "40¼", "40¾" — instead of a decimal, for the Dashboard Summary cards'
+// compact "count + hours" display.
+export function formatHoursFraction(hours: number): string {
+  const rounded = Math.round(hours * 4) / 4;
+  const whole = Math.floor(rounded);
+  const frac = rounded - whole;
+  const fracSymbol = frac === 0.25 ? "¼" : frac === 0.5 ? "½" : frac === 0.75 ? "¾" : "";
+  return `${whole}${fracSymbol}`;
+}

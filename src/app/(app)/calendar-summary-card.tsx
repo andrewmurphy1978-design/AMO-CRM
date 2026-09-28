@@ -27,8 +27,11 @@ export interface CalendarSummaryCounts {
   thisWeek: number;
   nextWeek: number;
   newEvents: number;
+  newHours: number;
   business: number;
+  businessHours: number;
   shifts: number;
+  shiftsHours: number;
   haley: number;
   lukas: number;
   mommy: number;
@@ -99,18 +102,21 @@ export default function CalendarSummaryCard({
           bg={CALENDAR_METRIC_COLORS.NEW.bg}
           text={CALENDAR_METRIC_COLORS.NEW.text}
           value={counts.newEvents}
+          hours={counts.newHours}
           label={labels.newLabel}
         />
         <SubCard
           bg={CALENDAR_METRIC_COLORS.BUSINESS.bg}
           text={CALENDAR_METRIC_COLORS.BUSINESS.text}
           value={counts.business}
+          hours={counts.businessHours}
           label={labels.businessLabel}
         />
         <SubCard
           bg={CALENDAR_METRIC_COLORS.SHIFTS.bg}
           text={CALENDAR_METRIC_COLORS.SHIFTS.text}
           value={counts.shifts}
+          hours={counts.shiftsHours}
           label={labels.shiftsLabel}
         />
         {/* Children + Mommy share one card instead of two — split 2/3
@@ -122,18 +128,21 @@ export default function CalendarSummaryCard({
           <div
             className={`flex flex-[2] flex-col items-center justify-center gap-0.5 px-1 ${CHILDREN_MOMMY_COLORS.banana.bg} ${CHILDREN_MOMMY_COLORS.banana.text}`}
           >
-            <span className="text-[9px] font-bold leading-tight sm:text-[11px]">
-              {counts.haley} {labels.haleyLabel}
+            <span className="flex items-baseline gap-1 leading-tight">
+              <span className="text-sm font-bold sm:text-base">{counts.haley}</span>
+              <span className="text-[9px] font-medium sm:text-[11px]">{labels.haleyLabel}</span>
             </span>
-            <span className="text-[9px] font-bold leading-tight sm:text-[11px]">
-              {counts.lukas} {labels.lukasLabel}
+            <span className="flex items-baseline gap-1 leading-tight">
+              <span className="text-sm font-bold sm:text-base">{counts.lukas}</span>
+              <span className="text-[9px] font-medium sm:text-[11px]">{labels.lukasLabel}</span>
             </span>
           </div>
           <div
             className={`flex flex-1 items-center justify-center px-1 ${CHILDREN_MOMMY_COLORS.graphite.bg} ${CHILDREN_MOMMY_COLORS.graphite.text}`}
           >
-            <span className="text-[9px] font-bold leading-tight sm:text-[11px]">
-              {counts.mommy} {labels.mommyLabel}
+            <span className="flex items-baseline gap-1 leading-tight">
+              <span className="text-sm font-bold sm:text-base">{counts.mommy}</span>
+              <span className="text-[9px] font-medium sm:text-[11px]">{labels.mommyLabel}</span>
             </span>
           </div>
         </div>
