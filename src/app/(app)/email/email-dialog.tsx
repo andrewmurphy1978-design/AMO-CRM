@@ -200,12 +200,13 @@ export default function EmailDialog({
           </div>
         ) : (
           <>
-            {/* Fixed, non-scrolling header row — metadata on the left,
-                the read-only link summary on the right, side by side
-                instead of stacked, so this row stays short and the body
-                below gets the rest of the dialog's height. */}
-            <div className="flex shrink-0 gap-4 px-5 pb-3">
-              <div className="min-w-0 flex-1 space-y-0.5 text-sm text-ink">
+            {/* Fixed, non-scrolling header row — metadata first, then the
+                read-only link summary stacked below it (not beside it: a
+                fixed side column here left almost no room for the metadata
+                text on a phone-width dialog), so this row stays short and
+                the body below gets the rest of the dialog's height. */}
+            <div className="flex shrink-0 flex-col gap-3 px-5 pb-3">
+              <div className="min-w-0 space-y-0.5 text-sm text-ink">
                 <p>
                   <span className="text-soft">{labels.from}: </span>
                   {detail?.from.name ? `${detail.from.name} <${detail.from.email}>` : detail?.from.email}
@@ -245,7 +246,7 @@ export default function EmailDialog({
               </div>
 
               {target.linkConfig && (
-                <div className="w-64 shrink-0 border-l border-card-border pl-4">
+                <div className="border-t border-card-border pt-3">
                   <EmailLinkSummary
                     current={target.linkConfig.current}
                     linkLabel={target.linkConfig.labels.link}
@@ -259,11 +260,10 @@ export default function EmailDialog({
 
             {/* The body fills the rest of the dialog's height — its own
                 iframe (see EmailBodyFrame) is the dialog's only scrollbar.
-                The link editor, when open, sits beside it in the same
-                right-hand column the summary above occupies, so it reads
-                as "below the summary" even though it's a separate row —
-                and the body's own width shrinks only while that's open. */}
-            <div className="flex min-h-0 flex-1 gap-4 px-5 pb-5">
+                The link editor, when open, sits below the body on a
+                phone-width dialog and beside it (its own column) from
+                `sm` up, same breakpoint the rest of this dialog uses. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-4 px-5 pb-5 sm:flex-row">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 {detail?.html || detail?.text ? (
                   <EmailBodyFrame html={detail.html} text={detail.text} showRemoteImagesLabel={labels.showRemoteImages} />
@@ -272,7 +272,7 @@ export default function EmailDialog({
                 )}
               </div>
               {linkExpanded && target.linkConfig && (
-                <div className="w-64 shrink-0 overflow-y-auto border-l border-card-border pl-4">
+                <div className="shrink-0 overflow-y-auto border-t border-card-border pt-4 sm:w-64 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
                   <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
                 </div>
               )}
@@ -285,10 +285,11 @@ export default function EmailDialog({
             href={target.link}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:underline"
+            title={isIonos ? labels.openWebmail : labels.openInGmail}
+            aria-label={isIonos ? labels.openWebmail : labels.openInGmail}
+            className="flex shrink-0 items-center justify-center rounded-lg p-2 text-emerald-700 hover:bg-black/5"
           >
-            {isIonos ? <IonosIcon className="h-3.5 w-3.5 shrink-0" /> : <GmailIcon className="h-3.5 w-3.5 shrink-0" />}
-            {isIonos ? labels.openWebmail : labels.openInGmail} ↗
+            {isIonos ? <IonosIcon className="h-4 w-4 shrink-0" /> : <GmailIcon className="h-4 w-4 shrink-0" />}
           </a>
           {detail && (
             <div className="flex items-center gap-1.5">
@@ -296,44 +297,48 @@ export default function EmailDialog({
                 <button
                   type="button"
                   onClick={onComplete}
-                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  title={labels.markComplete}
+                  aria-label={labels.markComplete}
+                  className="flex items-center justify-center rounded-lg bg-emerald-600 p-2 text-white hover:bg-emerald-700"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
                   </svg>
-                  {labels.markComplete}
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => onReply(detail, "reply")}
-                className="flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
+                title={labels.reply}
+                aria-label={labels.reply}
+                className="flex items-center justify-center rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
                 </svg>
-                {labels.reply}
               </button>
               <button
                 type="button"
                 onClick={() => onReply(detail, "replyAll")}
-                className="flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
+                title={labels.replyAll}
+                aria-label={labels.replyAll}
+                className="flex items-center justify-center rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 15 7 10m0 0 5-5M7 10h9a6 6 0 0 1 6 6v1.5" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 15 3 10m5-5-5 5" />
                 </svg>
-                {labels.replyAll}
               </button>
               <button
                 type="button"
                 onClick={() => onReply(detail, "forward")}
-                className="flex items-center gap-1.5 rounded-lg border border-card-border px-3 py-2 text-sm font-medium text-ink hover:bg-black/5"
+                title={labels.forward}
+                aria-label={labels.forward}
+                className="flex items-center justify-center rounded-lg border border-card-border p-2 text-ink hover:bg-black/5"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0-6-6m6 6H9a6 6 0 0 0 0 12h3" />
                 </svg>
-                {labels.forward}
               </button>
             </div>
           )}
