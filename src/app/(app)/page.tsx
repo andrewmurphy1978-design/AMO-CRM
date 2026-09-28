@@ -5,14 +5,16 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import {
   formatDistanceToNow,
   format,
-  isToday,
-  isYesterday,
-  isTomorrow,
-  startOfDay,
   startOfWeek,
   addDays,
   type Locale,
 } from "date-fns";
+import {
+  isTodayInZone,
+  isYesterdayInZone,
+  isTomorrowInZone,
+  startOfTodayInZone,
+} from "@/lib/user-timezone";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -64,8 +66,8 @@ function formatSmartDateTime(
   t: ReturnType<typeof getDict>,
 ): string {
   const time = format(date, "p", { locale: dateLocale });
-  if (isToday(date)) return t.dashboard.todayAt(time);
-  if (isYesterday(date)) return t.dashboard.yesterdayAt(time);
+  if (isTodayInZone(date)) return t.dashboard.todayAt(time);
+  if (isYesterdayInZone(date)) return t.dashboard.yesterdayAt(time);
   return t.dashboard.dateAt(
     format(date, "MMM d", { locale: dateLocale }),
     time,
@@ -125,10 +127,6 @@ function hoursAgo(hours: number): Date {
   return new Date(Date.now() - hours * 60 * 60 * 1000);
 }
 
-function startOfToday(): Date {
-  return startOfDay(new Date());
-}
-
 // Same shape as the Email/Calendar pages' own local copies of this — feeds
 // the Email card's "Linked to" contact picker.
 function contactLabel(c: {
@@ -148,7 +146,7 @@ export default async function DashboardPage() {
 
   const sevenDaysAgo = daysFromNow(-7);
   const sevenDaysFromNow = daysFromNow(7);
-  const todayStart = startOfToday();
+  const todayStart = startOfTodayInZone();
 
   // One shared client for every dashboard read below (counts, lists,
   // Google's token, the social snapshots loop, the user's time format) —
@@ -395,7 +393,7 @@ export default async function DashboardPage() {
   // included here since (like the Email card) they're only ever available
   // via a live client-side fetch — the Summary card fetches its own count.
   const emailToday = (emailInitialData?.emails ?? []).filter((e) =>
-    isToday(new Date(e.date)),
+    isTodayInZone(new Date(e.date)),
   ).length;
   const emailNeedsAttention = (emailInitialData?.emails ?? []).filter(
     (e) =>
@@ -414,14 +412,14 @@ export default async function DashboardPage() {
   ).length;
 
   // Same 3 buckets the card's own sections are keyed by — computed here
-  // (not inside the DB callback) since isToday/isYesterday just need plain
-  // JS Dates, not another query.
-  const newContactsToday = newContactsList.filter((c) => isToday(c.createdAt));
+  // (not inside the DB callback) since isTodayInZone/isYesterdayInZone just
+  // need plain JS Dates, not another query.
+  const newContactsToday = newContactsList.filter((c) => isTodayInZone(c.createdAt));
   const newContactsYesterday = newContactsList.filter((c) =>
-    isYesterday(c.createdAt),
+    isYesterdayInZone(c.createdAt),
   );
   const newContactsThisWeek = newContactsList.filter(
-    (c) => !isToday(c.createdAt) && !isYesterday(c.createdAt),
+    (c) => !isTodayInZone(c.createdAt) && !isYesterdayInZone(c.createdAt),
   );
   const newContactsLabels = {
     title: t.dashboard.newContactsTitle,
@@ -477,20 +475,22 @@ export default async function DashboardPage() {
   };
 
   // Feeds the Project Summary stat card's deadline composite — same
-  // today/isTomorrow/catch-all bucketing style as the Contact Summary
-  // card's own Today/Yesterday/This-week buckets above, just forward-
-  // looking (a task due later today still counts as "today" even if
-  // dueDate's clock time has already passed, which is why the query above
-  // starts the window at todayStart rather than "now").
+  // today/isTomorrowInZone/catch-all bucketing style as the Contact
+  // Summary card's own Today/Yesterday/This-week buckets above, just
+  // forward-looking (a task due later today still counts as "today" even
+  // if dueDate's clock time has already passed, which is why the query
+  // above starts the window at todayStart rather than "now").
   const tasksDueToday = deadlineTasksList.filter(
-    (task) => task.dueDate && isToday(task.dueDate),
+    (task) => task.dueDate && isTodayInZone(task.dueDate),
   );
   const tasksDueTomorrow = deadlineTasksList.filter(
-    (task) => task.dueDate && isTomorrow(task.dueDate),
+    (task) => task.dueDate && isTomorrowInZone(task.dueDate),
   );
   const tasksDueThisWeek = deadlineTasksList.filter(
     (task) =>
-      task.dueDate && !isToday(task.dueDate) && !isTomorrow(task.dueDate),
+      task.dueDate &&
+      !isTodayInZone(task.dueDate) &&
+      !isTomorrowInZone(task.dueDate),
   );
   const projectSummaryLabels = {
     title: t.dashboard.projectSummaryTitle,
