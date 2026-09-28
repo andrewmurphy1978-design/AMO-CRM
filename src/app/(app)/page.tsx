@@ -908,96 +908,104 @@ export default async function DashboardPage() {
 
           {/* Top of column 3 on desktop; on mobile (single-column stacking)
             this puts it right below the Calendar card, per the user's own
-            placement — Projects/Tasks (also moved to col-start-3 below,
-            right after this in DOM) then follow it in both layouts. */}
-          <div
-            id="dashboard-contacts-card"
-            className="lg:col-start-3 scroll-mt-20"
-          >
-            <NewContactsCard
-              today={newContactsToday}
-              yesterday={newContactsYesterday}
-              thisWeek={newContactsThisWeek}
-              stageLabels={t.stages}
-              labels={newContactsLabels}
-            />
-          </div>
-
-          <div
-            id="dashboard-projects-card"
-            className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-3 scroll-mt-20"
-          >
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <div className="flex items-center gap-2">
-              <ProjectsIcon size="h-8 w-8" iconSize="h-5 w-5" />
-              <h2 className="font-display text-lg font-semibold text-ink">
-                {t.dashboard.dashboardProjectsTitle}
-              </h2>
+            placement. Contacts/Projects/Tasks are grouped into one flex
+            column (one grid item) rather than three separate col-start-3
+            items: as three separate items, auto-placement lands Contacts in
+            the same implicit row as the Email card, and that row's height
+            is forced to Email's own fixed 820px, leaving a large dead zone
+            below the (much shorter) Contacts card before Projects starts in
+            the next row. Grouping them removes that row-height coupling —
+            the group is now sized by its own content — which is also what
+            lets `lg:gap-0` below close the gap between the three cards on
+            desktop specifically, without touching their normal `gap-2
+            sm:gap-6` spacing on mobile/tablet. */}
+          <div className="flex flex-col gap-2 sm:gap-6 lg:col-start-3 lg:gap-0">
+            <div id="dashboard-contacts-card" className="scroll-mt-20">
+              <NewContactsCard
+                today={newContactsToday}
+                yesterday={newContactsYesterday}
+                thisWeek={newContactsThisWeek}
+                stageLabels={t.stages}
+                labels={newContactsLabels}
+              />
             </div>
-            {activeProjects.length === 0 ? (
-              <p className="mt-1.5 sm:mt-3 text-sm text-soft">
-                {t.dashboard.noActiveProjects}
-              </p>
-            ) : (
-              <ul className="mt-1.5 sm:mt-3 space-y-3">
-                {activeProjects.map((project) => (
-                  <li
-                    key={project.id}
-                    className="flex items-start gap-3 text-sm"
-                  >
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-lime" />
-                    <div>
-                      <Link
-                        href={`/projects/${project.id}`}
-                        className="font-medium text-ink hover:text-emerald-700 hover:underline"
-                      >
-                        {project.name}
-                      </Link>
-                      <p className="text-xs text-soft">
-                        {project.contact.firstName ?? project.contact.email}
-                        {project.dueDate &&
-                          ` · ${t.dashboard.due} ${formatDistanceToNow(project.dueDate, { addSuffix: true, locale: dateLocale })}`}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-3">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">
-              {t.dashboard.upcomingTasks}
-            </h2>
-            {dueSoonTasks.length === 0 ? (
-              <p className="mt-1.5 sm:mt-3 text-sm text-soft">
-                {t.dashboard.noUpcomingTasks}
-              </p>
-            ) : (
-              <ul className="mt-1.5 sm:mt-3 space-y-3">
-                {dueSoonTasks.map((task) => (
-                  <li key={task.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-teal" />
-                    <div>
-                      <Link
-                        href={`/projects/${task.projectId}`}
-                        className="font-medium text-ink hover:text-emerald-700 hover:underline"
-                      >
-                        {task.title}
-                      </Link>
-                      <p className="text-xs text-soft">
-                        {task.project.name} ·{" "}
-                        {task.project.contact.firstName ??
-                          task.project.contact.email}
-                        {task.dueDate &&
-                          ` · ${t.dashboard.due} ${formatDistanceToNow(task.dueDate, { addSuffix: true, locale: dateLocale })}`}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div
+              id="dashboard-projects-card"
+              className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 scroll-mt-20"
+            >
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <div className="flex items-center gap-2">
+                <ProjectsIcon size="h-8 w-8" iconSize="h-5 w-5" />
+                <h2 className="font-display text-lg font-semibold text-ink">
+                  {t.dashboard.dashboardProjectsTitle}
+                </h2>
+              </div>
+              {activeProjects.length === 0 ? (
+                <p className="mt-1.5 sm:mt-3 text-sm text-soft">
+                  {t.dashboard.noActiveProjects}
+                </p>
+              ) : (
+                <ul className="mt-1.5 sm:mt-3 space-y-3">
+                  {activeProjects.map((project) => (
+                    <li
+                      key={project.id}
+                      className="flex items-start gap-3 text-sm"
+                    >
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-lime" />
+                      <div>
+                        <Link
+                          href={`/projects/${project.id}`}
+                          className="font-medium text-ink hover:text-emerald-700 hover:underline"
+                        >
+                          {project.name}
+                        </Link>
+                        <p className="text-xs text-soft">
+                          {project.contact.firstName ?? project.contact.email}
+                          {project.dueDate &&
+                            ` · ${t.dashboard.due} ${formatDistanceToNow(project.dueDate, { addSuffix: true, locale: dateLocale })}`}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
+              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <h2 className="font-display text-lg font-semibold text-ink">
+                {t.dashboard.upcomingTasks}
+              </h2>
+              {dueSoonTasks.length === 0 ? (
+                <p className="mt-1.5 sm:mt-3 text-sm text-soft">
+                  {t.dashboard.noUpcomingTasks}
+                </p>
+              ) : (
+                <ul className="mt-1.5 sm:mt-3 space-y-3">
+                  {dueSoonTasks.map((task) => (
+                    <li key={task.id} className="flex items-start gap-3 text-sm">
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-teal" />
+                      <div>
+                        <Link
+                          href={`/projects/${task.projectId}`}
+                          className="font-medium text-ink hover:text-emerald-700 hover:underline"
+                        >
+                          {task.title}
+                        </Link>
+                        <p className="text-xs text-soft">
+                          {task.project.name} ·{" "}
+                          {task.project.contact.firstName ??
+                            task.project.contact.email}
+                          {task.dueDate &&
+                            ` · ${t.dashboard.due} ${formatDistanceToNow(task.dueDate, { addSuffix: true, locale: dateLocale })}`}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           <div className="lg:col-start-2">
