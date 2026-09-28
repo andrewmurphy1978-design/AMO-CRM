@@ -221,12 +221,17 @@ export default function EmailDialog({
             </p>
           </div>
         ) : (
-          <>
-            {/* Fixed, non-scrolling header row — metadata first, then the
-                read-only link summary stacked below it (not beside it: a
-                fixed side column here left almost no room for the metadata
-                text on a phone-width dialog), so this row stays short and
-                the body below gets the rest of the dialog's height. */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            {/* Header block — metadata, then the read-only link summary
+                stacked below it (not beside it: a fixed side column here
+                left almost no room for the metadata text on a phone-width
+                dialog), then the link editor itself when open (see below).
+                shrink-0 so it takes whatever height it naturally needs; the
+                body below it keeps a small min-height floor rather than
+                being allowed to shrink to nothing, so a very tall editor
+                (e.g. with the contact search list open) makes this whole
+                block scroll — via the wrapping div above — instead of
+                clipping its own Cancel/Save against the dialog's edge. */}
             <div className="flex shrink-0 flex-col gap-3 px-5 pb-3">
               <div className="min-w-0 space-y-0.5 text-sm text-ink">
                 <p>
@@ -291,46 +296,35 @@ export default function EmailDialog({
                   )}
                 </div>
               )}
-            </div>
 
-            {/* The body fills the rest of the dialog's height — its own
-                iframe (see EmailBodyFrame) is the dialog's only scrollbar —
-                except when the link editor is open on a phone-width
-                dialog: this whole row then becomes the dialog's own
-                scroll container (a fixed-height body plus the editor
-                below it, both in plain flow) so the editor's Cancel/Save
-                is always reachable by scrolling, whatever its content
-                turns out to be, rather than the two of them fighting over
-                a fixed split via flex-shrink (which only holds up for
-                content short enough to fit — taller real content, e.g.
-                with search results open, overflowed and overlapped the
-                footer below). From `sm` up the editor keeps its original
-                side-column layout with its own independent scroll. */}
-            <div
-              className={clsx(
-                "flex min-h-0 flex-1 flex-col gap-4 px-5 pb-5 sm:flex-row",
-                linkExpanded && "overflow-y-auto sm:overflow-visible"
-              )}
-            >
-              <div
-                className={clsx(
-                  "flex min-w-0 flex-col",
-                  linkExpanded ? "h-[50vh] shrink-0 sm:h-auto sm:min-h-0 sm:flex-1" : "min-h-0 flex-1"
-                )}
-              >
-                {detail?.html || detail?.text ? (
-                  <EmailBodyFrame html={detail.html} text={detail.text} allowRemoteImages={allowRemoteImages} />
-                ) : (
-                  <p className="flex h-full items-center justify-center text-center text-sm text-soft">{labels.noContent}</p>
-                )}
-              </div>
+              {/* Opens in place, right below the summary above, pushing the
+                  body down rather than sitting beside it in its own column —
+                  its own content (a capped/scrollable contact search list,
+                  a handful of selects) is naturally bounded, so this stays
+                  shrink-0 without needing its own height cap: the body below
+                  it is the dialog's only flex-1 area and just shrinks to
+                  whatever room is left, same as it always does when the
+                  attachments row or a long Cc list grows this section. */}
               {linkExpanded && target.linkConfig && (
-                <div className="shrink-0 border-t border-card-border pt-4 sm:min-h-0 sm:w-64 sm:overflow-y-auto sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                <div className="border-t border-card-border pt-3">
                   <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
                 </div>
               )}
             </div>
-          </>
+
+            {/* The body fills whatever's left of the dialog's height — its
+                own iframe (see EmailBodyFrame) is normally the dialog's
+                only scrollbar. min-h-[220px] is its floor: enough to still
+                read a few lines rather than vanish outright when the
+                editor above has pushed it down a lot. */}
+            <div className="flex min-h-[220px] flex-1 flex-col px-5 pb-5">
+              {detail?.html || detail?.text ? (
+                <EmailBodyFrame html={detail.html} text={detail.text} allowRemoteImages={allowRemoteImages} />
+              ) : (
+                <p className="flex h-full items-center justify-center text-center text-sm text-soft">{labels.noContent}</p>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="flex shrink-0 items-center justify-between border-t border-card-border px-5 py-3">
