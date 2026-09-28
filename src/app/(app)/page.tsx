@@ -35,6 +35,7 @@ import SocialCard from "./social-card";
 import {
   getValidAccessToken,
   getCalendarEventsInRange,
+  getRecentlyCreatedEvents,
   type CalendarEventSummary,
 } from "@/lib/google";
 import { getLatestSocialSnapshots } from "@/lib/social";
@@ -506,8 +507,18 @@ export default async function DashboardPage() {
     }, 0);
   }
 
+  // Deliberately its own fetch (getRecentlyCreatedEvents), not a filter of
+  // calendarSummaryEvents above — that fetch is bounded to [this week, next
+  // week) for display reasons, so it would miss an event created recently
+  // but scheduled further out (e.g. an appointment booked a month ahead).
   const last48Hours = hoursAgo(48);
-  const newEvents = calendarSummaryEvents.filter(
+  const recentlyCreatedEvents = googleAccessToken
+    ? ((await getRecentlyCreatedEvents(
+        googleAccessToken,
+        last48Hours.toISOString(),
+      )) ?? [])
+    : [];
+  const newEvents = recentlyCreatedEvents.filter(
     (e) => e.created && new Date(e.created) >= last48Hours,
   );
 

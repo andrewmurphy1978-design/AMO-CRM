@@ -534,6 +534,7 @@ function UpcomingTable({
 
 export default function CalendarCard({
   initial,
+  initialNewEvents,
   links: initialLinks,
   connected,
   lang,
@@ -548,6 +549,11 @@ export default function CalendarCard({
   linkPickerLabels,
 }: {
   initial: CalendarEventSummary[] | null;
+  // Events created/updated in the last 48h, from a separate, far-wider
+  // fetch (getRecentlyCreatedEvents) than `initial` — see that function's
+  // comment in src/lib/google.ts for why a newly-created event can't
+  // reliably be found by filtering `initial` alone.
+  initialNewEvents: CalendarEventSummary[] | null;
   links: Record<string, ResolvedEventLink>;
   connected: boolean;
   lang: "en" | "fr";
@@ -572,6 +578,7 @@ export default function CalendarCard({
 }) {
   const router = useRouter();
   const [events, setEvents] = useState(initial);
+  const [newEventsSource, setNewEventsSource] = useState(initialNewEvents);
   const [links, setLinks] = useState(initialLinks);
   const [loading, setLoading] = useState(false);
   const [viewTarget, setViewTarget] = useState<string | null>(null);
@@ -595,9 +602,11 @@ export default function CalendarCard({
       if (res.ok) {
         const data = (await res.json()) as {
           events: CalendarEventSummary[];
+          newEvents?: CalendarEventSummary[];
           links?: Record<string, ResolvedEventLink>;
         };
         setEvents(data.events);
+        setNewEventsSource(data.newEvents ?? []);
         setLinks(data.links ?? {});
       }
     } catch {
@@ -621,15 +630,18 @@ export default function CalendarCard({
   const tableDays = days.slice(3);
   const tableEvents = eventsByDay.slice(3);
 
-  // "New events" — events created in the last 48 hours, grouped by each
-  // event's own date rather than intersected with `days` (which only runs
-  // today onward): a new event dated earlier this week (e.g. this
-  // component's own accessToken now fetches back to this week's Sunday —
-  // see getDashboardCalendarEvents in src/lib/google.ts) would otherwise
-  // never get a row here even though the Calendar Summary card's own
-  // "new events" count (src/app/(app)/page.tsx) already includes it.
+  // "New events" — events created in the last 48 hours, sourced from
+  // `newEventsSource` (a separate, far-wider getRecentlyCreatedEvents
+  // fetch — see its comment in src/lib/google.ts) rather than `events`,
+  // and grouped by each event's own date rather than intersected with
+  // `days` (which only spans a couple of weeks): a new event scheduled
+  // further out — an appointment booked a month ahead, say — would
+  // otherwise never get a row here even though the Calendar Summary
+  // card's own "new events" count (src/app/(app)/page.tsx) already
+  // includes it. updatedMin (used server-side) is a coarser filter than
+  // "created", so this still checks the exact `created` timestamp itself.
   const newEventsCutoff = hoursAgo(48);
-  const newEvents = (events ?? []).filter(
+  const newEvents = (newEventsSource ?? []).filter(
     (e) => e.created && new Date(e.created) >= newEventsCutoff,
   );
   const newEventsTotalCount = newEvents.length;

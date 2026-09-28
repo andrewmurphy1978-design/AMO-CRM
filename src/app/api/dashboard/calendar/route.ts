@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getValidAccessToken, getDashboardCalendarEvents } from "@/lib/google";
+import { getValidAccessToken, getDashboardCalendarEvents, getRecentlyCreatedEvents } from "@/lib/google";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getResolvedEventLinks } from "@/lib/calendar-links";
 
@@ -17,11 +17,15 @@ export async function GET() {
     const accessToken = await getValidAccessToken(session.user.id, db);
     if (!accessToken) return { error: "not_connected" as const };
 
-    const events = await getDashboardCalendarEvents(accessToken);
+    const newEventsCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const [events, newEvents] = await Promise.all([
+      getDashboardCalendarEvents(accessToken),
+      getRecentlyCreatedEvents(accessToken, newEventsCutoff),
+    ]);
     if (events === null) return { error: "fetch_failed" as const };
 
     const links = events.length > 0 ? await getResolvedEventLinks(db, events.map((e) => e.id)) : {};
-    return { events, links };
+    return { events, newEvents: newEvents ?? [], links };
   });
 
   if ("error" in result) {

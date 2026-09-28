@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { getDashboardCalendarEvents } from "@/lib/google";
+import { getDashboardCalendarEvents, getRecentlyCreatedEvents } from "@/lib/google";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getResolvedEventLinks } from "@/lib/calendar-links";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -10,13 +10,20 @@ function contactLabel(c: { firstName: string | null; lastName: string | null; em
   return name || c.email || "";
 }
 
+function hoursAgoIso(hours: number): string {
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+
 // `accessToken` is resolved once, sequentially, by the caller — see the
 // comment on getUpcomingEvents in src/lib/google.ts for why this can't
 // fetch it itself.
 //
-// Uses getDashboardCalendarEvents (not getUpcomingEvents) so the card's
-// own "New events (last 48h)" table can see an event dated earlier this
-// week — see that function's own comment in src/lib/google.ts.
+// Uses getDashboardCalendarEvents (not getUpcomingEvents) so the 3-day
+// grid/table can see an event dated earlier this week — see that
+// function's own comment in src/lib/google.ts. The "New events (last
+// 48h)" table is fed by a separate getRecentlyCreatedEvents fetch
+// instead, since a newly-created event can be scheduled far outside
+// getDashboardCalendarEvents' own near-term display window.
 export default async function CalendarCardServer({
   accessToken,
   lang,
@@ -28,7 +35,13 @@ export default async function CalendarCardServer({
   hour12: boolean;
   labels: CalendarLabels;
 }) {
-  const events = accessToken ? await getDashboardCalendarEvents(accessToken) : null;
+  const newEventsCutoff = hoursAgoIso(48);
+  const [events, newEvents] = accessToken
+    ? await Promise.all([
+        getDashboardCalendarEvents(accessToken),
+        getRecentlyCreatedEvents(accessToken, newEventsCutoff),
+      ])
+    : [null, null];
 
   // One shared client for the link lookup and the contact/project/task/
   // booking option lists the event dialog needs — see the comment on the
@@ -86,6 +99,7 @@ export default async function CalendarCardServer({
   return (
     <CalendarCard
       initial={events}
+      initialNewEvents={newEvents}
       links={links}
       connected={accessToken !== null}
       lang={lang}

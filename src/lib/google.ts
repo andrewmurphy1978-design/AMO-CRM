@@ -656,13 +656,10 @@ export async function getUpcomingEvents(accessToken: string): Promise<CalendarEv
 
 // Same "today + 15 days" window as getUpcomingEvents, but starting from
 // this week's Sunday instead of today — used only by the Dashboard
-// Calendar card, whose "New events (last 48h)" table needs to see an
-// event dated earlier this week (e.g. Monday) even when "today" is later
-// in the week, matching the same [thisWeekStart, ...) window the Calendar
-// Summary card's own "new events" count already uses (src/app/(app)/
-// page.tsx). The 3-day grid/table still only display today onward — they
-// bucket by their own `days` array, so the extra earlier days here are
-// simply invisible there, not shown out of place.
+// Calendar card's own 3-day grid/table, so an event dated earlier this
+// week (e.g. Monday) still shows there even when "today" is later in the
+// week. Not used for the "New events" feature below — see
+// getRecentlyCreatedEvents for why that needs its own, much wider fetch.
 export async function getDashboardCalendarEvents(accessToken: string): Promise<CalendarEventSummary[] | null> {
   const now = new Date();
   const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -672,6 +669,41 @@ export async function getDashboardCalendarEvents(accessToken: string): Promise<C
     startOfWeek.toISOString(),
     new Date(startOfToday.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString()
   );
+}
+
+// The Dashboard's "New events" feature (the Calendar Summary card's count
+// and the Calendar card's own table) needs every event *created* recently
+// — regardless of how far in the future it's actually scheduled. A
+// colonoscopy appointment booked a month out, added yesterday, is exactly
+// as "new" as one added for tomorrow. Bounding the search to a near-term
+// "upcoming" window (as getUpcomingEvents/getDashboardCalendarEvents do,
+// for display reasons) would silently miss it.
+//
+// Google's events.list has no "created since" filter, so this uses
+// updatedMin instead — an event's `updated` timestamp equals its
+// `created` timestamp at creation time, so filtering here and then
+// checking the exact `created` field client-side (done by every caller)
+// yields precisely "created since X", not "touched since X". The
+// occurrence range (timeMin/timeMax) is wide but still bounded, since
+// singleEvents=true would otherwise try to expand an indefinitely
+// recurring series into unbounded instances.
+export async function getRecentlyCreatedEvents(accessToken: string, updatedMinIso: string): Promise<CalendarEventSummary[] | null> {
+  try {
+    const now = new Date();
+    const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
+    url.searchParams.set("updatedMin", updatedMinIso);
+    url.searchParams.set("timeMin", new Date(now.getTime() - 5 * 365 * 24 * 60 * 60 * 1000).toISOString());
+    url.searchParams.set("timeMax", new Date(now.getTime() + 2 * 365 * 24 * 60 * 60 * 1000).toISOString());
+    url.searchParams.set("singleEvents", "true");
+    url.searchParams.set("maxResults", "250");
+
+    const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { items?: RawGoogleEvent[] };
+    return (data.items ?? []).map(mapGoogleEvent);
+  } catch {
+    return null;
+  }
 }
 
 interface RawGoogleEvent {
