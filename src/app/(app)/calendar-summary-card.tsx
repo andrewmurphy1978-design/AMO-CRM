@@ -126,23 +126,23 @@ export default function CalendarSummaryCard({
             and 3 lines instead of one number+label pair. */}
         <div className="flex h-14 flex-col overflow-hidden rounded-lg text-center sm:h-16">
           <div
-            className={`flex flex-[2] flex-col items-center justify-center gap-0.5 px-1 ${CHILDREN_MOMMY_COLORS.banana.bg} ${CHILDREN_MOMMY_COLORS.banana.text}`}
+            className={`flex flex-[2] flex-col items-center justify-center gap-px px-1 ${CHILDREN_MOMMY_COLORS.banana.bg} ${CHILDREN_MOMMY_COLORS.banana.text}`}
           >
-            <span className="flex items-baseline gap-1 leading-tight">
-              <span className="text-sm font-bold sm:text-base">{counts.haley}</span>
-              <span className="text-[9px] font-medium sm:text-[11px]">{labels.haleyLabel}</span>
+            <span className="flex items-baseline gap-0.5 leading-none">
+              <span className="text-xs font-bold sm:text-sm">{counts.haley}</span>
+              <span className="text-[8px] font-medium sm:text-[10px]">{labels.haleyLabel}</span>
             </span>
-            <span className="flex items-baseline gap-1 leading-tight">
-              <span className="text-sm font-bold sm:text-base">{counts.lukas}</span>
-              <span className="text-[9px] font-medium sm:text-[11px]">{labels.lukasLabel}</span>
+            <span className="flex items-baseline gap-0.5 leading-none">
+              <span className="text-xs font-bold sm:text-sm">{counts.lukas}</span>
+              <span className="text-[8px] font-medium sm:text-[10px]">{labels.lukasLabel}</span>
             </span>
           </div>
           <div
             className={`flex flex-1 items-center justify-center px-1 ${CHILDREN_MOMMY_COLORS.graphite.bg} ${CHILDREN_MOMMY_COLORS.graphite.text}`}
           >
-            <span className="flex items-baseline gap-1 leading-tight">
-              <span className="text-sm font-bold sm:text-base">{counts.mommy}</span>
-              <span className="text-[9px] font-medium sm:text-[11px]">{labels.mommyLabel}</span>
+            <span className="flex items-baseline gap-0.5 leading-none">
+              <span className="text-xs font-bold sm:text-sm">{counts.mommy}</span>
+              <span className="text-[8px] font-medium sm:text-[10px]">{labels.mommyLabel}</span>
             </span>
           </div>
         </div>

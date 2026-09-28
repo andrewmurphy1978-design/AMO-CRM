@@ -621,31 +621,35 @@ export default function CalendarCard({
   const tableDays = days.slice(3);
   const tableEvents = eventsByDay.slice(3);
 
-  // "New events" — events created in the last 48 hours, regardless of
-  // which of the 14 fetched days they actually fall on (so one can show up
-  // here even if it's also visible in the 3-day grid or the table above).
-  // Only days with at least one match get a row, unlike the table above
-  // which shows every day (with a "nothing" message) even when empty.
+  // "New events" — events created in the last 48 hours, grouped by each
+  // event's own date rather than intersected with `days` (which only runs
+  // today onward): a new event dated earlier this week (e.g. this
+  // component's own accessToken now fetches back to this week's Sunday —
+  // see getDashboardCalendarEvents in src/lib/google.ts) would otherwise
+  // never get a row here even though the Calendar Summary card's own
+  // "new events" count (src/app/(app)/page.tsx) already includes it.
   const newEventsCutoff = hoursAgo(48);
-  const newEventsByDayAll = days.map((day) =>
-    (events ?? []).filter(
-      (e) =>
-        e.start &&
-        isSameDay(new Date(e.start), day) &&
-        e.created &&
-        new Date(e.created) >= newEventsCutoff,
-    ),
+  const newEvents = (events ?? []).filter(
+    (e) => e.created && new Date(e.created) >= newEventsCutoff,
   );
-  const newEventsTotalCount = newEventsByDayAll.reduce(
-    (sum, list) => sum + list.length,
-    0,
+  const newEventsTotalCount = newEvents.length;
+  const newEventGroups = new Map<
+    number,
+    { day: Date; events: CalendarEventSummary[] }
+  >();
+  for (const event of newEvents) {
+    if (!event.start) continue;
+    const day = startOfDay(new Date(event.start));
+    const key = day.getTime();
+    const existing = newEventGroups.get(key);
+    if (existing) existing.events.push(event);
+    else newEventGroups.set(key, { day, events: [event] });
+  }
+  const sortedNewEventGroups = Array.from(newEventGroups.values()).sort(
+    (a, b) => a.day.getTime() - b.day.getTime(),
   );
-  const newEventDays = days.filter(
-    (_, i) => newEventsByDayAll[i].length > 0,
-  );
-  const newEventDaysEvents = newEventsByDayAll.filter(
-    (list) => list.length > 0,
-  );
+  const newEventDays = sortedNewEventGroups.map((g) => g.day);
+  const newEventDaysEvents = sortedNewEventGroups.map((g) => g.events);
 
   return (
     <div
@@ -708,32 +712,12 @@ export default function CalendarCard({
           </p>
         ) : (
           <div onClick={(e) => e.stopPropagation()}>
-            <ThreeDayGrid
-              days={gridDays}
-              eventsByDay={gridEvents}
-              links={links}
-              dateLocale={dateLocale}
-              hour12={hour12}
-              intlLocale={intlLocale}
-              labels={labels}
-              onRequestEdit={(event) => setViewTarget(event.id)}
-              onRequestCreate={requestCreate}
-            />
-            <UpcomingTable
-              days={tableDays}
-              eventsByDay={tableEvents}
-              dateLocale={dateLocale}
-              hour12={hour12}
-              intlLocale={intlLocale}
-              labels={labels}
-              onRequestEdit={(event) => setViewTarget(event.id)}
-              onRequestCreate={requestCreate}
-            />
-
             {/* Same category-header convention as the Email card's own
                 sections (email-screening-view.tsx): a solid color bar with
                 the heading and a translucent count pill beside it, above a
-                table built from the same UpcomingTable used above it. */}
+                table built from the same UpcomingTable used below it.
+                Shown above the 3-day grid so what's new is the first thing
+                seen. */}
             <div
               className={`mt-1.5 flex items-center gap-2 rounded-t-xl px-3 py-2 sm:mt-3 ${CALENDAR_NEW_EVENTS_SECTION.headerBg}`}
             >
@@ -760,10 +744,32 @@ export default function CalendarCard({
                 onRequestCreate={requestCreate}
               />
             ) : (
-              <p className="mt-1.5 text-sm text-soft sm:mt-3">
+              <p className="rounded-b-xl border border-t-0 border-card-border px-3 py-2 text-sm text-soft">
                 {labels.newEventsEmpty}
               </p>
             )}
+
+            <ThreeDayGrid
+              days={gridDays}
+              eventsByDay={gridEvents}
+              links={links}
+              dateLocale={dateLocale}
+              hour12={hour12}
+              intlLocale={intlLocale}
+              labels={labels}
+              onRequestEdit={(event) => setViewTarget(event.id)}
+              onRequestCreate={requestCreate}
+            />
+            <UpcomingTable
+              days={tableDays}
+              eventsByDay={tableEvents}
+              dateLocale={dateLocale}
+              hour12={hour12}
+              intlLocale={intlLocale}
+              labels={labels}
+              onRequestEdit={(event) => setViewTarget(event.id)}
+              onRequestCreate={requestCreate}
+            />
           </div>
         )}
       </div>

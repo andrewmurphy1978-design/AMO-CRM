@@ -654,6 +654,26 @@ export async function getUpcomingEvents(accessToken: string): Promise<CalendarEv
   );
 }
 
+// Same "today + 15 days" window as getUpcomingEvents, but starting from
+// this week's Sunday instead of today — used only by the Dashboard
+// Calendar card, whose "New events (last 48h)" table needs to see an
+// event dated earlier this week (e.g. Monday) even when "today" is later
+// in the week, matching the same [thisWeekStart, ...) window the Calendar
+// Summary card's own "new events" count already uses (src/app/(app)/
+// page.tsx). The 3-day grid/table still only display today onward — they
+// bucket by their own `days` array, so the extra earlier days here are
+// simply invisible there, not shown out of place.
+export async function getDashboardCalendarEvents(accessToken: string): Promise<CalendarEventSummary[] | null> {
+  const now = new Date();
+  const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const startOfWeek = new Date(startOfToday.getTime() - startOfToday.getUTCDay() * 24 * 60 * 60 * 1000);
+  return getCalendarEventsInRange(
+    accessToken,
+    startOfWeek.toISOString(),
+    new Date(startOfToday.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString()
+  );
+}
+
 interface RawGoogleEvent {
   id: string;
   summary?: string;

@@ -33,7 +33,7 @@ export default function SummarySubCard({
 }) {
   const hoursSuffix =
     hours !== undefined ? (
-      <span className="text-sm font-bold leading-none sm:text-base">
+      <span className="text-[10px] font-bold leading-none sm:text-xs">
         {formatHoursFraction(hours)}h
       </span>
     ) : null;

@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { getUpcomingEvents } from "@/lib/google";
+import { getDashboardCalendarEvents } from "@/lib/google";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getResolvedEventLinks } from "@/lib/calendar-links";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -13,6 +13,10 @@ function contactLabel(c: { firstName: string | null; lastName: string | null; em
 // `accessToken` is resolved once, sequentially, by the caller — see the
 // comment on getUpcomingEvents in src/lib/google.ts for why this can't
 // fetch it itself.
+//
+// Uses getDashboardCalendarEvents (not getUpcomingEvents) so the card's
+// own "New events (last 48h)" table can see an event dated earlier this
+// week — see that function's own comment in src/lib/google.ts.
 export default async function CalendarCardServer({
   accessToken,
   lang,
@@ -24,7 +28,7 @@ export default async function CalendarCardServer({
   hour12: boolean;
   labels: CalendarLabels;
 }) {
-  const events = accessToken ? await getUpcomingEvents(accessToken) : null;
+  const events = accessToken ? await getDashboardCalendarEvents(accessToken) : null;
 
   // One shared client for the link lookup and the contact/project/task/
   // booking option lists the event dialog needs — see the comment on the
