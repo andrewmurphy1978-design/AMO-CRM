@@ -29,6 +29,7 @@ import {
   formatTimeRange,
 } from "@/lib/calendar-time";
 import { layoutDayEvents, type TimedEvent } from "@/lib/calendar-layout";
+import EventPillList from "./event-pill-list";
 import type { ResolvedEventLink } from "@/lib/calendar-links";
 import type { EventLinkTargets } from "@/actions/calendar";
 import EventViewDialog, {
@@ -633,35 +634,27 @@ export default function CalendarCard({
   // "New events" — events created in the last 48 hours, sourced from
   // `newEventsSource` (a separate, far-wider getRecentlyCreatedEvents
   // fetch — see its comment in src/lib/google.ts) rather than `events`,
-  // and grouped by each event's own date rather than intersected with
+  // sorted by each event's own start date rather than intersected with
   // `days` (which only spans a couple of weeks): a new event scheduled
   // further out — an appointment booked a month ahead, say — would
   // otherwise never get a row here even though the Calendar Summary
   // card's own "new events" count (src/app/(app)/page.tsx) already
   // includes it. updatedMin (used server-side) is a coarser filter than
   // "created", so this still checks the exact `created` timestamp itself.
+  // Shown as the same flat colored-pill list the Contact/Project detail
+  // pages' own Calendar card uses (see event-pill-list.tsx), one row per
+  // event with its own date/time prefix, rather than grouped under
+  // per-day table headers.
   const newEventsCutoff = hoursAgo(48);
   const newEvents = (newEventsSource ?? []).filter(
     (e) => e.created && new Date(e.created) >= newEventsCutoff,
   );
   const newEventsTotalCount = newEvents.length;
-  const newEventGroups = new Map<
-    number,
-    { day: Date; events: CalendarEventSummary[] }
-  >();
-  for (const event of newEvents) {
-    if (!event.start) continue;
-    const day = startOfDay(new Date(event.start));
-    const key = day.getTime();
-    const existing = newEventGroups.get(key);
-    if (existing) existing.events.push(event);
-    else newEventGroups.set(key, { day, events: [event] });
-  }
-  const sortedNewEventGroups = Array.from(newEventGroups.values()).sort(
-    (a, b) => a.day.getTime() - b.day.getTime(),
-  );
-  const newEventDays = sortedNewEventGroups.map((g) => g.day);
-  const newEventDaysEvents = sortedNewEventGroups.map((g) => g.events);
+  const sortedNewEvents = [...newEvents].sort((a, b) => {
+    const aTime = a.start ? new Date(a.start).getTime() : 0;
+    const bTime = b.start ? new Date(b.start).getTime() : 0;
+    return aTime - bTime;
+  });
 
   return (
     <div
@@ -744,22 +737,16 @@ export default function CalendarCard({
                 {newEventsTotalCount}
               </span>
             </div>
-            {newEventDays.length > 0 ? (
-              <UpcomingTable
-                days={newEventDays}
-                eventsByDay={newEventDaysEvents}
+            <div className="rounded-b-xl border border-t-0 border-card-border px-3 pb-2">
+              <EventPillList
+                events={sortedNewEvents}
                 dateLocale={dateLocale}
                 hour12={hour12}
                 intlLocale={intlLocale}
-                labels={labels}
-                onRequestEdit={(event) => setViewTarget(event.id)}
-                onRequestCreate={requestCreate}
+                emptyLabel={labels.newEventsEmpty}
+                onSelect={(id) => setViewTarget(id)}
               />
-            ) : (
-              <p className="rounded-b-xl border border-t-0 border-card-border px-3 py-2 text-sm text-soft">
-                {labels.newEventsEmpty}
-              </p>
-            )}
+            </div>
 
             <ThreeDayGrid
               days={gridDays}

@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
 import type { CalendarEventSummary } from "@/lib/google";
-import { eventColor } from "@/lib/calendar-colors";
-import { formatTimeRange } from "@/lib/calendar-time";
 import type { EventLinkTargets } from "@/actions/calendar";
 import Card from "@/components/section-card";
 import type { Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { LinkOption } from "./link-dialog";
+import EventPillList from "./event-pill-list";
 import EventViewDialog, { type EventViewDialogLabels } from "./calendar-app/event-view-dialog";
 import EventDialog, { type EventDialogLabels, type EventDialogTarget } from "./calendar-app/event-dialog";
 
@@ -80,33 +78,14 @@ export default function CalendarEventsCard({
 
   return (
     <Card color="calendarEvents" title={title}>
-      {events.length === 0 ? (
-        <p className="mt-3 text-sm text-soft">{notConnectedLabel ?? noEventsLabel}</p>
-      ) : (
-        <ul className="mt-3 space-y-1.5">
-          {events.map((event) => {
-            const color = eventColor(event.colorId);
-            const eventDate = event.start ?? event.end;
-            return (
-              <li key={event.id}>
-                <button
-                  type="button"
-                  onClick={() => setViewTarget(event.id)}
-                  className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: color.bg, color: color.fg }}
-                >
-                  <span className="shrink-0 whitespace-nowrap text-xs font-bold">
-                    {eventDate && format(new Date(eventDate), "MMM d", { locale: dateLocale })}
-                    {!event.allDay && event.start &&
-                      ` · ${formatTimeRange(new Date(event.start), event.end ? new Date(event.end) : null, hour12, intlLocale)}`}
-                  </span>
-                  <span className="min-w-0 flex-1 whitespace-normal break-words">{event.title}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <EventPillList
+        events={events}
+        dateLocale={dateLocale}
+        hour12={hour12}
+        intlLocale={intlLocale}
+        emptyLabel={notConnectedLabel ?? noEventsLabel}
+        onSelect={setViewTarget}
+      />
 
       <EventViewDialog
         eventId={viewTarget}
