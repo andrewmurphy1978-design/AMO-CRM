@@ -6,7 +6,7 @@ import { zoneShortLabel, offsetMinutes, formatOffsetShort } from "@/lib/timezone
 // Replaces the old dashboard-wide World Clocks card (world-clocks.tsx) —
 // the compact pill shows the 2 zones picked in Settings (see
 // src/lib/world-clock-zones.ts), and clicking it opens every zone the
-// user picked (up to 8) as a drop-down, same idea as the Weather widget
+// user picked (up to 9) as a drop-down, same idea as the Weather widget
 // right next to it.
 export default function HeaderWorldClockWidget({
   headerZones,

@@ -110,7 +110,7 @@ export default function Sidebar({
               </svg>
             </button>
           </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
+          <nav className="flex-1 space-y-0.5 px-2 py-3">
             {navItems.map((item) => (
               <NavLink key={item.href} href={item.href} label={item.label} collapsed />
             ))}
@@ -160,12 +160,12 @@ export default function Sidebar({
           </svg>
         </button>
       </div>
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 space-y-0.5 px-3 py-3">
         {navItems.map((item) => (
           <NavLink key={item.href} href={item.href} label={item.label} />
         ))}
       </nav>
-      <div className="border-t border-white/10 p-4">
+      <div className="border-t border-white/10 p-3">
         <p className="truncate text-sm font-medium text-amo-white">{userName}</p>
         <p className="truncate text-xs text-amo-muted">{userEmail}</p>
         <form action={signOutAction}>

@@ -79,13 +79,27 @@ export default function PageHeader({
 }) {
   if (logoUrl) {
     return (
-      <header className="sticky top-0 z-30 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
+      <header className="@container sticky top-0 z-30 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
         <div className="flex shrink-0 items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={logoUrl} alt="Andrew Murphy Online" className="hidden h-auto w-36 shrink-0 object-contain sm:block sm:w-56" />
           {logoAccessory}
         </div>
-        <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-2xl">
+        {/* Centered over the whole header bar (not a flex-flow item) at
+            `sm`+ regardless of how wide the logo/accessory and date/time
+            groups on either side are — that's what makes it a true center
+            rather than "centered in the leftover space." The tradeoff:
+            since it doesn't participate in flex layout there, it can't
+            shrink to avoid those groups, so on a narrow enough header
+            (limited screen width, browser zoom, or just the sidebar being
+            expanded and leaving less room) it would overlap them instead.
+            `sm:invisible` + the `@container` breakpoint below hides it
+            (without moving anything else — it's still `absolute`, so
+            removing it does nothing to the header's flex layout) once the
+            header itself doesn't have enough room to show it without
+            overlapping. Still truncates and flows normally below `sm`,
+            where there's no absolute overlay to begin with. */}
+        <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:invisible sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-2xl sm:@min-[1300px]:visible">
           {title}
         </h1>
         <div className="flex items-center gap-3">

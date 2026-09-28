@@ -1,17 +1,19 @@
 import type { PrismaClient } from "@/lib/prisma";
 
 // Defaults + helpers for the customizable World Clock feature: each user
-// picks up to 8 IANA zones for their own World Clock card (the Dashboard
-// header widget's dropdown), and up to 2 of those to show in the compact
-// header widget itself. Both are stored as plain string arrays on User
-// (empty meaning "use these defaults", not the defaults baked in — see
-// prisma/schema.prisma) so a future change to the defaults still reaches
-// anyone who never customized their own.
-export const MAX_WORLD_CLOCK_ZONES = 8;
+// picks up to 9 IANA zones for their own World Clock card (the Dashboard
+// header widget's dropdown, laid out as a 3x3 grid), and up to 2 of those
+// to show in the compact header widget itself. Both are stored as plain
+// string arrays on User (empty meaning "use these defaults", not the
+// defaults baked in — see prisma/schema.prisma) so a future change to the
+// defaults still reaches anyone who never customized their own.
+export const MAX_WORLD_CLOCK_ZONES = 9;
 export const HEADER_CLOCK_COUNT = 2;
 
-// Same 8 zones the World Clock card originally shipped with (see the old
-// world-clocks.tsx), now just a fallback instead of a hardcoded list.
+// The 8 zones the World Clock card originally shipped with (see the old
+// world-clocks.tsx) plus Tokyo — filling out the 3x3 grid with an Asia zone,
+// the one region the original 8 didn't cover — now just a fallback instead
+// of a hardcoded list.
 export const DEFAULT_WORLD_CLOCK_ZONES = [
   "America/Toronto",
   "America/Chicago",
@@ -19,6 +21,7 @@ export const DEFAULT_WORLD_CLOCK_ZONES = [
   "America/Vancouver",
   "Europe/London",
   "Europe/Paris",
+  "Asia/Tokyo",
   "Australia/Sydney",
   "Pacific/Auckland",
 ] as const;
