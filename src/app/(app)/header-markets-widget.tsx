@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MarketsSnapshot, MarketsWidgetCurrencyRow, MarketsWidgetItemRow } from "@/lib/markets";
-import MarketsCard, { type MarketsLabels } from "./markets-card";
+import { countryFlagUrl } from "@/lib/flags";
+import MarketsCard, { fetchCryptoDirect, type MarketsLabels } from "./markets-card";
+
+// The base currency is always CAD in this app (see src/lib/markets.ts) —
+// MarketsWidgetCurrencyRow only carries the *target* currency's country
+// code, so this is the one fixed flag the pill needs for the "1 CAD" side.
+const CAD_COUNTRY_CODE = "ca";
 
 export interface MarketsWidgetData {
   currencyRow: MarketsWidgetCurrencyRow | null;
@@ -42,6 +48,7 @@ export default function HeaderMarketsWidget({
   labels: MarketsLabels;
 }) {
   const [open, setOpen] = useState(false);
+  const [pillData, setPillData] = useState(pill);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,7 +59,37 @@ export default function HeaderMarketsWidget({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  if (!pill || (!pill.currencyRow && pill.itemRows.length === 0)) {
+  // The pill's own data is a server-only snapshot — any crypto pick in it
+  // (e.g. Bitcoin) has a null % change, since CoinGecko blocks Cloudflare
+  // Workers' shared IPs (see fetchCryptoDirect's own comment). The full
+  // Markets card below already works around that with a client-side
+  // CoinGecko fetch once it's opened; this applies the same fix directly
+  // to the pill so a crypto pick doesn't sit blank until the user clicks
+  // it open.
+  useEffect(() => {
+    if (!pill?.itemRows.some((row) => row.key.startsWith("crypto:"))) return;
+    fetchCryptoDirect().then((crypto) => {
+      if (!crypto) return;
+      setPillData((prev) =>
+        prev
+          ? {
+              ...prev,
+              itemRows: prev.itemRows.map((row) => {
+                if (!row.key.startsWith("crypto:")) return row;
+                const id = row.key.slice("crypto:".length);
+                const match = crypto.find((c) => c.id === id);
+                return match ? { ...row, changePct: match.changePct24h } : row;
+              }),
+            }
+          : prev,
+      );
+    });
+    // Only ever runs once, right after the SSR-rendered pill shows up, to
+    // upgrade any crypto row with a value the server-side fetch can't get.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!pillData || (!pillData.currencyRow && pillData.itemRows.length === 0)) {
     return (
       <div className="hidden items-center rounded-lg bg-white/10 px-2.5 py-1.5 text-xs text-amo-white/70 sm:flex">
         {labels.unavailable}
@@ -67,16 +104,26 @@ export default function HeaderMarketsWidget({
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-3 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15"
       >
-        {pill.currencyRow && (
-          <span className="max-w-[7rem] min-w-0 text-center leading-tight">
-            <span className="block truncate text-[9px] uppercase tracking-wide opacity-75">1 CAD</span>
-            <span className="block truncate font-display text-xs font-bold tabular-nums">
-              = {pill.currencyRow.rateFromBase.toFixed(4)}
-              {pill.currencyRow.code}
+        {pillData.currencyRow && (
+          <span className="max-w-[8rem] min-w-0 text-center leading-tight">
+            <span className="flex items-center justify-center gap-1 truncate text-[9px] uppercase tracking-wide opacity-75">
+              {/* eslint-disable-next-line @next/next/no-img-element -- external flag CDN, not a local asset */}
+              <img src={countryFlagUrl(CAD_COUNTRY_CODE)} alt="" className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover" />
+              1 CAD
+            </span>
+            <span className="flex items-center justify-center gap-1 truncate font-display text-xs font-bold tabular-nums">
+              = {pillData.currencyRow.rateFromBase.toFixed(2)}
+              {/* eslint-disable-next-line @next/next/no-img-element -- external flag CDN, not a local asset */}
+              <img
+                src={countryFlagUrl(pillData.currencyRow.countryCode)}
+                alt=""
+                className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover"
+              />
+              {pillData.currencyRow.code}
             </span>
           </span>
         )}
-        {pill.itemRows.map((item) => (
+        {pillData.itemRows.map((item) => (
           <span key={item.key} className="max-w-[4.5rem] min-w-0 text-center leading-tight">
             <span className="block truncate text-[9px] uppercase tracking-wide opacity-75">{item.label}</span>
             <span className="block truncate font-display text-xs font-bold tabular-nums">

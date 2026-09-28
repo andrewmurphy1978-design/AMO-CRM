@@ -57,8 +57,12 @@ function FlagImg({ countryCode }: { countryCode: string }) {
 // CoinGecko blocks Cloudflare Workers' shared IP range (confirmed via a
 // live HTTP 403), so crypto prices are fetched directly from the visitor's
 // own browser instead of proxied through the server — CoinGecko's public
-// API is designed for direct client-side use and allows CORS.
-async function fetchCryptoDirect(): Promise<CryptoPrice[] | null> {
+// API is designed for direct client-side use and allows CORS. Exported so
+// the header Markets widget's own compact pill (header-markets-widget.tsx)
+// can apply the same fix to whichever crypto pick it shows — its data
+// comes from a server-only snapshot otherwise, so without this its crypto
+// row's % change stays blank even once this card's own copy is fixed.
+export async function fetchCryptoDirect(): Promise<CryptoPrice[] | null> {
   try {
     const ids = CRYPTO_IDS.map((c) => c.id).join(",");
     const res = await fetch(

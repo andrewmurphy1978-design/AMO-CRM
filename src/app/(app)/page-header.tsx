@@ -51,6 +51,7 @@ export default function PageHeader({
   dateTimeAccessory,
   actions,
   centerActions,
+  hideDateTimeCard,
 }: {
   title: ReactNode;
   hour12: boolean;
@@ -76,6 +77,10 @@ export default function PageHeader({
   // exactly the overlap bug the default in-flow placement below exists
   // to prevent.
   centerActions?: boolean;
+  // Lets the Dashboard's own per-widget Settings toggle (see
+  // dashboard-header-widgets.ts) hide the Date/Time/Location card too,
+  // same as it can hide any of the other header widgets.
+  hideDateTimeCard?: boolean;
 }) {
   if (logoUrl) {
     return (
@@ -99,13 +104,13 @@ export default function PageHeader({
             header itself doesn't have enough room to show it without
             overlapping. Still truncates and flows normally below `sm`,
             where there's no absolute overlay to begin with. */}
-        <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:invisible sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-2xl sm:@min-[1300px]:visible">
+        <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:invisible sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-2xl sm:@min-[1500px]:visible">
           {title}
         </h1>
         <div className="flex items-center gap-3">
           {actions}
           {dateTimeAccessory}
-          <DateTimeCard hour12={hour12} lang={lang} location={location} />
+          {!hideDateTimeCard && <DateTimeCard hour12={hour12} lang={lang} location={location} />}
         </div>
       </header>
     );

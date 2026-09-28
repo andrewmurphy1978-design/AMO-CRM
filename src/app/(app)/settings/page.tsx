@@ -30,6 +30,10 @@ import { getWatchedPeople, isPersonalSectionUser } from "@/lib/personal-watch";
 import { effectiveWorldClockZones, effectiveHeaderClockZones } from "@/lib/world-clock-zones";
 import { effectiveMarketCurrency, effectiveMarketItems } from "@/lib/dashboard-markets-picks";
 import MarketsPicksForm from "./markets-picks-form";
+import { effectiveSportsLeague, effectiveSportsTeamNhl, effectiveSportsTeamMlb } from "@/lib/dashboard-sports-picks";
+import SportsPicksForm from "./sports-picks-form";
+import { effectiveHiddenHeaderWidgets } from "@/lib/dashboard-header-widgets";
+import HeaderWidgetsForm from "./header-widgets-form";
 import PageHeader from "../page-header";
 
 interface MakeMetadata {
@@ -88,6 +92,10 @@ export default async function SettingsPage({
               headerClockZones: true,
               marketsCurrency: true,
               marketsItems: true,
+              sportsLeague: true,
+              sportsTeamNhl: true,
+              sportsTeamMlb: true,
+              hiddenHeaderWidgets: true,
             },
           })
         : null;
@@ -147,6 +155,10 @@ export default async function SettingsPage({
   );
   const marketsCurrency = effectiveMarketCurrency(currentUser?.marketsCurrency ?? null);
   const marketsItems = effectiveMarketItems(currentUser?.marketsItems ?? []);
+  const sportsLeague = effectiveSportsLeague(currentUser?.sportsLeague ?? null);
+  const sportsTeamNhl = effectiveSportsTeamNhl(currentUser?.sportsTeamNhl ?? null);
+  const sportsTeamMlb = effectiveSportsTeamMlb(currentUser?.sportsTeamMlb ?? null);
+  const hiddenHeaderWidgets = effectiveHiddenHeaderWidgets(currentUser?.hiddenHeaderWidgets ?? []);
   // Set by .github/workflows/deploy.yml right before the Cloudflare build —
   // absent in local dev, where there's no deploy to report. Shown in the
   // "Your CRM link" card as the fastest way to confirm a given push
@@ -225,6 +237,17 @@ export default async function SettingsPage({
                 initialCurrency={marketsCurrency}
                 initialItems={marketsItems}
               />
+            )}
+            {currentUser && (
+              <SportsPicksForm
+                lang={lang}
+                initialLeague={sportsLeague}
+                initialTeamNhl={sportsTeamNhl}
+                initialTeamMlb={sportsTeamMlb}
+              />
+            )}
+            {currentUser && (
+              <HeaderWidgetsForm lang={lang} initialHidden={hiddenHeaderWidgets} />
             )}
           </section>
 

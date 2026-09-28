@@ -52,16 +52,9 @@ export interface MlbSnapshot {
   errors: string[];
 }
 
-export interface SportsSnapshot {
-  nhl: NhlSnapshot;
-  mlb: MlbSnapshot;
-  fetchedAt: string;
-}
+const DEFAULT_NHL_TEAM_ABBREV = "MTL";
 
-const NHL_TEAM_ABBREV = "MTL";
-const NHL_TEAM_NAME = "Montreal Canadiens";
-
-const NHL_TEAM_NAMES: Record<string, string> = {
+export const NHL_TEAM_NAMES: Record<string, string> = {
   ANA: "Anaheim Ducks",
   ARI: "Arizona Coyotes",
   BOS: "Boston Bruins",
@@ -77,7 +70,7 @@ const NHL_TEAM_NAMES: Record<string, string> = {
   FLA: "Florida Panthers",
   LAK: "Los Angeles Kings",
   MIN: "Minnesota Wild",
-  MTL: NHL_TEAM_NAME,
+  MTL: "Montreal Canadiens",
   NSH: "Nashville Predators",
   NJD: "New Jersey Devils",
   NYI: "New York Islanders",
@@ -116,14 +109,14 @@ interface RawNhlGame {
   awayTeam?: RawNhlTeam;
 }
 
-function parseNhlGame(g: RawNhlGame): SportsTeamGame | null {
+function parseNhlGame(g: RawNhlGame, teamAbbrev: string): SportsTeamGame | null {
   const home = g.homeTeam;
   const away = g.awayTeam;
   if (!home?.abbrev || !away?.abbrev) return null;
   const homeAbbrev = home.abbrev;
   const awayAbbrev = away.abbrev;
-  if (homeAbbrev !== NHL_TEAM_ABBREV && awayAbbrev !== NHL_TEAM_ABBREV) return null;
-  const isHome = homeAbbrev === NHL_TEAM_ABBREV;
+  if (homeAbbrev !== teamAbbrev && awayAbbrev !== teamAbbrev) return null;
+  const isHome = homeAbbrev === teamAbbrev;
   const team = isHome ? home : away;
   const opponent = isHome ? away : home;
   const opponentAbbrev = isHome ? awayAbbrev : homeAbbrev;
@@ -148,19 +141,21 @@ function parseNhlGame(g: RawNhlGame): SportsTeamGame | null {
   };
 }
 
-export async function getNhlSnapshot(): Promise<NhlSnapshot> {
+export async function getNhlSnapshot(teamAbbrev: string = DEFAULT_NHL_TEAM_ABBREV): Promise<NhlSnapshot> {
   const errors: string[] = [];
   let lastGame: SportsTeamGame | null = null;
   let nextGame: SportsTeamGame | null = null;
 
   try {
-    const res = await fetch(`https://api-web.nhle.com/v1/club-schedule-season/${NHL_TEAM_ABBREV}/now`);
+    const res = await fetch(`https://api-web.nhle.com/v1/club-schedule-season/${teamAbbrev}/now`);
     if (!res.ok) {
       errors.push(`nhl: HTTP ${res.status}`);
     } else {
       const data = (await res.json()) as { games?: RawNhlGame[] };
       const games = Array.isArray(data.games) ? data.games : [];
-      const parsed = games.map(parseNhlGame).filter((g): g is SportsTeamGame => g !== null);
+      const parsed = games
+        .map((g) => parseNhlGame(g, teamAbbrev))
+        .filter((g): g is SportsTeamGame => g !== null);
       const now = Date.now();
       const past = parsed.filter((g) => g.status === "final" && new Date(g.date).getTime() <= now);
       const future = parsed
@@ -173,12 +168,51 @@ export async function getNhlSnapshot(): Promise<NhlSnapshot> {
     errors.push(`nhl: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  return { teamName: NHL_TEAM_NAME, teamLogo: nhlLogoUrl(NHL_TEAM_ABBREV), lastGame, nextGame, errors };
+  return {
+    teamName: NHL_TEAM_NAMES[teamAbbrev] ?? teamAbbrev,
+    teamLogo: nhlLogoUrl(teamAbbrev),
+    lastGame,
+    nextGame,
+    errors,
+  };
 }
 
-const MLB_TEAM_ID = 141; // Toronto Blue Jays
-const MLB_TEAM_NAME = "Toronto Blue Jays";
+const DEFAULT_MLB_TEAM_ID = 141; // Toronto Blue Jays
 const MLB_SPORT_ID = 1;
+
+// MLB Stats API's own stable numeric team ids.
+export const MLB_TEAM_NAMES: Record<number, string> = {
+  109: "Arizona Diamondbacks",
+  144: "Atlanta Braves",
+  110: "Baltimore Orioles",
+  111: "Boston Red Sox",
+  112: "Chicago Cubs",
+  145: "Chicago White Sox",
+  113: "Cincinnati Reds",
+  114: "Cleveland Guardians",
+  115: "Colorado Rockies",
+  116: "Detroit Tigers",
+  117: "Houston Astros",
+  118: "Kansas City Royals",
+  108: "Los Angeles Angels",
+  119: "Los Angeles Dodgers",
+  146: "Miami Marlins",
+  158: "Milwaukee Brewers",
+  142: "Minnesota Twins",
+  121: "New York Mets",
+  147: "New York Yankees",
+  133: "Oakland Athletics",
+  143: "Philadelphia Phillies",
+  134: "Pittsburgh Pirates",
+  135: "San Diego Padres",
+  137: "San Francisco Giants",
+  136: "Seattle Mariners",
+  138: "St. Louis Cardinals",
+  139: "Tampa Bay Rays",
+  140: "Texas Rangers",
+  141: "Toronto Blue Jays",
+  120: "Washington Nationals",
+};
 
 function mlbLogoUrl(teamId: number): string {
   return `https://www.mlbstatic.com/team-logos/${teamId}.svg`;
@@ -196,8 +230,8 @@ interface RawMlbGame {
   teams?: { home?: RawMlbTeamSide; away?: RawMlbTeamSide };
 }
 
-async function fetchMlbGames(gameType: string, season: number): Promise<RawMlbGame[]> {
-  const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=${MLB_SPORT_ID}&teamId=${MLB_TEAM_ID}&gameType=${gameType}&season=${season}`;
+async function fetchMlbGames(teamId: number, gameType: string, season: number): Promise<RawMlbGame[]> {
+  const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=${MLB_SPORT_ID}&teamId=${teamId}&gameType=${gameType}&season=${season}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = (await res.json()) as { dates?: { games?: RawMlbGame[] }[] };
@@ -228,8 +262,8 @@ function parseMlbGame(g: RawMlbGame): MlbSeriesGame | null {
   };
 }
 
-function toTeamGame(g: MlbSeriesGame): SportsTeamGame {
-  const isHome = g.homeTeamId === MLB_TEAM_ID;
+function toTeamGame(g: MlbSeriesGame, teamId: number): SportsTeamGame {
+  const isHome = g.homeTeamId === teamId;
   return {
     gameId: g.gameId,
     date: g.date,
@@ -242,7 +276,7 @@ function toTeamGame(g: MlbSeriesGame): SportsTeamGame {
   };
 }
 
-export async function getMlbSnapshot(): Promise<MlbSnapshot> {
+export async function getMlbSnapshot(teamId: number = DEFAULT_MLB_TEAM_ID): Promise<MlbSnapshot> {
   const errors: string[] = [];
   const season = new Date().getUTCFullYear();
   let inPostseason = false;
@@ -252,8 +286,8 @@ export async function getMlbSnapshot(): Promise<MlbSnapshot> {
 
   try {
     // "P" is the MLB Stats API's aggregate postseason gameType filter —
-    // any games back means the Blue Jays have clinched a postseason spot.
-    const postGames = await fetchMlbGames("P", season);
+    // any games back means the team has clinched a postseason spot.
+    const postGames = await fetchMlbGames(teamId, "P", season);
     const parsedPost = postGames.map(parseMlbGame).filter((g): g is MlbSeriesGame => g !== null);
     if (parsedPost.length > 0) {
       inPostseason = true;
@@ -262,7 +296,7 @@ export async function getMlbSnapshot(): Promise<MlbSnapshot> {
       // The current/most recent series' opponent — last played game if
       // one exists, otherwise the earliest scheduled one.
       const reference = [...sorted].reverse().find((g) => new Date(g.date).getTime() <= now) ?? sorted[0];
-      const opponentId = reference.homeTeamId === MLB_TEAM_ID ? reference.awayTeamId : reference.homeTeamId;
+      const opponentId = reference.homeTeamId === teamId ? reference.awayTeamId : reference.homeTeamId;
       seriesGames = sorted.filter((g) => g.homeTeamId === opponentId || g.awayTeamId === opponentId);
     }
   } catch (error) {
@@ -271,8 +305,11 @@ export async function getMlbSnapshot(): Promise<MlbSnapshot> {
 
   if (!inPostseason) {
     try {
-      const regGames = await fetchMlbGames("R", season);
-      const parsed = regGames.map(parseMlbGame).filter((g): g is MlbSeriesGame => g !== null).map(toTeamGame);
+      const regGames = await fetchMlbGames(teamId, "R", season);
+      const parsed = regGames
+        .map(parseMlbGame)
+        .filter((g): g is MlbSeriesGame => g !== null)
+        .map((g) => toTeamGame(g, teamId));
       const now = Date.now();
       const past = parsed.filter((g) => g.status === "final" && new Date(g.date).getTime() <= now);
       const future = parsed
@@ -286,17 +323,12 @@ export async function getMlbSnapshot(): Promise<MlbSnapshot> {
   }
 
   return {
-    teamName: MLB_TEAM_NAME,
-    teamLogo: mlbLogoUrl(MLB_TEAM_ID),
+    teamName: MLB_TEAM_NAMES[teamId] ?? String(teamId),
+    teamLogo: mlbLogoUrl(teamId),
     inPostseason,
     seriesGames,
     lastGame,
     nextGame,
     errors,
   };
-}
-
-export async function getSportsSnapshot(): Promise<SportsSnapshot> {
-  const [nhl, mlb] = await Promise.all([getNhlSnapshot(), getMlbSnapshot()]);
-  return { nhl, mlb, fetchedAt: new Date().toISOString() };
 }

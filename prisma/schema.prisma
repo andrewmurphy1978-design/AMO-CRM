@@ -83,6 +83,17 @@ model User {
   // World Clock zones above.
   marketsCurrency            String?
   marketsItems               String[]   @default([])
+  // The Dashboard header's condensed Sports widget: which league is
+  // currently shown, plus a separately-remembered home team per league so
+  // switching leagues doesn't lose the other one's pick — see
+  // src/lib/dashboard-sports-picks.ts. Null means "use the defaults".
+  sportsLeague               String?
+  sportsTeamNhl              String?
+  sportsTeamMlb              String?
+  // Which Dashboard header widgets this user has hidden — any of "weather",
+  // "news", "sports", "markets", "worldClock", "dateTime". Empty means all
+  // shown (the default) — see src/lib/dashboard-header-widgets.ts.
+  hiddenHeaderWidgets        String[]   @default([])
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @updatedAt
 

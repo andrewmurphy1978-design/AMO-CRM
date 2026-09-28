@@ -25,7 +25,8 @@ import { WeatherWidgetSkeleton } from "./header-weather-widget";
 import HeaderWorldClockWidget from "./header-world-clock-widget";
 import NewsHeaderServer from "./news-header-server";
 import { NewsWidgetSkeleton } from "./header-news-widget";
-import SportsCardServer from "./sports-card-server";
+import SportsHeaderServer from "./sports-header-server";
+import { SportsWidgetSkeleton } from "./header-sports-widget";
 import MarketsHeaderServer from "./markets-header-server";
 import { MarketsWidgetSkeleton } from "./header-markets-widget";
 import EmailCard from "./email-card";
@@ -54,6 +55,8 @@ import { getLatestSocialSnapshots } from "@/lib/social";
 import { getHour12 } from "@/lib/time-format";
 import { getUserWorldClockZones } from "@/lib/world-clock-zones";
 import { getUserMarketsPicks } from "@/lib/dashboard-markets-picks";
+import { getUserSportsPicks } from "@/lib/dashboard-sports-picks";
+import { getUserHiddenHeaderWidgets } from "@/lib/dashboard-header-widgets";
 import type { AutomationRun } from "@prisma/client";
 
 // Same full lockup used in the sidebar's expanded state elsewhere — the
@@ -183,6 +186,10 @@ export default async function DashboardPage() {
     headerZones,
     marketsCurrency,
     marketsItems,
+    sportsLeague,
+    sportsTeamNhl,
+    sportsTeamMlb,
+    hiddenHeaderWidgets,
     emailInitialData,
     addressColors,
     linkContacts,
@@ -274,6 +281,11 @@ export default async function DashboardPage() {
     const hour12 = await getHour12(session, db);
     const { worldZones, headerZones } = await getUserWorldClockZones(session, db);
     const { currency: marketsCurrency, items: marketsItems } = await getUserMarketsPicks(session, db);
+    const { league: sportsLeague, teamNhl: sportsTeamNhl, teamMlb: sportsTeamMlb } = await getUserSportsPicks(
+      session,
+      db,
+    );
+    const hiddenHeaderWidgets = await getUserHiddenHeaderWidgets(session, db);
     // Same address-color lookup the Email page's own dialogs use for their
     // colored header strip — fetched here too now that this card opens
     // those same dialogs instead of deep-linking out to Gmail.
@@ -371,6 +383,10 @@ export default async function DashboardPage() {
       headerZones,
       marketsCurrency,
       marketsItems,
+      sportsLeague,
+      sportsTeamNhl,
+      sportsTeamMlb,
+      hiddenHeaderWidgets,
       emailInitialData,
       addressColors,
       linkContacts,
@@ -562,18 +578,7 @@ export default async function DashboardPage() {
     commodities: t.dashboard.marketsCommodities,
     crypto: t.dashboard.marketsCrypto,
   };
-  const sportsLabels = {
-    title: t.dashboard.sportsTitle,
-    unavailable: t.dashboard.sportsUnavailable,
-    lastGame: t.dashboard.sportsLastGame,
-    nextGame: t.dashboard.sportsNextGame,
-    final: t.dashboard.sportsFinal,
-    vs: t.dashboard.sportsVs,
-    at: t.dashboard.sportsAt,
-    series: t.dashboard.sportsSeries,
-    refresh: t.dashboard.refresh,
-    refreshing: t.dashboard.refreshing,
-  };
+  const sportsUnavailableLabel = t.dashboard.sportsUnavailable;
 
   const emailLabels = {
     title: t.dashboard.emailTitle,
@@ -773,27 +778,46 @@ export default async function DashboardPage() {
         logoUrl={AMO_LOGO_URL}
         logoAccessory={
           <>
-            <Suspense fallback={<WeatherWidgetSkeleton />}>
-              <WeatherHeaderServer lang={lang} labels={weatherLabels} />
-            </Suspense>
-            <Suspense fallback={<NewsWidgetSkeleton />}>
-              <NewsHeaderServer labels={newsLabels} />
-            </Suspense>
+            {!hiddenHeaderWidgets.includes("weather") && (
+              <Suspense fallback={<WeatherWidgetSkeleton />}>
+                <WeatherHeaderServer lang={lang} labels={weatherLabels} />
+              </Suspense>
+            )}
+            {!hiddenHeaderWidgets.includes("news") && (
+              <Suspense fallback={<NewsWidgetSkeleton />}>
+                <NewsHeaderServer labels={newsLabels} />
+              </Suspense>
+            )}
+            {!hiddenHeaderWidgets.includes("sports") && (
+              <Suspense fallback={<SportsWidgetSkeleton />}>
+                <SportsHeaderServer
+                  league={sportsLeague}
+                  teamNhl={sportsTeamNhl}
+                  teamMlb={sportsTeamMlb}
+                  unavailableLabel={sportsUnavailableLabel}
+                />
+              </Suspense>
+            )}
           </>
         }
         dateTimeAccessory={
           <>
-            <Suspense fallback={<MarketsWidgetSkeleton />}>
-              <MarketsHeaderServer currency={marketsCurrency} items={marketsItems} labels={marketsLabels} />
-            </Suspense>
-            <HeaderWorldClockWidget
-              headerZones={headerZones}
-              allZones={worldZones}
-              hour12={hour12}
-              title={t.dashboard.worldClocksTitle}
-            />
+            {!hiddenHeaderWidgets.includes("markets") && (
+              <Suspense fallback={<MarketsWidgetSkeleton />}>
+                <MarketsHeaderServer currency={marketsCurrency} items={marketsItems} labels={marketsLabels} />
+              </Suspense>
+            )}
+            {!hiddenHeaderWidgets.includes("worldClock") && (
+              <HeaderWorldClockWidget
+                headerZones={headerZones}
+                allZones={worldZones}
+                hour12={hour12}
+                title={t.dashboard.worldClocksTitle}
+              />
+            )}
           </>
         }
+        hideDateTimeCard={hiddenHeaderWidgets.includes("dateTime")}
       />
 
       {/* Mobile: main's own p-4 (see app-shell.tsx) puts a 16px gap between
@@ -1088,25 +1112,6 @@ export default async function DashboardPage() {
                 )}
               </ul>
             )}
-          </div>
-
-          {/* Right-column widgets: each fetches real, sometimes slow,
-            external data — Suspense lets the rest of the dashboard render
-            immediately instead of waiting on all of them. Weather, World
-            Clocks, News, and Markets all moved into the header (see the
-            logoAccessory/dateTimeAccessory props on the PageHeader above)
-            — their drop-downs carry the same detail these cards used to
-            show, so they're no longer duplicated here. */}
-          <div className="lg:col-start-3">
-            <Suspense
-              fallback={<CardSkeleton title={t.dashboard.sportsTitle} />}
-            >
-              <SportsCardServer
-                labels={sportsLabels}
-                lang={lang}
-                hour12={hour12}
-              />
-            </Suspense>
           </div>
         </div>
       </div>

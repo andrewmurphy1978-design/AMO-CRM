@@ -8,6 +8,12 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { MAX_WORLD_CLOCK_ZONES, HEADER_CLOCK_COUNT } from "@/lib/world-clock-zones";
 import { MAX_MARKET_ITEMS, MARKET_CURRENCY_OPTIONS, MARKET_ITEM_OPTIONS } from "@/lib/dashboard-markets-picks";
+import {
+  SPORTS_LEAGUE_OPTIONS,
+  NHL_TEAM_OPTIONS,
+  MLB_TEAM_OPTIONS,
+} from "@/lib/dashboard-sports-picks";
+import { HEADER_WIDGET_KEYS } from "@/lib/dashboard-header-widgets";
 
 async function requireAdmin() {
   const session = await auth();
@@ -297,6 +303,62 @@ export async function saveMarketsSettings(
   revalidatePath("/");
 
   return { success: t.actions.marketsSettingsSaved };
+}
+
+export async function saveSportsSettings(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const league = String(formData.get("sportsLeague") ?? "");
+  const teamNhl = String(formData.get("sportsTeamNhl") ?? "");
+  const teamMlb = String(formData.get("sportsTeamMlb") ?? "");
+
+  if (!SPORTS_LEAGUE_OPTIONS.some((o) => o.value === league)) {
+    return { error: t.actions.invalidInput };
+  }
+  if (!NHL_TEAM_OPTIONS.some((o) => o.value === teamNhl) || !MLB_TEAM_OPTIONS.some((o) => o.value === teamMlb)) {
+    return { error: t.actions.invalidInput };
+  }
+
+  await withScopedPrismaClient((db) =>
+    db.user.update({
+      where: { id: session.user.id },
+      data: { sportsLeague: league, sportsTeamNhl: teamNhl, sportsTeamMlb: teamMlb },
+    })
+  );
+  revalidatePath("/settings");
+  revalidatePath("/");
+
+  return { success: t.actions.sportsSettingsSaved };
+}
+
+export async function saveHeaderWidgetsSettings(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const hidden = formData.getAll("hiddenHeaderWidgets").map(String).filter(Boolean);
+  if (hidden.some((key) => !(HEADER_WIDGET_KEYS as readonly string[]).includes(key))) {
+    return { error: t.actions.invalidInput };
+  }
+
+  await withScopedPrismaClient((db) =>
+    db.user.update({
+      where: { id: session.user.id },
+      data: { hiddenHeaderWidgets: hidden },
+    })
+  );
+  revalidatePath("/settings");
+  revalidatePath("/");
+
+  return { success: t.actions.headerWidgetsSettingsSaved };
 }
 
 // Which connected mail account (MailSource: "gmail" | "ionos") the New
