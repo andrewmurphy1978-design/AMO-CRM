@@ -6,6 +6,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getHour12 } from "@/lib/time-format";
 import PageHeader from "../page-header";
+import ContactsIcon from "../contacts-icon";
 import { tagKind, TAG_KIND_COLORS, sortTags, isLanguageTag } from "@/lib/tag-colors";
 import { countryFullName } from "@/lib/country-flag";
 import CountryFlag from "@/components/country-flag";
@@ -259,7 +260,12 @@ export default async function ContactsPage({
     <div className="flex flex-col gap-2 sm:gap-6">
       <DeleteToast message={deleted} />
       <PageHeader
-        title={t.contacts.title}
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <ContactsIcon />
+            <span className="truncate">{t.contacts.title}</span>
+          </span>
+        }
         hour12={hour12}
         lang={lang}
         location={t.dashboard.myLocation}

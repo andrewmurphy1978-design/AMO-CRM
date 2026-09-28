@@ -26,6 +26,7 @@ import EmailSummaryCard from "./email-summary-card";
 import CalendarCardServer from "./calendar-card-server";
 import CalendarSummaryCard from "./calendar-summary-card";
 import NewContactsCard from "./new-contacts-card";
+import ContactSummaryCard from "./contact-summary-card";
 import {
   getCachedInbox,
   getScreeningExtras,
@@ -179,6 +180,9 @@ export default async function DashboardPage() {
     activeProjects,
     recentActivity,
     newContactsList,
+    totalContactCount,
+    contactsBySource,
+    contactsByStage,
     integration,
     recentRuns,
     googleAccessToken,
@@ -237,6 +241,18 @@ export default async function DashboardPage() {
       orderBy: { createdAt: "desc" },
       take: 1000,
       include: { tags: { include: { tag: true } } },
+    });
+    // Feeds the Contact Summary card's total/by-source/by-stage counts —
+    // groupBy rather than fetching every row, since the total contact
+    // count can run well past newContactsList's 1000-row cap.
+    const totalContactCount = await db.contact.count();
+    const contactsBySource = await db.contact.groupBy({
+      by: ["source"],
+      _count: { _all: true },
+    });
+    const contactsByStage = await db.contact.groupBy({
+      by: ["stage"],
+      _count: { _all: true },
     });
     const integration = await db.integrationSetting.findUnique({
       where: { provider: "systeme_io" },
@@ -309,6 +325,9 @@ export default async function DashboardPage() {
       activeProjects,
       recentActivity,
       newContactsList,
+      totalContactCount,
+      contactsBySource,
+      contactsByStage,
       integration,
       recentRuns,
       googleAccessToken,
@@ -385,6 +404,53 @@ export default async function DashboardPage() {
     yesterday: t.dashboard.newContactsYesterday,
     thisWeek: t.dashboard.newContactsThisWeek,
     noneYet: t.dashboard.newContactsNoneYet,
+  };
+
+  // Feeds the Contact Summary stat card. bySource buckets the three
+  // values the app itself ever sets (see google-contacts.ts/sync.ts/
+  // contacts.ts) plus "other" for anything else (a blank source, or free
+  // text typed on the Contact form) — same reasoning as the Calendar
+  // Summary card's own colorId buckets: known values get their own color,
+  // everything else falls into a catch-all rather than being dropped.
+  let contactsBySourceSystemeIo = 0;
+  let contactsBySourceManual = 0;
+  let contactsBySourceGoogle = 0;
+  let contactsBySourceOther = 0;
+  for (const group of contactsBySource) {
+    const count = group._count._all;
+    if (group.source === "systeme.io") contactsBySourceSystemeIo += count;
+    else if (group.source === "manual") contactsBySourceManual += count;
+    else if (group.source === "google_contacts") contactsBySourceGoogle += count;
+    else contactsBySourceOther += count;
+  }
+  const contactsByStageMap: Record<string, number> = {};
+  for (const group of contactsByStage) {
+    contactsByStageMap[group.stage] = group._count._all;
+  }
+  const contactSummaryLabels = {
+    title: t.dashboard.contactSummaryTitle,
+    totalLabel: t.dashboard.contactSummaryTotalLabel,
+    todayLabel: t.dashboard.newContactsToday,
+    yesterdayLabel: t.dashboard.newContactsYesterday,
+    thisWeekLabel: t.dashboard.newContactsThisWeek,
+    sourceSystemeIoLabel: t.dashboard.contactSummarySourceSystemeIoLabel,
+    sourceManualLabel: t.dashboard.contactSummarySourceManualLabel,
+    sourceGoogleLabel: t.dashboard.contactSummarySourceGoogleLabel,
+    sourceOtherLabel: t.dashboard.contactSummarySourceOtherLabel,
+    stageLabels: t.stages,
+  };
+  const contactSummaryCounts = {
+    total: totalContactCount,
+    today: newContactsToday.length,
+    yesterday: newContactsYesterday.length,
+    thisWeek: newContactsThisWeek.length,
+    bySource: {
+      systemeIo: contactsBySourceSystemeIo,
+      manual: contactsBySourceManual,
+      google: contactsBySourceGoogle,
+      other: contactsBySourceOther,
+    },
+    byStage: contactsByStageMap,
   };
 
   const weatherLabels = {
@@ -689,6 +755,10 @@ export default async function DashboardPage() {
             counts={calendarSummaryCounts}
             labels={calendarSummaryLabels}
           />
+          <ContactSummaryCard
+            counts={contactSummaryCounts}
+            labels={contactSummaryLabels}
+          />
           {stats.map((stat) => (
             <Link
               key={stat.label}
@@ -772,7 +842,10 @@ export default async function DashboardPage() {
             this puts it right below the Calendar card, per the user's own
             placement — Projects/Tasks (also moved to col-start-3 below,
             right after this in DOM) then follow it in both layouts. */}
-          <div className="lg:col-start-3">
+          <div
+            id="dashboard-contacts-card"
+            className="lg:col-start-3 scroll-mt-20"
+          >
             <NewContactsCard
               today={newContactsToday}
               yesterday={newContactsYesterday}

@@ -6,6 +6,11 @@ import type { ContactStage } from "@prisma/client";
 import { tagKind, TAG_KIND_COLORS, isLanguageTag } from "@/lib/tag-colors";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
+import ContactsIcon from "./contacts-icon";
+import {
+  CONTACT_CARD_ACCENT_BAR,
+  CONTACT_CARD_BG,
+} from "./contact-summary-colors";
 
 // Same stripe colors as the Contacts list itself (contacts/page.tsx) — kept
 // as its own small copy rather than a shared export since nothing else
@@ -230,8 +235,12 @@ export default function NewContactsCard({
     today.length === 0 && yesterday.length === 0 && thisWeek.length === 0;
 
   return (
-    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+    <div
+      className={`relative flex flex-col overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${CONTACT_CARD_BG}`}
+    >
+      <div
+        className={`absolute inset-x-0 top-0 h-[3px] ${CONTACT_CARD_ACCENT_BAR}`}
+      />
       {/* No "Open Contacts" button — clicking anywhere on the card that
           isn't a contact row now does the same thing, same convention as
           the Email card (display:contents click boundary; each section's
@@ -247,9 +256,12 @@ export default function NewContactsCard({
         className="contents cursor-pointer"
       >
         <div className="relative flex shrink-0 items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">
-            {labels.title}
-          </h2>
+          <div className="flex items-center gap-2">
+            <ContactsIcon />
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {labels.title}
+            </h2>
+          </div>
         </div>
 
         <div className="mt-1.5 sm:mt-3 flex flex-col gap-3">
