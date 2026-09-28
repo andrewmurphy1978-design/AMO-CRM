@@ -1053,6 +1053,14 @@ export default function EmailScreeningView({
       : []),
   ];
 
+  // Same isCompleted/status lookup the rows above use for their own
+  // onComplete/onUncomplete/completedLocked props (see receivedRows/
+  // sentRows), computed generically here for whichever message the dialog
+  // currently has open, regardless of which list it came from.
+  const openSentEntry = openMessage ? sentAwaitingReply.find((s) => s.id === openMessage.id) : undefined;
+  const openMessageLocked = openSentEntry?.status === "completed";
+  const openMessageCompleted = openMessage ? isCompleted(openMessage.id) || openMessageLocked : false;
+
   return (
     <div className="space-y-2 sm:space-y-6">
       {header}
@@ -1155,14 +1163,15 @@ export default function EmailScreeningView({
           setOpenMessage(null);
           setComposeTarget(composeTargetFrom(detail, mode));
         }}
-        onComplete={
-          openMessage
-            ? () => {
-                markComplete(openMessage.id);
-                setOpenMessage(null);
-              }
-            : undefined
-        }
+        // Reflects the open message's own current state — same
+        // onComplete/onUncomplete/completedLocked convention as each row
+        // (see receivedRows/sentRows above) — rather than a one-way
+        // action, so the dialog's own button is a real toggle. Neither
+        // handler closes the dialog: toggling shouldn't force a reopen to
+        // toggle back.
+        onComplete={openMessage && !openMessageCompleted ? () => markComplete(openMessage.id) : undefined}
+        onUncomplete={openMessage && openMessageCompleted && !openMessageLocked ? () => markUncomplete(openMessage.id) : undefined}
+        completedLocked={openMessageLocked}
         dateLocale={dateLocale}
         intlLocale={intlLocale}
         hour12={hour12}

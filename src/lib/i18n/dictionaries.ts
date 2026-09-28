@@ -896,6 +896,7 @@ export const dictionaries = {
       replyAll: "Reply all",
       forward: "Forward",
       markComplete: "Mark as complete",
+      markUncomplete: "Mark as not complete",
     },
     emailCompose: {
       replyTitle: "Reply",
@@ -2188,6 +2189,7 @@ export const dictionaries = {
       replyAll: "Répondre à tous",
       forward: "Transférer",
       markComplete: "Marquer comme terminé",
+      markUncomplete: "Marquer comme non terminé",
     },
     emailCompose: {
       replyTitle: "Répondre",

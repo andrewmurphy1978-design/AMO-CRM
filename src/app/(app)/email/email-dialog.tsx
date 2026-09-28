@@ -28,6 +28,7 @@ export interface EmailDialogLabels {
   replyAll: string;
   forward: string;
   markComplete: string;
+  markUncomplete: string;
 }
 
 export interface EmailDialogTarget {
@@ -80,6 +81,8 @@ export default function EmailDialog({
   onClose,
   onReply,
   onComplete,
+  onUncomplete,
+  completedLocked,
   dateLocale,
   intlLocale,
   hour12,
@@ -88,7 +91,16 @@ export default function EmailDialog({
   target: EmailDialogTarget | null;
   onClose: () => void;
   onReply: (detail: EmailDetail, mode: ComposeMode) => void;
+  // Only one of onComplete/onUncomplete is ever passed for a given target —
+  // whichever direction applies to its current state — same convention as
+  // the row's own CompleteButton/UncompleteButton in email-screening-view.tsx,
+  // so this single button can render as a toggle reflecting that state.
   onComplete?: () => void;
+  onUncomplete?: () => void;
+  // True for a sent thread Gmail marked completed by detecting a reply —
+  // that state can't be undone from here, so it gets a static badge
+  // instead of a clickable toggle (see completedLocked in email-screening-view.tsx).
+  completedLocked?: boolean;
   dateLocale: Locale | undefined;
   intlLocale: string;
   hour12: boolean;
@@ -272,7 +284,7 @@ export default function EmailDialog({
                 )}
               </div>
               {linkExpanded && target.linkConfig && (
-                <div className="shrink-0 overflow-y-auto border-t border-card-border pt-4 sm:w-64 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                <div className="max-h-[45vh] min-h-0 shrink-0 overflow-y-auto border-t border-card-border pt-4 sm:max-h-none sm:w-64 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
                   <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
                 </div>
               )}
@@ -293,18 +305,47 @@ export default function EmailDialog({
           </a>
           {detail && (
             <div className="flex items-center gap-1.5">
-              {onComplete && (
-                <button
-                  type="button"
-                  onClick={onComplete}
+              {/* A toggle, not a one-way action: solid green with a white
+                  check when the message is already complete (click to
+                  undo), plain green check on white when it isn't (click to
+                  mark done) — same convention as the row's own
+                  CompleteButton/UncompleteButton in email-screening-view.tsx. */}
+              {completedLocked ? (
+                <span
                   title={labels.markComplete}
                   aria-label={labels.markComplete}
+                  className="flex items-center justify-center rounded-lg bg-emerald-600 p-2 text-white"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
+                  </svg>
+                </span>
+              ) : onUncomplete ? (
+                <button
+                  type="button"
+                  onClick={onUncomplete}
+                  title={labels.markUncomplete}
+                  aria-label={labels.markUncomplete}
                   className="flex items-center justify-center rounded-lg bg-emerald-600 p-2 text-white hover:bg-emerald-700"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
                   </svg>
                 </button>
+              ) : (
+                onComplete && (
+                  <button
+                    type="button"
+                    onClick={onComplete}
+                    title={labels.markComplete}
+                    aria-label={labels.markComplete}
+                    className="flex items-center justify-center rounded-lg border border-card-border p-2 text-emerald-600 hover:bg-emerald-600/10"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} className="h-4 w-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18l9.5-12" />
+                    </svg>
+                  </button>
+                )
               )}
               <button
                 type="button"
