@@ -107,19 +107,24 @@ export default function HeaderMarketsWidget({
         {pillData.currencyRow && (
           <span className="max-w-[8rem] min-w-0 text-center leading-tight">
             <span className="flex items-center justify-center gap-1 truncate text-[9px] uppercase tracking-wide opacity-75">
+              1
               {/* eslint-disable-next-line @next/next/no-img-element -- external flag CDN, not a local asset */}
-              <img src={countryFlagUrl(CAD_COUNTRY_CODE)} alt="" className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover" />
-              1 CAD
+              <img
+                src={countryFlagUrl(CAD_COUNTRY_CODE)}
+                alt="CAD"
+                title="CAD"
+                className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover"
+              />
             </span>
             <span className="flex items-center justify-center gap-1 truncate font-display text-xs font-bold tabular-nums">
               = {pillData.currencyRow.rateFromBase.toFixed(2)}
               {/* eslint-disable-next-line @next/next/no-img-element -- external flag CDN, not a local asset */}
               <img
                 src={countryFlagUrl(pillData.currencyRow.countryCode)}
-                alt=""
+                alt={pillData.currencyRow.code}
+                title={pillData.currencyRow.code}
                 className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover"
               />
-              {pillData.currencyRow.code}
             </span>
           </span>
         )}

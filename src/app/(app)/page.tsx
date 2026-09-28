@@ -794,6 +794,7 @@ export default async function DashboardPage() {
                   league={sportsLeague}
                   teamNhl={sportsTeamNhl}
                   teamMlb={sportsTeamMlb}
+                  lang={lang}
                   unavailableLabel={sportsUnavailableLabel}
                 />
               </Suspense>

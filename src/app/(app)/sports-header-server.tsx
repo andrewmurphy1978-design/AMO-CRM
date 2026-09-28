@@ -1,5 +1,8 @@
+import { format } from "date-fns";
 import { getNhlSnapshot, getMlbSnapshot } from "@/lib/sports";
 import type { SportsLeague } from "@/lib/dashboard-sports-picks";
+import { getDateLocale } from "@/lib/i18n/date-locale";
+import type { Lang } from "@/lib/i18n/dictionaries";
 import HeaderSportsWidget from "./header-sports-widget";
 
 // Dedicated async Server Component so this (real network) fetch sits behind
@@ -12,13 +15,16 @@ export default async function SportsHeaderServer({
   league,
   teamNhl,
   teamMlb,
+  lang,
   unavailableLabel,
 }: {
   league: SportsLeague;
   teamNhl: string;
   teamMlb: string;
+  lang: Lang;
   unavailableLabel: string;
 }) {
+  const dateLocale = getDateLocale(lang);
   if (league === "MLB") {
     const snapshot = await getMlbSnapshot(Number(teamMlb));
     return (
@@ -26,6 +32,11 @@ export default async function SportsHeaderServer({
         game={snapshot.lastGame}
         teamLogo={snapshot.teamLogo}
         teamName={snapshot.teamName}
+        gameDateLabel={
+          snapshot.lastGame
+            ? format(new Date(snapshot.lastGame.date), "MMM d", { locale: dateLocale })
+            : null
+        }
         unavailableLabel={unavailableLabel}
       />
     );
@@ -36,6 +47,11 @@ export default async function SportsHeaderServer({
       game={snapshot.lastGame}
       teamLogo={snapshot.teamLogo}
       teamName={snapshot.teamName}
+      gameDateLabel={
+        snapshot.lastGame
+          ? format(new Date(snapshot.lastGame.date), "MMM d", { locale: dateLocale })
+          : null
+      }
       unavailableLabel={unavailableLabel}
     />
   );

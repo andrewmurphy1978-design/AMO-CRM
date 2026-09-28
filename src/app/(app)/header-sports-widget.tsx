@@ -16,11 +16,13 @@ export default function HeaderSportsWidget({
   game,
   teamLogo,
   teamName,
+  gameDateLabel,
   unavailableLabel,
 }: {
   game: SportsTeamGame | null;
   teamLogo: string;
   teamName: string;
+  gameDateLabel: string | null;
   unavailableLabel: string;
 }) {
   if (!game || game.status !== "final") {
@@ -40,14 +42,19 @@ export default function HeaderSportsWidget({
   const secondScore = teamFirst ? game.opponentScore : game.teamScore;
 
   return (
-    <div className="hidden items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white sm:flex">
-      {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDN, not a local asset */}
-      <img src={firstLogo} alt={firstName} className="h-5 w-5 object-contain" />
-      <span className="font-display text-sm font-bold tabular-nums">{firstScore}</span>
-      <span className="text-xs opacity-60">–</span>
-      <span className="font-display text-sm font-bold tabular-nums">{secondScore}</span>
-      {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDN, not a local asset */}
-      <img src={secondLogo} alt={secondName} className="h-5 w-5 object-contain" />
+    <div className="hidden flex-col items-center gap-0.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white sm:flex">
+      <div className="flex items-center gap-1.5">
+        {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDN, not a local asset */}
+        <img src={firstLogo} alt={firstName} className="h-5 w-5 object-contain" />
+        <span className="font-display text-sm font-bold tabular-nums">{firstScore}</span>
+        <span className="text-xs opacity-60">–</span>
+        <span className="font-display text-sm font-bold tabular-nums">{secondScore}</span>
+        {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDN, not a local asset */}
+        <img src={secondLogo} alt={secondName} className="h-5 w-5 object-contain" />
+      </div>
+      {gameDateLabel && (
+        <span className="text-[9px] uppercase tracking-wide opacity-60">{gameDateLabel}</span>
+      )}
     </div>
   );
 }
