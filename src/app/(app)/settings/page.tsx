@@ -14,6 +14,7 @@ import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buf
 import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
+import WorldClockForm from "./world-clock-form";
 import PersonalWatchForm from "./personal-watch-form";
 import EmailAddressColorForm from "./email-address-color-form";
 import EmailScreeningForm from "./email-screening-form";
@@ -26,6 +27,7 @@ import BuildVersion from "./build-version";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getWatchedPeople, isPersonalSectionUser } from "@/lib/personal-watch";
+import { effectiveWorldClockZones, effectiveHeaderClockZones } from "@/lib/world-clock-zones";
 import PageHeader from "../page-header";
 
 interface MakeMetadata {
@@ -80,6 +82,8 @@ export default async function SettingsPage({
               defaultComposeSource: true,
               defaultFontFamily: true,
               defaultFontSize: true,
+              worldClockZones: true,
+              headerClockZones: true,
             },
           })
         : null;
@@ -132,6 +136,11 @@ export default async function SettingsPage({
       };
     });
   const hour12 = currentUser?.timeFormat === "HOUR12";
+  const worldClockZones = effectiveWorldClockZones(currentUser?.worldClockZones ?? []);
+  const headerClockZones = effectiveHeaderClockZones(
+    currentUser?.headerClockZones ?? [],
+    worldClockZones,
+  );
   // Set by .github/workflows/deploy.yml right before the Cloudflare build —
   // absent in local dev, where there's no deploy to report. Shown in the
   // "Your CRM link" card as the fastest way to confirm a given push
@@ -197,6 +206,13 @@ export default async function SettingsPage({
               <ChangePasswordForm lang={lang} />
             </div>
             {currentUser && <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />}
+            {currentUser && (
+              <WorldClockForm
+                lang={lang}
+                initialZones={worldClockZones}
+                initialHeaderZones={headerClockZones}
+              />
+            )}
           </section>
 
           {currentUser && (

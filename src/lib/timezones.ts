@@ -53,7 +53,11 @@ function formatOffset(offsetMin: number): string {
   return `UTC${sign}${hh}:${mm}`;
 }
 
-function niceName(timeZone: string): string {
+// The zone's city/region name alone (no offset) — e.g. "Toronto" for
+// "America/Toronto" — for compact displays like the World Clock widgets,
+// where getWorldTimeZoneOptions' own "(UTC-04:00) Toronto" label is too
+// verbose.
+export function zoneShortLabel(timeZone: string): string {
   const parts = timeZone.split("/");
   return (parts.length > 1 ? parts.slice(1) : parts).join(" – ").replace(/_/g, " ");
 }
@@ -68,5 +72,5 @@ export function getWorldTimeZoneOptions(): TimeZoneOption[] {
   return zones
     .map((value) => ({ value, offset: offsetMinutes(value, REFERENCE_DATE) }))
     .sort((a, b) => a.offset - b.offset || a.value.localeCompare(b.value))
-    .map(({ value, offset }) => ({ value, label: `(${formatOffset(offset)}) ${niceName(value)}` }));
+    .map(({ value, offset }) => ({ value, label: `(${formatOffset(offset)}) ${zoneShortLabel(value)}` }));
 }

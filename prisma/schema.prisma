@@ -68,6 +68,13 @@ model User {
   // default. Null on either uses the browser's own default serif/14px.
   defaultFontFamily          String?
   defaultFontSize            String?
+  // Up to 8 IANA zones for this user's own World Clock card, and up to 2
+  // of those shown in the Dashboard header's compact widget. Empty means
+  // "use the built-in defaults" (see src/lib/world-clock-zones.ts) rather
+  // than storing the defaults themselves, so a future change to those
+  // defaults still reaches anyone who never customized their own.
+  worldClockZones            String[]   @default([])
+  headerClockZones           String[]   @default([])
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @updatedAt
 

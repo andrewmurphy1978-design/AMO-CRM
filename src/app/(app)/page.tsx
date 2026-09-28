@@ -18,10 +18,11 @@ import {
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
-import WorldClocks from "./world-clocks";
 import PageHeader from "./page-header";
 import CardSkeleton from "./card-skeleton";
-import WeatherCardServer from "./weather-card-server";
+import WeatherHeaderServer from "./weather-header-server";
+import { WeatherWidgetSkeleton } from "./header-weather-widget";
+import HeaderWorldClockWidget from "./header-world-clock-widget";
 import NewsCardServer from "./news-card-server";
 import SportsCardServer from "./sports-card-server";
 import MarketsCardServer from "./markets-card-server";
@@ -49,6 +50,7 @@ import {
 } from "@/lib/google";
 import { getLatestSocialSnapshots } from "@/lib/social";
 import { getHour12 } from "@/lib/time-format";
+import { getUserWorldClockZones } from "@/lib/world-clock-zones";
 import type { AutomationRun } from "@prisma/client";
 
 // Same full lockup used in the sidebar's expanded state elsewhere — the
@@ -174,6 +176,8 @@ export default async function DashboardPage() {
     googleAccessToken,
     socialSnapshots,
     hour12,
+    worldZones,
+    headerZones,
     emailInitialData,
     addressColors,
     linkContacts,
@@ -263,6 +267,7 @@ export default async function DashboardPage() {
       : null;
     const socialSnapshots = await getLatestSocialSnapshots(db);
     const hour12 = await getHour12(session, db);
+    const { worldZones, headerZones } = await getUserWorldClockZones(session, db);
     // Same address-color lookup the Email page's own dialogs use for their
     // colored header strip — fetched here too now that this card opens
     // those same dialogs instead of deep-linking out to Gmail.
@@ -356,6 +361,8 @@ export default async function DashboardPage() {
       googleAccessToken,
       socialSnapshots,
       hour12,
+      worldZones,
+      headerZones,
       emailInitialData,
       addressColors,
       linkContacts,
@@ -756,6 +763,19 @@ export default async function DashboardPage() {
         lang={lang}
         location={t.dashboard.myLocation}
         logoUrl={AMO_LOGO_URL}
+        logoAccessory={
+          <Suspense fallback={<WeatherWidgetSkeleton />}>
+            <WeatherHeaderServer lang={lang} labels={weatherLabels} />
+          </Suspense>
+        }
+        dateTimeAccessory={
+          <HeaderWorldClockWidget
+            headerZones={headerZones}
+            allZones={worldZones}
+            hour12={hour12}
+            title={t.dashboard.worldClocksTitle}
+          />
+        }
       />
 
       {/* Mobile: main's own p-4 (see app-shell.tsx) puts a 16px gap between
@@ -1054,17 +1074,10 @@ export default async function DashboardPage() {
 
           {/* Right-column widgets: each fetches real, sometimes slow,
             external data — Suspense lets the rest of the dashboard render
-            immediately instead of waiting on all of them. */}
-          <div className="lg:col-start-3">
-            <Suspense
-              fallback={<CardSkeleton title={t.dashboard.weatherTitle} />}
-            >
-              <WeatherCardServer lang={lang} labels={weatherLabels} />
-            </Suspense>
-          </div>
-          <div className="lg:col-start-3">
-            <WorldClocks title="World clocks" hour12={hour12} />
-          </div>
+            immediately instead of waiting on all of them. Weather and
+            World Clocks moved into the header (see the logoAccessory/
+            dateTimeAccessory props on the PageHeader above) — their
+            drop-downs carry the same detail these cards used to show. */}
           <div className="lg:col-start-3">
             <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
               <NewsCardServer labels={newsLabels} />

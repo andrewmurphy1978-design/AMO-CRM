@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { MAX_WORLD_CLOCK_ZONES, HEADER_CLOCK_COUNT } from "@/lib/world-clock-zones";
 
 async function requireAdmin() {
   const session = await auth();
@@ -235,6 +236,36 @@ export async function saveTimeFormat(
   revalidatePath("/");
 
   return { success: t.actions.timeFormatSaved };
+}
+
+export async function saveWorldClockSettings(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const zones = formData.getAll("zones").map(String).filter(Boolean);
+  const headerZones = formData.getAll("headerZones").map(String).filter(Boolean);
+
+  if (zones.length > MAX_WORLD_CLOCK_ZONES || headerZones.length > HEADER_CLOCK_COUNT) {
+    return { error: t.actions.invalidInput };
+  }
+  if (headerZones.some((z) => !zones.includes(z))) {
+    return { error: t.actions.invalidInput };
+  }
+
+  await withScopedPrismaClient((db) =>
+    db.user.update({
+      where: { id: session.user.id },
+      data: { worldClockZones: zones, headerClockZones: headerZones },
+    })
+  );
+  revalidatePath("/settings");
+  revalidatePath("/");
+
+  return { success: t.actions.worldClockSettingsSaved };
 }
 
 // Which connected mail account (MailSource: "gmail" | "ionos") the New

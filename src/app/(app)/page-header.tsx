@@ -47,6 +47,8 @@ export default function PageHeader({
   lang,
   location,
   logoUrl,
+  logoAccessory,
+  dateTimeAccessory,
   actions,
   centerActions,
 }: {
@@ -60,6 +62,12 @@ export default function PageHeader({
   lang: Lang;
   location: string;
   logoUrl?: string;
+  // Rendered right beside the logo (only meaningful when logoUrl is set,
+  // i.e. only the Dashboard today) — the Weather header widget.
+  logoAccessory?: ReactNode;
+  // Rendered just before DateTimeCard (only meaningful when logoUrl is
+  // set) — the World Clock header widget.
+  dateTimeAccessory?: ReactNode;
   actions?: ReactNode;
   // Centers `actions` over the header bar instead of the default in-flow
   // placement right after the title. Only safe for pages with a short,
@@ -72,13 +80,17 @@ export default function PageHeader({
   if (logoUrl) {
     return (
       <header className="sticky top-0 z-30 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={logoUrl} alt="Andrew Murphy Online" className="hidden h-auto w-36 shrink-0 object-contain sm:block sm:w-56" />
+        <div className="flex shrink-0 items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={logoUrl} alt="Andrew Murphy Online" className="hidden h-auto w-36 shrink-0 object-contain sm:block sm:w-56" />
+          {logoAccessory}
+        </div>
         <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-2xl">
           {title}
         </h1>
         <div className="flex items-center gap-3">
           {actions}
+          {dateTimeAccessory}
           <DateTimeCard hour12={hour12} lang={lang} location={location} />
         </div>
       </header>
