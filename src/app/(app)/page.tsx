@@ -34,8 +34,10 @@ import ProjectsIcon from "./projects-icon";
 import {
   getCachedInbox,
   getScreeningExtras,
+  refreshEmailInboxCache,
   type EmailScreeningPayload,
 } from "@/lib/email-inbox";
+import { isStale } from "@/lib/staleness";
 import SocialCard from "./social-card";
 import {
   getValidAccessToken,
@@ -294,16 +296,41 @@ export default async function DashboardPage() {
       select: { id: true, name: true },
     });
 
-    // Reads the same cached inbox snapshot the Email page maintains — no
-    // live Gmail/Claude call here, just a DB read, so this can share this
-    // block's one connection instead of the email card doing its own
-    // scoped read from inside a concurrently-rendered Suspense boundary
-    // (which is exactly the pattern that trips Cloudflare's Error 1102:
-    // two Suspense children each opening their own connection at once).
+    // Reads the same cached inbox snapshot the Email page maintains — a
+    // plain DB read shares this block's one connection instead of the
+    // email card doing its own scoped read from inside a concurrently-
+    // rendered Suspense boundary (which is exactly the pattern that trips
+    // Cloudflare's Error 1102: two Suspense children each opening their
+    // own connection at once). But a snapshot that's gone stale (cron
+    // hiccup, or mail simply arriving faster than the 15-minute cron/
+    // client refresh cadence) is exactly what made the Email Summary
+    // card's "new emails today" count read low — that count is computed
+    // once here, server-side, and unlike the Email card below it never
+    // gets a chance to self-correct via a client-side refresh. Refreshing
+    // here when stale, on the same window the Email page's own client
+    // check already uses (src/lib/staleness.ts), means the very first
+    // paint is already correct, and it also means the Email card's own
+    // "is my initialData stale?" check below finds nothing to do.
     const emailInitialData: EmailScreeningPayload | null =
       googleAccessToken && session
         ? await (async () => {
-            const snapshot = await getCachedInbox(db, session.user.id);
+            const cached = await getCachedInbox(db, session.user.id);
+            let snapshot = cached;
+            if (!cached || isStale(cached.fetchedAt)) {
+              try {
+                snapshot = await refreshEmailInboxCache(
+                  db,
+                  session.user.id,
+                  googleAccessToken,
+                );
+              } catch {
+                // A transient Gmail/IONOS hiccup should never take down
+                // the whole Dashboard — fall back to the last known
+                // snapshot (possibly still null on a genuine first-ever
+                // visit, same as before this refresh existed).
+                snapshot = cached;
+              }
+            }
             if (!snapshot) return null;
             const extras = await getScreeningExtras(
               db,
