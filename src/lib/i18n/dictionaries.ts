@@ -129,7 +129,7 @@ export const dictionaries = {
       calendarSummaryShiftsLabel: (hours: number) => `shifts at Mike's (${hours}h)`,
       calendarSummaryHaleyLabel: "Haley",
       calendarSummaryLukasLabel: "Lukas",
-      calendarSummaryMommyLabel: "Mommy",
+      calendarSummaryMommyLabel: "Mom",
       openInCalendar: "Open Calendar",
       socialTitle: "Social media analytics",
       socialEmpty: "No data yet — the Make.com sync hasn't reported in.",
