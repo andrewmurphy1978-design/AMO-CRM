@@ -65,7 +65,7 @@ export default function Sidebar({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-7 w-7 object-contain" />
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto px-1.5 py-3">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-1.5 py-3">
         {navItems.map((item) => (
           <NavLink key={item.href} href={item.href} label={item.label} collapsed />
         ))}

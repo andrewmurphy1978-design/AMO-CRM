@@ -70,7 +70,7 @@ export default function NavLink({
       aria-label={collapsed ? label : undefined}
       className={clsx(
         "flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-150",
-        collapsed ? "justify-center px-0 py-2" : "px-3 py-1.5",
+        collapsed ? "justify-center px-0 py-1" : "px-3 py-1.5",
         active
           ? "bg-gradient-to-r from-amo-lime/20 to-amo-teal/10 text-amo-white shadow-[inset_2px_0_0_0_var(--amo-lime)]"
           : "text-amo-muted hover:bg-white/5 hover:text-amo-white"
