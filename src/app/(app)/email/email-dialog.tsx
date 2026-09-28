@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "@/lib/clsx";
 import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
@@ -111,6 +111,10 @@ export default function EmailDialog({
   const [detail, setDetail] = useState<EmailDetail | null>(null);
   const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
   const [linkExpanded, setLinkExpanded] = useState(false);
+  // Lifted out of EmailBodyFrame so its "Show images" button can live next
+  // to the Linked-to summary in the header instead of floating above the
+  // iframe — see email-body-frame.tsx's own comment on why it's controlled.
+  const [allowRemoteImages, setAllowRemoteImages] = useState(false);
 
   useEffect(() => {
     if (!target) return;
@@ -120,6 +124,7 @@ export default function EmailDialog({
     setLoadError(null);
     setDetail(null);
     setLinkExpanded(false);
+    setAllowRemoteImages(false);
     fetchEmailDetail(target.id)
       .then((result) => {
         if (cancelled) return;
@@ -152,6 +157,11 @@ export default function EmailDialog({
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, [target, onClose]);
+
+  const hasRemoteImages = useMemo(
+    () => (detail?.html ? /<img[^>]+src=["']https?:/i.test(detail.html) : false),
+    [detail]
+  );
 
   if (!target) return null;
 
@@ -257,34 +267,65 @@ export default function EmailDialog({
                 )}
               </div>
 
-              {target.linkConfig && (
-                <div className="border-t border-card-border pt-3">
-                  <EmailLinkSummary
-                    current={target.linkConfig.current}
-                    linkLabel={target.linkConfig.labels.link}
-                    noneLabel={target.linkConfig.labels.none}
-                    editLabel={target.linkConfig.labels.edit}
-                    onEdit={() => setLinkExpanded((v) => !v)}
-                  />
+              {(target.linkConfig || (hasRemoteImages && !allowRemoteImages)) && (
+                <div className="flex items-start justify-between gap-3 border-t border-card-border pt-3">
+                  <div className="min-w-0 flex-1">
+                    {target.linkConfig && (
+                      <EmailLinkSummary
+                        current={target.linkConfig.current}
+                        linkLabel={target.linkConfig.labels.link}
+                        noneLabel={target.linkConfig.labels.none}
+                        editLabel={target.linkConfig.labels.edit}
+                        onEdit={() => setLinkExpanded((v) => !v)}
+                      />
+                    )}
+                  </div>
+                  {hasRemoteImages && !allowRemoteImages && (
+                    <button
+                      type="button"
+                      onClick={() => setAllowRemoteImages(true)}
+                      className="shrink-0 rounded-md border border-card-border px-2 py-1 text-xs font-medium text-soft hover:bg-black/5"
+                    >
+                      {labels.showRemoteImages}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
 
             {/* The body fills the rest of the dialog's height — its own
-                iframe (see EmailBodyFrame) is the dialog's only scrollbar.
-                The link editor, when open, sits below the body on a
-                phone-width dialog and beside it (its own column) from
-                `sm` up, same breakpoint the rest of this dialog uses. */}
-            <div className="flex min-h-0 flex-1 flex-col gap-4 px-5 pb-5 sm:flex-row">
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                iframe (see EmailBodyFrame) is the dialog's only scrollbar —
+                except when the link editor is open on a phone-width
+                dialog: this whole row then becomes the dialog's own
+                scroll container (a fixed-height body plus the editor
+                below it, both in plain flow) so the editor's Cancel/Save
+                is always reachable by scrolling, whatever its content
+                turns out to be, rather than the two of them fighting over
+                a fixed split via flex-shrink (which only holds up for
+                content short enough to fit — taller real content, e.g.
+                with search results open, overflowed and overlapped the
+                footer below). From `sm` up the editor keeps its original
+                side-column layout with its own independent scroll. */}
+            <div
+              className={clsx(
+                "flex min-h-0 flex-1 flex-col gap-4 px-5 pb-5 sm:flex-row",
+                linkExpanded && "overflow-y-auto sm:overflow-visible"
+              )}
+            >
+              <div
+                className={clsx(
+                  "flex min-w-0 flex-col",
+                  linkExpanded ? "h-[50vh] shrink-0 sm:h-auto sm:min-h-0 sm:flex-1" : "min-h-0 flex-1"
+                )}
+              >
                 {detail?.html || detail?.text ? (
-                  <EmailBodyFrame html={detail.html} text={detail.text} showRemoteImagesLabel={labels.showRemoteImages} />
+                  <EmailBodyFrame html={detail.html} text={detail.text} allowRemoteImages={allowRemoteImages} />
                 ) : (
                   <p className="flex h-full items-center justify-center text-center text-sm text-soft">{labels.noContent}</p>
                 )}
               </div>
               {linkExpanded && target.linkConfig && (
-                <div className="max-h-[45vh] min-h-0 shrink-0 overflow-y-auto border-t border-card-border pt-4 sm:max-h-none sm:w-64 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                <div className="shrink-0 border-t border-card-border pt-4 sm:min-h-0 sm:w-64 sm:overflow-y-auto sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
                   <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
                 </div>
               )}
