@@ -3,17 +3,25 @@
 // own header — purely decorative, shares the fuchsia identity color of
 // that trio. Named ContactsIcon (not ContactIcon) since new-contacts-card.tsx
 // already has its own local per-row avatar-fallback component by that name.
-export default function ContactsIcon({ className }: { className?: string }) {
+export default function ContactsIcon({
+  size = "h-10 w-10",
+  iconSize = "h-6 w-6",
+  className,
+}: {
+  size?: string;
+  iconSize?: string;
+  className?: string;
+}) {
   return (
     <span
-      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fuchsia-100 text-fuchsia-600 ${className ?? ""}`}
+      className={`inline-flex ${size} shrink-0 items-center justify-center rounded-full bg-fuchsia-100 text-fuchsia-600 ${className ?? ""}`}
     >
       <svg
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.75}
-        className="h-6 w-6"
+        className={iconSize}
       >
         <path
           strokeLinecap="round"

@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ComponentType } from "react";
 import clsx from "@/lib/clsx";
+import CalendarIcon from "./calendar-icon";
+import ContactsIcon from "./contacts-icon";
+import EmailIcon from "./email-icon";
+import ProjectsIcon from "./projects-icon";
 
 // Keyed by href so the icon follows the route regardless of the (localized)
 // label text. Same thin-stroke style as the dashboard's stat card icons.
@@ -36,6 +41,19 @@ const NAV_ICON_EXTRA_PATHS: Record<string, string> = {
   "/settings": "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
 };
 
+// Email, Calendar, Contacts and Projects instead get the same colored-pill
+// badge icon used on their own Summary cards/page headers, rather than the
+// plain currentColor outline the other nav items still use.
+const NAV_PILL_ICONS: Record<
+  string,
+  ComponentType<{ size?: string; iconSize?: string; className?: string }>
+> = {
+  "/email": EmailIcon,
+  "/calendar-app": CalendarIcon,
+  "/contacts": ContactsIcon,
+  "/projects": ProjectsIcon,
+};
+
 export default function NavLink({
   href,
   label,
@@ -49,6 +67,7 @@ export default function NavLink({
   const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
   const iconPath = NAV_ICON_PATHS[href];
   const extraPath = NAV_ICON_EXTRA_PATHS[href];
+  const PillIcon = NAV_PILL_ICONS[href];
 
   return (
     <Link
@@ -76,11 +95,15 @@ export default function NavLink({
           : "text-amo-muted hover:bg-white/5 hover:text-amo-white"
       )}
     >
-      {iconPath && (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-5 w-5 shrink-0">
-          <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
-          {extraPath && <path strokeLinecap="round" strokeLinejoin="round" d={extraPath} />}
-        </svg>
+      {PillIcon ? (
+        <PillIcon size="h-7 w-7" iconSize="h-4 w-4" />
+      ) : (
+        iconPath && (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-5 w-5 shrink-0">
+            <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
+            {extraPath && <path strokeLinecap="round" strokeLinejoin="round" d={extraPath} />}
+          </svg>
+        )
       )}
       {!collapsed && <span>{label}</span>}
     </Link>

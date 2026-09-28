@@ -1,17 +1,27 @@
 // Small envelope badge shown beside the "Email" title on both the Email
 // card and its Summary card — purely decorative, shares the same indigo
-// identity color as the rest of that pair.
-export default function EmailIcon({ className }: { className?: string }) {
+// identity color as the rest of that pair. `size`/`iconSize` default to
+// that h-10/h-6 badge but are overridable so the same component also works
+// as the sidebar's compact nav-pill icon.
+export default function EmailIcon({
+  size = "h-10 w-10",
+  iconSize = "h-6 w-6",
+  className,
+}: {
+  size?: string;
+  iconSize?: string;
+  className?: string;
+}) {
   return (
     <span
-      className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 ${className ?? ""}`}
+      className={`inline-flex ${size} shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 ${className ?? ""}`}
     >
       <svg
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.75}
-        className="h-6 w-6"
+        className={iconSize}
       >
         <path
           strokeLinecap="round"
