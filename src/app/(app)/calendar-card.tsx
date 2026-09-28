@@ -21,6 +21,7 @@ import CalendarIcon from "./calendar-icon";
 import {
   CALENDAR_CARD_ACCENT_BAR,
   CALENDAR_CARD_BG,
+  CALENDAR_NEW_EVENTS_SECTION,
 } from "./calendar-summary-colors";
 import {
   formatClockTime,
@@ -48,6 +49,8 @@ export interface CalendarLabels {
   noEvents: string;
   today: string;
   tomorrow: string;
+  newEventsHeading: string;
+  newEventsEmpty: string;
 }
 
 const GRID_START_HOUR = 6; // grid content starts at 6 AM...
@@ -59,6 +62,10 @@ const MIN_BLOCK_HEIGHT = 30; // px — enough room for a time range under the ti
 function minutesSinceGridStart(date: Date): number {
   const hours = date.getHours() + date.getMinutes() / 60;
   return (hours - GRID_START_HOUR) * 60;
+}
+
+function hoursAgo(hours: number): Date {
+  return new Date(Date.now() - hours * 60 * 60 * 1000);
 }
 
 // The dialogs only need the four raw ids to prefill their selections —
@@ -614,6 +621,32 @@ export default function CalendarCard({
   const tableDays = days.slice(3);
   const tableEvents = eventsByDay.slice(3);
 
+  // "New events" — events created in the last 48 hours, regardless of
+  // which of the 14 fetched days they actually fall on (so one can show up
+  // here even if it's also visible in the 3-day grid or the table above).
+  // Only days with at least one match get a row, unlike the table above
+  // which shows every day (with a "nothing" message) even when empty.
+  const newEventsCutoff = hoursAgo(48);
+  const newEventsByDayAll = days.map((day) =>
+    (events ?? []).filter(
+      (e) =>
+        e.start &&
+        isSameDay(new Date(e.start), day) &&
+        e.created &&
+        new Date(e.created) >= newEventsCutoff,
+    ),
+  );
+  const newEventsTotalCount = newEventsByDayAll.reduce(
+    (sum, list) => sum + list.length,
+    0,
+  );
+  const newEventDays = days.filter(
+    (_, i) => newEventsByDayAll[i].length > 0,
+  );
+  const newEventDaysEvents = newEventsByDayAll.filter(
+    (list) => list.length > 0,
+  );
+
   return (
     <div
       className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${CALENDAR_CARD_BG}`}
@@ -696,6 +729,41 @@ export default function CalendarCard({
               onRequestEdit={(event) => setViewTarget(event.id)}
               onRequestCreate={requestCreate}
             />
+
+            {/* Same category-header convention as the Email card's own
+                sections (email-screening-view.tsx): a solid color bar with
+                the heading and a translucent count pill beside it, above a
+                table built from the same UpcomingTable used above it. */}
+            <div
+              className={`mt-1.5 flex items-center gap-2 rounded-t-xl px-3 py-2 sm:mt-3 ${CALENDAR_NEW_EVENTS_SECTION.headerBg}`}
+            >
+              <h3
+                className={`min-w-0 truncate text-sm font-semibold uppercase tracking-wide ${CALENDAR_NEW_EVENTS_SECTION.headerText}`}
+              >
+                {labels.newEventsHeading}
+              </h3>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${CALENDAR_NEW_EVENTS_SECTION.badgeBg} ${CALENDAR_NEW_EVENTS_SECTION.badgeText}`}
+              >
+                {newEventsTotalCount}
+              </span>
+            </div>
+            {newEventDays.length > 0 ? (
+              <UpcomingTable
+                days={newEventDays}
+                eventsByDay={newEventDaysEvents}
+                dateLocale={dateLocale}
+                hour12={hour12}
+                intlLocale={intlLocale}
+                labels={labels}
+                onRequestEdit={(event) => setViewTarget(event.id)}
+                onRequestCreate={requestCreate}
+              />
+            ) : (
+              <p className="mt-1.5 text-sm text-soft sm:mt-3">
+                {labels.newEventsEmpty}
+              </p>
+            )}
           </div>
         )}
       </div>

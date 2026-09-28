@@ -27,3 +27,14 @@ export const CHILDREN_MOMMY_COLORS = {
   banana: { bg: "bg-[#f6bf26]", text: "text-black" },
   graphite: { bg: "bg-[#616161]", text: "text-white" },
 } as const;
+
+// The Calendar card's own "New events (last 48h)" category header, styled
+// the same way EMAIL_SECTION_COLORS' category headers are (solid color bar
+// + translucent white count pill) — reuses the Summary card's NEW cyan so
+// the two "new events" concepts read as the same thing.
+export const CALENDAR_NEW_EVENTS_SECTION = {
+  headerBg: "bg-cyan-600",
+  headerText: "text-white",
+  badgeBg: "bg-white/25",
+  badgeText: "text-white",
+} as const;

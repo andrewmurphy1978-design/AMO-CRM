@@ -610,6 +610,8 @@ export default async function DashboardPage() {
     noEvents: t.dashboard.calendarNoEvents,
     today: t.dashboard.calendarToday,
     tomorrow: t.dashboard.calendarTomorrow,
+    newEventsHeading: t.dashboard.calendarNewEventsHeading,
+    newEventsEmpty: t.dashboard.calendarNewEventsEmpty,
   };
 
   const stats = [
