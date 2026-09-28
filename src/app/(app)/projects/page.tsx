@@ -8,6 +8,7 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
 import PageHeader from "../page-header";
+import ProjectsIcon from "../projects-icon";
 
 const STATUS_COLORS: Record<string, string> = {
   PLANNING: "bg-black/5 text-soft",
@@ -85,7 +86,12 @@ export default async function ProjectsPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title={t.projects.title}
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <ProjectsIcon />
+            <span className="truncate">{t.projects.title}</span>
+          </span>
+        }
         hour12={hour12}
         lang={lang}
         location={t.dashboard.myLocation}

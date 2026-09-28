@@ -7,6 +7,8 @@ import {
   format,
   isToday,
   isYesterday,
+  isTomorrow,
+  startOfDay,
   startOfWeek,
   addDays,
   type Locale,
@@ -27,6 +29,8 @@ import CalendarCardServer from "./calendar-card-server";
 import CalendarSummaryCard from "./calendar-summary-card";
 import NewContactsCard from "./new-contacts-card";
 import ContactSummaryCard from "./contact-summary-card";
+import ProjectSummaryCard from "./project-summary-card";
+import ProjectsIcon from "./projects-icon";
 import {
   getCachedInbox,
   getScreeningExtras,
@@ -111,36 +115,16 @@ function groupAutomationRuns(runs: AutomationRun[]): AutomationEntry[] {
   return entries;
 }
 
-const STAT_ICONS = {
-  contacts: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"
-    />
-  ),
-  projects: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-19.5 0v6a2.25 2.25 0 0 0 2.25 2.25h15a2.25 2.25 0 0 0 2.25-2.25v-6m-19.5 0h19.5M12 6.75h.008v.008H12V6.75Z"
-    />
-  ),
-  tasks: (
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-    />
-  ),
-} as const;
-
 function daysFromNow(days: number): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
 function hoursAgo(hours: number): Date {
   return new Date(Date.now() - hours * 60 * 60 * 1000);
+}
+
+function startOfToday(): Date {
+  return startOfDay(new Date());
 }
 
 // Same shape as the Email/Calendar pages' own local copies of this — feeds
@@ -161,6 +145,8 @@ export default async function DashboardPage() {
   const dateLocale = getDateLocale(lang);
 
   const sevenDaysAgo = daysFromNow(-7);
+  const sevenDaysFromNow = daysFromNow(7);
+  const todayStart = startOfToday();
 
   // One shared client for every dashboard read below (counts, lists,
   // Google's token, the social snapshots loop, the user's time format) —
@@ -173,6 +159,9 @@ export default async function DashboardPage() {
   // same fix already used for the systeme.io/Buffer/Make bulk syncs.
   const {
     activeProjectCount,
+    activePhaseCount,
+    activeTaskCount,
+    deadlineTasksList,
     dueSoonTasks,
     activeProjects,
     recentActivity,
@@ -194,6 +183,26 @@ export default async function DashboardPage() {
   } = await withScopedPrismaClient(async (db) => {
     const activeProjectCount = await db.project.count({
       where: { status: "ACTIVE" },
+    });
+    // Feeds the Project Summary card. Same status set the removed Open-
+    // Tasks stat used for "active" — TODO/IN_PROGRESS/BLOCKED, everything
+    // short of DONE.
+    const activePhaseCount = await db.projectPhase.count({
+      where: { status: "ACTIVE" },
+    });
+    const activeTaskCount = await db.task.count({
+      where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
+    });
+    // Today/tomorrow/this-week deadline buckets (computed below, once
+    // we're back on plain JS Dates) — every non-done task due in the next
+    // 7 days, not just the ones the "Upcoming tasks" list below happens to
+    // show.
+    const deadlineTasksList = await db.task.findMany({
+      where: {
+        status: { not: "DONE" },
+        dueDate: { gte: todayStart, lte: sevenDaysFromNow },
+      },
+      select: { id: true, dueDate: true },
     });
     const dueSoonTasks = await db.task.findMany({
       where: {
@@ -307,6 +316,9 @@ export default async function DashboardPage() {
 
     return {
       activeProjectCount,
+      activePhaseCount,
+      activeTaskCount,
+      deadlineTasksList,
       dueSoonTasks,
       activeProjects,
       recentActivity,
@@ -435,6 +447,40 @@ export default async function DashboardPage() {
     },
     activeStageCount,
     inactiveStageCount,
+  };
+
+  // Feeds the Project Summary stat card's deadline composite — same
+  // today/isTomorrow/catch-all bucketing style as the Contact Summary
+  // card's own Today/Yesterday/This-week buckets above, just forward-
+  // looking (a task due later today still counts as "today" even if
+  // dueDate's clock time has already passed, which is why the query above
+  // starts the window at todayStart rather than "now").
+  const tasksDueToday = deadlineTasksList.filter(
+    (task) => task.dueDate && isToday(task.dueDate),
+  );
+  const tasksDueTomorrow = deadlineTasksList.filter(
+    (task) => task.dueDate && isTomorrow(task.dueDate),
+  );
+  const tasksDueThisWeek = deadlineTasksList.filter(
+    (task) =>
+      task.dueDate && !isToday(task.dueDate) && !isTomorrow(task.dueDate),
+  );
+  const projectSummaryLabels = {
+    title: t.dashboard.projectSummaryTitle,
+    activeProjectsLabel: t.dashboard.projectSummaryActiveProjectsLabel,
+    activePhasesLabel: t.dashboard.projectSummaryActivePhasesLabel,
+    activeTasksLabel: t.dashboard.projectSummaryActiveTasksLabel,
+    todayLabel: t.dashboard.calendarToday,
+    tomorrowLabel: t.dashboard.calendarTomorrow,
+    thisWeekLabel: t.dashboard.newContactsThisWeek,
+  };
+  const projectSummaryCounts = {
+    activeProjects: activeProjectCount,
+    activePhases: activePhaseCount,
+    activeTasks: activeTaskCount,
+    today: tasksDueToday.length,
+    tomorrow: tasksDueTomorrow.length,
+    thisWeek: tasksDueThisWeek.length,
   };
 
   const weatherLabels = {
@@ -675,24 +721,6 @@ export default async function DashboardPage() {
     newEventsEmpty: t.dashboard.calendarNewEventsEmpty,
   };
 
-  const stats = [
-    {
-      label: t.dashboard.statActiveProjects,
-      value: activeProjectCount,
-      sub: null,
-      href: "/projects?status=ACTIVE",
-      icon: STAT_ICONS.projects,
-      color: "blue",
-    },
-  ] as const;
-
-  const colorClasses = {
-    lime: "bg-emerald-50 text-emerald-700",
-    teal: "bg-teal-50 text-teal-700",
-    blue: "bg-sky-50 text-sky-700",
-    gold: "bg-amber-100 text-amber-700",
-  } as const;
-
   return (
     <div className="space-y-2 sm:space-y-8">
       <PageHeader
@@ -735,35 +763,10 @@ export default async function DashboardPage() {
             counts={contactSummaryCounts}
             labels={contactSummaryLabels}
           />
-          {stats.map((stat) => (
-            <Link
-              key={stat.label}
-              href={stat.href}
-              className="group relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 transition-all duration-200 hover:-translate-y-1 hover:border-amo-lime/40 hover:shadow-[0_12px_28px_rgba(46,204,113,0.15)]"
-            >
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-              <div
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${colorClasses[stat.color]}`}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  className="h-5 w-5"
-                >
-                  {stat.icon}
-                </svg>
-              </div>
-              <p className="mt-4 font-display text-2xl font-semibold text-ink">
-                {stat.value}
-              </p>
-              <p className="mt-1 text-sm text-soft">{stat.label}</p>
-              {stat.sub && (
-                <p className="mt-0.5 text-xs text-soft">{stat.sub}</p>
-              )}
-            </Link>
-          ))}
+          <ProjectSummaryCard
+            counts={projectSummaryCounts}
+            labels={projectSummaryLabels}
+          />
         </div>
 
         {/* A single flat grid (not three separately-flowing column divs) so
@@ -831,11 +834,17 @@ export default async function DashboardPage() {
             />
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-3">
+          <div
+            id="dashboard-projects-card"
+            className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-3 scroll-mt-20"
+          >
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">
-              {t.dashboard.dashboardProjectsTitle}
-            </h2>
+            <div className="flex items-center gap-2">
+              <ProjectsIcon size="h-8 w-8" iconSize="h-5 w-5" />
+              <h2 className="font-display text-lg font-semibold text-ink">
+                {t.dashboard.dashboardProjectsTitle}
+              </h2>
+            </div>
             {activeProjects.length === 0 ? (
               <p className="mt-1.5 sm:mt-3 text-sm text-soft">
                 {t.dashboard.noActiveProjects}
