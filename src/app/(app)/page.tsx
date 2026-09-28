@@ -37,6 +37,9 @@ import NewContactsCard from "./new-contacts-card";
 import ContactSummaryCard from "./contact-summary-card";
 import ProjectSummaryCard from "./project-summary-card";
 import ProjectsIcon from "./projects-icon";
+import TasksIcon from "./tasks-icon";
+import { PROJECT_CARD_ACCENT_BAR, PROJECT_CARD_BG } from "./project-summary-colors";
+import { TASK_CARD_ACCENT_BAR, TASK_CARD_BG } from "./task-card-colors";
 import {
   getCachedInbox,
   getScreeningExtras,
@@ -579,6 +582,18 @@ export default async function DashboardPage() {
     crypto: t.dashboard.marketsCrypto,
   };
   const sportsUnavailableLabel = t.dashboard.sportsUnavailable;
+  const sportsLabels = {
+    title: t.dashboard.sportsTitle,
+    unavailable: t.dashboard.sportsUnavailable,
+    lastGame: t.dashboard.sportsLastGame,
+    nextGame: t.dashboard.sportsNextGame,
+    final: t.dashboard.sportsFinal,
+    vs: t.dashboard.sportsVs,
+    at: t.dashboard.sportsAt,
+    series: t.dashboard.sportsSeries,
+    refresh: t.dashboard.refresh,
+    refreshing: t.dashboard.refreshing,
+  };
 
   const emailLabels = {
     title: t.dashboard.emailTitle,
@@ -795,6 +810,8 @@ export default async function DashboardPage() {
                   teamNhl={sportsTeamNhl}
                   teamMlb={sportsTeamMlb}
                   lang={lang}
+                  hour12={hour12}
+                  cardLabels={sportsLabels}
                   unavailableLabel={sportsUnavailableLabel}
                 />
               </Suspense>
@@ -916,11 +933,10 @@ export default async function DashboardPage() {
             is forced to Email's own fixed 820px, leaving a large dead zone
             below the (much shorter) Contacts card before Projects starts in
             the next row. Grouping them removes that row-height coupling —
-            the group is now sized by its own content — which is also what
-            lets `lg:gap-0` below close the gap between the three cards on
-            desktop specifically, without touching their normal `gap-2
-            sm:gap-6` spacing on mobile/tablet. */}
-          <div className="flex flex-col gap-2 sm:gap-6 lg:col-start-3 lg:gap-0">
+            the group is now sized by its own content — while keeping the
+            normal `gap-2 sm:gap-6` spacing between all three cards, same as
+            every other pair of cards on the page. */}
+          <div className="flex flex-col gap-2 sm:gap-6 lg:col-start-3">
             <div id="dashboard-contacts-card" className="scroll-mt-20">
               <NewContactsCard
                 today={newContactsToday}
@@ -933,9 +949,9 @@ export default async function DashboardPage() {
 
             <div
               id="dashboard-projects-card"
-              className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 scroll-mt-20"
+              className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 scroll-mt-20 ${PROJECT_CARD_BG}`}
             >
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+              <div className={`absolute inset-x-0 top-0 h-[3px] ${PROJECT_CARD_ACCENT_BAR}`} />
               <div className="flex items-center gap-2">
                 <ProjectsIcon size="h-8 w-8" iconSize="h-5 w-5" />
                 <h2 className="font-display text-lg font-semibold text-ink">
@@ -973,11 +989,14 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">
-                {t.dashboard.upcomingTasks}
-              </h2>
+            <div className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${TASK_CARD_BG}`}>
+              <div className={`absolute inset-x-0 top-0 h-[3px] ${TASK_CARD_ACCENT_BAR}`} />
+              <div className="flex items-center gap-2">
+                <TasksIcon size="h-8 w-8" iconSize="h-5 w-5" />
+                <h2 className="font-display text-lg font-semibold text-ink">
+                  {t.dashboard.upcomingTasks}
+                </h2>
+              </div>
               {dueSoonTasks.length === 0 ? (
                 <p className="mt-1.5 sm:mt-3 text-sm text-soft">
                   {t.dashboard.noUpcomingTasks}
