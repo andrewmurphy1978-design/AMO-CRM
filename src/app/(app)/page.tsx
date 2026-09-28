@@ -23,11 +23,9 @@ import CardSkeleton from "./card-skeleton";
 import WeatherHeaderServer from "./weather-header-server";
 import { WeatherWidgetSkeleton } from "./header-weather-widget";
 import HeaderWorldClockWidget from "./header-world-clock-widget";
-import NewsCardServer from "./news-card-server";
 import NewsHeaderServer from "./news-header-server";
 import { NewsWidgetSkeleton } from "./header-news-widget";
 import SportsCardServer from "./sports-card-server";
-import MarketsCardServer from "./markets-card-server";
 import MarketsHeaderServer from "./markets-header-server";
 import { MarketsWidgetSkeleton } from "./header-markets-widget";
 import EmailCard from "./email-card";
@@ -1094,15 +1092,11 @@ export default async function DashboardPage() {
 
           {/* Right-column widgets: each fetches real, sometimes slow,
             external data — Suspense lets the rest of the dashboard render
-            immediately instead of waiting on all of them. Weather and
-            World Clocks moved into the header (see the logoAccessory/
-            dateTimeAccessory props on the PageHeader above) — their
-            drop-downs carry the same detail these cards used to show. */}
-          <div className="lg:col-start-3">
-            <Suspense fallback={<CardSkeleton title={t.dashboard.newsTitle} />}>
-              <NewsCardServer labels={newsLabels} />
-            </Suspense>
-          </div>
+            immediately instead of waiting on all of them. Weather, World
+            Clocks, News, and Markets all moved into the header (see the
+            logoAccessory/dateTimeAccessory props on the PageHeader above)
+            — their drop-downs carry the same detail these cards used to
+            show, so they're no longer duplicated here. */}
           <div className="lg:col-start-3">
             <Suspense
               fallback={<CardSkeleton title={t.dashboard.sportsTitle} />}
@@ -1112,13 +1106,6 @@ export default async function DashboardPage() {
                 lang={lang}
                 hour12={hour12}
               />
-            </Suspense>
-          </div>
-          <div className="lg:col-start-3">
-            <Suspense
-              fallback={<CardSkeleton title={t.dashboard.marketsTitle} />}
-            >
-              <MarketsCardServer labels={marketsLabels} />
             </Suspense>
           </div>
         </div>

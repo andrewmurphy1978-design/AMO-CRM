@@ -79,14 +79,29 @@ function buildUrl(cat: CategoryQuery): string {
   return `https://www.bing.com/news/search?q=${encodeURIComponent(siteFilter + cat.query)}&format=RSS&setmkt=${cat.setmkt}`;
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  "#39": "'",
+  apos: "'",
+  quot: '"',
+  lt: "<",
+  gt: ">",
+  nbsp: " ",
+};
+
+// Bing's French-market RSS feeds carry accented letters (é, à, «, », …) as
+// HTML numeric character references (&#233; / &#xE9;), not just the handful
+// of named entities above — a single regex pass so every code point (not
+// just the ones this file happened to list) gets decoded, and so "&amp;"
+// doesn't get double-unescaped into something else first.
 function decodeEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, "&")
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+  return text.replace(/&(#\d+|#x[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, body: string) => {
+    if (body[0] === "#") {
+      const codePoint = body[1] === "x" || body[1] === "X" ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
+    }
+    return NAMED_ENTITIES[body] ?? match;
+  });
 }
 
 // Unwraps Bing's click-tracking redirect to the real article URL.

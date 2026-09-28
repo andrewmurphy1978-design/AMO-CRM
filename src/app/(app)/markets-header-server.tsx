@@ -7,7 +7,9 @@ import type { MarketsLabels } from "./markets-card";
 // weather-header-server.tsx. `currency`/`items` come from the signed-in
 // user's own picks (see src/lib/dashboard-markets-picks.ts), resolved by
 // the caller inside its own withScopedPrismaClient block rather than here,
-// so this component never opens its own Prisma client.
+// so this component never opens its own Prisma client. The full `snapshot`
+// is also passed through so the widget's drop-down can render the complete
+// Markets card, not just the condensed pill's 4 picks.
 export default async function MarketsHeaderServer({
   currency,
   items,
@@ -18,6 +20,6 @@ export default async function MarketsHeaderServer({
   labels: MarketsLabels;
 }) {
   const snapshot = await getMarketsSnapshot();
-  const data = pickMarketsWidgetData(snapshot, currency, items);
-  return <HeaderMarketsWidget initial={data} labels={labels} />;
+  const pill = pickMarketsWidgetData(snapshot, currency, items);
+  return <HeaderMarketsWidget pill={pill} snapshot={snapshot} labels={labels} />;
 }
