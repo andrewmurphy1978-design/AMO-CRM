@@ -1094,6 +1094,7 @@ export const dictionaries = {
     eventDialog: {
       createTitle: "New event",
       editTitle: "Edit event",
+      duplicateTitle: "Duplicate event",
       loading: "Loading...",
       titleLabel: "Title",
       titlePlaceholder: "Add a title",
@@ -1155,6 +1156,7 @@ export const dictionaries = {
       loadFailed: "Couldn't load this event.",
       notConnected: "Google Calendar isn't connected.",
       edit: "Edit",
+      duplicate: "Duplicate",
       delete: "Delete",
       close: "Close",
       deleteConfirm: "Delete this event? This also removes it from Google Calendar.",
@@ -2390,6 +2392,7 @@ export const dictionaries = {
     eventDialog: {
       createTitle: "Nouvel événement",
       editTitle: "Modifier l'événement",
+      duplicateTitle: "Dupliquer l'événement",
       loading: "Chargement...",
       titleLabel: "Titre",
       titlePlaceholder: "Ajouter un titre",
@@ -2451,6 +2454,7 @@ export const dictionaries = {
       loadFailed: "Impossible de charger cet événement.",
       notConnected: "Google Calendar n'est pas connecté.",
       edit: "Modifier",
+      duplicate: "Dupliquer",
       delete: "Supprimer",
       close: "Fermer",
       deleteConfirm: "Supprimer cet événement? Il sera aussi retiré de Google Calendar.",

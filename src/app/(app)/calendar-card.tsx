@@ -545,6 +545,7 @@ export default function CalendarCard({
   projectOptions,
   taskOptions,
   bookingOptions,
+  programOptions,
   eventDialogLabels,
   eventViewDialogLabels,
   linkPickerLabels,
@@ -564,6 +565,7 @@ export default function CalendarCard({
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
   bookingOptions: LinkOption[];
+  programOptions: LinkOption[];
   eventDialogLabels: EventDialogLabels;
   eventViewDialogLabels: EventViewDialogLabels;
   linkPickerLabels: {
@@ -780,11 +782,17 @@ export default function CalendarCard({
         projects={projectOptions}
         tasks={taskOptions}
         bookings={bookingOptions}
+        programs={programOptions}
         onClose={() => setViewTarget(null)}
         onEdit={() => {
           const id = viewTarget;
           setViewTarget(null);
           if (id) setDialogTarget({ id });
+        }}
+        onDuplicate={() => {
+          const id = viewTarget;
+          setViewTarget(null);
+          if (id) setDialogTarget({ duplicateOf: id });
         }}
         onDeleted={() => {
           setViewTarget(null);
@@ -802,14 +810,18 @@ export default function CalendarCard({
           dialogTarget
             ? "id" in dialogTarget
               ? dialogTarget.id
-              : dialogTarget.start.getTime()
+              : "duplicateOf" in dialogTarget
+                ? `dup-${dialogTarget.duplicateOf}`
+                : dialogTarget.start.getTime()
             : "none"
         }
         target={dialogTarget}
         initialLinks={
           dialogTarget && "id" in dialogTarget
             ? toLinkTargets(links[dialogTarget.id])
-            : undefined
+            : dialogTarget && "duplicateOf" in dialogTarget
+              ? toLinkTargets(links[dialogTarget.duplicateOf])
+              : undefined
         }
         onClose={() => setDialogTarget(null)}
         onSaved={() => {
@@ -824,6 +836,7 @@ export default function CalendarCard({
         projects={projectOptions}
         tasks={taskOptions}
         bookings={bookingOptions}
+        programs={programOptions}
         lang={lang}
         hour12={hour12}
         dateLocale={dateLocale}

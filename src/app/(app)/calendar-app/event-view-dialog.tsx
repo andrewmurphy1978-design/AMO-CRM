@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, type Locale } from "date-fns";
 import { eventColor } from "@/lib/calendar-colors";
 import { formatTimeRange } from "@/lib/calendar-time";
 import { formatReminderList, type ReminderLabels } from "@/lib/calendar-reminders";
 import type { CalendarAttendee, CalendarEventDetail } from "@/lib/google";
 import { fetchCalendarEventDetail, fetchDefaultReminders, deleteCalendarEventAction, type EventLinkTargets } from "@/actions/calendar";
-import type { LinkOption } from "../link-dialog";
+import { buildAddressBook, type LinkOption } from "../link-dialog";
 
 export interface EventViewDialogLabels extends ReminderLabels {
   loading: string;
   loadFailed: string;
   notConnected: string;
   edit: string;
+  duplicate: string;
   delete: string;
   close: string;
   deleteConfirm: string;
@@ -30,10 +31,11 @@ export interface EventViewDialogLabels extends ReminderLabels {
 }
 
 // "Andrew Murphy (andrewmurphy1978@gmail.com)" when the address matches a
-// known contact; otherwise Google's own displayName for that guest, or
-// just the bare email when neither is available.
-function guestDisplay(a: CalendarAttendee, contacts: LinkOption[]): string {
-  const match = contacts.find((c) => c.email && c.email.toLowerCase() === a.email.toLowerCase());
+// known contact or affiliate program (including any of their extra
+// addresses); otherwise Google's own displayName for that guest, or just
+// the bare email when neither is available.
+function guestDisplay(a: CalendarAttendee, addressBook: { label: string; email: string }[]): string {
+  const match = addressBook.find((entry) => entry.email.toLowerCase() === a.email.toLowerCase());
   if (match) return `${match.label} (${a.email})`;
   if (a.displayName) return `${a.displayName} (${a.email})`;
   return a.email;
@@ -112,8 +114,10 @@ export default function EventViewDialog({
   projects,
   tasks,
   bookings,
+  programs,
   onClose,
   onEdit,
+  onDuplicate,
   onDeleted,
   hour12,
   dateLocale,
@@ -128,8 +132,10 @@ export default function EventViewDialog({
   projects: LinkOption[];
   tasks: LinkOption[];
   bookings: LinkOption[];
+  programs: LinkOption[];
   onClose: () => void;
   onEdit: () => void;
+  onDuplicate: () => void;
   onDeleted: () => void;
   hour12: boolean;
   dateLocale: Locale | undefined;
@@ -141,6 +147,7 @@ export default function EventViewDialog({
   const [detail, setDetail] = useState<CalendarEventDetail | null>(null);
   const [defaultReminders, setDefaultReminders] = useState<number[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const addressBook = useMemo(() => buildAddressBook(contacts, programs), [contacts, programs]);
 
   useEffect(() => {
     if (!eventId) return;
@@ -246,7 +253,7 @@ export default function EventViewDialog({
                   <ul className="mt-0.5 space-y-0.5">
                     {detail.attendees.map((a) => (
                       <li key={a.email} className="truncate">
-                        {guestDisplay(a, contacts)}
+                        {guestDisplay(a, addressBook)}
                       </li>
                     ))}
                   </ul>
@@ -303,9 +310,19 @@ export default function EventViewDialog({
             >
               {labels.delete}
             </button>
-            <button type="button" disabled={loading} onClick={onEdit} className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60">
-              {labels.edit}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={onDuplicate}
+                className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60"
+              >
+                {labels.duplicate}
+              </button>
+              <button type="button" disabled={loading} onClick={onEdit} className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60">
+                {labels.edit}
+              </button>
+            </div>
           </div>
         </div>
       </div>

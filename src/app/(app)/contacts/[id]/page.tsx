@@ -208,6 +208,7 @@ export default async function ContactDetailPage({
     calendarProjectOptions,
     calendarTaskOptions,
     calendarBookingOptions,
+    calendarProgramOptions,
   } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
@@ -254,7 +255,7 @@ export default async function ContactDetailPage({
     const allContacts = await db.contact.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       take: 300,
-      select: { id: true, firstName: true, lastName: true, email: true },
+      select: { id: true, firstName: true, lastName: true, email: true, extraEmails: true },
     });
     const allProjects = await db.project.findMany({ orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, contactId: true } });
     const allTasks = await db.task.findMany({
@@ -268,6 +269,10 @@ export default async function ContactDetailPage({
       take: 100,
       select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
     });
+    const allPrograms = await db.affiliateProgram.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true, extraEmails: true },
+    });
     const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
 
     return {
@@ -280,10 +285,12 @@ export default async function ContactDetailPage({
         id: c.id,
         label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "",
         email: c.email,
+        extraEmails: c.extraEmails,
       })),
       calendarProjectOptions: allProjects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId })),
       calendarTaskOptions: allTasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId })),
       calendarBookingOptions: allBookings,
+      calendarProgramOptions: allPrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails })),
     };
   });
 
@@ -675,6 +682,7 @@ export default async function ContactDetailPage({
             projects={calendarProjectOptions}
             tasks={calendarTaskOptions}
             bookings={calendarBookingLabelOptions}
+            programs={calendarProgramOptions}
             noEventsLabel={t.calendarApp.noLinkedEvents}
             hour12={hour12}
             intlLocale={intlLocale}

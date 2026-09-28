@@ -47,12 +47,12 @@ export default async function CalendarCardServer({
   // booking option lists the event dialog needs — see the comment on the
   // equivalent block in src/app/(app)/page.tsx for why these share a
   // connection instead of each opening its own.
-  const { links, contactOptions, projectOptions, taskOptions, bookingOptions } = await withScopedPrismaClient(async (db) => {
+  const { links, contactOptions, projectOptions, taskOptions, bookingOptions, programOptions } = await withScopedPrismaClient(async (db) => {
     const links = events && events.length > 0 ? await getResolvedEventLinks(db, events.map((e) => e.id)) : {};
     const contacts = await db.contact.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       take: 300,
-      select: { id: true, firstName: true, lastName: true, email: true },
+      select: { id: true, firstName: true, lastName: true, email: true, extraEmails: true },
     });
     const projects = await db.project.findMany({
       orderBy: { name: "asc" },
@@ -70,12 +70,17 @@ export default async function CalendarCardServer({
       take: 100,
       select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
     });
+    const affiliatePrograms = await db.affiliateProgram.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true, extraEmails: true },
+    });
     return {
       links,
-      contactOptions: contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email })),
+      contactOptions: contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email, extraEmails: c.extraEmails })),
       projectOptions: projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId })),
       taskOptions: tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId })),
       bookingOptions: bookings,
+      programOptions: affiliatePrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails })),
     };
   });
 
@@ -109,6 +114,7 @@ export default async function CalendarCardServer({
       projectOptions={projectOptions}
       taskOptions={taskOptions}
       bookingOptions={bookingLabelOptions}
+      programOptions={programOptions}
       eventDialogLabels={t.eventDialog}
       eventViewDialogLabels={t.eventViewDialog}
       linkPickerLabels={linkPickerLabels}

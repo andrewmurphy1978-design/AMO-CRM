@@ -13,7 +13,7 @@ import { buildQuotedReply } from "@/lib/mail/mime-build";
 import type { MailIdentity, MailSource } from "@/lib/mail/identity";
 import { NO_ADDRESS_COLOR, contrastTextColor } from "@/lib/email-address-match";
 import { EmailLinkSummary, EmailLinkEditor, type EmailLinkConfig } from "./email-link-fields";
-import type { LinkOption } from "../link-dialog";
+import { buildAddressBook, type AddressBookEntry, type LinkOption } from "../link-dialog";
 
 export type ComposeMode = "reply" | "replyAll" | "forward" | "draft" | "new";
 
@@ -114,27 +114,6 @@ function subjectWithPrefix(subject: string, prefix: string): string {
 
 function identityKey(id: FromIdentity): string {
   return `${id.source}:${id.accountAddress}`;
-}
-
-interface AddressBookEntry {
-  key: string;
-  label: string;
-  email: string;
-}
-
-// Flattens Contacts/Affiliate Programs (each can have a primary + several
-// extra addresses — Contact.email/extraEmails, AffiliateProgram's own
-// mirror of that pattern) into one search list for the To/Cc/Bcc
-// autocomplete below — one entry per address rather than one per
-// contact/program, so every address is individually searchable/pickable.
-function buildAddressBook(contactOptions: LinkOption[], programOptions: LinkOption[]): AddressBookEntry[] {
-  const entries: AddressBookEntry[] = [];
-  for (const opt of [...contactOptions, ...programOptions]) {
-    for (const email of [opt.email, ...(opt.extraEmails ?? [])]) {
-      if (email) entries.push({ key: `${opt.id}:${email}`, label: opt.label, email });
-    }
-  }
-  return entries;
 }
 
 // Attached beneath the To/Cc/Bcc inputs — as the user types, whatever's

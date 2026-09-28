@@ -104,6 +104,7 @@ export default function CalendarShell({
   projects,
   tasks,
   bookings,
+  programs,
   hour12,
   intlLocale,
   lang,
@@ -120,6 +121,7 @@ export default function CalendarShell({
   projects: LinkOption[];
   tasks: LinkOption[];
   bookings: LinkOption[];
+  programs: LinkOption[];
   hour12: boolean;
   intlLocale: string;
   lang: Lang;
@@ -503,11 +505,17 @@ export default function CalendarShell({
         projects={projects}
         tasks={tasks}
         bookings={bookings}
+        programs={programs}
         onClose={() => setViewTarget(null)}
         onEdit={() => {
           const id = viewTarget;
           setViewTarget(null);
           if (id) setDialogTarget({ id });
+        }}
+        onDuplicate={() => {
+          const id = viewTarget;
+          setViewTarget(null);
+          if (id) setDialogTarget({ duplicateOf: id });
         }}
         onDeleted={() => {
           setViewTarget(null);
@@ -521,9 +529,23 @@ export default function CalendarShell({
       />
 
       <EventDialog
-        key={dialogTarget ? ("id" in dialogTarget ? dialogTarget.id : dialogTarget.start.getTime()) : "none"}
+        key={
+          dialogTarget
+            ? "id" in dialogTarget
+              ? dialogTarget.id
+              : "duplicateOf" in dialogTarget
+                ? `dup-${dialogTarget.duplicateOf}`
+                : dialogTarget.start.getTime()
+            : "none"
+        }
         target={dialogTarget}
-        initialLinks={dialogTarget && "id" in dialogTarget ? links[dialogTarget.id] : undefined}
+        initialLinks={
+          dialogTarget && "id" in dialogTarget
+            ? links[dialogTarget.id]
+            : dialogTarget && "duplicateOf" in dialogTarget
+              ? links[dialogTarget.duplicateOf]
+              : undefined
+        }
         onClose={() => setDialogTarget(null)}
         onSaved={() => {
           refresh();
@@ -537,6 +559,7 @@ export default function CalendarShell({
         projects={projects}
         tasks={tasks}
         bookings={bookings}
+        programs={programs}
         lang={lang}
         hour12={hour12}
         dateLocale={dateLocale}

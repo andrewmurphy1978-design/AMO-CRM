@@ -47,14 +47,14 @@ export default async function CalendarAppPage() {
   // scoped client just for the event-links lookup, which is the same
   // "two connections in one request" pattern that trips Cloudflare's
   // Error 1102, just sequential instead of concurrent.
-  const { googleAccessToken, hour12, contacts, projects, tasks, bookings, events, eventLinks } = await withScopedPrismaClient(
+  const { googleAccessToken, hour12, contacts, projects, tasks, bookings, affiliatePrograms, events, eventLinks } = await withScopedPrismaClient(
     async (db) => {
       const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
       const hour12 = await getHour12(session, db);
       const contacts = await db.contact.findMany({
         orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
         take: 300,
-        select: { id: true, firstName: true, lastName: true, email: true },
+        select: { id: true, firstName: true, lastName: true, email: true, extraEmails: true },
       });
       const projects = await db.project.findMany({
         orderBy: { name: "asc" },
@@ -72,6 +72,10 @@ export default async function CalendarAppPage() {
         take: 100,
         select: { id: true, eventName: true, contactName: true, scheduledFor: true, contactId: true },
       });
+      const affiliatePrograms = await db.affiliateProgram.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, email: true, extraEmails: true },
+      });
 
       // Matches CalendarShell's default view ("week", Sunday-start) so the
       // first paint doesn't need an extra client-side fetch.
@@ -86,7 +90,7 @@ export default async function CalendarAppPage() {
       const eventLinks =
         eventIds.length > 0 ? await db.calendarEventLink.findMany({ where: { googleEventId: { in: eventIds } } }) : [];
 
-      return { googleAccessToken, hour12, contacts, projects, tasks, bookings, events, eventLinks };
+      return { googleAccessToken, hour12, contacts, projects, tasks, bookings, affiliatePrograms, events, eventLinks };
     }
   );
   const initialLinks = Object.fromEntries(
@@ -96,7 +100,7 @@ export default async function CalendarAppPage() {
     ])
   );
 
-  const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email }));
+  const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email, extraEmails: c.extraEmails }));
   const projectOptions = projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId }));
   const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId }));
   const bookingOptions = bookings.map((b) => ({
@@ -104,6 +108,7 @@ export default async function CalendarAppPage() {
     label: `${b.eventName ?? t.linkPicker.booking} (${b.scheduledFor ? format(b.scheduledFor, "MMM d") : "?"})`,
     contactId: b.contactId,
   }));
+  const programOptions = affiliatePrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails }));
 
   const linkPickerLabels = {
     contact: t.linkPicker.contact,
@@ -156,6 +161,7 @@ export default async function CalendarAppPage() {
           projects={projectOptions}
           tasks={taskOptions}
           bookings={bookingOptions}
+          programs={programOptions}
           hour12={hour12}
           intlLocale={intlLocale}
           lang={lang}

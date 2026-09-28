@@ -17,9 +17,9 @@ import {
   deleteCalendarEventAction,
   type EventLinkTargets,
 } from "@/actions/calendar";
-import type { LinkOption } from "../link-dialog";
+import { buildAddressBook, type LinkOption } from "../link-dialog";
 
-export type EventDialogTarget = { id: string } | { start: Date; allDay?: boolean };
+export type EventDialogTarget = { id: string } | { start: Date; allDay?: boolean } | { duplicateOf: string };
 
 type RepeatPreset = "none" | "daily" | "weekly" | "monthly" | "yearly";
 
@@ -219,6 +219,7 @@ function stateFromDetail(detail: CalendarEventDetail, links: EventLinkTargets): 
 export interface EventDialogLabels extends ReminderLabels {
   createTitle: string;
   editTitle: string;
+  duplicateTitle: string;
   loading: string;
   titleLabel: string;
   titlePlaceholder: string;
@@ -525,6 +526,7 @@ export default function EventDialog({
   projects,
   tasks,
   bookings,
+  programs,
   lang,
   hour12,
   dateLocale,
@@ -545,6 +547,7 @@ export default function EventDialog({
   projects: LinkOption[];
   tasks: LinkOption[];
   bookings: LinkOption[];
+  programs: LinkOption[];
   lang: Lang;
   hour12: boolean;
   dateLocale: Locale | undefined;
@@ -554,9 +557,10 @@ export default function EventDialog({
 }) {
   const t = getDict(lang);
   const isEdit = target !== null && "id" in target;
+  const isDuplicate = target !== null && "duplicateOf" in target;
   const eventId = target && "id" in target ? target.id : null;
 
-  const [loading, setLoading] = useState(isEdit);
+  const [loading, setLoading] = useState(isEdit || isDuplicate);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<CalendarEventDetail | null>(null);
   const [defaultReminders, setDefaultReminders] = useState<number[]>([]);
@@ -592,26 +596,38 @@ export default function EventDialog({
 
   useEffect(() => {
     if (!target || "start" in target) return;
+    const sourceId = "id" in target ? target.id : target.duplicateOf;
+    const duplicating = "duplicateOf" in target;
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setLoadError(null);
-    fetchCalendarEventDetail(target.id).then((result) => {
+    fetchCalendarEventDetail(sourceId).then((result) => {
       if (cancelled) return;
       if ("error" in result) {
         setLoadError(result.error);
         setLoading(false);
         return;
       }
-      setDetail(result);
-      setForm(stateFromDetail(result, initialLinks ?? { contactId: "", projectId: "", taskId: "", bookingId: "" }));
+      // A duplicate is a brand-new, not-yet-created event — its form is
+      // prefilled from the source event, but `detail` itself stays null
+      // (not the source's own CalendarEventDetail) so this never shows the
+      // source's "Open in Google Calendar" link or gets locked as a
+      // recurring instance; recurrence itself is dropped for the same
+      // reason (a fresh single event, not a new occurrence of the series).
+      if (duplicating) {
+        setForm({ ...stateFromDetail(result, initialLinks ?? { contactId: "", projectId: "", taskId: "", bookingId: "" }), repeat: "none" });
+      } else {
+        setDetail(result);
+        setForm(stateFromDetail(result, initialLinks ?? { contactId: "", projectId: "", taskId: "", bookingId: "" }));
+      }
       setLoading(false);
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target && "id" in target ? target.id : target && "start" in target ? target.start.getTime() : null]);
+  }, [target && "id" in target ? target.id : target && "duplicateOf" in target ? target.duplicateOf : target && "start" in target ? target.start.getTime() : null]);
 
   useEffect(() => {
     if (!target) return;
@@ -628,11 +644,23 @@ export default function EventDialog({
     return list.slice(0, 20);
   }, [contactSearch, contacts]);
 
-  const filteredGuestContacts = useMemo(() => {
+  // Same Contacts + Affiliate Programs address book (primary email plus any
+  // extra addresses) the Email compose dialog's To/Cc/Bcc fields search —
+  // one entry per address, so an extra email is just as pickable as a
+  // primary one.
+  const addressBook = useMemo(() => buildAddressBook(contacts, programs), [contacts, programs]);
+
+  const filteredGuestEntries = useMemo(() => {
     const q = guestInput.trim().toLowerCase();
     if (!q) return [];
-    return contacts.filter((c) => c.email && c.label.toLowerCase().includes(q) && !form.attendeeEmails.includes(c.email)).slice(0, 8);
-  }, [guestInput, contacts, form.attendeeEmails]);
+    return addressBook
+      .filter(
+        (entry) =>
+          !form.attendeeEmails.includes(entry.email) &&
+          (entry.label.toLowerCase().includes(q) || entry.email.toLowerCase().includes(q))
+      )
+      .slice(0, 8);
+  }, [guestInput, addressBook, form.attendeeEmails]);
 
   const availableProjects = useMemo(
     () => (form.contactId ? projects.filter((p) => p.contactId === form.contactId) : []),
@@ -671,9 +699,9 @@ export default function EventDialog({
   }
 
   // "Andrew Murphy (andrewmurphy1978@gmail.com)" when the address matches a
-  // known contact, otherwise just the bare email.
+  // known contact or affiliate program, otherwise just the bare email.
   function guestLabel(email: string): string {
-    const match = contacts.find((c) => c.email && c.email.toLowerCase() === email.toLowerCase());
+    const match = addressBook.find((entry) => entry.email.toLowerCase() === email.toLowerCase());
     return match ? `${match.label} (${email})` : email;
   }
 
@@ -791,12 +819,23 @@ export default function EventDialog({
             to the top color bar this replaces, just spread into a full
             colored heading instead of a thin strip. */}
         <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4" style={{ backgroundColor: color.bg, color: color.fg }}>
-          <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold">{isEdit ? labels.editTitle : labels.createTitle}</h3>
+          <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold">
+            {isDuplicate ? labels.duplicateTitle : isEdit ? labels.editTitle : labels.createTitle}
+          </h3>
           {!loading && !loadError && (
-            <div className="flex shrink-0 items-center gap-3">
+            <div className="flex shrink-0 items-center gap-1.5">
               {detail?.htmlLink && (
-                <a href={detail.htmlLink} target="_blank" rel="noopener noreferrer" className={`text-xs font-semibold underline ${headerLinkClass}`}>
-                  {labels.openInGoogleCalendar} ↗
+                <a
+                  href={detail.htmlLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={labels.openInGoogleCalendar}
+                  aria-label={labels.openInGoogleCalendar}
+                  className={`flex items-center justify-center rounded-lg p-2 ${headerLinkClass}`}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15 20 4m0 0h-5.5M20 4v5.5M13 5H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+                  </svg>
                 </a>
               )}
               {isEdit && (
@@ -804,21 +843,37 @@ export default function EventDialog({
                   type="button"
                   disabled={pending}
                   onClick={remove}
-                  className={`rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-60 ${headerBtnClass}`}
+                  title={labels.delete}
+                  aria-label={labels.delete}
+                  className={`flex items-center justify-center rounded-lg border p-2 disabled:opacity-60 ${headerBtnClass}`}
                 >
-                  {labels.delete}
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2l1-12" />
+                  </svg>
                 </button>
               )}
-              <button type="button" onClick={onClose} className={`text-sm hover:underline ${headerLinkClass}`}>
-                {labels.cancel}
+              <button
+                type="button"
+                onClick={onClose}
+                title={labels.cancel}
+                aria-label={labels.cancel}
+                className={`flex items-center justify-center rounded-lg p-2 ${headerLinkClass}`}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                  <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
+                </svg>
               </button>
               <button
                 type="button"
                 disabled={pending}
                 onClick={save}
-                className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
+                title={pending ? labels.saving : labels.save}
+                aria-label={pending ? labels.saving : labels.save}
+                className="btn-primary flex items-center justify-center rounded-lg p-2 shadow-sm disabled:opacity-60"
               >
-                {pending ? labels.saving : labels.save}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75 10 18.25 19.5 6.75" />
+                </svg>
               </button>
             </div>
           )}
@@ -1028,16 +1083,18 @@ export default function EventDialog({
                       {labels.addGuest}
                     </button>
                   </div>
-                  {filteredGuestContacts.length > 0 && (
+                  {filteredGuestEntries.length > 0 && (
                     <div className="absolute z-10 mt-1 max-h-32 w-full overflow-y-auto rounded-md border border-card-border bg-card-bg shadow-lg">
-                      {filteredGuestContacts.map((c) => (
+                      {filteredGuestEntries.map((entry) => (
                         <button
-                          key={c.id}
+                          key={entry.key}
                           type="button"
-                          onClick={() => addGuestEmail(c.email!)}
-                          className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-amo-lime/10"
+                          onClick={() => addGuestEmail(entry.email)}
+                          className="block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-amo-lime/10"
                         >
-                          {c.label}
+                          <span className="text-ink">{entry.label}</span>
+                          {entry.label && <span className="text-soft"> · </span>}
+                          <span className="text-soft">{entry.email}</span>
                         </button>
                       ))}
                     </div>

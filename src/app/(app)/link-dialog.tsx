@@ -37,6 +37,27 @@ export interface LinkValues {
   affiliateProgramId: string;
 }
 
+export interface AddressBookEntry {
+  key: string;
+  label: string;
+  email: string;
+}
+
+// Flattens Contacts/Affiliate Programs (each can have a primary email plus
+// several extra ones) into one search list for an address-book autocomplete
+// — one entry per address rather than one per contact/program, so every
+// address is individually searchable/pickable. Shared by the Email compose
+// dialog's To/Cc/Bcc fields and the Calendar event dialog's Guests field.
+export function buildAddressBook(contactOptions: LinkOption[], programOptions: LinkOption[]): AddressBookEntry[] {
+  const entries: AddressBookEntry[] = [];
+  for (const opt of [...contactOptions, ...programOptions]) {
+    for (const email of [opt.email, ...(opt.extraEmails ?? [])]) {
+      if (email) entries.push({ key: `${opt.id}:${email}`, label: opt.label, email });
+    }
+  }
+  return entries;
+}
+
 // Shared modal used by both the Email and Calendar pages to attach a
 // message/appointment to a client (searchable, since there can be
 // hundreds) and, once a client is picked, to a project of theirs, a task
