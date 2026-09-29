@@ -808,7 +808,7 @@ export default async function DashboardPage() {
           // of Weather), Sports spans the full row below them — desktop
           // keeps the original single-row Weather/News/Sports order via the
           // same named-area trick, just with all 3 areas in one row there.
-          <div className="grid grid-cols-2 items-center gap-x-1.5 gap-y-0 [grid-template-areas:'weather_news'_'sports_sports'] [grid-template-rows:auto_auto] sm:grid-cols-3 sm:[grid-template-areas:'weather_news_sports'] sm:[grid-template-rows:auto]">
+          <div className="grid items-center gap-x-1.5 gap-y-0.5 [grid-template-areas:'weather_news'_'sports_sports'] [grid-template-columns:auto_auto] [grid-template-rows:auto_auto] sm:[grid-template-areas:'weather_news_sports'] sm:[grid-template-columns:auto_auto_auto] sm:[grid-template-rows:auto]">
             {!hiddenHeaderWidgets.includes("weather") && (
               <div className="min-w-0 [grid-area:weather]">
                 <Suspense fallback={<WeatherWidgetSkeleton />}>
@@ -846,7 +846,7 @@ export default async function DashboardPage() {
           // keeps them side by side, same order, via the plain flex-col/
           // flex-row swap (no 3rd widget interleaved here, unlike the
           // Weather/News/Sports group above, so no grid-area trick needed).
-          <div className="flex min-w-0 flex-col items-end gap-0 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex min-w-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
             {!hiddenHeaderWidgets.includes("markets") && (
               <Suspense fallback={<MarketsWidgetSkeleton />}>
                 <MarketsHeaderServer

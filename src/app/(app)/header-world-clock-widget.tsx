@@ -70,9 +70,9 @@ export default function HeaderWorldClockWidget({
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1.5 rounded-lg bg-white/10 px-1.5 py-0.5 text-amo-white transition-colors hover:bg-white/15 sm:gap-3 sm:px-2.5 sm:py-1.5"
       >
-        <span className="flex items-baseline gap-1 whitespace-nowrap text-xs font-bold sm:hidden">
-          <span className="uppercase tracking-wide opacity-75">{zoneShortLabel(mobile)}</span>
-          <span className="font-display tabular-nums">{timeIn(mobile)}</span>
+        <span className="flex items-baseline gap-1 whitespace-nowrap sm:hidden">
+          <span className="text-[9px] font-bold uppercase tracking-wide opacity-75">{zoneShortLabel(mobile)}</span>
+          <span className="font-display text-xs font-bold tabular-nums">{timeIn(mobile)}</span>
         </span>
         {headerZones.map((zone) => (
           <span key={zone} className="hidden max-w-[5.5rem] min-w-0 text-center leading-tight sm:block">
