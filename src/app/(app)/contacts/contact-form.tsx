@@ -24,7 +24,7 @@ import LocalTimeCard from "@/components/local-time-card";
 import ContactCredentialsCard, { type ContactCredentialRow } from "./[id]/contact-credentials-card";
 import { CONTACT_SYNC_APPS, type ContactSyncDirection } from "@/lib/contact-sync";
 
-type ExtraAddress = {
+export type ExtraAddress = {
   description?: string | null;
   address?: string | null;
   city?: string | null;
@@ -32,9 +32,9 @@ type ExtraAddress = {
   zip?: string | null;
   country?: string | null;
 };
-type AppHandleRow = { app: string; handle: string };
+export type AppHandleRow = { app: string; handle: string };
 type FieldValueRow = { fieldSlug: string; value: string | null };
-type DomainRow = {
+export type DomainRow = {
   domain: string;
   registrar?: string | null;
   dnsProvider?: string | null;
@@ -43,7 +43,7 @@ type DomainRow = {
   managedBy?: string | null;
   notes?: string | null;
 };
-type ContactRelationRow = {
+export type ContactRelationRow = {
   relatedContactId: string;
   relationType: string;
   notes?: string | null;
@@ -120,16 +120,16 @@ type ContactFormValues = {
   fieldValues?: FieldValueRow[] | null;
 };
 
-const SOCIAL_PLATFORMS = ["Facebook", "Instagram", "LinkedIn", "TikTok", "YouTube", "X", "Website", "Other"];
+export const SOCIAL_PLATFORMS = ["Facebook", "Instagram", "LinkedIn", "TikTok", "YouTube", "X", "Website", "Other"];
 
 // Free-text suggestions for the Related Contacts "relation type" field —
 // not an enum, since the actual range of family/business relations any
 // client might have is open-ended (same reasoning as companyType/industry).
-const RELATION_TYPE_OPTIONS = ["Spouse", "Child", "Parent", "Sibling", "Business partner", "Employee", "Employer", "Referral", "Other"];
+export const RELATION_TYPE_OPTIONS = ["Spouse", "Child", "Parent", "Sibling", "Business partner", "Employee", "Employer", "Referral", "Other"];
 
-const FIELD_CLASS =
+export const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
-const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
+export const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
 
 // One accent color per card — same "solid header bar" approach as the
 // Email page's category sections, so each group of fields is visually
@@ -1191,7 +1191,7 @@ function TagCheckbox({
 // selection changes) — a real browser <select>'s own <option> list can't
 // show images, so this is as "visual" as a plain form control gets short of
 // building a whole custom listbox.
-function AppSelect({
+export function AppSelect({
   name,
   value,
   onChange,
@@ -1224,7 +1224,7 @@ function AppSelect({
 // Shared shape for the Instant messaging apps and Preferred VoIP apps
 // sections — both are an unlimited list of (app, handle) rows with a live
 // icon preview, an "add" button, and a remove button per row.
-function AppHandleListBody({
+export function AppHandleListBody({
   addLabel,
   handlePlaceholder,
   appFieldName,
@@ -1279,7 +1279,7 @@ function AppHandleListBody({
   );
 }
 
-function AppHandleList(
+export function AppHandleList(
   props: Parameters<typeof AppHandleListBody>[0] & { title: string }
 ) {
   const { title, ...rest } = props;
@@ -1293,7 +1293,7 @@ function AppHandleList(
   );
 }
 
-function AddressGroup({
+export function AddressGroup({
   title,
   prefix,
   t,
@@ -1409,10 +1409,10 @@ function AddressGroup({
   );
 }
 
-const TABLE_INPUT_CLASS =
+export const TABLE_INPUT_CLASS =
   "w-full rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 
-function TechStackRow({
+export function TechStackRow({
   label,
   prefix,
   values,
@@ -1442,7 +1442,7 @@ function TechStackRow({
   );
 }
 
-function Field({
+export function Field({
   label,
   name,
   type = "text",

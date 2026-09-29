@@ -42,7 +42,6 @@ export async function addContactCredential(
   );
 
   revalidatePath(`/contacts/${contactId}`);
-  revalidatePath(`/contacts/${contactId}/edit`);
   return { success: t.contactCredentials.saved };
 }
 
@@ -50,7 +49,6 @@ export async function deleteContactCredential(contactId: string, id: string): Pr
   await requireAdmin();
   await withScopedPrismaClient((db) => db.contactCredential.delete({ where: { id } }));
   revalidatePath(`/contacts/${contactId}`);
-  revalidatePath(`/contacts/${contactId}/edit`);
 }
 
 // Decrypts on demand rather than shipping every entry's plaintext to the
