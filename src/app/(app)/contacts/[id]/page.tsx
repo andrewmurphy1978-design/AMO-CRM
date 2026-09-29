@@ -638,9 +638,9 @@ export default async function ContactDetailPage({
               </div>
               <TagManager contactId={contact.id} tags={contact.tags.map((ct) => ct.tag)} allTags={allTags} lang={lang} />
 
-              {/* Row 4 — Services required / Project goal stack below Website,
-                  to the left of the picture as requested. */}
-              <div className="space-y-3">
+              {/* Row 4 — Services required / Project goal sit side by side
+                  below Website, to the left of the picture as requested. */}
+              <div className="space-y-2">
                 <InfoField
                   label={t.contactForm.website}
                   value={
@@ -651,8 +651,10 @@ export default async function ContactDetailPage({
                     ) : undefined
                   }
                 />
-                <InfoField label={t.contactDetail.servicesRequiredLabel} value={servicesRequiredValue} />
-                <InfoField label={t.contactDetail.projectGoalLabel} value={projectGoalValue} />
+                <div className="grid grid-cols-2 gap-2">
+                  <InfoField label={t.contactDetail.servicesRequiredLabel} value={servicesRequiredValue} />
+                  <InfoField label={t.contactDetail.projectGoalLabel} value={projectGoalValue} />
+                </div>
               </div>
               <InfoField label={t.contactForm.nickname} value={contact.nickname} />
               <InfoField label={t.contactForm.birthday} value={birthdayLine} />
