@@ -24,6 +24,7 @@ import {
   readTechStackItems,
   readDomainItems,
   readContactRelations,
+  reciprocalRelationType,
   readAppSyncSettings,
   buildCustomFieldEditOps,
 } from "@/lib/contact-form-fields";
@@ -432,10 +433,43 @@ export async function updateContactRelations(
 
   const result = await withScopedPrismaClient(async (db) => {
     const relations = readContactRelations(formData);
+
+    const previous = await db.contactRelation.findMany({ where: { contactId }, select: { relatedContactId: true } });
+    const newRelatedIds = new Set(relations.map((r) => r.relatedContactId));
+    const droppedRelatedIds = previous.map((r) => r.relatedContactId).filter((id) => !newRelatedIds.has(id));
+
     await db.$transaction([
       db.contactRelation.deleteMany({ where: { contactId } }),
       ...(relations.length > 0 ? [db.contactRelation.createMany({ data: relations.map((row) => ({ ...row, contactId })) })] : []),
+      // Drop the reciprocal row this contact no longer links to, so
+      // removing a relation here doesn't leave a stale mirror behind on
+      // the other contact's own Related Contacts list.
+      ...(droppedRelatedIds.length > 0
+        ? [db.contactRelation.deleteMany({ where: { contactId: { in: droppedRelatedIds }, relatedContactId: contactId } })]
+        : []),
     ]);
+
+    // Mirror each relation onto the other contact with its reciprocal type
+    // (e.g. "Wife" here becomes "Husband" there) so each contact's own
+    // Related Contacts list reads correctly from its own perspective
+    // instead of the same one-sided label showing on both — see
+    // reciprocalRelationType's own comment for the (best-effort) mapping.
+    for (const row of relations) {
+      const reciprocalType = reciprocalRelationType(row.relationType);
+      const existingMirror = await db.contactRelation.findFirst({
+        where: { contactId: row.relatedContactId, relatedContactId: contactId },
+      });
+      if (existingMirror) {
+        if (existingMirror.relationType !== reciprocalType) {
+          await db.contactRelation.update({ where: { id: existingMirror.id }, data: { relationType: reciprocalType } });
+        }
+      } else {
+        await db.contactRelation.create({
+          data: { contactId: row.relatedContactId, relatedContactId: contactId, relationType: reciprocalType },
+        });
+      }
+    }
+
     const updated = await db.contact.findUniqueOrThrow({ where: { id: contactId } });
     const appSyncRows = await currentAppSyncRows(db, contactId);
     const syncStatus = await applyContactExternalSyncs(db, session, updated, appSyncRows, t);

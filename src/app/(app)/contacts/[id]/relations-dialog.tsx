@@ -2,11 +2,22 @@
 
 import { useMemo, useRef, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { FIELD_CLASS, RELATION_TYPE_OPTIONS, type ContactRelationRow, type RelatableContact } from "../contact-form";
+import { FIELD_CLASS, type ContactRelationRow, type RelatableContact } from "../contact-form";
+import { FAMILY_RELATION_OPTIONS, PROFESSIONAL_RELATION_OPTIONS } from "@/lib/contact-form-fields";
 import SectionDialog, { EditCardButton } from "./section-dialog";
+import { CARD_COLORS } from "@/components/section-card";
 
 function contactLabel(c: RelatableContact) {
   return [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || c.id;
+}
+
+// Purely a client-side UI grouping for the Relation datalist below — not
+// persisted (the DB only ever stores the free-text relationType) — so an
+// existing relation's category is inferred from which list its value
+// happens to match, defaulting to Personal for custom text.
+type RelationCategory = "personal" | "professional";
+function categoryFor(relationType: string): RelationCategory {
+  return PROFESSIONAL_RELATION_OPTIONS.includes(relationType) ? "professional" : "personal";
 }
 
 export default function RelationsDialog({
@@ -22,7 +33,9 @@ export default function RelationsDialog({
 }) {
   const t = getDict(lang);
   const [open, setOpen] = useState(false);
-  const [relations, setRelations] = useState(() => initialRelations.map((row, id) => ({ id, search: "", ...row })));
+  const [relations, setRelations] = useState(() =>
+    initialRelations.map((row, id) => ({ id, search: "", category: categoryFor(row.relationType), ...row }))
+  );
   const nextId = useRef(relations.length);
 
   function updateRow(id: number, patch: Partial<(typeof relations)[number]>) {
@@ -32,19 +45,44 @@ export default function RelationsDialog({
   return (
     <>
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
-    <SectionDialog open={open} onOpenChange={setOpen} title={t.contactForm.cardRelatedContacts} action={action} labels={t.phaseDialog} wide>
-      <div className="space-y-1.5">
+    <SectionDialog
+      open={open}
+      onOpenChange={setOpen}
+      title={t.contactForm.cardRelatedContacts}
+      action={action}
+      labels={t.phaseDialog}
+      wide
+      headerColorClassName={CARD_COLORS.relations}
+    >
+      <div className="space-y-2">
         {relations.map((row) => (
-          <RelationRow key={row.id} row={row} allContacts={allContacts} t={t} onChange={(patch) => updateRow(row.id, patch)} onRemove={() => setRelations((rows) => rows.filter((r) => r.id !== row.id))} />
+          <RelationRow
+            key={row.id}
+            row={row}
+            allContacts={allContacts}
+            t={t}
+            onChange={(patch) => updateRow(row.id, patch)}
+            onRemove={() => setRelations((rows) => rows.filter((r) => r.id !== row.id))}
+          />
         ))}
-        <datalist id="relationTypeOptions">
-          {RELATION_TYPE_OPTIONS.map((option) => (
+        <datalist id="relationOptionsPersonal">
+          {FAMILY_RELATION_OPTIONS.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+        <datalist id="relationOptionsProfessional">
+          {PROFESSIONAL_RELATION_OPTIONS.map((option) => (
             <option key={option} value={option} />
           ))}
         </datalist>
         <button
           type="button"
-          onClick={() => setRelations((rows) => [...rows, { id: nextId.current++, relatedContactId: "", relationType: "Other", notes: "", search: "" }])}
+          onClick={() =>
+            setRelations((rows) => [
+              ...rows,
+              { id: nextId.current++, relatedContactId: "", relationType: "Other", notes: "", search: "", category: "personal" },
+            ])
+          }
           className="text-xs font-semibold text-amo-lime hover:underline"
         >
           + {t.contactForm.addRelatedContact}
@@ -63,10 +101,10 @@ function RelationRow({
   onChange,
   onRemove,
 }: {
-  row: { id: number; relatedContactId: string; relationType: string; notes?: string | null; search: string };
+  row: { id: number; relatedContactId: string; relationType: string; notes?: string | null; search: string; category: RelationCategory };
   allContacts: RelatableContact[];
   t: ReturnType<typeof getDict>;
-  onChange: (patch: Partial<{ relatedContactId: string; relationType: string; notes: string; search: string }>) => void;
+  onChange: (patch: Partial<{ relatedContactId: string; relationType: string; notes: string; search: string; category: RelationCategory }>) => void;
   onRemove: () => void;
 }) {
   const selected = row.relatedContactId ? allContacts.find((c) => c.id === row.relatedContactId) ?? null : null;
@@ -77,67 +115,79 @@ function RelationRow({
   }, [allContacts, query]);
 
   return (
-    <div className="flex flex-wrap items-start gap-1.5">
-      <div className="w-full sm:w-56">
-        <input type="hidden" name="relationContactId" value={row.relatedContactId} readOnly />
-        {selected ? (
-          <div className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink">
-            <span className="truncate">{contactLabel(selected)}</span>
-            <button type="button" onClick={() => onChange({ relatedContactId: "" })} className="ml-2 shrink-0 text-xs text-soft hover:underline">
-              {t.linkPicker.clear}
-            </button>
-          </div>
-        ) : (
-          <>
-            <input
-              type="text"
-              value={row.search}
-              onChange={(e) => onChange({ search: e.target.value })}
-              placeholder={t.linkPicker.searchPlaceholder}
-              className={`${FIELD_CLASS} mt-0`}
-            />
-            {query && (
-              <div className="mt-1 max-h-40 overflow-y-auto rounded-md border border-card-border">
-                {filtered.length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-soft">{t.linkPicker.noResults}</p>
-                ) : (
-                  filtered.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => onChange({ relatedContactId: c.id, search: "" })}
-                      className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-amo-lime/10"
-                    >
-                      {contactLabel(c)}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </>
-        )}
+    <div className="rounded-lg border border-card-border p-2.5">
+      <div className="flex flex-wrap items-start gap-1.5">
+        <div className="w-full sm:w-56">
+          <input type="hidden" name="relationContactId" value={row.relatedContactId} readOnly />
+          {selected ? (
+            <div className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink">
+              <span className="truncate">{contactLabel(selected)}</span>
+              <button type="button" onClick={() => onChange({ relatedContactId: "" })} className="ml-2 shrink-0 text-xs text-soft hover:underline">
+                {t.linkPicker.clear}
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                type="text"
+                value={row.search}
+                onChange={(e) => onChange({ search: e.target.value })}
+                placeholder={t.linkPicker.searchPlaceholder}
+                className={`${FIELD_CLASS} mt-0`}
+              />
+              {query && (
+                <div className="mt-1 max-h-40 overflow-y-auto rounded-md border border-card-border">
+                  {filtered.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-soft">{t.linkPicker.noResults}</p>
+                  ) : (
+                    filtered.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => onChange({ relatedContactId: c.id, search: "" })}
+                        className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-amo-lime/10"
+                      >
+                        {contactLabel(c)}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+        <select
+          value={row.category}
+          onChange={(e) => onChange({ category: e.target.value as RelationCategory })}
+          aria-label={t.contactForm.relationCategoryLabel}
+          className={`${FIELD_CLASS} mt-0 w-36`}
+        >
+          <option value="personal">{t.contactForm.relationCategoryPersonal}</option>
+          <option value="professional">{t.contactForm.relationCategoryProfessional}</option>
+        </select>
+        <input
+          name="relationType"
+          value={row.relationType}
+          onChange={(e) => onChange({ relationType: e.target.value })}
+          list={row.category === "professional" ? "relationOptionsProfessional" : "relationOptionsPersonal"}
+          placeholder={t.contactForm.relationTypePlaceholder}
+          className={`${FIELD_CLASS} mt-0 flex-1`}
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+          aria-label={t.contactForm.removeEntry}
+        >
+          ✕
+        </button>
       </div>
       <input
         name="relationNotes"
         defaultValue={row.notes ?? ""}
         placeholder={t.contactForm.notes}
-        className={`${FIELD_CLASS} mt-0 flex-1`}
+        className={`${FIELD_CLASS} mt-1.5 w-full`}
       />
-      <input
-        name="relationType"
-        defaultValue={row.relationType}
-        list="relationTypeOptions"
-        placeholder={t.contactForm.relationTypePlaceholder}
-        className={`${FIELD_CLASS} mt-0 w-40`}
-      />
-      <button
-        type="button"
-        onClick={onRemove}
-        className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
-        aria-label={t.contactForm.removeEntry}
-      >
-        ✕
-      </button>
     </div>
   );
 }

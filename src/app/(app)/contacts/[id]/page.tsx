@@ -27,6 +27,7 @@ import LinkedEmailsList from "../../linked-emails-list";
 import ContactCredentialsCard from "./contact-credentials-card";
 import ContactEmailLinks from "./contact-email-links";
 import { CONTACT_SYNC_APPS } from "@/lib/contact-sync";
+import { reciprocalRelationType } from "@/lib/contact-form-fields";
 import { telHref, messagingAppLink, voipAppLink } from "@/lib/app-deep-links";
 import { formatBirthday } from "@/lib/birthday";
 import { initialsFor } from "@/lib/avatar";
@@ -440,24 +441,38 @@ export default async function ContactDetailPage({
     notes: c.notes,
   }));
 
-  // Combined both directions — a relation is stored once, from whichever
-  // contact's form it was added on (see the ContactRelation model comment
-  // in schema.prisma), so this contact's Info page has to look both ways
-  // to show every link it's actually part of.
-  const relatedContactRows = [
+  // updateContactRelations now mirrors every relation onto the other
+  // contact with its reciprocal type (see reciprocalRelationType) — so
+  // relationsFrom alone already covers every relationship this contact
+  // saved from its own side, with the label reading correctly as-is.
+  // relationsTo is still consulted as a fallback for relations that
+  // predate that mirroring (or haven't been re-saved since), with the
+  // label computed as its reciprocal since that row's own relationType
+  // describes this contact, not the other one — then de-duped by other
+  // contact so a fully-mirrored pair (now covered by relationsFrom) never
+  // lists the same person twice.
+  const relatedContactRowsRaw = [
     ...contact.relationsFrom.map((r) => ({
       id: r.id,
+      otherId: r.relatedContactId,
       relationType: r.relationType,
       notes: r.notes,
       other: r.relatedContact,
     })),
     ...contact.relationsTo.map((r) => ({
       id: r.id,
-      relationType: r.relationType,
+      otherId: r.contactId,
+      relationType: reciprocalRelationType(r.relationType),
       notes: r.notes,
       other: r.contact,
     })),
   ];
+  const seenRelatedOtherIds = new Set<string>();
+  const relatedContactRows = relatedContactRowsRaw.filter((row) => {
+    if (seenRelatedOtherIds.has(row.otherId)) return false;
+    seenRelatedOtherIds.add(row.otherId);
+    return true;
+  });
 
   const otherContactsForRelations = allContactsForRelations.filter((c) => c.id !== contact.id);
 

@@ -327,6 +327,100 @@ export function readContactRelations(formData: FormData) {
   return rows;
 }
 
+// Suggestions for the Related Contacts "Relation" field, grouped by the
+// "Type of relationship" selector shown beside it — still free text (a
+// <datalist>, not an enum) since real relationships always outrun any
+// fixed list.
+export const FAMILY_RELATION_OPTIONS = [
+  "Wife",
+  "Husband",
+  "Partner",
+  "Mother",
+  "Father",
+  "Parent",
+  "Sister",
+  "Brother",
+  "Sibling",
+  "Daughter",
+  "Son",
+  "Child",
+  "Grandmother",
+  "Grandfather",
+  "Grandparent",
+  "Grandchild",
+  "Cousin",
+  "Sister-in-law",
+  "Brother-in-law",
+  "Friend",
+];
+export const PROFESSIONAL_RELATION_OPTIONS = [
+  "Employee",
+  "Employer",
+  "Manager",
+  "President",
+  "Vice-President",
+  "Business partner",
+  "Colleague",
+  "Lawyer",
+  "Accountant",
+  "Financial Advisor",
+  "Consultant",
+  "Contractor",
+  "Client",
+  "Supplier",
+];
+
+// The mirrored relation created/updated on the OTHER contact whenever a
+// relation is saved (see updateContactRelations) — so "Wife" on this
+// contact's page automatically shows up as "Husband" on the other
+// contact's own page, each reading correctly from that contact's own
+// perspective, instead of the same one-sided label appearing on both.
+// Best-effort: reciprocals that actually depend on the other person's
+// gender (Mother/Father, Son/Daughter, the in-laws, ...) fall back to a
+// neutral term (Child, Parent, Sibling-in-law...) rather than guessing
+// wrong — the saved contact can always correct it afterward. Anything not
+// listed here (including custom free text) mirrors back as itself.
+const RELATION_RECIPROCALS: Record<string, string> = {
+  Wife: "Husband",
+  Husband: "Wife",
+  Partner: "Partner",
+  Mother: "Child",
+  Father: "Child",
+  Parent: "Child",
+  Child: "Parent",
+  Son: "Parent",
+  Daughter: "Parent",
+  Sister: "Sibling",
+  Brother: "Sibling",
+  Sibling: "Sibling",
+  Grandmother: "Grandchild",
+  Grandfather: "Grandchild",
+  Grandparent: "Grandchild",
+  Grandchild: "Grandparent",
+  Cousin: "Cousin",
+  "Sister-in-law": "Brother-in-law",
+  "Brother-in-law": "Sister-in-law",
+  Friend: "Friend",
+  Employee: "Employer",
+  Employer: "Employee",
+  Manager: "Employee",
+  President: "Employee",
+  "Vice-President": "Employee",
+  "Business partner": "Business partner",
+  Colleague: "Colleague",
+  Lawyer: "Client",
+  Accountant: "Client",
+  "Financial Advisor": "Client",
+  Consultant: "Client",
+  Contractor: "Client",
+  Client: "Supplier",
+  Supplier: "Client",
+};
+
+export function reciprocalRelationType(relationType: string): string {
+  return RELATION_RECIPROCALS[relationType] ?? relationType;
+}
+
 // One enabled checkbox + one direction <select> per entry in
 // CONTACT_SYNC_APPS (see src/lib/contact-sync.ts) — always submitted for
 // every known app regardless of whether this contact has ever synced with

@@ -9,9 +9,52 @@ import { CARD_COLORS } from "@/components/section-card";
 // A desktop "table" built from grid instead of an actual <table>, so the
 // same markup can restack to full-width labeled fields on mobile instead of
 // forcing a fixed-width table to scroll horizontally (same pattern as
-// tech-stack-dialog.tsx). Domain/Notes get more room than the shorter
-// fields since that's where the longest values actually land.
-const GRID_COLS = "lg:grid-cols-[1.7fr_1fr_1fr_0.9fr_0.8fr_1.4fr_1.3fr_auto]";
+// tech-stack-dialog.tsx). Domain/Registrar/DNS Provider get the most room
+// since that's where the longest values land.
+const GRID_COLS = "lg:grid-cols-[2fr_1.4fr_1.4fr_0.9fr_0.8fr_1.3fr_1.1fr_auto]";
+
+// Suggestions for the Registrar/DNS Provider fields — plain <input>s with a
+// <datalist> rather than a <select>, since a client's actual registrar/DNS
+// host is very often something not on any fixed list (a reseller, a niche
+// host, etc) and free text must always stay possible.
+const COMMON_REGISTRARS = [
+  "GoDaddy",
+  "Namecheap",
+  "IONOS",
+  "Google Domains",
+  "Cloudflare Registrar",
+  "Network Solutions",
+  "Bluehost",
+  "Hover",
+  "Domain.com",
+  "OVHcloud",
+  "Gandi",
+  "Squarespace Domains",
+  "Wix",
+  "1&1",
+  "Dynadot",
+  "Porkbun",
+  "Name.com",
+  "Tucows",
+];
+const COMMON_DNS_PROVIDERS = [
+  "Cloudflare",
+  "GoDaddy",
+  "IONOS",
+  "Amazon Route 53",
+  "Google Cloud DNS",
+  "Namecheap",
+  "DNS Made Easy",
+  "NS1",
+  "Azure DNS",
+  "OVHcloud",
+  "DigitalOcean",
+  "Vercel",
+  "Netlify",
+  "Squarespace",
+  "Hurricane Electric",
+  "No-IP",
+];
 
 export default function DomainsDialog({
   action,
@@ -50,14 +93,18 @@ export default function DomainsDialog({
       headerColorClassName={CARD_COLORS.domains}
     >
       <div className="divide-y divide-card-border rounded-lg border border-card-border">
-        <div className={`hidden border-b border-card-border bg-black/[0.02] px-3 py-2 text-left text-xs uppercase tracking-wide text-soft lg:grid lg:gap-2 ${GRID_COLS}`}>
-          <span>{t.contactForm.domain}</span>
-          <span>{t.contactForm.registrar}</span>
-          <span>{t.contactForm.dnsProvider}</span>
-          <span>{t.contactForm.expiryDate}</span>
-          <span>{t.contactForm.autoRenew}</span>
-          <span>{t.contactForm.managedBy}</span>
-          <span>{t.contactForm.notes}</span>
+        <div className={`hidden border-b border-card-border bg-black/[0.02] py-2 text-left text-xs uppercase tracking-wide text-soft lg:grid lg:gap-2 ${GRID_COLS}`}>
+          {/* pl-3 (not the row's own px-3) lines each label up with the text
+              inside the input box below it, which is itself indented by the
+              input's own px-3 padding — aligning to the box edge instead
+              would leave the label looking shifted left of its field. */}
+          <span className="pl-3">{t.contactForm.domain}</span>
+          <span className="pl-3">{t.contactForm.registrar}</span>
+          <span className="pl-3">{t.contactForm.dnsProvider}</span>
+          <span className="pl-3">{t.contactForm.expiryDate}</span>
+          <span className="pl-3">{t.contactForm.autoRenew}</span>
+          <span className="pl-3">{t.contactForm.managedBy}</span>
+          <span className="pl-3">{t.contactForm.notes}</span>
           <span></span>
         </div>
         {domains.map((row) => (
@@ -68,11 +115,21 @@ export default function DomainsDialog({
             </div>
             <div>
               <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.registrar}</label>
-              <input name="domainRegistrar" defaultValue={row.registrar ?? ""} className={`${FIELD_CLASS} lg:mt-0`} />
+              <input
+                name="domainRegistrar"
+                list="domainRegistrarOptions"
+                defaultValue={row.registrar ?? ""}
+                className={`${FIELD_CLASS} lg:mt-0`}
+              />
             </div>
             <div>
               <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.dnsProvider}</label>
-              <input name="domainDnsProvider" defaultValue={row.dnsProvider ?? ""} className={`${FIELD_CLASS} lg:mt-0`} />
+              <input
+                name="domainDnsProvider"
+                list="domainDnsProviderOptions"
+                defaultValue={row.dnsProvider ?? ""}
+                className={`${FIELD_CLASS} lg:mt-0`}
+              />
             </div>
             <div>
               <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.expiryDate}</label>
@@ -114,6 +171,16 @@ export default function DomainsDialog({
           </div>
         ))}
       </div>
+      <datalist id="domainRegistrarOptions">
+        {COMMON_REGISTRARS.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+      <datalist id="domainDnsProviderOptions">
+        {COMMON_DNS_PROVIDERS.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
       <button
         type="button"
         onClick={() =>
