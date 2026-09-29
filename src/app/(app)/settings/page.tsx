@@ -36,6 +36,10 @@ import {
   effectiveSportsLeague,
   effectiveSportsTeamNhl,
   effectiveSportsTeamMlb,
+  effectiveSportsTeamNfl,
+  effectiveSportsTeamCfl,
+  effectiveSportsTeamMls,
+  effectiveSportsTeamNba,
   effectiveSportsLeagueMobile,
 } from "@/lib/dashboard-sports-picks";
 import SportsPicksForm from "./sports-picks-form";
@@ -104,6 +108,10 @@ export default async function SettingsPage({
               sportsLeague: true,
               sportsTeamNhl: true,
               sportsTeamMlb: true,
+              sportsTeamNfl: true,
+              sportsTeamCfl: true,
+              sportsTeamMls: true,
+              sportsTeamNba: true,
               sportsLeagueMobile: true,
               hiddenHeaderWidgets: true,
             },
@@ -170,6 +178,10 @@ export default async function SettingsPage({
   const sportsLeague = effectiveSportsLeague(currentUser?.sportsLeague ?? null);
   const sportsTeamNhl = effectiveSportsTeamNhl(currentUser?.sportsTeamNhl ?? null);
   const sportsTeamMlb = effectiveSportsTeamMlb(currentUser?.sportsTeamMlb ?? null);
+  const sportsTeamNfl = effectiveSportsTeamNfl(currentUser?.sportsTeamNfl ?? null);
+  const sportsTeamCfl = effectiveSportsTeamCfl(currentUser?.sportsTeamCfl ?? null);
+  const sportsTeamMls = effectiveSportsTeamMls(currentUser?.sportsTeamMls ?? null);
+  const sportsTeamNba = effectiveSportsTeamNba(currentUser?.sportsTeamNba ?? null);
   const sportsLeagueMobile = effectiveSportsLeagueMobile(currentUser?.sportsLeagueMobile ?? null, sportsLeague);
   const hiddenHeaderWidgets = effectiveHiddenHeaderWidgets(currentUser?.hiddenHeaderWidgets ?? []);
   // Set by .github/workflows/deploy.yml right before the Cloudflare build —
@@ -260,6 +272,10 @@ export default async function SettingsPage({
               initialLeague={sportsLeague}
               initialTeamNhl={sportsTeamNhl}
               initialTeamMlb={sportsTeamMlb}
+              initialTeamNfl={sportsTeamNfl}
+              initialTeamCfl={sportsTeamCfl}
+              initialTeamMls={sportsTeamMls}
+              initialTeamNba={sportsTeamNba}
               initialLeagueMobile={sportsLeagueMobile}
             />
           </SettingsCard>

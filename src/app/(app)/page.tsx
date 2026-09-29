@@ -205,6 +205,10 @@ export default async function DashboardPage() {
     sportsLeague,
     sportsTeamNhl,
     sportsTeamMlb,
+    sportsTeamNfl,
+    sportsTeamCfl,
+    sportsTeamMls,
+    sportsTeamNba,
     sportsLeagueMobile,
     hiddenHeaderWidgets,
     emailInitialData,
@@ -305,6 +309,10 @@ export default async function DashboardPage() {
       league: sportsLeague,
       teamNhl: sportsTeamNhl,
       teamMlb: sportsTeamMlb,
+      teamNfl: sportsTeamNfl,
+      teamCfl: sportsTeamCfl,
+      teamMls: sportsTeamMls,
+      teamNba: sportsTeamNba,
       leagueMobile: sportsLeagueMobile,
     } = await getUserSportsPicks(session, db);
     const hiddenHeaderWidgets = await getUserHiddenHeaderWidgets(session, db);
@@ -426,6 +434,10 @@ export default async function DashboardPage() {
       sportsLeague,
       sportsTeamNhl,
       sportsTeamMlb,
+      sportsTeamNfl,
+      sportsTeamCfl,
+      sportsTeamMls,
+      sportsTeamNba,
       sportsLeagueMobile,
       hiddenHeaderWidgets,
       emailInitialData,
@@ -998,8 +1010,14 @@ export default async function DashboardPage() {
                 <Suspense fallback={<SportsWidgetSkeleton />}>
                   <SportsHeaderServer
                     league={sportsLeague}
-                    teamNhl={sportsTeamNhl}
-                    teamMlb={sportsTeamMlb}
+                    teams={{
+                      nhl: sportsTeamNhl,
+                      mlb: sportsTeamMlb,
+                      nfl: sportsTeamNfl,
+                      cfl: sportsTeamCfl,
+                      mls: sportsTeamMls,
+                      nba: sportsTeamNba,
+                    }}
                     leagueMobile={sportsLeagueMobile}
                     lang={lang}
                     hour12={hour12}

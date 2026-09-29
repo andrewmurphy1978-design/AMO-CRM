@@ -7,6 +7,7 @@ import type { Lang } from "@/lib/i18n/dictionaries";
 import type {
   NhlSnapshot,
   MlbSnapshot,
+  TeamSnapshot,
   SportsTeamGame,
   MlbSeriesGame,
 } from "@/lib/sports";
@@ -28,7 +29,11 @@ export interface SportsLabels {
 
 export type SportsCardSnapshot =
   | { league: "NHL"; nhl: NhlSnapshot }
-  | { league: "MLB"; mlb: MlbSnapshot };
+  | { league: "MLB"; mlb: MlbSnapshot }
+  | { league: "NFL"; nfl: TeamSnapshot }
+  | { league: "CFL"; cfl: TeamSnapshot }
+  | { league: "MLS"; mls: TeamSnapshot }
+  | { league: "NBA"; nba: TeamSnapshot };
 
 // The current team's own accent — used to make its row/score stand out in
 // a postseason series list.
@@ -193,10 +198,23 @@ export default function SportsCard({
     }
   }
 
-  const nhl = snapshot?.league === "NHL" ? snapshot.nhl : null;
+  // NHL/NFL/CFL/MLS/NBA all render the same simple last-game/next-game way
+  // (no postseason-series special case like MLB gets below).
+  const simple: TeamSnapshot | null =
+    snapshot?.league === "NHL"
+      ? snapshot.nhl
+      : snapshot?.league === "NFL"
+        ? snapshot.nfl
+        : snapshot?.league === "CFL"
+          ? snapshot.cfl
+          : snapshot?.league === "MLS"
+            ? snapshot.mls
+            : snapshot?.league === "NBA"
+              ? snapshot.nba
+              : null;
   const mlb = snapshot?.league === "MLB" ? snapshot.mlb : null;
   const hasData = Boolean(
-    nhl ? nhl.lastGame || nhl.nextGame : mlb ? mlb.seriesGames.length || mlb.lastGame || mlb.nextGame : false,
+    simple ? simple.lastGame || simple.nextGame : mlb ? mlb.seriesGames.length || mlb.lastGame || mlb.nextGame : false,
   );
 
   return (
@@ -209,25 +227,25 @@ export default function SportsCard({
 
       {!hasData ? (
         <p className="mt-1.5 sm:mt-3 text-sm text-soft">{labels.unavailable}</p>
-      ) : nhl ? (
+      ) : simple ? (
         <div className="mt-1.5 sm:mt-3 grid grid-cols-2 gap-3">
-          {nhl.lastGame && (
+          {simple.lastGame && (
             <TeamGameRow
               label={labels.lastGame}
-              game={nhl.lastGame}
-              teamName={nhl.teamName}
-              teamLogo={nhl.teamLogo}
+              game={simple.lastGame}
+              teamName={simple.teamName}
+              teamLogo={simple.teamLogo}
               hour12={hour12}
               dateLocale={dateLocale}
               labels={labels}
             />
           )}
-          {nhl.nextGame && (
+          {simple.nextGame && (
             <TeamGameRow
               label={labels.nextGame}
-              game={nhl.nextGame}
-              teamName={nhl.teamName}
-              teamLogo={nhl.teamLogo}
+              game={simple.nextGame}
+              teamName={simple.teamName}
+              teamLogo={simple.teamLogo}
               hour12={hour12}
               dateLocale={dateLocale}
               labels={labels}

@@ -332,3 +332,274 @@ export async function getMlbSnapshot(teamId: number = DEFAULT_MLB_TEAM_ID): Prom
     errors,
   };
 }
+
+// NFL/CFL/MLS/NBA all share the same last-game/next-game shape NHL already
+// uses (no postseason-series special case like MLB) and all sit on ESPN's
+// own public "site.api" — an undocumented but, like the NHL/MLB APIs above,
+// widely relied-on endpoint (`site.api.espn.com/apis/site/v2/sports/
+// {sport}/{league}/teams/{abbrev}/schedule`) rather than four more bespoke
+// per-league clients. This session's network egress can't reach it either
+// to confirm the live response shape, so parsing below is defensive in the
+// same way as everything above it.
+export type TeamSnapshot = NhlSnapshot;
+
+interface RawEspnTeamRef {
+  abbreviation?: string;
+  displayName?: string;
+  logo?: string;
+}
+
+interface RawEspnCompetitor {
+  homeAway?: "home" | "away";
+  score?: { value?: number; displayValue?: string } | string | number;
+  team?: RawEspnTeamRef;
+}
+
+interface RawEspnCompetition {
+  date?: string;
+  competitors?: RawEspnCompetitor[];
+  status?: { type?: { state?: string; completed?: boolean } };
+}
+
+interface RawEspnEvent {
+  id?: string | number;
+  date?: string;
+  competitions?: RawEspnCompetition[];
+}
+
+interface RawEspnScheduleResponse {
+  events?: RawEspnEvent[];
+}
+
+function parseEspnScore(score: RawEspnCompetitor["score"]): number | null {
+  if (typeof score === "number") return score;
+  if (typeof score === "string") {
+    const n = Number(score);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (score && typeof score === "object") {
+    if (typeof score.value === "number") return score.value;
+    if (typeof score.displayValue === "string") {
+      const n = Number(score.displayValue);
+      return Number.isFinite(n) ? n : null;
+    }
+  }
+  return null;
+}
+
+function parseEspnEvent(
+  event: RawEspnEvent,
+  teamAbbrev: string,
+  teamNames: Record<string, string>,
+  fallbackLogo: (abbrev: string) => string,
+): SportsTeamGame | null {
+  const competition = event.competitions?.[0];
+  const competitors = competition?.competitors;
+  if (!competition || !competitors || competitors.length < 2) return null;
+  const mine = competitors.find((c) => c.team?.abbreviation?.toUpperCase() === teamAbbrev.toUpperCase());
+  const opponent = competitors.find((c) => c !== mine);
+  const opponentAbbrev = opponent?.team?.abbreviation?.toUpperCase();
+  if (!mine || !opponent || !opponentAbbrev) return null;
+
+  const stateRaw = competition.status?.type?.state?.toLowerCase();
+  const completed = competition.status?.type?.completed === true;
+  const status: SportsTeamGame["status"] = completed ? "final" : stateRaw === "in" ? "live" : "upcoming";
+
+  return {
+    gameId: String(event.id ?? `${event.date}-${opponentAbbrev}`),
+    date: event.date ?? competition.date ?? new Date().toISOString(),
+    opponentName: teamNames[opponentAbbrev] ?? opponent.team?.displayName ?? opponentAbbrev,
+    opponentLogo: opponent.team?.logo ?? fallbackLogo(opponentAbbrev),
+    homeAway: mine.homeAway === "home" ? "home" : "away",
+    status,
+    teamScore: parseEspnScore(mine.score),
+    opponentScore: parseEspnScore(opponent.score),
+  };
+}
+
+async function getEspnTeamSnapshot(
+  sportPath: string, // e.g. "football/nfl"
+  teamAbbrev: string, // e.g. "NE" — also lowercased for the URL's own team slug
+  teamNames: Record<string, string>,
+  fallbackLogo: (abbrev: string) => string,
+): Promise<TeamSnapshot> {
+  const errors: string[] = [];
+  let lastGame: SportsTeamGame | null = null;
+  let nextGame: SportsTeamGame | null = null;
+
+  try {
+    const res = await fetch(
+      `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamAbbrev.toLowerCase()}/schedule`,
+    );
+    if (!res.ok) {
+      errors.push(`espn(${sportPath}): HTTP ${res.status}`);
+    } else {
+      const data = (await res.json()) as RawEspnScheduleResponse;
+      const events = Array.isArray(data.events) ? data.events : [];
+      const parsed = events
+        .map((e) => parseEspnEvent(e, teamAbbrev, teamNames, fallbackLogo))
+        .filter((g): g is SportsTeamGame => g !== null);
+      const now = Date.now();
+      const past = parsed.filter((g) => g.status === "final" && new Date(g.date).getTime() <= now);
+      const future = parsed
+        .filter((g) => g.status !== "final" && new Date(g.date).getTime() >= now)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      lastGame = past.length > 0 ? past[past.length - 1] : null;
+      nextGame = future.length > 0 ? future[0] : null;
+    }
+  } catch (error) {
+    errors.push(`espn(${sportPath}): ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return {
+    teamName: teamNames[teamAbbrev] ?? teamAbbrev,
+    teamLogo: fallbackLogo(teamAbbrev),
+    lastGame,
+    nextGame,
+    errors,
+  };
+}
+
+// ESPN's own team-logo CDN follows this pattern for every sport it covers —
+// used only as a fallback since the schedule response above usually already
+// embeds each competitor's own `team.logo` URL directly.
+function espnLogoUrl(spritePath: string, abbrev: string): string {
+  return `https://a.espncdn.com/i/teamlogos/${spritePath}/500/${abbrev.toLowerCase()}.png`;
+}
+
+const DEFAULT_NFL_TEAM = "NE"; // New England Patriots — closest NFL market to Quebec
+
+export const NFL_TEAM_NAMES: Record<string, string> = {
+  ARI: "Arizona Cardinals",
+  ATL: "Atlanta Falcons",
+  BAL: "Baltimore Ravens",
+  BUF: "Buffalo Bills",
+  CAR: "Carolina Panthers",
+  CHI: "Chicago Bears",
+  CIN: "Cincinnati Bengals",
+  CLE: "Cleveland Browns",
+  DAL: "Dallas Cowboys",
+  DEN: "Denver Broncos",
+  DET: "Detroit Lions",
+  GB: "Green Bay Packers",
+  HOU: "Houston Texans",
+  IND: "Indianapolis Colts",
+  JAX: "Jacksonville Jaguars",
+  KC: "Kansas City Chiefs",
+  LV: "Las Vegas Raiders",
+  LAC: "Los Angeles Chargers",
+  LAR: "Los Angeles Rams",
+  MIA: "Miami Dolphins",
+  MIN: "Minnesota Vikings",
+  NE: "New England Patriots",
+  NO: "New Orleans Saints",
+  NYG: "New York Giants",
+  NYJ: "New York Jets",
+  PHI: "Philadelphia Eagles",
+  PIT: "Pittsburgh Steelers",
+  SF: "San Francisco 49ers",
+  SEA: "Seattle Seahawks",
+  TB: "Tampa Bay Buccaneers",
+  TEN: "Tennessee Titans",
+  WSH: "Washington Commanders",
+};
+
+export async function getNflSnapshot(teamAbbrev: string = DEFAULT_NFL_TEAM): Promise<TeamSnapshot> {
+  return getEspnTeamSnapshot("football/nfl", teamAbbrev, NFL_TEAM_NAMES, (a) => espnLogoUrl("nfl", a));
+}
+
+const DEFAULT_CFL_TEAM = "MTL"; // Montreal Alouettes
+
+export const CFL_TEAM_NAMES: Record<string, string> = {
+  BC: "BC Lions",
+  CGY: "Calgary Stampeders",
+  EDM: "Edmonton Elks",
+  HAM: "Hamilton Tiger-Cats",
+  MTL: "Montreal Alouettes",
+  OTT: "Ottawa Redblacks",
+  SSK: "Saskatchewan Roughriders",
+  TOR: "Toronto Argonauts",
+  WPG: "Winnipeg Blue Bombers",
+};
+
+export async function getCflSnapshot(teamAbbrev: string = DEFAULT_CFL_TEAM): Promise<TeamSnapshot> {
+  return getEspnTeamSnapshot("football/cfl", teamAbbrev, CFL_TEAM_NAMES, (a) => espnLogoUrl("cfl", a));
+}
+
+const DEFAULT_MLS_TEAM = "MTL"; // CF Montréal
+
+export const MLS_TEAM_NAMES: Record<string, string> = {
+  ATL: "Atlanta United FC",
+  ATX: "Austin FC",
+  CLT: "Charlotte FC",
+  CHI: "Chicago Fire FC",
+  CIN: "FC Cincinnati",
+  COL: "Colorado Rapids",
+  CLB: "Columbus Crew",
+  DC: "D.C. United",
+  DAL: "FC Dallas",
+  HOU: "Houston Dynamo FC",
+  SKC: "Sporting Kansas City",
+  LA: "LA Galaxy",
+  LAFC: "Los Angeles FC",
+  MIA: "Inter Miami CF",
+  MIN: "Minnesota United FC",
+  MTL: "CF Montréal",
+  NSH: "Nashville SC",
+  NE: "New England Revolution",
+  NYC: "New York City FC",
+  NY: "New York Red Bulls",
+  ORL: "Orlando City SC",
+  PHI: "Philadelphia Union",
+  POR: "Portland Timbers",
+  RSL: "Real Salt Lake",
+  SD: "San Diego FC",
+  SJ: "San Jose Earthquakes",
+  SEA: "Seattle Sounders FC",
+  STL: "St. Louis City SC",
+  TOR: "Toronto FC",
+  VAN: "Vancouver Whitecaps FC",
+};
+
+export async function getMlsSnapshot(teamAbbrev: string = DEFAULT_MLS_TEAM): Promise<TeamSnapshot> {
+  return getEspnTeamSnapshot("soccer/usa.1", teamAbbrev, MLS_TEAM_NAMES, (a) => espnLogoUrl("soccer", a));
+}
+
+const DEFAULT_NBA_TEAM = "TOR"; // Toronto Raptors — only Canadian NBA team
+
+export const NBA_TEAM_NAMES: Record<string, string> = {
+  ATL: "Atlanta Hawks",
+  BOS: "Boston Celtics",
+  BKN: "Brooklyn Nets",
+  CHA: "Charlotte Hornets",
+  CHI: "Chicago Bulls",
+  CLE: "Cleveland Cavaliers",
+  DAL: "Dallas Mavericks",
+  DEN: "Denver Nuggets",
+  DET: "Detroit Pistons",
+  GS: "Golden State Warriors",
+  HOU: "Houston Rockets",
+  IND: "Indiana Pacers",
+  LAC: "LA Clippers",
+  LAL: "Los Angeles Lakers",
+  MEM: "Memphis Grizzlies",
+  MIA: "Miami Heat",
+  MIL: "Milwaukee Bucks",
+  MIN: "Minnesota Timberwolves",
+  NO: "New Orleans Pelicans",
+  NY: "New York Knicks",
+  OKC: "Oklahoma City Thunder",
+  ORL: "Orlando Magic",
+  PHI: "Philadelphia 76ers",
+  PHX: "Phoenix Suns",
+  POR: "Portland Trail Blazers",
+  SAC: "Sacramento Kings",
+  SA: "San Antonio Spurs",
+  TOR: "Toronto Raptors",
+  UTAH: "Utah Jazz",
+  WSH: "Washington Wizards",
+};
+
+export async function getNbaSnapshot(teamAbbrev: string = DEFAULT_NBA_TEAM): Promise<TeamSnapshot> {
+  return getEspnTeamSnapshot("basketball/nba", teamAbbrev, NBA_TEAM_NAMES, (a) => espnLogoUrl("nba", a));
+}

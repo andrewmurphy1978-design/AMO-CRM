@@ -12,6 +12,10 @@ import {
   SPORTS_LEAGUE_OPTIONS,
   NHL_TEAM_OPTIONS,
   MLB_TEAM_OPTIONS,
+  NFL_TEAM_OPTIONS,
+  CFL_TEAM_OPTIONS,
+  MLS_TEAM_OPTIONS,
+  NBA_TEAM_OPTIONS,
 } from "@/lib/dashboard-sports-picks";
 import { HEADER_WIDGET_KEYS } from "@/lib/dashboard-header-widgets";
 
@@ -326,13 +330,24 @@ export async function saveSportsSettings(
   const league = String(formData.get("sportsLeague") ?? "");
   const teamNhl = String(formData.get("sportsTeamNhl") ?? "");
   const teamMlb = String(formData.get("sportsTeamMlb") ?? "");
+  const teamNfl = String(formData.get("sportsTeamNfl") ?? "");
+  const teamCfl = String(formData.get("sportsTeamCfl") ?? "");
+  const teamMls = String(formData.get("sportsTeamMls") ?? "");
+  const teamNba = String(formData.get("sportsTeamNba") ?? "");
   const sportsLeagueMobileRaw = String(formData.get("sportsLeagueMobile") ?? "");
   const sportsLeagueMobile = sportsLeagueMobileRaw || null;
 
   if (!SPORTS_LEAGUE_OPTIONS.some((o) => o.value === league)) {
     return { error: t.actions.invalidInput };
   }
-  if (!NHL_TEAM_OPTIONS.some((o) => o.value === teamNhl) || !MLB_TEAM_OPTIONS.some((o) => o.value === teamMlb)) {
+  if (
+    !NHL_TEAM_OPTIONS.some((o) => o.value === teamNhl) ||
+    !MLB_TEAM_OPTIONS.some((o) => o.value === teamMlb) ||
+    !NFL_TEAM_OPTIONS.some((o) => o.value === teamNfl) ||
+    !CFL_TEAM_OPTIONS.some((o) => o.value === teamCfl) ||
+    !MLS_TEAM_OPTIONS.some((o) => o.value === teamMls) ||
+    !NBA_TEAM_OPTIONS.some((o) => o.value === teamNba)
+  ) {
     return { error: t.actions.invalidInput };
   }
   if (sportsLeagueMobile && !SPORTS_LEAGUE_OPTIONS.some((o) => o.value === sportsLeagueMobile)) {
@@ -342,7 +357,16 @@ export async function saveSportsSettings(
   await withScopedPrismaClient((db) =>
     db.user.update({
       where: { id: session.user.id },
-      data: { sportsLeague: league, sportsTeamNhl: teamNhl, sportsTeamMlb: teamMlb, sportsLeagueMobile },
+      data: {
+        sportsLeague: league,
+        sportsTeamNhl: teamNhl,
+        sportsTeamMlb: teamMlb,
+        sportsTeamNfl: teamNfl,
+        sportsTeamCfl: teamCfl,
+        sportsTeamMls: teamMls,
+        sportsTeamNba: teamNba,
+        sportsLeagueMobile,
+      },
     })
   );
   revalidatePath("/settings");
