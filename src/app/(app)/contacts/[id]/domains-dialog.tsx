@@ -11,7 +11,7 @@ import { CARD_COLORS } from "@/components/section-card";
 // forcing a fixed-width table to scroll horizontally (same pattern as
 // tech-stack-dialog.tsx). Domain/Notes get more room than the shorter
 // fields since that's where the longest values actually land.
-const GRID_COLS = "lg:grid-cols-[1.3fr_1fr_1fr_0.9fr_0.8fr_1fr_1.3fr_auto]";
+const GRID_COLS = "lg:grid-cols-[1.7fr_1fr_1fr_0.9fr_0.8fr_1.4fr_1.3fr_auto]";
 
 export default function DomainsDialog({
   action,

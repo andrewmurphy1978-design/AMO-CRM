@@ -936,15 +936,15 @@ export default async function ContactDetailPage({
             ) : (
               <ul className="divide-y divide-card-border">
                 {contact.domains.map((d) => (
-                  <li key={d.id} className="py-2 text-sm">
+                  <li key={d.id} className="py-2 text-sm first:pt-0">
                     <p className="font-medium text-ink">{d.domain}</p>
                     <p className="text-xs text-soft">
                       {[
-                        d.registrar,
-                        d.dnsProvider,
+                        d.registrar ? `${t.contactForm.registrar}: ${d.registrar}` : null,
+                        d.dnsProvider ? `${t.contactForm.dnsProvider}: ${d.dnsProvider}` : null,
                         d.expiryDate ? `${t.contactForm.expiryDate}: ${format(d.expiryDate, "PP", { locale: dateLocale })}` : null,
                         d.autoRenew ? t.contactForm.autoRenew : null,
-                        d.managedBy,
+                        d.managedBy ? `${t.contactForm.managedBy}: ${d.managedBy}` : null,
                       ]
                         .filter(Boolean)
                         .join(" · ")}
@@ -975,7 +975,7 @@ export default async function ContactDetailPage({
               ) : (
                 <ul className="divide-y divide-card-border">
                   {relatedContactRows.map((row) => (
-                    <li key={row.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                    <li key={row.id} className="flex flex-wrap items-center gap-2 py-2 text-sm first:pt-0">
                       <Link href={`/contacts/${row.other.id}`} className="font-medium text-ink hover:underline">
                         {[row.other.firstName, row.other.lastName].filter(Boolean).join(" ") || row.other.company || row.other.email || row.other.id}
                       </Link>
