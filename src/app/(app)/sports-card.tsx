@@ -41,6 +41,20 @@ export type SportsCardSnapshot =
 // a postseason series list.
 const TEAM_ACCENT = "text-amo-teal font-semibold";
 
+// date-fns v4's format() throws on an invalid Date rather than returning
+// something — used everywhere a game's own `date` field gets formatted
+// below, since this session can't confirm live that every league's date
+// string is always something `new Date()` parses cleanly.
+function safeFormatDate(dateStr: string, pattern: string, dateLocale: ReturnType<typeof getDateLocale>): string {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return format(d, pattern, { locale: dateLocale });
+  } catch {
+    return "";
+  }
+}
+
 function GameTime({
   date,
   hour12,
@@ -53,6 +67,9 @@ function GameTime({
   at: string;
 }) {
   const d = new Date(date);
+  // Intl.DateTimeFormat#format and date-fns' format() both throw on an
+  // invalid Date rather than returning something — see safeFormatDate above.
+  if (Number.isNaN(d.getTime())) return null;
   const time = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -116,7 +133,7 @@ function TeamGameRow({
       <p className="mt-0.5 text-xs text-soft">
         {isFinal ? (
           <>
-            {labels.final} · {format(new Date(game.date), "MMM d", { locale: dateLocale })}
+            {labels.final} · {safeFormatDate(game.date, "MMM d", dateLocale)}
           </>
         ) : (
           <GameTime date={game.date} hour12={hour12} dateLocale={dateLocale} at={labels.at} />
@@ -159,7 +176,7 @@ function SeriesGameRow({
       </div>
       <span className="text-[10px] text-soft">
         {isFinal ? (
-          format(new Date(game.date), "MMM d", { locale: dateLocale })
+          safeFormatDate(game.date, "MMM d", dateLocale)
         ) : (
           <GameTime date={game.date} hour12={hour12} dateLocale={dateLocale} at={labels.at} />
         )}
@@ -199,7 +216,7 @@ function SimpleGamesGrid({
       ) : nextGame ? (
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{labels.lastGame}</p>
-          <p className="mt-1 text-xs text-soft">{labels.seasonStartsOn(format(new Date(nextGame.date), "MMM d", { locale: dateLocale }))}</p>
+          <p className="mt-1 text-xs text-soft">{labels.seasonStartsOn(safeFormatDate(nextGame.date, "MMM d", dateLocale))}</p>
         </div>
       ) : null}
       {nextGame ? (
