@@ -346,6 +346,7 @@ model Contact {
   appSyncSettings      ContactAppSync[]
   relationsFrom        ContactRelation[]         @relation("ContactRelationsFrom")
   relationsTo          ContactRelation[]         @relation("ContactRelationsTo")
+  contactNotes         ContactNote[]
 
   @@index([stage])
   @@index([lastName, firstName])
@@ -487,6 +488,23 @@ model ContactRelation {
   @@index([contactId])
   @@index([relatedContactId])
   @@map("contact_relations")
+}
+
+// One row per free-form note, so a contact can keep more than one over
+// time instead of a single note being overwritten — the Notes card lists
+// them newest first. The older scalar Contact.notes field is left as-is
+// (Google Contacts sync still reads/writes it as the contact's single
+// "biography" field) and is kept as a joined copy of these rows by
+// updateContactNotes, so that sync keeps working without its own changes.
+model ContactNote {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([contactId])
+  @@map("contact_notes")
 }
 
 // Login credentials for a web-based tool this contact/client uses (e.g.

@@ -25,6 +25,7 @@ import {
   readDomainItems,
   readContactRelations,
   reciprocalRelationType,
+  readContactNotes,
   readAppSyncSettings,
   buildCustomFieldEditOps,
 } from "@/lib/contact-form-fields";
@@ -471,6 +472,34 @@ export async function updateContactRelations(
       }
     }
 
+    const updated = await db.contact.findUniqueOrThrow({ where: { id: contactId } });
+    const appSyncRows = await currentAppSyncRows(db, contactId);
+    const syncStatus = await applyContactExternalSyncs(db, session, updated, appSyncRows, t);
+    return { syncStatus };
+  });
+
+  revalidatePaths(contactId);
+  return { success: `${t.actions.contactUpdated}${result.syncStatus}` };
+}
+
+export async function updateContactNotes(
+  contactId: string,
+  _prevState: ActionResult | undefined,
+  formData: FormData
+): Promise<ActionResult> {
+  const session = await auth2();
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const result = await withScopedPrismaClient(async (db) => {
+    const notes = readContactNotes(formData);
+    await db.$transaction([
+      db.contactNote.deleteMany({ where: { contactId } }),
+      ...(notes.length > 0 ? [db.contactNote.createMany({ data: notes.map((text) => ({ contactId, text })) })] : []),
+      // Kept in sync as a joined copy so Google Contacts sync (which reads/
+      // writes this single scalar field as the contact's "biography") keeps
+      // working without its own changes — see the schema comment on ContactNote.
+      db.contact.update({ where: { id: contactId }, data: { notes: notes.join("\n\n") || null } }),
+    ]);
     const updated = await db.contact.findUniqueOrThrow({ where: { id: contactId } });
     const appSyncRows = await currentAppSyncRows(db, contactId);
     const syncStatus = await applyContactExternalSyncs(db, session, updated, appSyncRows, t);

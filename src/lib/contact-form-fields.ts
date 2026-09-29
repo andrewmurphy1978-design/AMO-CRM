@@ -421,6 +421,16 @@ export function reciprocalRelationType(relationType: string): string {
   return RELATION_RECIPROCALS[relationType] ?? relationType;
 }
 
+// Parallel "noteText" inputs (one per note row) — a blank row is dropped,
+// same as every other repeatable-row reader above.
+export function readContactNotes(formData: FormData) {
+  return formData
+    .getAll("noteText")
+    .map(String)
+    .map((text) => text.trim())
+    .filter((text) => text.length > 0);
+}
+
 // One enabled checkbox + one direction <select> per entry in
 // CONTACT_SYNC_APPS (see src/lib/contact-sync.ts) — always submitted for
 // every known app regardless of whether this contact has ever synced with

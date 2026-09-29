@@ -42,6 +42,7 @@ import TechStackDialog from "./tech-stack-dialog";
 import DomainsDialog from "./domains-dialog";
 import RelationsDialog from "./relations-dialog";
 import OtherInfoDialog from "./other-info-dialog";
+import NotesDialog from "./notes-dialog";
 import {
   updateContactGeneralInfo,
   updateContactInfo,
@@ -53,6 +54,7 @@ import {
   updateContactDomains,
   updateContactRelations,
   updateContactOtherInfo,
+  updateContactNotes,
 } from "@/actions/contact-sections";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
@@ -375,6 +377,7 @@ export default async function ContactDetailPage({
         appSyncSettings: true,
         relationsFrom: { include: { relatedContact: true }, orderBy: { createdAt: "asc" } },
         relationsTo: { include: { contact: true }, orderBy: { createdAt: "asc" } },
+        contactNotes: { orderBy: { createdAt: "desc" } },
       },
     });
     const calendarEvents = contact ? await getLinkedCalendarEvents(db, { contactId: contact.id }, googleAccessToken) : [];
@@ -1075,8 +1078,30 @@ export default async function ContactDetailPage({
             </div>
           </Card>
 
-          <Card color="notes" title={t.contactForm.cardNotes} compact>
-            <p className="whitespace-pre-wrap break-words text-sm text-ink">{contact.notes || "—"}</p>
+          <Card
+            color="notes"
+            title={t.contactForm.cardNotes}
+            compact
+            actions={
+              <NotesDialog
+                action={updateContactNotes.bind(null, contact.id)}
+                notes={contact.contactNotes.map((n) => n.text)}
+                lang={lang}
+              />
+            }
+          >
+            {contact.contactNotes.length === 0 ? (
+              <p className="text-sm text-soft">—</p>
+            ) : (
+              <ul className="divide-y divide-card-border">
+                {contact.contactNotes.map((note) => (
+                  <li key={note.id} className="py-2 text-sm first:pt-0">
+                    <p className="whitespace-pre-wrap break-words text-ink">{note.text}</p>
+                    <p className="mt-1 text-xs text-soft">{formatDistanceToNow(note.createdAt, { addSuffix: true, locale: dateLocale })}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Card>
 
           {isAdmin && <ContactCredentialsCard contactId={contact.id} entries={credentialEntries} lang={lang} />}
