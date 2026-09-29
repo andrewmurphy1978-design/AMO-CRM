@@ -383,37 +383,19 @@ function birthdayToGoogleDate(birthday: string | null | undefined): { date: { ye
   return null;
 }
 
-// Mirrors a CRM edit back onto the Google contact it was imported from (or
-// linked to) — the reverse of mapPerson/listGoogleContacts above. Sends
-// every field this app owns on every call, even when empty, so removing a
+// Shared by pushContactToGoogle (update) and createGoogleContact (create) —
+// both send the same field shape, they just hit different People API
+// methods. Sends every field this app owns even when empty, so removing a
 // value in the CRM clears it on the Google side too rather than leaving a
-// stale one behind; updatePersonFields has to name exactly the fields
-// present in the body for that to happen. People API requires the
-// contact's current etag on every update (a concurrency guard against
-// clobbering a change made directly in Google Contacts since the last
-// pull), so this always does one people.get before the write.
-export async function pushContactToGoogle(
-  accessToken: string,
-  resourceName: string,
-  contact: ContactPushInput
-): Promise<{ error?: string }> {
-  const getRes = await fetch(`https://people.googleapis.com/v1/${resourceName}?personFields=metadata`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!getRes.ok) return { error: await describeError(getRes) };
-  const current = (await getRes.json()) as { etag?: string };
-  if (!current.etag) return { error: "Google Contacts did not return a version marker (etag) for this contact." };
-
+// stale one behind on an update.
+function buildPersonBody(contact: ContactPushInput) {
   const emails = [contact.email, contact.email2, ...(contact.extraEmails ?? [])].filter((v): v is string => Boolean(v?.trim()));
   const phones = [contact.phone, contact.phone2, ...(contact.extraPhones ?? [])].filter((v): v is string => Boolean(v?.trim()));
   const hasOrg = Boolean(contact.company?.trim() || contact.jobTitle?.trim());
   const hasAddress = Boolean(contact.address?.trim() || contact.city?.trim() || contact.state?.trim() || contact.zip?.trim() || contact.country?.trim());
   const birthday = birthdayToGoogleDate(contact.birthday);
 
-  const updatePersonFields = ["names", "nicknames", "emailAddresses", "phoneNumbers", "organizations", "addresses", "biographies", "birthdays"];
-
-  const body = {
-    etag: current.etag,
+  return {
     names: [{ givenName: contact.firstName?.trim() ?? "", familyName: contact.lastName?.trim() ?? "" }],
     nicknames: contact.nickname?.trim() ? [{ value: contact.nickname.trim() }] : [],
     emailAddresses: emails.map((value) => ({ value })),
@@ -433,9 +415,33 @@ export async function pushContactToGoogle(
     biographies: contact.notes?.trim() ? [{ value: contact.notes.trim() }] : [],
     birthdays: birthday ? [birthday] : [],
   };
+}
+
+const PERSON_UPDATE_FIELDS = ["names", "nicknames", "emailAddresses", "phoneNumbers", "organizations", "addresses", "biographies", "birthdays"];
+
+// Mirrors a CRM edit back onto the Google contact it was imported from (or
+// linked to) — the reverse of mapPerson/listGoogleContacts above.
+// updatePersonFields has to name exactly the fields present in the body for
+// a cleared CRM value to actually clear the Google side. People API
+// requires the contact's current etag on every update (a concurrency guard
+// against clobbering a change made directly in Google Contacts since the
+// last pull), so this always does one people.get before the write.
+export async function pushContactToGoogle(
+  accessToken: string,
+  resourceName: string,
+  contact: ContactPushInput
+): Promise<{ error?: string }> {
+  const getRes = await fetch(`https://people.googleapis.com/v1/${resourceName}?personFields=metadata`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!getRes.ok) return { error: await describeError(getRes) };
+  const current = (await getRes.json()) as { etag?: string };
+  if (!current.etag) return { error: "Google Contacts did not return a version marker (etag) for this contact." };
+
+  const body = { etag: current.etag, ...buildPersonBody(contact) };
 
   const url = new URL(`https://people.googleapis.com/v1/${resourceName}:updateContact`);
-  url.searchParams.set("updatePersonFields", updatePersonFields.join(","));
+  url.searchParams.set("updatePersonFields", PERSON_UPDATE_FIELDS.join(","));
 
   const res = await fetch(url.toString(), {
     method: "PATCH",
@@ -444,6 +450,23 @@ export async function pushContactToGoogle(
   });
   if (!res.ok) return { error: await describeError(res) };
   return {};
+}
+
+// Creates a brand-new Google contact for a CRM contact that has none yet
+// (see ContactAppSync — "google_contacts" app, TO_APP/BOTH direction).
+// Returns the new resourceName so the caller can store it as the CRM
+// contact's googleContactId, making every future edit flow through
+// pushContactToGoogle above instead of creating a duplicate.
+export async function createGoogleContact(accessToken: string, contact: ContactPushInput): Promise<{ resourceName?: string; error?: string }> {
+  const res = await fetch("https://people.googleapis.com/v1/people:createContact", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(buildPersonBody(contact)),
+  });
+  if (!res.ok) return { error: await describeError(res) };
+  const created = (await res.json()) as { resourceName?: string };
+  if (!created.resourceName) return { error: "Google Contacts did not return a resource name for the new contact." };
+  return { resourceName: created.resourceName };
 }
 
 export async function deleteGoogleContact(accessToken: string, resourceName: string): Promise<{ error?: string }> {

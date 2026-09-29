@@ -341,6 +341,11 @@ model Contact {
   messagingAccounts    ContactMessagingAccount[]
   voipAccounts         ContactVoipAccount[]
   techStackItems       ContactTechStackItem[]
+  domains              ContactDomain[]
+  credentials          ContactCredential[]
+  appSyncSettings      ContactAppSync[]
+  relationsFrom        ContactRelation[]         @relation("ContactRelationsFrom")
+  relationsTo          ContactRelation[]         @relation("ContactRelationsTo")
 
   @@index([stage])
   @@index([lastName, firstName])
@@ -432,6 +437,101 @@ model ContactSocialLink {
 
   @@index([contactId])
   @@map("contact_social_links")
+}
+
+// One row per domain this contact owns/uses, added via the Contact form's
+// "+" button (same shape as ContactTechStackItem) — the registrar/DNS/
+// expiry details needed to actually manage a client's domain, distinct from
+// the tech-stack rows above (which track which *app* runs on a domain, not
+// the domain registration itself).
+model ContactDomain {
+  id          String    @id @default(cuid())
+  contactId   String
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  domain      String
+  registrar   String?
+  dnsProvider String?
+  expiryDate  DateTime?
+  autoRenew   Boolean   @default(false)
+  // Free text (e.g. "Us", "Client", "Third party") rather than an enum —
+  // same reasoning as companyType/industry: varies too much to pin down.
+  managedBy   String?
+  notes       String?   @db.Text
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([contactId])
+  @@map("contact_domains")
+}
+
+// Links this contact to another one in the CRM — a family relation (e.g.
+// "Spouse", "Child") or a business one (e.g. "Business partner",
+// "Employee") — free text like relationType elsewhere, not an enum. Stored
+// once per link, from whichever contact's form it was added on; the Info
+// page for either contact shows it by matching on both contactId and
+// relatedContactId, so it doesn't need a mirrored second row.
+model ContactRelation {
+  id               String   @id @default(cuid())
+  contactId        String
+  contact          Contact  @relation("ContactRelationsFrom", fields: [contactId], references: [id], onDelete: Cascade)
+  relatedContactId String
+  relatedContact   Contact  @relation("ContactRelationsTo", fields: [relatedContactId], references: [id], onDelete: Cascade)
+  relationType     String
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  @@index([contactId])
+  @@index([relatedContactId])
+  @@map("contact_relations")
+}
+
+// Login credentials for a web-based tool this contact/client uses (e.g.
+// their WordPress admin, domain registrar, hosting panel) — the password is
+// never stored in plaintext (see encryptSecret/decryptSecret in
+// src/lib/crypto.ts) and never shipped to the client on page load; it's
+// only decrypted on demand via revealContactCredential, same pattern as
+// ApiKeyVaultEntry/revealVaultEntry.
+model ContactCredential {
+  id                String   @id @default(cuid())
+  contactId         String
+  contact           Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label             String
+  url               String?
+  username          String?
+  passwordEncrypted String?  @db.Text
+  notes             String?  @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([contactId])
+  @@map("contact_credentials")
+}
+
+// Per-app sync configuration for this contact — whether/how it should be
+// kept in sync with an external system beyond the two built-in
+// systemeIoId/googleContactId columns already on Contact. `app` is a plain
+// string (not an enum) specifically so a future third app (e.g. a
+// different CRM/ESP) is a new row shape, not a migration — see
+// CONTACT_SYNC_APPS in src/lib/contact-sync.ts for the known apps this UI
+// currently renders a row for.
+model ContactAppSync {
+  id             String    @id @default(cuid())
+  contactId      String
+  contact        Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  app            String
+  // "TO_APP" (CRM -> app), "FROM_APP" (app -> CRM, informational — actual
+  // inbound sync still goes through that app's own existing import/pull
+  // feature), "BOTH".
+  direction      String    @default("BOTH")
+  enabled        Boolean   @default(true)
+  lastSyncedAt   DateTime?
+  lastSyncStatus String?
+  lastSyncError  String?   @db.Text
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([contactId, app])
+  @@map("contact_app_syncs")
 }
 
 // --- Additional systeme.io data (subscriptions, courses, communities) ------

@@ -21,10 +21,28 @@ import { getWorldTimeZoneOptions } from "@/lib/timezones";
 import PageHeader from "../page-header";
 import Card from "@/components/section-card";
 import LocalTimeCard from "@/components/local-time-card";
+import ContactCredentialsCard, { type ContactCredentialRow } from "./[id]/contact-credentials-card";
+import { CONTACT_SYNC_APPS, type ContactSyncDirection } from "@/lib/contact-sync";
 
 type ExtraAddress = { address?: string | null; city?: string | null; state?: string | null; zip?: string | null; country?: string | null };
 type AppHandleRow = { app: string; handle: string };
 type FieldValueRow = { fieldSlug: string; value: string | null };
+type DomainRow = {
+  domain: string;
+  registrar?: string | null;
+  dnsProvider?: string | null;
+  expiryDate?: Date | string | null;
+  autoRenew?: boolean;
+  managedBy?: string | null;
+  notes?: string | null;
+};
+type ContactRelationRow = {
+  relatedContactId: string;
+  relationType: string;
+  notes?: string | null;
+};
+type AppSyncSettingRow = { app: string; enabled: boolean; direction: string };
+export type RelatableContact = { id: string; firstName: string | null; lastName: string | null; company: string | null; email: string | null };
 
 type ContactFormValues = {
   email?: string | null;
@@ -46,6 +64,7 @@ type ContactFormValues = {
   industry?: string | null;
   locale?: string | null;
   timeZone?: string | null;
+  website?: string | null;
   stage?: string;
   address?: string | null;
   city?: string | null;
@@ -82,6 +101,9 @@ type ContactFormValues = {
   socialLinks?: { platform: string; url: string }[] | null;
   messagingAccounts?: AppHandleRow[] | null;
   voipAccounts?: AppHandleRow[] | null;
+  domains?: DomainRow[] | null;
+  relationsFrom?: ContactRelationRow[] | null;
+  appSyncSettings?: AppSyncSettingRow[] | null;
   notes?: string | null;
   source?: string | null;
   systemeIoId?: number | null;
@@ -92,6 +114,11 @@ type ContactFormValues = {
 };
 
 const SOCIAL_PLATFORMS = ["Facebook", "Instagram", "LinkedIn", "TikTok", "YouTube", "X", "Website", "Other"];
+
+// Free-text suggestions for the Related Contacts "relation type" field —
+// not an enum, since the actual range of family/business relations any
+// client might have is open-ended (same reasoning as companyType/industry).
+const RELATION_TYPE_OPTIONS = ["Spouse", "Child", "Parent", "Sibling", "Business partner", "Employee", "Employer", "Referral", "Other"];
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -111,6 +138,9 @@ export default function ContactForm({
   hour12,
   location,
   contactId,
+  allContacts,
+  isAdmin,
+  credentialEntries,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -129,6 +159,13 @@ export default function ContactForm({
   // Contact form has no id yet (createContact redirects server-side
   // instead, straight to the freshly created contact).
   contactId?: string;
+  // Every other contact, for the Related Contacts picker — omitted (empty)
+  // on the New Contact form since there's no id yet to link from.
+  allContacts?: RelatableContact[];
+  // Gates the Credentials card below — same admin-only rule as the global
+  // API key vault in Settings.
+  isAdmin?: boolean;
+  credentialEntries?: ContactCredentialRow[];
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const t = getDict(lang);
@@ -264,6 +301,40 @@ export default function ContactForm({
   );
   const nextTechStackId = useRef(techStackItems.length);
 
+  const [domains, setDomains] = useState(() =>
+    (defaultValues?.domains ?? []).map((row, id) => ({
+      id,
+      ...row,
+      // RSC serialization hands a DateTime prop to the client as a real
+      // Date instance (not an ISO string), so String(date) here would give
+      // Date.prototype.toString()'s "Tue Dec 01 2026 ..." format — sliced
+      // to something a <input type="date"> silently rejects. toISOString()
+      // is what actually produces the yyyy-mm-dd it needs.
+      expiryDate: row.expiryDate ? (row.expiryDate instanceof Date ? row.expiryDate.toISOString() : String(row.expiryDate)).slice(0, 10) : "",
+    }))
+  );
+  const nextDomainId = useRef(domains.length);
+
+  const [relations, setRelations] = useState(() =>
+    (defaultValues?.relationsFrom ?? []).map((row, id) => ({ id, ...row }))
+  );
+  const nextRelationId = useRef(relations.length);
+
+  const appSyncDefaults = (app: string): { enabled: boolean; direction: ContactSyncDirection } => {
+    const existing = defaultValues?.appSyncSettings?.find((row) => row.app === app);
+    if (existing) return { enabled: existing.enabled, direction: existing.direction as ContactSyncDirection };
+    // No saved setting yet — preserve today's behavior: a contact already
+    // linked to google_contacts/systeme.io keeps getting pushed to on every
+    // save, and a brand-new contact defaults to being sent to Google
+    // Contacts only (per the explicit ask), not systeme.io.
+    if (app === "google_contacts") return { enabled: true, direction: "BOTH" };
+    if (app === "systeme_io") return { enabled: Boolean(defaultValues?.systemeIoId), direction: "BOTH" };
+    return { enabled: false, direction: "BOTH" };
+  };
+  const [appSync, setAppSync] = useState<Record<string, { enabled: boolean; direction: ContactSyncDirection }>>(() =>
+    Object.fromEntries(CONTACT_SYNC_APPS.map((def) => [def.app, appSyncDefaults(def.app)]))
+  );
+
   // Only seeds the phone fields' initial flag — each PhoneField's flag is
   // independently changeable afterward regardless of the address country.
   const phoneCountry = countryToCode(defaultValues?.country) ?? "CA";
@@ -290,6 +361,7 @@ export default function ContactForm({
   const projectGoal = findFieldValue("projectgoaldescription");
 
   return (
+    <>
     <form
       action={formAction}
       onChange={() => setDirty(true)}
@@ -510,82 +582,17 @@ export default function ContactForm({
               ))}
             </select>
           </div>
+          <Field label={t.contactForm.website} name="website" type="url" defaultValue={defaultValues?.website ?? ""} placeholder="https://…" />
         </div>
 
+        {/* Only ever populated by the Google Contacts import (see
+            actions/google-contacts.ts) — a personal contact's nickname, job
+            title, birthday, and (read-only) Google avatar. Folded in here as
+            a sub-card, same treatment the Invoice fields used to get before
+            Invoice was pulled out into its own top-level card. */}
         <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">
-          <h3 className={LABEL_CLASS}>{t.contactForm.cardInvoice}</h3>
-          <div className="mt-3 space-y-4">
-            <div>
-              <label className="flex items-center gap-2 text-sm text-ink">
-                <input
-                  type="checkbox"
-                  name="autoSendInvoiceReminders"
-                  defaultChecked={defaultValues?.autoSendInvoiceReminders ?? false}
-                  className="accent-amo-lime"
-                />
-                {t.contactForm.autoSendInvoiceReminders}
-              </label>
-              <p className="mt-1 text-xs text-soft">{t.contactForm.autoSendInvoiceRemindersHelp}</p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <label className={LABEL_CLASS}>{t.contactForm.preferredCurrency}</label>
-                <select name="preferredCurrency" defaultValue={defaultValues?.preferredCurrency ?? ""} className={FIELD_CLASS}>
-                  <option value="">—</option>
-                  {CURRENCIES.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={LABEL_CLASS}>{t.contactForm.paymentTerms}</label>
-                <select name="paymentTerms" defaultValue={defaultValues?.paymentTerms ?? ""} className={FIELD_CLASS}>
-                  <option value="">—</option>
-                  {PAYMENT_TERMS.map((term) => (
-                    <option key={term} value={term}>
-                      {term}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={LABEL_CLASS}>{t.contactForm.paymentSchedule}</label>
-                <select name="paymentSchedule" defaultValue={defaultValues?.paymentSchedule ?? ""} className={FIELD_CLASS}>
-                  <option value="">—</option>
-                  {PAYMENT_SCHEDULES.map((schedule) => (
-                    <option key={schedule} value={schedule}>
-                      {schedule}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={LABEL_CLASS}>{t.contactForm.defaultDiscount}</label>
-                <input
-                  type="number"
-                  name="defaultDiscount"
-                  min={0}
-                  max={100}
-                  step="0.1"
-                  defaultValue={defaultValues?.defaultDiscount ?? ""}
-                  className={FIELD_CLASS}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Only ever populated by the Google Contacts import (see
-          actions/google-contacts.ts) — a personal contact's nickname, job
-          title, birthday, and (read-only) Google avatar. Shown only when
-          at least one of these has a value, so a systeme.io-only contact
-          never sees an empty card. */}
-      {(defaultValues?.nickname || defaultValues?.jobTitle || defaultValues?.birthday || defaultValues?.avatarUrl) && (
-        <Card color="personal" title={t.contactForm.cardPersonalInfo}>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <h3 className={LABEL_CLASS}>{t.contactForm.cardPersonalInfo}</h3>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {defaultValues?.avatarUrl && (
               <div className="flex items-center gap-3 lg:col-span-1">
                 {/* eslint-disable-next-line @next/next/no-img-element -- an arbitrary external Google-hosted URL, not a local/optimizable asset */}
@@ -601,8 +608,8 @@ export default function ContactForm({
               placeholder="YYYY-MM-DD"
             />
           </div>
-        </Card>
-      )}
+        </div>
+      </Card>
 
       <Card color="contact" title={t.contactForm.cardContactInfo}>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
@@ -691,6 +698,59 @@ export default function ContactForm({
         </div>
       </Card>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card color="social" title={t.contactForm.cardSocialMedia}>
+          <div className="space-y-1.5">
+            {socialLinks.map((row) => (
+              <div key={row.id} className="flex items-center gap-1.5">
+                <AppSelect
+                  name="socialPlatform"
+                  value={row.platform}
+                  onChange={(platform) => setSocialLinks((rows) => rows.map((r) => (r.id === row.id ? { ...r, platform } : r)))}
+                  options={SOCIAL_PLATFORMS}
+                />
+                <input
+                  type="url"
+                  name="socialUrl"
+                  defaultValue={row.url}
+                  placeholder="https://…"
+                  className={`${FIELD_CLASS} mt-0 flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSocialLinks((rows) => rows.filter((r) => r.id !== row.id))}
+                  className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                  aria-label={t.contactForm.removeEntry}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setSocialLinks((rows) => [...rows, { id: nextSocialId.current++, platform: "Facebook", url: "" }])}
+              className="text-xs font-semibold text-amo-lime hover:underline"
+            >
+              + {t.contactForm.addSocialLink}
+            </button>
+          </div>
+        </Card>
+
+        <Card color="voip" title={t.contactForm.cardVoipApps}>
+          <AppHandleListBody
+            addLabel={t.contactForm.addVoipApp}
+            handlePlaceholder={t.contactForm.voipHandle}
+            appFieldName="voipApp"
+            handleFieldName="voipHandle"
+            appOptions={VOIP_APPS}
+            rows={voipAccounts}
+            setRows={setVoipAccounts}
+            removeLabel={t.contactForm.removeEntry}
+            onAdd={() => setVoipAccounts((rows) => [...rows, { id: nextVoipId.current++, app: VOIP_APPS[0], handle: "" }])}
+          />
+        </Card>
+      </div>
+
       <Card color="addresses" title={t.contactForm.cardAddresses}>
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-4">
@@ -734,6 +794,68 @@ export default function ContactForm({
               </div>
               <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={defaultValues?.billingEmail ?? ""} />
             </AddressGroup>
+          </div>
+        </div>
+      </Card>
+
+      <Card color="billing" title={t.contactForm.cardInvoice}>
+        <div>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              name="autoSendInvoiceReminders"
+              defaultChecked={defaultValues?.autoSendInvoiceReminders ?? false}
+              className="accent-amo-lime"
+            />
+            {t.contactForm.autoSendInvoiceReminders}
+          </label>
+          <p className="mt-1 text-xs text-soft">{t.contactForm.autoSendInvoiceRemindersHelp}</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.preferredCurrency}</label>
+            <select name="preferredCurrency" defaultValue={defaultValues?.preferredCurrency ?? ""} className={FIELD_CLASS}>
+              <option value="">—</option>
+              {CURRENCIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.paymentTerms}</label>
+            <select name="paymentTerms" defaultValue={defaultValues?.paymentTerms ?? ""} className={FIELD_CLASS}>
+              <option value="">—</option>
+              {PAYMENT_TERMS.map((term) => (
+                <option key={term} value={term}>
+                  {term}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.paymentSchedule}</label>
+            <select name="paymentSchedule" defaultValue={defaultValues?.paymentSchedule ?? ""} className={FIELD_CLASS}>
+              <option value="">—</option>
+              {PAYMENT_SCHEDULES.map((schedule) => (
+                <option key={schedule} value={schedule}>
+                  {schedule}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.defaultDiscount}</label>
+            <input
+              type="number"
+              name="defaultDiscount"
+              min={0}
+              max={100}
+              step="0.1"
+              defaultValue={defaultValues?.defaultDiscount ?? ""}
+              className={FIELD_CLASS}
+            />
           </div>
         </div>
       </Card>
@@ -799,27 +921,110 @@ export default function ContactForm({
         </button>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card color="social" title={t.contactForm.cardSocialMedia}>
+      <Card color="domains" title={t.contactForm.cardDomains}>
+        <div className="overflow-x-auto rounded-lg border border-card-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-card-border bg-black/[0.02] text-left text-xs uppercase tracking-wide text-soft">
+                <th className="px-3 py-2 font-semibold">{t.contactForm.domain}</th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.registrar}</th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.dnsProvider}</th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.expiryDate}</th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.autoRenew}</th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.managedBy}</th>
+                <th className="px-3 py-2 font-semibold">{t.contactForm.notes}</th>
+                <th className="px-3 py-2 font-semibold"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-card-border">
+              {domains.map((row) => (
+                <tr key={row.id}>
+                  <td className="px-3 py-2">
+                    <input name="domainDomain" defaultValue={row.domain} placeholder="example.com" className={TABLE_INPUT_CLASS} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input name="domainRegistrar" defaultValue={row.registrar ?? ""} className={TABLE_INPUT_CLASS} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input name="domainDnsProvider" defaultValue={row.dnsProvider ?? ""} className={TABLE_INPUT_CLASS} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input type="date" name="domainExpiryDate" defaultValue={row.expiryDate ?? ""} className={TABLE_INPUT_CLASS} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select name="domainAutoRenew" defaultValue={row.autoRenew ? "on" : "off"} className={TABLE_INPUT_CLASS}>
+                      <option value="off">{t.contactForm.no}</option>
+                      <option value="on">{t.contactForm.yes}</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input name="domainManagedBy" defaultValue={row.managedBy ?? ""} className={TABLE_INPUT_CLASS} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input name="domainNotes" defaultValue={row.notes ?? ""} className={TABLE_INPUT_CLASS} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setDomains((rows) => rows.filter((r) => r.id !== row.id))}
+                      className="shrink-0 rounded-md border border-card-border px-2 py-1.5 text-xs text-soft hover:text-ink"
+                      aria-label={t.contactForm.removeEntry}
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setDomains((rows) => [
+              ...rows,
+              { id: nextDomainId.current++, domain: "", registrar: "", dnsProvider: "", expiryDate: "", autoRenew: false, managedBy: "", notes: "" },
+            ])
+          }
+          className="text-xs font-semibold text-amo-lime hover:underline"
+        >
+          + {t.contactForm.addDomain}
+        </button>
+      </Card>
+
+      {allContacts && allContacts.length > 0 && (
+        <Card color="relations" title={t.contactForm.cardRelatedContacts}>
           <div className="space-y-1.5">
-            {socialLinks.map((row) => (
-              <div key={row.id} className="flex items-center gap-1.5">
-                <AppSelect
-                  name="socialPlatform"
-                  value={row.platform}
-                  onChange={(platform) => setSocialLinks((rows) => rows.map((r) => (r.id === row.id ? { ...r, platform } : r)))}
-                  options={SOCIAL_PLATFORMS}
+            {relations.map((row) => (
+              <div key={row.id} className="flex flex-wrap items-center gap-1.5">
+                <select
+                  name="relationContactId"
+                  defaultValue={row.relatedContactId}
+                  className={`${FIELD_CLASS} mt-0 w-full sm:w-56`}
+                >
+                  <option value="">—</option>
+                  {allContacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {[c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || c.id}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  name="relationType"
+                  defaultValue={row.relationType}
+                  list="relationTypeOptions"
+                  placeholder={t.contactForm.relationTypePlaceholder}
+                  className={`${FIELD_CLASS} mt-0 w-40`}
                 />
                 <input
-                  type="url"
-                  name="socialUrl"
-                  defaultValue={row.url}
-                  placeholder="https://…"
+                  name="relationNotes"
+                  defaultValue={row.notes ?? ""}
+                  placeholder={t.contactForm.notes}
                   className={`${FIELD_CLASS} mt-0 flex-1`}
                 />
                 <button
                   type="button"
-                  onClick={() => setSocialLinks((rows) => rows.filter((r) => r.id !== row.id))}
+                  onClick={() => setRelations((rows) => rows.filter((r) => r.id !== row.id))}
                   className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
                   aria-label={t.contactForm.removeEntry}
                 >
@@ -827,31 +1032,21 @@ export default function ContactForm({
                 </button>
               </div>
             ))}
+            <datalist id="relationTypeOptions">
+              {RELATION_TYPE_OPTIONS.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
             <button
               type="button"
-              onClick={() => setSocialLinks((rows) => [...rows, { id: nextSocialId.current++, platform: "Facebook", url: "" }])}
+              onClick={() => setRelations((rows) => [...rows, { id: nextRelationId.current++, relatedContactId: "", relationType: "Other", notes: "" }])}
               className="text-xs font-semibold text-amo-lime hover:underline"
             >
-              + {t.contactForm.addSocialLink}
+              + {t.contactForm.addRelatedContact}
             </button>
           </div>
         </Card>
-
-        <Card color="voip" title={t.contactForm.cardVoipApps}>
-          <AppHandleListBody
-            addLabel={t.contactForm.addVoipApp}
-            handlePlaceholder={t.contactForm.voipHandle}
-            appFieldName="voipApp"
-            handleFieldName="voipHandle"
-            appOptions={VOIP_APPS}
-            rows={voipAccounts}
-            setRows={setVoipAccounts}
-            removeLabel={t.contactForm.removeEntry}
-            onAdd={() => setVoipAccounts((rows) => [...rows, { id: nextVoipId.current++, app: VOIP_APPS[0], handle: "" }])}
-          />
-        </Card>
-      </div>
-
+      )}
 
       <Card color="other" title={t.contactForm.cardOtherInfo}>
         <div className="grid gap-4 sm:grid-cols-3">
@@ -888,12 +1083,60 @@ export default function ContactForm({
             <textarea name="projectGoalDescription" rows={2} defaultValue={projectGoal?.value ?? ""} className={FIELD_CLASS} />
           </div>
         </div>
+
+        {/* Per-external-app sync configuration — see CONTACT_SYNC_APPS in
+            src/lib/contact-sync.ts. New apps just add an entry there; this
+            list renders whatever's in the registry rather than hardcoding
+            google_contacts/systeme_io by name. */}
+        <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">
+          <h3 className={LABEL_CLASS}>{t.contactForm.appSyncTitle}</h3>
+          <p className="mt-1 text-xs text-soft">{t.contactForm.appSyncHelp}</p>
+          <div className="mt-3 space-y-2">
+            {CONTACT_SYNC_APPS.map((def) => {
+              const current = appSync[def.app];
+              return (
+                <div key={def.app} className="flex flex-wrap items-center gap-3 rounded-md border border-card-border bg-card-bg px-3 py-2">
+                  <label className="flex min-w-[10rem] flex-1 items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      name={`appSyncEnabled_${def.app}`}
+                      checked={current.enabled}
+                      onChange={(e) => setAppSync((prev) => ({ ...prev, [def.app]: { ...prev[def.app], enabled: e.target.checked } }))}
+                      className="accent-amo-lime"
+                    />
+                    {t.contactForm.syncAppLabels[def.labelKey as keyof typeof t.contactForm.syncAppLabels] ?? def.app}
+                  </label>
+                  <select
+                    name={`appSyncDirection_${def.app}`}
+                    value={current.direction}
+                    onChange={(e) =>
+                      setAppSync((prev) => ({ ...prev, [def.app]: { ...prev[def.app], direction: e.target.value as ContactSyncDirection } }))
+                    }
+                    disabled={!current.enabled}
+                    className="rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink shadow-sm disabled:opacity-50"
+                  >
+                    <option value="BOTH">{t.contactForm.syncDirectionBoth}</option>
+                    <option value="TO_APP">{t.contactForm.syncDirectionToApp}</option>
+                    <option value="FROM_APP">{t.contactForm.syncDirectionFromApp}</option>
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </Card>
 
       <Card color="notes" title={t.contactForm.cardNotes}>
         <textarea name="notes" rows={3} defaultValue={defaultValues?.notes ?? ""} className={FIELD_CLASS} />
       </Card>
     </form>
+
+    {contactId && isAdmin && (
+      <div className="mt-6">
+        <ContactCredentialsCard contactId={contactId} entries={credentialEntries ?? []} lang={lang} />
+      </div>
+    )}
+    </>
   );
 }
 

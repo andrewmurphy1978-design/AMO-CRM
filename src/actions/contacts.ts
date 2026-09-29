@@ -11,7 +11,8 @@ import { countryToCode } from "@/lib/country-flag";
 import { normalizeRegionForCountry } from "@/lib/regions";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getValidAccessToken } from "@/lib/google";
-import { pushContactToGoogle, deleteGoogleContact } from "@/lib/google-contacts";
+import { pushContactToGoogle, deleteGoogleContact, createGoogleContact } from "@/lib/google-contacts";
+import { CONTACT_SYNC_APPS, type ContactSyncDirection } from "@/lib/contact-sync";
 
 // Google Contacts import (see google-contacts.ts) leaves email null for a
 // phone-only personal contact, and Contact.email is nullable in the schema
@@ -41,6 +42,7 @@ const ContactSchema = z.object({
   industry: z.string().trim().optional(),
   locale: z.string().trim().optional(),
   timeZone: z.string().trim().optional(),
+  website: z.string().trim().optional(),
   // Only ever actually submitted when the contact isn't systeme.io-synced
   // (see contact-form.tsx) — for a synced contact the field isn't rendered,
   // so this resolves to undefined and Prisma's update leaves it untouched.
@@ -95,6 +97,7 @@ const CONTACT_FORM_FIELDS = [
   "industry",
   "locale",
   "timeZone",
+  "website",
   "source",
   "preferredCurrency",
   "paymentTerms",
@@ -257,6 +260,83 @@ function readTechStackItems(formData: FormData) {
   return rows;
 }
 
+// Parallel "domain{Domain,Registrar,DnsProvider,ExpiryDate,AutoRenew,
+// ManagedBy,Notes}" inputs (same index = same row) — client domains this
+// contact owns, added via the Contact form's "+" button. autoRenew is
+// submitted as a <select> "on"/"off" rather than a checkbox specifically so
+// it always appears in getAll() at the right index (an unchecked checkbox
+// submits nothing at all, which would desync every array's indexes).
+function readDomainItems(formData: FormData) {
+  const domains = formData.getAll("domainDomain").map(String);
+  const registrars = formData.getAll("domainRegistrar").map(String);
+  const dnsProviders = formData.getAll("domainDnsProvider").map(String);
+  const expiryDates = formData.getAll("domainExpiryDate").map(String);
+  const autoRenews = formData.getAll("domainAutoRenew").map(String);
+  const managedBys = formData.getAll("domainManagedBy").map(String);
+  const notesList = formData.getAll("domainNotes").map(String);
+  const rows: {
+    domain: string;
+    registrar: string | null;
+    dnsProvider: string | null;
+    expiryDate: Date | null;
+    autoRenew: boolean;
+    managedBy: string | null;
+    notes: string | null;
+    order: number;
+  }[] = [];
+  for (let i = 0; i < domains.length; i++) {
+    const domain = domains[i]?.trim() ?? "";
+    if (!domain) continue;
+    const expiry = expiryDates[i]?.trim();
+    rows.push({
+      domain,
+      registrar: registrars[i]?.trim() || null,
+      dnsProvider: dnsProviders[i]?.trim() || null,
+      expiryDate: expiry ? new Date(expiry) : null,
+      autoRenew: autoRenews[i] === "on",
+      managedBy: managedBys[i]?.trim() || null,
+      notes: notesList[i]?.trim() || null,
+      order: rows.length,
+    });
+  }
+  return rows;
+}
+
+// Parallel "relationContactId"/"relationType"/"relationNotes" inputs (same
+// index = same row) — links to other CRM contacts (family or business
+// relations), added via the Contact form's "+" button. A row with no
+// selected contact is dropped.
+function readContactRelations(formData: FormData) {
+  const relatedIds = formData.getAll("relationContactId").map(String);
+  const types = formData.getAll("relationType").map(String);
+  const notesList = formData.getAll("relationNotes").map(String);
+  const rows: { relatedContactId: string; relationType: string; notes: string | null }[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < relatedIds.length; i++) {
+    const relatedContactId = relatedIds[i]?.trim() ?? "";
+    if (!relatedContactId || seen.has(relatedContactId)) continue;
+    seen.add(relatedContactId);
+    rows.push({
+      relatedContactId,
+      relationType: types[i]?.trim() || "Other",
+      notes: notesList[i]?.trim() || null,
+    });
+  }
+  return rows;
+}
+
+// One enabled checkbox + one direction <select> per entry in
+// CONTACT_SYNC_APPS (see src/lib/contact-sync.ts) — always submitted for
+// every known app regardless of whether this contact has ever synced with
+// it yet, so a brand-new app-sync row can be created on first save.
+function readAppSyncSettings(formData: FormData) {
+  return CONTACT_SYNC_APPS.map((def) => ({
+    app: def.app,
+    enabled: formData.get(`appSyncEnabled_${def.app}`) === "on",
+    direction: (String(formData.get(`appSyncDirection_${def.app}`) ?? "BOTH") as ContactSyncDirection),
+  }));
+}
+
 function readContactForm(formData: FormData) {
   const raw: Record<string, string | string[] | boolean | number | undefined> = {
     email: String(formData.get("email") ?? "").trim().toLowerCase(),
@@ -367,6 +447,68 @@ async function syncContactTagsWith(db: PrismaClient, contactId: string, desiredN
   }
 }
 
+// Creates this contact in whichever CONTACT_SYNC_APPS app is enabled
+// (direction TO_APP/BOTH) but doesn't have a link id yet — the missing
+// "create" half of what updateContact's existing push blocks only ever did
+// for a contact that was *already* linked. Called after the contact row
+// (and its ContactAppSync settings) are saved, from both createContact (a
+// brand-new CRM contact, most relevantly for google_contacts per the
+// user's ask) and updateContact (a contact whose sync was just turned on
+// for an app it isn't linked to yet). Best-effort, like every other push in
+// this file — never throws, always returns a status string to append.
+async function syncMissingAppLinksWith(
+  db: PrismaClient,
+  session: { user: { id: string } },
+  contact: { id: string; email: string | null; locale: string | null; googleContactId: string | null; systemeIoId: number | null } & Record<string, unknown>,
+  appSyncRows: { app: string; enabled: boolean; direction: ContactSyncDirection }[],
+  t: ReturnType<typeof getDict>
+): Promise<string> {
+  let status = "";
+  for (const row of appSyncRows) {
+    if (!row.enabled || row.direction === "FROM_APP") continue;
+    const def = CONTACT_SYNC_APPS.find((d) => d.app === row.app);
+    if (!def) continue;
+    if (contact[def.idField]) continue; // already linked — the update-push blocks own this one
+
+    if (def.app === "google_contacts") {
+      try {
+        const accessToken = await getValidAccessToken(session.user.id, db);
+        if (accessToken) {
+          const created = await createGoogleContact(accessToken, contact as unknown as import("@/lib/google-contacts").ContactPushInput);
+          if (created.resourceName) {
+            await db.contact.update({ where: { id: contact.id }, data: { googleContactId: created.resourceName } });
+            status += t.actions.contactCreatedGoogleSynced;
+          } else if (created.error) {
+            status += t.actions.contactUpdatedGoogleWarning(created.error);
+          }
+        }
+      } catch (error) {
+        status += t.actions.contactUpdatedGoogleWarning(error instanceof Error ? error.message : "unknown error");
+      }
+    }
+
+    if (def.app === "systeme_io" && contact.email) {
+      try {
+        const client = await getSystemeIoClient(db);
+        if (client) {
+          const fields: Record<string, string> = {};
+          for (const [column, slug] of Object.entries(DEFAULT_PUSH_FIELD_SLUGS)) {
+            const value = contact[column];
+            if (!value || typeof value !== "string") continue;
+            fields[slug] = column === "country" ? (countryToCode(value) ?? value) : value;
+          }
+          const created = await client.createContact(contact.email, fields, contact.locale ?? undefined);
+          await db.contact.update({ where: { id: contact.id }, data: { systemeIoId: created.id } });
+          status += t.actions.contactCreatedSystemeIoSynced;
+        }
+      } catch (error) {
+        status += t.actions.contactUpdatedWarning(error instanceof Error ? error.message : "unknown error");
+      }
+    }
+  }
+  return status;
+}
+
 export async function createContact(
   _prevState: { error?: string } | undefined,
   formData: FormData
@@ -437,6 +579,31 @@ export async function createContact(
       });
     }
 
+    const domains = readDomainItems(formData);
+    if (domains.length > 0) {
+      await db.contactDomain.createMany({
+        data: domains.map((row) => ({ ...row, contactId: contact.id })),
+      });
+    }
+
+    const relations = readContactRelations(formData);
+    if (relations.length > 0) {
+      await db.contactRelation.createMany({
+        data: relations.map((row) => ({ ...row, contactId: contact.id })),
+      });
+    }
+
+    const appSyncRows = readAppSyncSettings(formData);
+    await db.$transaction(
+      appSyncRows.map((row) =>
+        db.contactAppSync.upsert({
+          where: { contactId_app: { contactId: contact.id, app: row.app } },
+          update: { enabled: row.enabled, direction: row.direction },
+          create: { contactId: contact.id, app: row.app, enabled: row.enabled, direction: row.direction },
+        })
+      )
+    );
+
     const customFieldOps = buildCustomFieldEditOps(db, contact.id, formData);
     if (customFieldOps.length > 0) {
       await db.$transaction(customFieldOps);
@@ -447,11 +614,13 @@ export async function createContact(
       await addTagToContactWith(db, contact.id, name);
     }
 
+    const syncStatus = await syncMissingAppLinksWith(db, session, contact, appSyncRows, t);
+
     await db.activityLogEntry.create({
       data: {
         contactId: contact.id,
         userId: session.user.id,
-        message: t.actions.createdContact(session.user.name ?? ""),
+        message: t.actions.createdContact(session.user.name ?? "") + syncStatus,
       },
     });
 
@@ -525,6 +694,9 @@ export async function updateContact(
     const messagingAccounts = readMessagingAccounts(formData);
     const voipAccounts = readVoipAccounts(formData);
     const techStackItems = readTechStackItems(formData);
+    const domains = readDomainItems(formData);
+    const relations = readContactRelations(formData);
+    const appSyncRows = readAppSyncSettings(formData);
 
     await db.$transaction([
       db.contactSocialLink.deleteMany({ where: { contactId } }),
@@ -547,6 +719,17 @@ export async function updateContact(
       ...(techStackItems.length > 0
         ? [db.contactTechStackItem.createMany({ data: techStackItems.map((row) => ({ ...row, contactId })) })]
         : []),
+      db.contactDomain.deleteMany({ where: { contactId } }),
+      ...(domains.length > 0 ? [db.contactDomain.createMany({ data: domains.map((row) => ({ ...row, contactId })) })] : []),
+      db.contactRelation.deleteMany({ where: { contactId } }),
+      ...(relations.length > 0 ? [db.contactRelation.createMany({ data: relations.map((row) => ({ ...row, contactId })) })] : []),
+      ...appSyncRows.map((row) =>
+        db.contactAppSync.upsert({
+          where: { contactId_app: { contactId, app: row.app } },
+          update: { enabled: row.enabled, direction: row.direction },
+          create: { contactId, app: row.app, enabled: row.enabled, direction: row.direction },
+        })
+      ),
       ...buildCustomFieldEditOps(db, contactId, formData),
     ]);
 
@@ -556,8 +739,13 @@ export async function updateContact(
     // Best-effort push back to systeme.io — never fails the CRM save itself.
     // Reported back either way (success or failure) so "Contact updated"
     // doesn't leave the user guessing whether systeme.io actually got it.
+    // Gated on the app-sync setting the user just saved above — a contact
+    // whose systeme.io sync was switched off/to FROM_APP-only no longer
+    // gets pushed to, same as one that was never linked.
+    const systemeSync = appSyncRows.find((row) => row.app === "systeme_io");
+    const googleSync = appSyncRows.find((row) => row.app === "google_contacts");
     let syncStatus = "";
-    if (updated.systemeIoId) {
+    if (updated.systemeIoId && systemeSync?.enabled && systemeSync.direction !== "FROM_APP") {
       try {
         const client = await getSystemeIoClient(db);
         if (client) {
@@ -585,7 +773,7 @@ export async function updateContact(
     // read/write `contacts` scope (see api/google/connect/route.ts); an
     // account still on the older contacts.readonly grant needs to
     // reconnect once before this can succeed.
-    if (updated.googleContactId) {
+    if (updated.googleContactId && googleSync?.enabled && googleSync.direction !== "FROM_APP") {
       try {
         const accessToken = await getValidAccessToken(session.user.id, db);
         if (accessToken) {
@@ -597,6 +785,11 @@ export async function updateContact(
         syncStatus += t.actions.contactUpdatedGoogleWarning(message);
       }
     }
+
+    // Create this contact in any app that's enabled but not linked yet —
+    // e.g. sync to Google Contacts was just turned on for a contact that
+    // has never been pushed there before.
+    syncStatus += await syncMissingAppLinksWith(db, session, updated, appSyncRows, t);
 
     return { syncStatus };
   });

@@ -25,6 +25,8 @@ import PageHeader from "../../page-header";
 import Card from "@/components/section-card";
 import LocalTimeCard from "@/components/local-time-card";
 import LinkedEmailsList from "../../linked-emails-list";
+import ContactCredentialsCard from "./contact-credentials-card";
+import { CONTACT_SYNC_APPS } from "@/lib/contact-sync";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -247,6 +249,11 @@ export default async function ContactDetailPage({
         messagingAccounts: { orderBy: { order: "asc" } },
         voipAccounts: { orderBy: { order: "asc" } },
         techStackItems: { orderBy: { order: "asc" } },
+        domains: { orderBy: { order: "asc" } },
+        credentials: { orderBy: { createdAt: "asc" } },
+        appSyncSettings: true,
+        relationsFrom: { include: { relatedContact: true }, orderBy: { createdAt: "asc" } },
+        relationsTo: { include: { contact: true }, orderBy: { createdAt: "asc" } },
       },
     });
     const calendarEvents = contact ? await getLinkedCalendarEvents(db, { contactId: contact.id }, googleAccessToken) : [];
@@ -303,6 +310,37 @@ export default async function ContactDetailPage({
   });
 
   if (!contact) notFound();
+
+  const isAdmin = session?.user.role === "ADMIN";
+  const credentialEntries = contact.credentials.map((c) => ({
+    id: c.id,
+    label: c.label,
+    url: c.url,
+    username: c.username,
+    hasPassword: Boolean(c.passwordEncrypted),
+    notes: c.notes,
+  }));
+
+  // Combined both directions — a relation is stored once, from whichever
+  // contact's form it was added on (see the ContactRelation model comment
+  // in schema.prisma), so this contact's Info page has to look both ways
+  // to show every link it's actually part of.
+  const relatedContactRows = [
+    ...contact.relationsFrom.map((r) => ({
+      id: r.id,
+      relationType: r.relationType,
+      notes: r.notes,
+      other: r.relatedContact,
+    })),
+    ...contact.relationsTo.map((r) => ({
+      id: r.id,
+      relationType: r.relationType,
+      notes: r.notes,
+      other: r.contact,
+    })),
+  ];
+
+  const appSyncByApp = new Map(contact.appSyncSettings.map((row) => [row.app, row]));
 
   const fullName = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email || "";
 
@@ -442,43 +480,33 @@ export default async function ContactDetailPage({
                 label={t.contactForm.timeZone}
                 value={contact.timeZone ? `(${utcOffsetLabel(contact.timeZone)}) ${contact.timeZone.replace(/_/g, " ")}` : undefined}
               />
+              <InfoField
+                label={t.contactForm.website}
+                value={
+                  contact.website ? (
+                    <a href={contact.website} target="_blank" rel="noreferrer" className="break-words text-sky-700 hover:underline">
+                      {contact.website}
+                    </a>
+                  ) : undefined
+                }
+              />
             </div>
 
-            <div className="rounded-lg border border-card-border bg-black/[0.02] p-2 sm:p-4">
-              <h3 className={LABEL_CLASS}>{t.contactForm.cardInvoice}</h3>
-              <div className="mt-2 space-y-2 sm:mt-3 sm:space-y-4">
-                <p className="text-sm text-ink">
-                  {contact.autoSendInvoiceReminders ? t.contactDetail.invoiceRemindersAuto : t.contactDetail.invoiceRemindersManual}
-                </p>
-                <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
-                  <InfoField
-                    label={t.contactForm.preferredCurrency}
-                    value={CURRENCIES.find((c) => c.value === contact.preferredCurrency)?.label}
-                  />
-                  <InfoField label={t.contactForm.paymentTerms} value={contact.paymentTerms} />
-                  <InfoField label={t.contactForm.paymentSchedule} value={contact.paymentSchedule} />
-                  <InfoField
-                    label={t.contactForm.defaultDiscount}
-                    value={contact.defaultDiscount != null ? `${contact.defaultDiscount}%` : undefined}
-                  />
+            {(contact.nickname || contact.jobTitle || contact.birthday || contact.avatarUrl) && (
+              <div className="rounded-lg border border-card-border bg-black/[0.02] p-2 sm:p-4">
+                <h3 className={LABEL_CLASS}>{t.contactForm.cardPersonalInfo}</h3>
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-4 lg:grid-cols-4">
+                  {contact.avatarUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element -- an arbitrary external Google-hosted URL, not a local/optimizable asset
+                    <img src={contact.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
+                  )}
+                  <InfoField label={t.contactForm.nickname} value={contact.nickname} />
+                  <InfoField label={t.contactForm.jobTitle} value={contact.jobTitle} />
+                  <InfoField label={t.contactForm.birthday} value={contact.birthday} />
                 </div>
               </div>
-            </div>
+            )}
           </Card>
-
-          {(contact.nickname || contact.jobTitle || contact.birthday || contact.avatarUrl) && (
-            <Card color="personal" title={t.contactForm.cardPersonalInfo} compact>
-              <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
-                {contact.avatarUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element -- an arbitrary external Google-hosted URL, not a local/optimizable asset
-                  <img src={contact.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
-                )}
-                <InfoField label={t.contactForm.nickname} value={contact.nickname} />
-                <InfoField label={t.contactForm.jobTitle} value={contact.jobTitle} />
-                <InfoField label={t.contactForm.birthday} value={contact.birthday} />
-              </div>
-            </Card>
-          )}
 
           <Card color="contact" title={t.contactForm.cardContactInfo} compact>
             <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
@@ -523,6 +551,25 @@ export default async function ContactDetailPage({
               </div>
             </div>
           </Card>
+
+          <div className="grid grid-cols-2 gap-2 sm:gap-4">
+            <Card color="social" title={t.contactForm.cardSocialMedia} compact>
+              <div className="flex flex-wrap gap-1.5">
+                {contact.socialLinks.length === 0 && <p className="text-sm text-soft">—</p>}
+                {contact.socialLinks.map((link) => (
+                  <AppIdChip key={link.id} platform={link.platform} id={link.url} href={link.url} />
+                ))}
+              </div>
+            </Card>
+            <Card color="voip" title={t.contactForm.cardVoipApps} compact>
+              <div className="flex flex-wrap gap-1.5">
+                {contact.voipAccounts.length === 0 && <p className="text-sm text-soft">—</p>}
+                {contact.voipAccounts.map((row) => (
+                  <AppIdChip key={row.id} platform={row.app} id={row.handle} />
+                ))}
+              </div>
+            </Card>
+          </div>
 
           <Card color="addresses" title={t.contactForm.cardAddresses} compact>
             <div className="grid gap-2 sm:gap-4 lg:grid-cols-2">
@@ -579,6 +626,24 @@ export default async function ContactDetailPage({
             </div>
           </Card>
 
+          <Card color="billing" title={t.contactForm.cardInvoice} compact>
+            <p className="text-sm text-ink">
+              {contact.autoSendInvoiceReminders ? t.contactDetail.invoiceRemindersAuto : t.contactDetail.invoiceRemindersManual}
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
+              <InfoField
+                label={t.contactForm.preferredCurrency}
+                value={CURRENCIES.find((c) => c.value === contact.preferredCurrency)?.label}
+              />
+              <InfoField label={t.contactForm.paymentTerms} value={contact.paymentTerms} />
+              <InfoField label={t.contactForm.paymentSchedule} value={contact.paymentSchedule} />
+              <InfoField
+                label={t.contactForm.defaultDiscount}
+                value={contact.defaultDiscount != null ? `${contact.defaultDiscount}%` : undefined}
+              />
+            </div>
+          </Card>
+
           <Card color="techStack" title={t.contactForm.techStackTitle} compact>
             <div className="grid grid-cols-2 gap-2 sm:gap-6 lg:grid-cols-4">
               <TechStackBlock
@@ -627,24 +692,47 @@ export default async function ContactDetailPage({
             </div>
           </Card>
 
-          <div className="grid grid-cols-2 gap-2 sm:gap-4">
-            <Card color="social" title={t.contactForm.cardSocialMedia} compact>
-              <div className="flex flex-wrap gap-1.5">
-                {contact.socialLinks.length === 0 && <p className="text-sm text-soft">—</p>}
-                {contact.socialLinks.map((link) => (
-                  <AppIdChip key={link.id} platform={link.platform} id={link.url} href={link.url} />
+          <Card color="domains" title={t.contactForm.cardDomains} compact>
+            {contact.domains.length === 0 ? (
+              <p className="text-sm text-soft">—</p>
+            ) : (
+              <ul className="divide-y divide-card-border">
+                {contact.domains.map((d) => (
+                  <li key={d.id} className="py-2 text-sm">
+                    <p className="font-medium text-ink">{d.domain}</p>
+                    <p className="text-xs text-soft">
+                      {[
+                        d.registrar,
+                        d.dnsProvider,
+                        d.expiryDate ? `${t.contactForm.expiryDate}: ${format(d.expiryDate, "PP", { locale: dateLocale })}` : null,
+                        d.autoRenew ? t.contactForm.autoRenew : null,
+                        d.managedBy,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                    {d.notes && <p className="text-xs text-soft">{d.notes}</p>}
+                  </li>
                 ))}
-              </div>
-            </Card>
-            <Card color="voip" title={t.contactForm.cardVoipApps} compact>
-              <div className="flex flex-wrap gap-1.5">
-                {contact.voipAccounts.length === 0 && <p className="text-sm text-soft">—</p>}
-                {contact.voipAccounts.map((row) => (
-                  <AppIdChip key={row.id} platform={row.app} id={row.handle} />
+              </ul>
+            )}
+          </Card>
+
+          {relatedContactRows.length > 0 && (
+            <Card color="relations" title={t.contactForm.cardRelatedContacts} compact>
+              <ul className="divide-y divide-card-border">
+                {relatedContactRows.map((row) => (
+                  <li key={row.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
+                    <Link href={`/contacts/${row.other.id}`} className="font-medium text-ink hover:underline">
+                      {[row.other.firstName, row.other.lastName].filter(Boolean).join(" ") || row.other.company || row.other.email || row.other.id}
+                    </Link>
+                    <span className="text-xs text-soft">{row.relationType}</span>
+                    {row.notes && <span className="text-xs text-soft">· {row.notes}</span>}
+                  </li>
                 ))}
-              </div>
+              </ul>
             </Card>
-          </div>
+          )}
 
           <Card color="other" title={t.contactForm.cardOtherInfo} compact>
             <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-3">
@@ -671,11 +759,33 @@ export default async function ContactDetailPage({
                 ))}
               </div>
             )}
+
+            <div className="rounded-lg border border-card-border bg-black/[0.02] p-2 sm:p-4">
+              <h3 className={LABEL_CLASS}>{t.contactForm.appSyncTitle}</h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {CONTACT_SYNC_APPS.map((def) => {
+                  const row = appSyncByApp.get(def.app);
+                  const enabled = row ? row.enabled : def.app === "google_contacts" || Boolean(contact.systemeIoId && def.app === "systeme_io");
+                  const label = t.contactForm.syncAppLabels[def.labelKey as keyof typeof t.contactForm.syncAppLabels] ?? def.app;
+                  return (
+                    <span
+                      key={def.app}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${enabled ? "bg-emerald-100 text-emerald-800" : "bg-black/5 text-soft"}`}
+                    >
+                      {label}
+                      {enabled && row ? ` · ${row.direction === "BOTH" ? t.contactForm.syncDirectionBoth : row.direction === "TO_APP" ? t.contactForm.syncDirectionToApp : t.contactForm.syncDirectionFromApp}` : ""}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
           </Card>
 
           <Card color="notes" title={t.contactForm.cardNotes} compact>
             <p className="whitespace-pre-wrap break-words text-sm text-ink">{contact.notes || "—"}</p>
           </Card>
+
+          {isAdmin && <ContactCredentialsCard contactId={contact.id} entries={credentialEntries} lang={lang} />}
         </div>
 
         <div className="min-w-0 space-y-2 sm:space-y-6">

@@ -11,10 +11,15 @@ export default async function NewContactPage() {
   const t = getDict(lang);
   const session = await auth();
 
-  const { allTags, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { allTags, hour12, allContacts } = await withScopedPrismaClient(async (db) => {
     const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
     const hour12 = await getHour12(session, db);
-    return { allTags, hour12 };
+    const allContacts = await db.contact.findMany({
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      take: 500,
+      select: { id: true, firstName: true, lastName: true, company: true, email: true },
+    });
+    return { allTags, hour12, allContacts };
   });
 
   return (
@@ -26,6 +31,7 @@ export default async function NewContactPage() {
       title={t.newContactPage.title}
       hour12={hour12}
       location={t.dashboard.myLocation}
+      allContacts={allContacts}
     />
   );
 }

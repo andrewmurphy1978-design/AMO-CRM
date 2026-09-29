@@ -16,7 +16,7 @@ export default async function EditContactPage({
   const session = await auth();
 
   // One shared client — see src/lib/prisma.ts for why.
-  const { contact, allTags, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { contact, allTags, hour12, allContacts, credentialEntries } = await withScopedPrismaClient(async (db) => {
     const contact = await db.contact.findUnique({
       where: { id },
       include: {
@@ -26,18 +26,37 @@ export default async function EditContactPage({
         messagingAccounts: { orderBy: { order: "asc" } },
         voipAccounts: { orderBy: { order: "asc" } },
         techStackItems: { orderBy: { order: "asc" } },
+        domains: { orderBy: { order: "asc" } },
+        relationsFrom: true,
+        appSyncSettings: true,
+        credentials: { orderBy: { createdAt: "asc" } },
         fieldValues: true,
       },
     });
     const allTags = await db.tag.findMany({ orderBy: { name: "asc" } });
     const hour12 = await getHour12(session, db);
-    return { contact, allTags, hour12 };
+    const allContacts = await db.contact.findMany({
+      where: { NOT: { id } },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      take: 500,
+      select: { id: true, firstName: true, lastName: true, company: true, email: true },
+    });
+    const credentialEntries = (contact?.credentials ?? []).map((c) => ({
+      id: c.id,
+      label: c.label,
+      url: c.url,
+      username: c.username,
+      hasPassword: Boolean(c.passwordEncrypted),
+      notes: c.notes,
+    }));
+    return { contact, allTags, hour12, allContacts, credentialEntries };
   });
   if (!contact) notFound();
 
   const lang = await getLang();
   const t = getDict(lang);
   const boundUpdate = updateContact.bind(null, contact.id);
+  const isAdmin = session?.user.role === "ADMIN";
 
   return (
     <ContactForm
@@ -51,6 +70,9 @@ export default async function EditContactPage({
       hour12={hour12}
       location={t.dashboard.myLocation}
       contactId={contact.id}
+      allContacts={allContacts}
+      isAdmin={isAdmin}
+      credentialEntries={credentialEntries}
     />
   );
 }

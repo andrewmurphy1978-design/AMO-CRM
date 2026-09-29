@@ -234,6 +234,23 @@ export class SystemeIoClient {
     return { skipped };
   }
 
+  // NOTE: unlike updateContactFields (confirmed against the real API and
+  // battle-tested against per-field 422s), this create path is UNVERIFIED —
+  // this sandbox has no network access to systeme.io, so the payload shape
+  // is a best guess based on the documented contact resource (email, fields
+  // array, locale) and the confirmed PATCH shape above. Test with a real
+  // account before relying on it; watch for a 422 naming a different field
+  // name for "email" or a different fields-array shape.
+  async createContact(email: string, fields: Record<string, string> = {}, locale?: string): Promise<SystemeIoContact> {
+    const fieldsArray = Object.entries(fields).map(([slug, value]) => ({ slug, value }));
+    const data = await this.mutate<Record<string, unknown>>("POST", "/contacts", {
+      email,
+      ...(fieldsArray.length > 0 ? { fields: fieldsArray } : {}),
+      ...(locale ? { locale } : {}),
+    });
+    return mapContact(data);
+  }
+
   async addTagToContact(contactId: number, tagId: number): Promise<void> {
     await this.mutate("POST", `/contacts/${contactId}/tags`, { tagId });
   }
