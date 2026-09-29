@@ -39,6 +39,9 @@ import ProjectSummaryCard from "./project-summary-card";
 import AffiliateProgramsSummaryCard, {
   type AffiliateProgramsSummaryCounts,
 } from "./affiliate-programs-summary-card";
+import AutomationsSummaryCard, {
+  type AutomationsSummaryCounts,
+} from "./automations-summary-card";
 import PendingAffiliateProgramsCard, {
   type PendingAffiliateProgramRow,
 } from "./pending-affiliate-programs-card";
@@ -63,6 +66,7 @@ import {
   type CalendarEventSummary,
 } from "@/lib/google";
 import { getLatestSocialSnapshots, summarizeSocialSnapshots } from "@/lib/social";
+import { refreshMakeRunsQuietly } from "@/lib/automations";
 import { getHour12 } from "@/lib/time-format";
 import { getUserWorldClockZones } from "@/lib/world-clock-zones";
 import { getUserMarketsPicks } from "@/lib/dashboard-markets-picks";
@@ -183,7 +187,6 @@ export default async function DashboardPage() {
     deadlineTasksList,
     dueSoonTasks,
     activeProjects,
-    recentActivity,
     newContactsList,
     totalContactCount,
     contactsBySource,
@@ -253,11 +256,6 @@ export default async function DashboardPage() {
       take: 5,
       include: { contact: true },
     });
-    const recentActivity = await db.activityLogEntry.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 8,
-      include: { contact: true, project: true },
-    });
     // Feeds the new-contacts Dashboard card (today/yesterday/this week
     // buckets computed below, once we're back on plain JS Dates) — every
     // matching row, not just the card's own visible 2/2/5 rows-before-
@@ -285,6 +283,13 @@ export default async function DashboardPage() {
     const integration = await db.integrationSetting.findUnique({
       where: { provider: "systeme_io" },
     });
+    // Zapier runs arrive live via its own webhook, but Make only reports
+    // in when pulled — refreshing here keeps the Automations card current
+    // on every Dashboard load without the user having to visit Settings
+    // and click "Sync now" first. Reuses this same `db` rather than
+    // calling runMakeSync() (which opens its own scoped client) — see
+    // refreshMakeRunsQuietly's own comment.
+    await refreshMakeRunsQuietly(db);
     const recentRuns = await db.automationRun.findMany({
       orderBy: { occurredAt: "desc" },
       take: 30,
@@ -403,7 +408,6 @@ export default async function DashboardPage() {
       deadlineTasksList,
       dueSoonTasks,
       activeProjects,
-      recentActivity,
       newContactsList,
       totalContactCount,
       contactsBySource,
@@ -434,6 +438,13 @@ export default async function DashboardPage() {
     };
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
+  const automationSummaryCounts: AutomationsSummaryCounts = {
+    total: recentRuns.length,
+    success: recentRuns.filter((r) => r.status !== "error").length,
+    failed: recentRuns.filter((r) => r.status === "error").length,
+    make: recentRuns.filter((r) => r.source === "make").length,
+    zapier: recentRuns.filter((r) => r.source === "zapier").length,
+  };
 
   // Bucket counts for the Affiliate Programs Summary card, and the pending-
   // only subset for the Pending Affiliate Programs list card just below it.
@@ -851,6 +862,14 @@ export default async function DashboardPage() {
     viewsLabel: t.dashboard.socialSummaryViewsLabel,
     platformsLabel: t.dashboard.socialSummaryPlatformsLabel,
   };
+  const automationsSummaryLabels = {
+    title: t.dashboard.automationsSummaryTitle,
+    totalLabel: t.dashboard.automationsSummaryTotalLabel,
+    successLabel: t.dashboard.automationsSummarySuccessLabel,
+    failedLabel: t.dashboard.automationsSummaryFailedLabel,
+    makeLabel: t.dashboard.automationsSummaryMakeLabel,
+    zapierLabel: t.dashboard.automationsSummaryZapierLabel,
+  };
   const calendarLabels = {
     title: t.dashboard.calendarTitle,
     refresh: t.dashboard.refresh,
@@ -863,6 +882,88 @@ export default async function DashboardPage() {
     newEventsHeading: t.dashboard.calendarNewEventsHeading,
     newEventsEmpty: t.dashboard.calendarNewEventsEmpty,
   };
+
+  // Defined once and rendered in two places (desktop and mobile each get
+  // their own instance right below Social, same reasoning as every other
+  // desktop/mobile card pair on this page — see the Pending Affiliate
+  // Programs card's own comment) rather than duplicating this markup.
+  const automationsCard = (
+    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
+      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+      <h2 className="font-display text-lg font-semibold text-ink">
+        {t.dashboard.automationsTitle}
+      </h2>
+      {automationEntries.length === 0 ? (
+        <p className="mt-1.5 sm:mt-3 text-sm text-soft">
+          {t.dashboard.noAutomationRuns}
+        </p>
+      ) : (
+        <ul className="mt-1.5 sm:mt-3 space-y-2">
+          {automationEntries.map((entry) =>
+            entry.kind === "run" ? (
+              <li
+                key={entry.run.id}
+                className="flex items-start gap-3 text-sm"
+              >
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                <div className="flex-1">
+                  <p className="text-ink">
+                    <span className="font-medium">
+                      {entry.run.source === "make" ? "Make" : "Zapier"}
+                    </span>
+                    {entry.run.name ? ` · ${entry.run.name}` : ""}
+                  </p>
+                  {entry.run.message && (
+                    <p className="text-xs text-soft">
+                      {entry.run.message}
+                    </p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-medium text-red-600">
+                    {t.dashboard.automationError}
+                  </span>
+                  <p className="text-xs text-soft">
+                    {formatSmartDateTime(
+                      entry.run.occurredAt,
+                      dateLocale,
+                      t,
+                    )}
+                  </p>
+                </div>
+              </li>
+            ) : (
+              <li
+                key={`${entry.source}-${entry.name}-${entry.latest.getTime()}`}
+                className="flex items-start gap-3 text-sm"
+              >
+                <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                <div className="flex-1">
+                  <p className="text-ink">
+                    <span className="font-medium">
+                      {entry.source === "make" ? "Make" : "Zapier"}
+                    </span>
+                    {entry.name ? ` · ${entry.name}` : ""}
+                  </p>
+                  <p className="text-xs text-soft">
+                    {t.dashboard.automationSuccessCount(entry.count)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-xs font-medium text-emerald-700">
+                    {t.dashboard.automationSuccess}
+                  </span>
+                  <p className="text-xs text-soft">
+                    {formatSmartDateTime(entry.latest, dateLocale, t)}
+                  </p>
+                </div>
+              </li>
+            ),
+          )}
+        </ul>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-2 sm:space-y-8">
@@ -990,6 +1091,10 @@ export default async function DashboardPage() {
             counts={socialSummaryCounts}
             labels={socialSummaryLabels}
           />
+          <AutomationsSummaryCard
+            counts={automationSummaryCounts}
+            labels={automationsSummaryLabels}
+          />
         </div>
 
         {/* A single flat grid (not three separately-flowing column divs) so
@@ -1044,20 +1149,48 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div
-            id="dashboard-calendar-card"
-            className="lg:col-start-2 scroll-mt-20"
-          >
-            <Suspense
-              fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}
-            >
-              <CalendarCardServer
-                accessToken={googleAccessToken}
-                lang={lang}
-                hour12={hour12}
-                labels={calendarLabels}
-              />
-            </Suspense>
+          {/* Calendar + the desktop-only Social Media Analytics card are
+              grouped into one flex-col grid item (same technique as the
+              Email/Pending Affiliate group in column 1 and the Contacts/
+              Projects/Tasks group in column 3) instead of two separate
+              col-start-2 items. A CSS Grid row's height is shared across
+              every column, so even with an explicit row-start, a Social
+              card placed as its own grid item would still get stretched
+              down to wherever row 1 actually ends — i.e. the tallest of
+              Email/Calendar/Contacts, not Calendar's own bottom. Inside a
+              shared flex-col item, Social instead follows Calendar in
+              plain in-flow layout, independent of how tall the other
+              columns happen to be. */}
+          <div className="flex flex-col gap-2 sm:gap-6 lg:col-start-2">
+            <div id="dashboard-calendar-card" className="scroll-mt-20">
+              <Suspense
+                fallback={<CardSkeleton title={t.dashboard.calendarTitle} />}
+              >
+                <CalendarCardServer
+                  accessToken={googleAccessToken}
+                  lang={lang}
+                  hour12={hour12}
+                  labels={calendarLabels}
+                />
+              </Suspense>
+            </div>
+
+            <div className="hidden lg:block">
+              <div id="dashboard-social-card-desktop" className="scroll-mt-20">
+                <SocialCard
+                  snapshots={socialSnapshots}
+                  labels={socialLabels}
+                  isAdmin={session?.user.role === "ADMIN"}
+                  dateLocale={dateLocale}
+                />
+              </div>
+            </div>
+
+            <div className="hidden lg:block">
+              <div id="dashboard-automations-card-desktop" className="scroll-mt-20">
+                {automationsCard}
+              </div>
+            </div>
           </div>
 
           {/* Top of column 3 on desktop; on mobile (single-column stacking)
@@ -1182,118 +1315,32 @@ export default async function DashboardPage() {
             />
           </div>
 
-          <div id="dashboard-social-card" className="lg:col-start-2 scroll-mt-20">
-            <SocialCard
-              snapshots={socialSnapshots}
-              labels={socialLabels}
-              isAdmin={session?.user.role === "ADMIN"}
-              dateLocale={dateLocale}
-            />
+          {/* Mobile only — its own separate instance from the desktop copy
+              above (see that one's comment for why desktop needs its own
+              grid item rather than sharing this DOM position). Single-
+              column mobile stacking follows DOM order, so sitting here —
+              right after the mobile Pending Affiliate Programs card —
+              keeps Social right where it already was on mobile; lg:hidden
+              then removes it from the desktop grid entirely. */}
+          <div className="lg:hidden">
+            <div id="dashboard-social-card-mobile" className="scroll-mt-20">
+              <SocialCard
+                snapshots={socialSnapshots}
+                labels={socialLabels}
+                isAdmin={session?.user.role === "ADMIN"}
+                dateLocale={dateLocale}
+              />
+            </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-1">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">
-              {t.dashboard.recentActivity}
-            </h2>
-            {recentActivity.length === 0 ? (
-              <p className="mt-1.5 sm:mt-3 text-sm text-soft">
-                {t.dashboard.noActivity}
-              </p>
-            ) : (
-              <ul className="mt-1.5 sm:mt-3 space-y-3">
-                {recentActivity.map((entry) => (
-                  <li key={entry.id} className="flex items-start gap-3 text-sm">
-                    <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amo-blue" />
-                    <div>
-                      <p className="text-ink">{entry.message}</p>
-                      <p className="text-xs text-soft">
-                        {formatDistanceToNow(entry.createdAt, {
-                          addSuffix: true,
-                          locale: dateLocale,
-                        })}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5 lg:col-start-2">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">
-              {t.dashboard.automationsTitle}
-            </h2>
-            {automationEntries.length === 0 ? (
-              <p className="mt-1.5 sm:mt-3 text-sm text-soft">
-                {t.dashboard.noAutomationRuns}
-              </p>
-            ) : (
-              <ul className="mt-1.5 sm:mt-3 space-y-2">
-                {automationEntries.map((entry) =>
-                  entry.kind === "run" ? (
-                    <li
-                      key={entry.run.id}
-                      className="flex items-start gap-3 text-sm"
-                    >
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-red-500" />
-                      <div className="flex-1">
-                        <p className="text-ink">
-                          <span className="font-medium">
-                            {entry.run.source === "make" ? "Make" : "Zapier"}
-                          </span>
-                          {entry.run.name ? ` · ${entry.run.name}` : ""}
-                        </p>
-                        {entry.run.message && (
-                          <p className="text-xs text-soft">
-                            {entry.run.message}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-medium text-red-600">
-                          {t.dashboard.automationError}
-                        </span>
-                        <p className="text-xs text-soft">
-                          {formatSmartDateTime(
-                            entry.run.occurredAt,
-                            dateLocale,
-                            t,
-                          )}
-                        </p>
-                      </div>
-                    </li>
-                  ) : (
-                    <li
-                      key={`${entry.source}-${entry.name}-${entry.latest.getTime()}`}
-                      className="flex items-start gap-3 text-sm"
-                    >
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                      <div className="flex-1">
-                        <p className="text-ink">
-                          <span className="font-medium">
-                            {entry.source === "make" ? "Make" : "Zapier"}
-                          </span>
-                          {entry.name ? ` · ${entry.name}` : ""}
-                        </p>
-                        <p className="text-xs text-soft">
-                          {t.dashboard.automationSuccessCount(entry.count)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-medium text-emerald-700">
-                          {t.dashboard.automationSuccess}
-                        </span>
-                        <p className="text-xs text-soft">
-                          {formatSmartDateTime(entry.latest, dateLocale, t)}
-                        </p>
-                      </div>
-                    </li>
-                  ),
-                )}
-              </ul>
-            )}
+          {/* Mobile-only Automations instance, right after mobile Social —
+              its own separate instance from the desktop copy above, same
+              dual-instance reasoning as every other desktop/mobile card
+              pair on this page. */}
+          <div className="lg:hidden">
+            <div id="dashboard-automations-card-mobile" className="scroll-mt-20">
+              {automationsCard}
+            </div>
           </div>
         </div>
       </div>

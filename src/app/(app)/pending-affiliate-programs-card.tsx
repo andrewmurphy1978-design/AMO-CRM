@@ -86,8 +86,13 @@ export default function PendingAffiliateProgramsCard({
         {programs.length === 0 ? (
           <p className="mt-1.5 sm:mt-3 text-sm text-soft">{labels.noneYet}</p>
         ) : (
+          // Capped to roughly 10 rows (each a measured, content-length-
+          // independent ~47px thanks to the truncate classes below) before
+          // scrolling — with dozens of pending programs, this card was
+          // growing tall enough to push every card below it far down the
+          // page instead of staying a fixed-height list like its siblings.
           <div
-            className="mt-1.5 divide-y divide-card-border sm:mt-3"
+            className="mt-1.5 max-h-[470px] divide-y divide-card-border overflow-y-auto sm:mt-3"
             onClick={(e) => e.stopPropagation()}
           >
             {programs.map((p) => {

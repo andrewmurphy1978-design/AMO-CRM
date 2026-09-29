@@ -31,6 +31,23 @@ export async function runMakeSync(): Promise<MakeSyncResult> {
   return withScopedPrismaClient((db) => runMakeSyncWith(db));
 }
 
+// Keeps the Dashboard's Automations card current on every load, reusing the
+// page's own already-open db client rather than calling runMakeSync()
+// (which opens its own scoped client) — nesting a second one would open a
+// second Postgres connection within the same Worker invocation, the exact
+// pattern withScopedPrismaClient exists to prevent (see its own header
+// comment). Never throws: Make being unconfigured, or a transient API
+// failure, just leaves the existing AutomationRun rows as they were — same
+// "defensive, never breaks the page" rule every other header widget
+// (weather/markets/sports) already follows.
+export async function refreshMakeRunsQuietly(db: PrismaClient): Promise<void> {
+  try {
+    await runMakeSyncWith(db);
+  } catch {
+    // Not configured, or a transient Make API error.
+  }
+}
+
 async function runMakeSyncWith(db: PrismaClient): Promise<MakeSyncResult> {
   const setting = await db.integrationSetting.findUnique({ where: { provider: "make" } });
   if (!setting?.apiKeyEncrypted) {

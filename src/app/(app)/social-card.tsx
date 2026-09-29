@@ -2,12 +2,15 @@ import { formatDistanceToNow } from "date-fns";
 import type { Locale } from "date-fns";
 import clsx from "@/lib/clsx";
 import {
+  EXTRA_STAT_KEYS,
   SOCIAL_PLATFORMS,
   type ExtraStatKey,
   type SocialPlatform,
   type SocialSnapshotView,
 } from "@/lib/social";
 import SocialSyncButton from "./social-sync-button";
+import SocialIcon from "./social-icon";
+import { SOCIAL_CARD_ACCENT_BAR, SOCIAL_CARD_BG } from "./social-summary-colors";
 
 export interface SocialLabels {
   title: string;
@@ -185,6 +188,80 @@ function StatCell({
   );
 }
 
+interface CombinedStatRow {
+  key: string;
+  label: string;
+  enValue: number | null;
+  frValue: number | null;
+}
+
+// Mobile's own layout (see MobilePlatformRow below) puts English and French
+// side by side as two number columns sharing one label column, instead of
+// the desktop table's two independently-labeled stacked blocks — at phone
+// width the desktop shape left the French column squeezed half off-screen
+// since each language repeated every label ("Followers"/"Engagement"/...)
+// in full. One combined row per stat (present in either language) is both
+// narrower and avoids repeating the label twice.
+function combinedRows(
+  en: SocialSnapshotView | undefined,
+  fr: SocialSnapshotView | undefined,
+  labels: SocialLabels,
+): CombinedStatRow[] {
+  const rows: CombinedStatRow[] = [];
+  const push = (key: string, label: string, enValue: number | null, frValue: number | null) => {
+    if (enValue !== null || frValue !== null) rows.push({ key, label, enValue, frValue });
+  };
+  push("followers", labels.followers, en?.followers ?? null, fr?.followers ?? null);
+  push("engagement", labels.engagement, en?.engagement ?? null, fr?.engagement ?? null);
+  push("views", labels.views, en?.views ?? null, fr?.views ?? null);
+  for (const key of EXTRA_STAT_KEYS) {
+    if (key === "reach" || key === "impressions") continue; // already surfaced as "views" above
+    const enValue = en?.extraStats.find((s) => s.key === key)?.value ?? null;
+    const frValue = fr?.extraStats.find((s) => s.key === key)?.value ?? null;
+    push(key, labels.statLabels[key], enValue, frValue);
+  }
+  return rows;
+}
+
+function MobilePlatformRow({
+  platform,
+  en,
+  fr,
+  labels,
+}: {
+  platform: SocialPlatform;
+  en: SocialSnapshotView | undefined;
+  fr: SocialSnapshotView | undefined;
+  labels: SocialLabels;
+}) {
+  const style = ROW_STYLE[platform];
+  const rows = combinedRows(en, fr, labels);
+  return (
+    <div className={clsx("flex items-center gap-2 rounded-lg px-2 py-2", style.rowBg)}>
+      {/* Logo only — no platform name — so the label/EN/FR columns get all
+          the remaining width on a phone screen. */}
+      <PlatformIcon platform={platform} style={style} />
+      {rows.length === 0 ? (
+        <span className={clsx("text-xs", style.soft)}>—</span>
+      ) : (
+        <div className="min-w-0 flex-1 space-y-0.5">
+          {rows.map((row) => (
+            <div key={row.key} className="flex items-center gap-2 text-xs">
+              <span className={clsx("min-w-0 flex-1 truncate", style.soft)}>{row.label}</span>
+              <span className={clsx("w-12 shrink-0 text-right font-medium tabular-nums", style.text)}>
+                {row.enValue !== null ? fmt(row.enValue) : "—"}
+              </span>
+              <span className={clsx("w-12 shrink-0 text-right font-medium tabular-nums", style.text)}>
+                {row.frValue !== null ? fmt(row.frValue) : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SocialCard({
   snapshots,
   labels,
@@ -206,22 +283,25 @@ export default function SocialCard({
   );
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+    <div className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${SOCIAL_CARD_BG}`}>
+      <div className={`absolute inset-x-0 top-0 h-[3px] ${SOCIAL_CARD_ACCENT_BAR}`} />
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-ink">
-            {labels.title}
-          </h2>
-          {lastSyncedAt && (
-            <p className="mt-0.5 text-xs text-soft">
-              {labels.updatedPrefix}{" "}
-              {formatDistanceToNow(lastSyncedAt, {
-                addSuffix: true,
-                locale: dateLocale,
-              })}
-            </p>
-          )}
+        <div className="flex items-center gap-2">
+          <SocialIcon />
+          <div>
+            <h2 className="font-display text-lg font-semibold text-ink">
+              {labels.title}
+            </h2>
+            {lastSyncedAt && (
+              <p className="mt-0.5 text-xs text-soft">
+                {labels.updatedPrefix}{" "}
+                {formatDistanceToNow(lastSyncedAt, {
+                  addSuffix: true,
+                  locale: dateLocale,
+                })}
+              </p>
+            )}
+          </div>
         </div>
         {isAdmin && (
           <SocialSyncButton
@@ -233,60 +313,85 @@ export default function SocialCard({
       {!hasAnyData ? (
         <p className="mt-1.5 sm:mt-3 text-sm text-soft">{labels.empty}</p>
       ) : (
-        <div className="mt-1.5 sm:mt-3 overflow-hidden rounded-xl border border-card-border">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-card-border bg-field-bg text-xs font-semibold uppercase tracking-wide text-soft">
-                <th className="w-12 py-2 pl-3 text-left"></th>
-                <th className="py-2 pl-2 text-left">{labels.languageEn}</th>
-                <th className="py-2 pl-2 pr-3 text-left">
-                  {labels.languageFr}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {SOCIAL_PLATFORMS.map((platform) => {
-                const style = ROW_STYLE[platform];
-                return (
-                  <tr
-                    key={platform}
-                    className={clsx(
-                      "border-b border-card-border/60 last:border-b-0",
-                      style.rowBg,
-                    )}
-                  >
-                    <td className="py-3 pl-3">
-                      <div className="flex items-center gap-2">
-                        <PlatformIcon platform={platform} style={style} />
-                        <span
-                          className={clsx("text-xs font-medium", style.text)}
-                        >
-                          {labels.platformNames[platform]}
-                        </span>
-                      </div>
-                    </td>
-                    <td className={clsx("py-3 pl-2 align-top", style.text)}>
-                      <StatCell
-                        snapshot={byKey.get(`${platform}|EN`)}
-                        labels={labels}
-                        soft={style.soft}
-                      />
-                    </td>
-                    <td
-                      className={clsx("py-3 pl-2 pr-3 align-top", style.text)}
+        <>
+          {/* Mobile: logo-only rows, English/French as two number columns
+              sharing one label column (see MobilePlatformRow/combinedRows
+              above) — the desktop table's two fully-labeled language
+              columns don't fit at phone width without one of them running
+              off-screen. */}
+          <div className="mt-1.5 space-y-1.5 sm:hidden">
+            <div className="flex items-center gap-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-soft">
+              <span className="w-8 shrink-0" />
+              <span className="min-w-0 flex-1" />
+              <span className="w-12 shrink-0 text-right">{labels.languageEn}</span>
+              <span className="w-12 shrink-0 text-right">{labels.languageFr}</span>
+            </div>
+            {SOCIAL_PLATFORMS.map((platform) => (
+              <MobilePlatformRow
+                key={platform}
+                platform={platform}
+                en={byKey.get(`${platform}|EN`)}
+                fr={byKey.get(`${platform}|FR`)}
+                labels={labels}
+              />
+            ))}
+          </div>
+
+          <div className="hidden sm:mt-3 sm:block sm:overflow-hidden sm:rounded-xl sm:border sm:border-card-border">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-card-border bg-field-bg text-xs font-semibold uppercase tracking-wide text-soft">
+                  <th className="w-12 py-2 pl-3 text-left"></th>
+                  <th className="py-2 pl-2 text-left">{labels.languageEn}</th>
+                  <th className="py-2 pl-2 pr-3 text-left">
+                    {labels.languageFr}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {SOCIAL_PLATFORMS.map((platform) => {
+                  const style = ROW_STYLE[platform];
+                  return (
+                    <tr
+                      key={platform}
+                      className={clsx(
+                        "border-b border-card-border/60 last:border-b-0",
+                        style.rowBg,
+                      )}
                     >
-                      <StatCell
-                        snapshot={byKey.get(`${platform}|FR`)}
-                        labels={labels}
-                        soft={style.soft}
-                      />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                      <td className="py-3 pl-3">
+                        <div className="flex items-center gap-2">
+                          <PlatformIcon platform={platform} style={style} />
+                          <span
+                            className={clsx("text-xs font-medium", style.text)}
+                          >
+                            {labels.platformNames[platform]}
+                          </span>
+                        </div>
+                      </td>
+                      <td className={clsx("py-3 pl-2 align-top", style.text)}>
+                        <StatCell
+                          snapshot={byKey.get(`${platform}|EN`)}
+                          labels={labels}
+                          soft={style.soft}
+                        />
+                      </td>
+                      <td
+                        className={clsx("py-3 pl-2 pr-3 align-top", style.text)}
+                      >
+                        <StatCell
+                          snapshot={byKey.get(`${platform}|FR`)}
+                          labels={labels}
+                          soft={style.soft}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
