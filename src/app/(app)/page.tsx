@@ -1170,6 +1170,16 @@ export default async function DashboardPage() {
                 labels={pendingAffiliateProgramsLabels}
               />
             </div>
+
+            {/* Moved here (below Pending Affiliate Programs) from column 2
+                on desktop only — column 2 (Calendar + Social) was getting
+                too crowded. Mobile keeps its own separate instance right
+                after the mobile Social card, unaffected by this move. */}
+            <div className="hidden lg:block">
+              <div id="dashboard-automations-card-desktop" className="scroll-mt-20">
+                {automationsCard}
+              </div>
+            </div>
           </div>
 
           {/* Calendar + the desktop-only Social Media Analytics card are
@@ -1206,12 +1216,6 @@ export default async function DashboardPage() {
                   isAdmin={session?.user.role === "ADMIN"}
                   dateLocale={dateLocale}
                 />
-              </div>
-            </div>
-
-            <div className="hidden lg:block">
-              <div id="dashboard-automations-card-desktop" className="scroll-mt-20">
-                {automationsCard}
               </div>
             </div>
           </div>
