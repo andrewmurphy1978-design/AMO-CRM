@@ -992,41 +992,42 @@ export default async function DashboardPage() {
           e.g. under the compact Calendar/Weather cards next to the Email
           card's own fixed 820px height). */}
         <div className="grid grid-cols-1 items-start gap-2 sm:gap-6 lg:grid-cols-3">
-          <div
-            id="dashboard-email-card"
-            className="lg:col-start-1 scroll-mt-20"
-          >
-            <EmailCard
-              initialData={emailInitialData}
-              connected={googleAccessToken !== null}
-              hour12={hour12}
-              lang={lang}
-              addressColors={addressColors}
-              contactOptions={emailLinkContactOptions}
-              projectOptions={emailLinkProjectOptions}
-              taskOptions={emailLinkTaskOptions}
-              programOptions={emailLinkProgramOptions}
-              labels={emailLabels}
-            />
-          </div>
+          {/* Email + the desktop-only Pending Affiliate Programs card are
+              grouped into one flex-col grid item (same technique as the
+              Contacts/Projects/Tasks group in column 3 below) instead of
+              two separate col-start-1 grid items. A CSS Grid row's height
+              is shared across every column, so even with an explicit
+              row-start, a Pending card placed as its own grid item would
+              still get stretched down to wherever row 1 actually ends —
+              i.e. Calendar's own bottom whenever Calendar is taller than
+              Email (a real production inbox next to a real, long event
+              list), not Email's. Inside a shared flex-col item, Pending
+              instead follows Email in plain in-flow layout, independent
+              of how tall Calendar or the Contacts group happen to be. */}
+          <div className="flex flex-col gap-2 sm:gap-6 lg:col-start-1">
+            <div id="dashboard-email-card" className="scroll-mt-20">
+              <EmailCard
+                initialData={emailInitialData}
+                connected={googleAccessToken !== null}
+                hour12={hour12}
+                lang={lang}
+                addressColors={addressColors}
+                contactOptions={emailLinkContactOptions}
+                projectOptions={emailLinkProjectOptions}
+                taskOptions={emailLinkTaskOptions}
+                programOptions={emailLinkProgramOptions}
+                labels={emailLabels}
+              />
+            </div>
 
-          {/* Desktop only, directly below Email — given an explicit
-              lg:row-start (not just lg:col-start like every other item
-              here) so it never enters the auto-placement cursor at all:
-              an auto-placed item in this same column would advance that
-              shared cursor and knock Calendar/the Contacts group out of
-              Email's own row (see the mobile-only copy's comment below
-              for the full story). Explicit-position items are placed in
-              their own pass before auto-placement runs, so this reserves
-              col1/row2 up front and every other (auto) item then simply
-              flows around it. */}
-          <div className="hidden lg:col-start-1 lg:row-start-2 lg:block">
-            <PendingAffiliateProgramsCard
-              id="dashboard-pending-affiliate-programs-card-desktop"
-              programs={pendingAffiliatePrograms}
-              lang={lang}
-              labels={pendingAffiliateProgramsLabels}
-            />
+            <div className="hidden lg:block">
+              <PendingAffiliateProgramsCard
+                id="dashboard-pending-affiliate-programs-card-desktop"
+                programs={pendingAffiliatePrograms}
+                lang={lang}
+                labels={pendingAffiliateProgramsLabels}
+              />
+            </div>
           </div>
 
           <div

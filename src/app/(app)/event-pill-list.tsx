@@ -39,7 +39,10 @@ export default function EventPillList({
             <button
               type="button"
               onClick={() => onSelect(event.id)}
-              className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-opacity hover:opacity-90"
+              // Mobile: date/time stacks above the title instead of sharing
+              // one line with it (sm+ keeps the original side-by-side row —
+              // there's room for both there).
+              className="flex w-full flex-col items-start gap-0.5 rounded-lg px-2 py-1.5 text-left text-sm transition-opacity hover:opacity-90 sm:flex-row sm:items-start sm:gap-2"
               style={{ backgroundColor: color.bg, color: color.fg }}
             >
               <span className="shrink-0 whitespace-nowrap text-xs font-bold">
