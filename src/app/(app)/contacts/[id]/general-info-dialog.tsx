@@ -152,7 +152,7 @@ export default function GeneralInfoDialog({
           )}
           <div>
             <label className={LABEL_CLASS}>{t.contactForm.language}</label>
-            <div className="mt-2 flex items-center gap-4 text-sm text-ink">
+            <div className="mt-2 flex items-center gap-4 text-sm text-ink lg:flex-col lg:items-start lg:gap-1.5">
               <label className="flex items-center gap-1.5">
                 <input type="radio" name="locale" value="en" defaultChecked={(values.locale ?? "en").toLowerCase().startsWith("en")} className="accent-amo-lime" />
                 {t.team.english}
@@ -169,7 +169,7 @@ export default function GeneralInfoDialog({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label={t.contactForm.website} name="website" type="url" defaultValue={values.website} placeholder="https://…" />
           <Field label={t.contactForm.nickname} name="nickname" defaultValue={values.nickname} />
-          <Field label={t.contactForm.birthday} name="birthday" defaultValue={values.birthday} placeholder="YYYY-MM-DD" />
+          <Field label={t.contactForm.birthday} name="birthday" type="date" defaultValue={values.birthday} placeholder="YYYY-MM-DD" />
           <div>
             <label className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</label>
             <div className="mt-1">

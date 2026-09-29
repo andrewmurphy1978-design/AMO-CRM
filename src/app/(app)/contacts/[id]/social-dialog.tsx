@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { AppSelect, FIELD_CLASS, SOCIAL_PLATFORMS } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
+import { CARD_COLORS } from "@/components/section-card";
 
 export default function SocialDialog({
   action,
@@ -22,7 +23,14 @@ export default function SocialDialog({
   return (
     <>
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
-    <SectionDialog open={open} onOpenChange={setOpen} title={t.contactForm.cardSocialMedia} action={action} labels={t.phaseDialog}>
+    <SectionDialog
+      open={open}
+      onOpenChange={setOpen}
+      title={t.contactForm.cardSocialMedia}
+      action={action}
+      labels={t.phaseDialog}
+      headerColorClassName={CARD_COLORS.social}
+    >
       <div className="space-y-1.5">
         {socialLinks.map((row) => (
           <div key={row.id} className="flex items-center gap-1.5">

@@ -111,13 +111,25 @@ function InfoField({ label, value }: { label: string; value?: React.ReactNode })
 // The contact's photo if one was set (an uploaded/letter-avatar data URI or
 // a Google-hosted URL), else a colored-circle initials placeholder — same
 // fallback the avatar picker itself shows before a first choice is made.
-function AvatarThumb({ url, firstName, lastName }: { url?: string | null; firstName?: string | null; lastName?: string | null }) {
+function AvatarThumb({
+  url,
+  firstName,
+  lastName,
+  size = "h-14 w-14",
+  textSize = "text-sm",
+}: {
+  url?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  size?: string;
+  textSize?: string;
+}) {
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element -- either an external Google-hosted URL or a locally-generated data URI, not a local/optimizable asset
-    return <img src={url} alt="" className="h-14 w-14 rounded-full object-cover" />;
+    return <img src={url} alt="" className={`${size} shrink-0 rounded-full object-cover`} />;
   }
   return (
-    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/10 text-sm font-semibold text-soft">
+    <div className={`flex ${size} shrink-0 items-center justify-center rounded-full bg-black/10 ${textSize} font-semibold text-soft`}>
       {initialsFor(firstName, lastName)}
     </div>
   );
@@ -526,7 +538,12 @@ export default async function ContactDetailPage({
     // unaffected (mx-0/px-0 leaves main's own sm:p-8 as the only inset).
     <div className="-mx-4 space-y-2 px-2 sm:mx-0 sm:space-y-6 sm:px-0">
       <PageHeader
-        title={fullName}
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} size="h-10 w-10" textSize="text-xs" />
+            <span className="truncate">{fullName}</span>
+          </span>
+        }
         hour12={hour12}
         lang={lang}
         location={t.dashboard.myLocation}
@@ -568,7 +585,10 @@ export default async function ContactDetailPage({
               <InfoField label={t.contactForm.industry} value={contact.industry} />
 
               {/* Row 3 */}
-              <InfoField label={t.contactForm.stage} value={STAGE_LABELS[contact.stage]} />
+              <div className="space-y-3">
+                <InfoField label={t.contactForm.stage} value={STAGE_LABELS[contact.stage]} />
+                <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
+              </div>
               <InfoField
                 label={t.contactForm.timeZone}
                 value={contact.timeZone ? `(${utcOffsetLabel(contact.timeZone)}) ${contact.timeZone.replace(/_/g, " ")}` : undefined}
@@ -596,14 +616,9 @@ export default async function ContactDetailPage({
               <div>
                 <p className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</p>
                 <div className="mt-1">
-                  <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} />
+                  <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} size="h-28 w-28" textSize="text-2xl" />
                 </div>
               </div>
-
-              {/* Not part of the requested 4 rows, but still real data with
-                  nowhere else to show now that the bordered Personal info
-                  sub-card is gone — kept as a small trailing row. */}
-              <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
             </div>
 
             {/* Mobile: separate 7(+2)-row layout — a merged Jurisdiction field
@@ -649,7 +664,7 @@ export default async function ContactDetailPage({
               <div>
                 <p className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</p>
                 <div className="mt-1">
-                  <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} />
+                  <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} size="h-28 w-28" textSize="text-2xl" />
                 </div>
               </div>
 

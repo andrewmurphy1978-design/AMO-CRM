@@ -55,7 +55,7 @@ export default function AvatarPicker({
   return (
     <div>
       <input type="hidden" name={name} value={value} />
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col items-center gap-2">
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element -- either an external Google-hosted URL or a locally-generated data URI, not a local/optimizable asset
           <img src={value} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
@@ -64,7 +64,7 @@ export default function AvatarPicker({
             {initials}
           </div>
         )}
-        <div className="flex flex-1 flex-col gap-1.5">
+        <div className="flex flex-col items-center gap-1.5">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -97,7 +97,7 @@ export default function AvatarPicker({
             }}
           />
           <p className="text-[11px] text-soft">{labels.orChoose}</p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap justify-center gap-1.5">
             {AVATAR_COLORS.map((color) => (
               <button
                 key={color}

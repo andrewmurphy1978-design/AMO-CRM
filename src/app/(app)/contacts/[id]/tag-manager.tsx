@@ -77,11 +77,16 @@ export default function TagManager({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
           <div
-            className="max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-4 shadow-xl"
+            className="flex max-h-[80vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl lg:max-h-[92vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-display text-base font-semibold text-ink">{t.tagManager.allTagsTitle}</h3>
-            <div className="mt-3 space-y-2">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-card-border px-4 py-3">
+              <h3 className="font-display text-base font-semibold text-ink">{t.tagManager.allTagsTitle}</h3>
+              <button type="button" onClick={() => setOpen(false)} className="btn-primary rounded-lg px-4 py-1.5 text-sm font-semibold shadow-sm">
+                {t.tagManager.done}
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
               {[groups.language, groups.personal, groups.systemeIo].map(
                 (group, i) =>
                   group.length > 0 && (
@@ -108,11 +113,6 @@ export default function TagManager({
                     </div>
                   )
               )}
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button type="button" onClick={() => setOpen(false)} className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
-                {t.tagManager.done}
-              </button>
             </div>
           </div>
         </div>

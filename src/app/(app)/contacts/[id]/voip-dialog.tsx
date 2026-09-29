@@ -5,6 +5,7 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { VOIP_APPS } from "@/lib/platform-icons";
 import { AppHandleListBody, type AppHandleRow } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
+import { CARD_COLORS } from "@/components/section-card";
 
 export default function VoipDialog({
   action,
@@ -23,7 +24,14 @@ export default function VoipDialog({
   return (
     <>
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
-    <SectionDialog open={open} onOpenChange={setOpen} title={t.contactForm.cardVoipApps} action={action} labels={t.phaseDialog}>
+    <SectionDialog
+      open={open}
+      onOpenChange={setOpen}
+      title={t.contactForm.cardVoipApps}
+      action={action}
+      labels={t.phaseDialog}
+      headerColorClassName={CARD_COLORS.voip}
+    >
       <AppHandleListBody
         addLabel={t.contactForm.addVoipApp}
         handlePlaceholder={t.contactForm.voipHandle}

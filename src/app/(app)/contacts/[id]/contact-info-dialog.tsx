@@ -7,6 +7,7 @@ import { MESSAGING_APPS } from "@/lib/platform-icons";
 import PhoneField from "@/components/phone-field";
 import { AppHandleList, FIELD_CLASS, LABEL_CLASS, type AppHandleRow } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
+import { CARD_COLORS } from "@/components/section-card";
 
 export interface ContactInfoValues {
   email?: string | null;
@@ -42,8 +43,16 @@ export default function ContactInfoDialog({
   return (
     <>
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
-    <SectionDialog open={open} onOpenChange={setOpen} title={t.contactForm.cardContactInfo} action={action} labels={t.phaseDialog} wide>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
+    <SectionDialog
+      open={open}
+      onOpenChange={setOpen}
+      title={t.contactForm.cardContactInfo}
+      action={action}
+      labels={t.phaseDialog}
+      extraWide
+      headerColorClassName={CARD_COLORS.contact}
+    >
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,1.7fr)]">
         <div>
           <label className={LABEL_CLASS}>{t.contactForm.emails}</label>
           <div className="mt-1 space-y-1.5">
