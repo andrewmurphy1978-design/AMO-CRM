@@ -8,6 +8,7 @@ import { stateLabelForCountry } from "@/lib/address-labels";
 import { COMPANY_TYPES } from "@/lib/company-types";
 import { INDUSTRIES } from "@/lib/industries";
 import { getWorldTimeZoneOptions } from "@/lib/timezones";
+import { normalizeFieldSlug, SERVICES_REQUIRED_DEFAULT_SLUG, PROJECT_GOAL_DEFAULT_SLUG } from "@/lib/custom-field-slugs";
 import LocalTimeCard from "@/components/local-time-card";
 import Combobox from "@/components/combobox";
 import { CARD_COLORS } from "@/components/section-card";
@@ -35,6 +36,7 @@ export interface GeneralInfoValues {
   stage: string;
   source?: string | null;
   systemeIoId?: number | null;
+  fieldValues?: { fieldSlug: string; value: string | null }[] | null;
 }
 
 export default function GeneralInfoDialog({
@@ -62,6 +64,9 @@ export default function GeneralInfoDialog({
   const [timeZone, setTimeZone] = useState(values.timeZone ?? "");
   const [timeZoneOptions] = useState(() => getWorldTimeZoneOptions());
   const isManual = !values.systemeIoId;
+  const findFieldValue = (normalized: string) => values.fieldValues?.find((fv) => normalizeFieldSlug(fv.fieldSlug) === normalized);
+  const servicesRequired = findFieldValue("servicesrequired");
+  const projectGoal = findFieldValue("projectgoaldescription");
 
   const STAGES = [
     { value: "LEAD", label: t.stages.LEAD },
@@ -173,14 +178,23 @@ export default function GeneralInfoDialog({
           </div>
         </div>
 
-        {/* Row 4: Website (+ Tags below it) / Nickname / Birthday / Image */}
+        {/* Row 4: Website (+ Tags below it) / Services required / Project goal / Image —
+            the two custom-field textareas sit between Tags and the picture, as requested. */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-3">
             <Field label={t.contactForm.website} name="website" type="url" defaultValue={values.website} placeholder="https://…" />
             <TagManager contactId={contactId} tags={tags} allTags={allTags} lang={lang} />
           </div>
-          <Field label={t.contactForm.nickname} name="nickname" defaultValue={values.nickname} />
-          <Field label={t.contactForm.birthday} name="birthday" type="date" defaultValue={values.birthday} placeholder="YYYY-MM-DD" />
+          <div>
+            <label className={LABEL_CLASS}>{t.contactDetail.servicesRequiredLabel}</label>
+            <input type="hidden" name="servicesRequiredSlug" value={servicesRequired?.fieldSlug ?? SERVICES_REQUIRED_DEFAULT_SLUG} />
+            <textarea name="servicesRequired" rows={3} defaultValue={servicesRequired?.value ?? ""} className={FIELD_CLASS} />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.contactDetail.projectGoalLabel}</label>
+            <input type="hidden" name="projectGoalDescriptionSlug" value={projectGoal?.fieldSlug ?? PROJECT_GOAL_DEFAULT_SLUG} />
+            <textarea name="projectGoalDescription" rows={3} defaultValue={projectGoal?.value ?? ""} className={FIELD_CLASS} />
+          </div>
           <div>
             <label className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</label>
             <div className="mt-1">
@@ -193,6 +207,13 @@ export default function GeneralInfoDialog({
               />
             </div>
           </div>
+        </div>
+
+        {/* Row 5: Nickname / Birthday — moved off row 4 to make room for the
+            two textareas above. */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label={t.contactForm.nickname} name="nickname" defaultValue={values.nickname} />
+          <Field label={t.contactForm.birthday} name="birthday" type="date" defaultValue={values.birthday} placeholder="YYYY-MM-DD" />
         </div>
 
         {isManual && (

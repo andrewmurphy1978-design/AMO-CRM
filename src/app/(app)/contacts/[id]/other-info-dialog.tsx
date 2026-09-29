@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { normalizeFieldSlug, SERVICES_REQUIRED_DEFAULT_SLUG, PROJECT_GOAL_DEFAULT_SLUG } from "@/lib/custom-field-slugs";
 import { CONTACT_SYNC_APPS, type ContactSyncDirection } from "@/lib/contact-sync";
-import { Field, FIELD_CLASS, LABEL_CLASS } from "../contact-form";
+import { Field, LABEL_CLASS } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
 
 export interface OtherInfoValues {
@@ -26,9 +25,6 @@ export default function OtherInfoDialog({
   const t = getDict(lang);
   const [open, setOpen] = useState(false);
   const isManual = !values.systemeIoId;
-  const findFieldValue = (normalized: string) => values.fieldValues?.find((fv) => normalizeFieldSlug(fv.fieldSlug) === normalized);
-  const servicesRequired = findFieldValue("servicesrequired");
-  const projectGoal = findFieldValue("projectgoaldescription");
 
   const appSyncDefaults = (app: string): { enabled: boolean; direction: ContactSyncDirection } => {
     const existing = values.appSyncSettings?.find((row) => row.app === app);
@@ -46,18 +42,6 @@ export default function OtherInfoDialog({
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
     <SectionDialog open={open} onOpenChange={setOpen} title={t.contactForm.cardOtherInfo} action={action} labels={t.phaseDialog} wide>
       {isManual && <Field label={t.contactDetail.fieldSource} name="source" defaultValue={values.source} />}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className={LABEL_CLASS}>{t.contactDetail.servicesRequiredLabel}</label>
-          <input type="hidden" name="servicesRequiredSlug" value={servicesRequired?.fieldSlug ?? SERVICES_REQUIRED_DEFAULT_SLUG} />
-          <textarea name="servicesRequired" rows={2} defaultValue={servicesRequired?.value ?? ""} className={FIELD_CLASS} />
-        </div>
-        <div>
-          <label className={LABEL_CLASS}>{t.contactDetail.projectGoalLabel}</label>
-          <input type="hidden" name="projectGoalDescriptionSlug" value={projectGoal?.fieldSlug ?? PROJECT_GOAL_DEFAULT_SLUG} />
-          <textarea name="projectGoalDescription" rows={2} defaultValue={projectGoal?.value ?? ""} className={FIELD_CLASS} />
-        </div>
-      </div>
 
       <div className="rounded-lg border border-card-border bg-black/[0.02] p-3">
         <h3 className={LABEL_CLASS}>{t.contactForm.appSyncTitle}</h3>

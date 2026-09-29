@@ -63,6 +63,11 @@ const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 // since systeme.io's own slugs vary in casing.
 const DUPLICATE_FIELD_SLUGS = new Set(["companyname", "postcode", "streetnumber", "streetaddress"]);
 
+// Services required / Project goal description now have their own dedicated
+// spot in the General info card (below Website) instead of showing generically
+// in "Other info" — excluded from that generic list so they don't show twice.
+const GENERAL_INFO_FIELD_SLUGS = new Set(["servicesrequired", "projectgoaldescription"]);
+
 function normalizeSlug(slug: string): string {
   return slug.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -496,7 +501,13 @@ export default async function ContactDetailPage({
     noResults: t.linkPicker.noResults,
   };
 
-  const otherFields = contact.fieldValues.filter((fv) => !DUPLICATE_FIELD_SLUGS.has(normalizeSlug(fv.fieldSlug)));
+  // Services required / Project goal description now display in the
+  // General info card (below Website), not in this generic list.
+  const otherFields = contact.fieldValues.filter(
+    (fv) => !DUPLICATE_FIELD_SLUGS.has(normalizeSlug(fv.fieldSlug)) && !GENERAL_INFO_FIELD_SLUGS.has(normalizeSlug(fv.fieldSlug))
+  );
+  const servicesRequiredValue = contact.fieldValues.find((fv) => normalizeSlug(fv.fieldSlug) === "servicesrequired")?.value;
+  const projectGoalValue = contact.fieldValues.find((fv) => normalizeSlug(fv.fieldSlug) === "projectgoaldescription")?.value;
 
   const hasBillingContactInfo = contact.billingContactName || contact.billingEmail || contact.billingPhone;
 
@@ -624,17 +635,22 @@ export default async function ContactDetailPage({
               </div>
               <TagManager contactId={contact.id} tags={contact.tags.map((ct) => ct.tag)} allTags={allTags} lang={lang} />
 
-              {/* Row 4 */}
-              <InfoField
-                label={t.contactForm.website}
-                value={
-                  contact.website ? (
-                    <a href={contact.website} target="_blank" rel="noreferrer" className="break-words text-sky-700 hover:underline">
-                      {contact.website}
-                    </a>
-                  ) : undefined
-                }
-              />
+              {/* Row 4 — Services required / Project goal stack below Website,
+                  to the left of the picture as requested. */}
+              <div className="space-y-3">
+                <InfoField
+                  label={t.contactForm.website}
+                  value={
+                    contact.website ? (
+                      <a href={contact.website} target="_blank" rel="noreferrer" className="break-words text-sky-700 hover:underline">
+                        {contact.website}
+                      </a>
+                    ) : undefined
+                  }
+                />
+                <InfoField label={t.contactDetail.servicesRequiredLabel} value={servicesRequiredValue} />
+                <InfoField label={t.contactDetail.projectGoalLabel} value={projectGoalValue} />
+              </div>
               <InfoField label={t.contactForm.nickname} value={contact.nickname} />
               <InfoField label={t.contactForm.birthday} value={birthdayLine} />
               <div>
@@ -672,16 +688,20 @@ export default async function ContactDetailPage({
                 ) : null}
               </div>
 
-              <InfoField
-                label={t.contactForm.website}
-                value={
-                  contact.website ? (
-                    <a href={contact.website} target="_blank" rel="noreferrer" className="break-words text-sky-700 hover:underline">
-                      {contact.website}
-                    </a>
-                  ) : undefined
-                }
-              />
+              <div className="space-y-2">
+                <InfoField
+                  label={t.contactForm.website}
+                  value={
+                    contact.website ? (
+                      <a href={contact.website} target="_blank" rel="noreferrer" className="break-words text-sky-700 hover:underline">
+                        {contact.website}
+                      </a>
+                    ) : undefined
+                  }
+                />
+                <InfoField label={t.contactDetail.servicesRequiredLabel} value={servicesRequiredValue} />
+                <InfoField label={t.contactDetail.projectGoalLabel} value={projectGoalValue} />
+              </div>
               <InfoField label={t.contactForm.nickname} value={contact.nickname} />
 
               <InfoField label={t.contactForm.birthday} value={birthdayLine} />

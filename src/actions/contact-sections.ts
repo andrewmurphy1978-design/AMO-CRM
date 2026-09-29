@@ -114,6 +114,7 @@ export async function updateContactGeneralInfo(
 
   const result = await withScopedPrismaClient(async (db) => {
     const updated = await db.contact.update({ where: { id: contactId }, data });
+    await db.$transaction(buildCustomFieldEditOps(db, contactId, formData));
     const appSyncRows = await currentAppSyncRows(db, contactId);
     const syncStatus = await applyContactExternalSyncs(db, session, updated, appSyncRows, t);
     return { syncStatus };
