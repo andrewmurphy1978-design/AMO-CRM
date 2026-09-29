@@ -193,6 +193,24 @@ export async function runBufferSync(): Promise<BufferSyncResult> {
   return withScopedPrismaClient((db) => runBufferSyncWith(db));
 }
 
+// Same "refresh on every Dashboard load" treatment as Automations' own
+// refreshMakeRunsQuietly (see lib/automations.ts) — reuses the caller's own
+// db client (never opens a second scoped one, per withScopedPrismaClient's
+// own connection-limit warning) and swallows any error so a stale/expired
+// Buffer key or a transient API failure never breaks the Dashboard itself;
+// the Social Media Analytics card just keeps showing its last known
+// snapshot, same as it already does today after any button-triggered sync
+// failure. A no-accounts-connected dashboard costs nothing extra here —
+// runBufferSyncWith's own account loop is a no-op when nothing has an
+// apiKeyEncrypted set.
+export async function refreshBufferSyncQuietly(db: PrismaClient): Promise<void> {
+  try {
+    await runBufferSyncWith(db);
+  } catch {
+    // Not configured, an expired/invalid key, or a transient Buffer API error.
+  }
+}
+
 async function runBufferSyncWith(db: PrismaClient): Promise<BufferSyncResult> {
   const accounts = await db.integrationSetting.findMany({
     where: { provider: { in: BUFFER_ACCOUNTS.map((a) => a.provider) } },

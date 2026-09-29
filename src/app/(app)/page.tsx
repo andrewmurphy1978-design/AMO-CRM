@@ -69,6 +69,7 @@ import {
 } from "@/lib/google";
 import { getLatestSocialSnapshots, summarizeSocialSnapshots } from "@/lib/social";
 import { refreshMakeRunsQuietly } from "@/lib/automations";
+import { refreshBufferSyncQuietly } from "@/lib/buffer";
 import { getHour12 } from "@/lib/time-format";
 import { getUserWorldClockZones } from "@/lib/world-clock-zones";
 import { getUserMarketsPicks } from "@/lib/dashboard-markets-picks";
@@ -303,6 +304,12 @@ export default async function DashboardPage() {
     const googleAccessToken = session
       ? await getValidAccessToken(session.user.id, db)
       : null;
+    // Same reasoning as the Automations refresh just above: keeps the
+    // Social Media Analytics card current on every Dashboard load without
+    // a manual "Sync now" first, reusing this same `db` rather than
+    // opening a second scoped client — see refreshBufferSyncQuietly's own
+    // comment.
+    await refreshBufferSyncQuietly(db);
     const socialSnapshots = await getLatestSocialSnapshots(db);
     const hour12 = await getHour12(session, db);
     const { worldZones, headerZones, headerZoneMobile } = await getUserWorldClockZones(session, db);
