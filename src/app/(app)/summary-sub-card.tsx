@@ -22,7 +22,10 @@ export default function SummarySubCard({
 }: {
   bg: string;
   text: string;
-  value: number;
+  // A pre-formatted string is allowed alongside a plain number — e.g. a
+  // signed delta ("+128") or a "4/6" ratio — for cards whose value isn't a
+  // bare count (see SocialAnalyticsSummaryCard).
+  value: number | string;
   label: string;
   // Total event-hours behind this count (e.g. shift/meeting duration) —
   // shown beside the value, smaller, as a rounded-to-the-quarter-hour

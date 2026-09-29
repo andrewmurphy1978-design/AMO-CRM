@@ -47,6 +47,42 @@ export interface SocialSnapshotView {
   capturedAt: Date;
 }
 
+export interface SocialSummaryCounts {
+  totalFollowers: number;
+  followersGrowth: number; // signed sum of every known delta; 0 when none are known yet
+  totalEngagement: number;
+  totalViews: number;
+  platformsTracked: number; // distinct platforms with at least one snapshot, out of platformsTotal
+  platformsTotal: number;
+}
+
+// Rolls every platform+language snapshot up into the handful of numbers the
+// Dashboard's Social Media Analytics Summary card shows at a glance —
+// mirrors the getLatestSocialSnapshots -> *SummaryCard split every other
+// Dashboard card uses (see affiliateSummaryCounts in page.tsx).
+export function summarizeSocialSnapshots(snapshots: SocialSnapshotView[]): SocialSummaryCounts {
+  let totalFollowers = 0;
+  let followersGrowth = 0;
+  let totalEngagement = 0;
+  let totalViews = 0;
+  const platforms = new Set<SocialPlatform>();
+  for (const snapshot of snapshots) {
+    if (snapshot.followers !== null) totalFollowers += snapshot.followers;
+    if (snapshot.followersDelta !== null) followersGrowth += snapshot.followersDelta;
+    if (snapshot.engagement !== null) totalEngagement += snapshot.engagement;
+    if (snapshot.views !== null) totalViews += snapshot.views;
+    platforms.add(snapshot.platform);
+  }
+  return {
+    totalFollowers,
+    followersGrowth,
+    totalEngagement,
+    totalViews,
+    platformsTracked: platforms.size,
+    platformsTotal: SOCIAL_PLATFORMS.length,
+  };
+}
+
 function extractExtraStats(raw: unknown): ExtraStat[] {
   if (!raw || typeof raw !== "object") return [];
   const data = raw as Record<string, unknown>;

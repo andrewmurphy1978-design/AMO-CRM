@@ -55,13 +55,14 @@ import {
 } from "@/lib/email-inbox";
 import { isStale } from "@/lib/staleness";
 import SocialCard from "./social-card";
+import SocialAnalyticsSummaryCard from "./social-summary-card";
 import {
   getValidAccessToken,
   getCalendarEventsInRange,
   getRecentlyCreatedEvents,
   type CalendarEventSummary,
 } from "@/lib/google";
-import { getLatestSocialSnapshots } from "@/lib/social";
+import { getLatestSocialSnapshots, summarizeSocialSnapshots } from "@/lib/social";
 import { getHour12 } from "@/lib/time-format";
 import { getUserWorldClockZones } from "@/lib/world-clock-zones";
 import { getUserMarketsPicks } from "@/lib/dashboard-markets-picks";
@@ -454,6 +455,7 @@ export default async function DashboardPage() {
     declinedBlocked: affiliateBucketCounts.declinedBlocked,
     noProgram: affiliateBucketCounts.noProgram,
   };
+  const socialSummaryCounts = summarizeSocialSnapshots(socialSnapshots);
 
   // Feeds the Email card's "Linked to" picker — same option shapes the
   // Email page itself builds from the equivalent full-list queries above.
@@ -841,6 +843,14 @@ export default async function DashboardPage() {
       x: t.dashboard.socialX,
     },
   };
+  const socialSummaryLabels = {
+    title: t.dashboard.socialSummaryTitle,
+    followersLabel: t.dashboard.socialSummaryFollowersLabel,
+    growthLabel: t.dashboard.socialSummaryGrowthLabel,
+    engagementLabel: t.dashboard.socialSummaryEngagementLabel,
+    viewsLabel: t.dashboard.socialSummaryViewsLabel,
+    platformsLabel: t.dashboard.socialSummaryPlatformsLabel,
+  };
   const calendarLabels = {
     title: t.dashboard.calendarTitle,
     refresh: t.dashboard.refresh,
@@ -969,12 +979,16 @@ export default async function DashboardPage() {
         </div>
 
         {/* Second summary row, below the first — its own grid rather than a
-            5th slot in the row above, since more summary cards are expected
-            to join this row later. */}
+            5th/6th slot in the row above, since more summary cards are
+            expected to join this row later. */}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           <AffiliateProgramsSummaryCard
             counts={affiliateSummaryCounts}
             labels={affiliateSummaryLabels}
+          />
+          <SocialAnalyticsSummaryCard
+            counts={socialSummaryCounts}
+            labels={socialSummaryLabels}
           />
         </div>
 
@@ -1168,7 +1182,7 @@ export default async function DashboardPage() {
             />
           </div>
 
-          <div className="lg:col-start-2">
+          <div id="dashboard-social-card" className="lg:col-start-2 scroll-mt-20">
             <SocialCard
               snapshots={socialSnapshots}
               labels={socialLabels}

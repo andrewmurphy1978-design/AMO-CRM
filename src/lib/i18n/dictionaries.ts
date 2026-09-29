@@ -169,6 +169,16 @@ export const dictionaries = {
       socialStatLikes: "Likes",
       socialStatShares: "Shares",
       socialStatSaves: "Saves",
+      socialSummaryTitle: "Social Media",
+      // Shorter than the other cards' "total X" labels on purpose — this
+      // value can run into the thousands (unlike Contact/Affiliate's small
+      // counts), leaving less room before the fixed-width row layout
+      // truncates the label (see SummarySubCard's "row" layout).
+      socialSummaryFollowersLabel: "followers",
+      socialSummaryGrowthLabel: "new followers",
+      socialSummaryEngagementLabel: "engagement",
+      socialSummaryViewsLabel: "views",
+      socialSummaryPlatformsLabel: "platforms tracked",
       weatherTitle: "Weather",
       weatherComingSoon: "Live weather is next up — see chat.",
       worldClocksTitle: "World clocks",
@@ -1491,6 +1501,12 @@ export const dictionaries = {
       socialStatLikes: "J'aime",
       socialStatShares: "Partages",
       socialStatSaves: "Enregistrements",
+      socialSummaryTitle: "Réseaux sociaux",
+      socialSummaryFollowersLabel: "abonnés",
+      socialSummaryGrowthLabel: "nouveaux abonnés",
+      socialSummaryEngagementLabel: "engagement",
+      socialSummaryViewsLabel: "vues",
+      socialSummaryPlatformsLabel: "plateformes suivies",
       weatherTitle: "Météo",
       weatherComingSoon: "La météo en direct arrive bientôt — voir le chat.",
       worldClocksTitle: "Heures dans le monde",
