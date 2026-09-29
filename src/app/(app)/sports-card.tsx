@@ -183,16 +183,21 @@ function simpleSnapshotOf(snapshot: SportsCardSnapshot): TeamSnapshot | null {
   }
 }
 
-// A league with no last/next game and no postseason series has nothing to
-// show — most often because its season hasn't started yet. Rather than
-// rendering an "unavailable" placeholder for it, SportsCard filters these
-// out entirely so the drop-down only lists leagues with something to say.
+// A league with no last/next game, no postseason series, and no fetch/parse
+// error has nothing to show — most often because its season hasn't started
+// yet. Rather than rendering an "unavailable" placeholder for it, SportsCard
+// filters these out entirely so the drop-down only lists leagues with
+// something to say. A league that DID error (its API call failed, or the
+// response didn't parse into any games) stays visible instead of silently
+// vanishing — see LeagueSection below, which surfaces `errors` for it.
 function hasLeagueData(snapshot: SportsCardSnapshot): boolean {
   const simple = simpleSnapshotOf(snapshot);
   const mlb = snapshot.league === "MLB" ? snapshot.mlb : null;
-  return Boolean(
+  const hasGames = Boolean(
     simple ? simple.lastGame || simple.nextGame : mlb ? mlb.seriesGames.length || mlb.lastGame || mlb.nextGame : false,
   );
+  const hasErrors = (simple?.errors.length ?? mlb?.errors.length ?? 0) > 0;
+  return hasGames || hasErrors;
 }
 
 // One league's block inside the drop-down — every league with data renders
@@ -216,6 +221,32 @@ function LeagueSection({
   const mlb = snapshot.league === "MLB" ? snapshot.mlb : null;
   const teamName = simple?.teamName ?? mlb?.teamName ?? "";
   const teamLogo = simple?.teamLogo ?? mlb?.teamLogo ?? "";
+  const errors = simple?.errors ?? mlb?.errors ?? [];
+  const hasGames = Boolean(
+    simple ? simple.lastGame || simple.nextGame : mlb ? mlb.seriesGames.length || mlb.lastGame || mlb.nextGame : false,
+  );
+
+  // A league whose API call failed or whose response didn't parse into any
+  // games still gets its own row (see hasLeagueData above) instead of
+  // silently disappearing — this is what actually shows why, right in the
+  // widget, rather than only in a snapshot field nothing ever displayed.
+  if (!hasGames && errors.length > 0) {
+    return (
+      <div className="border-b border-card-border/60 pb-2 last:border-b-0 last:pb-0">
+        <div className="flex items-center gap-1.5">
+          {teamLogo && (
+            // eslint-disable-next-line @next/next/no-img-element -- external team-logo CDN, not a local asset
+            <img src={teamLogo} alt={teamName} className="h-5 w-5 object-contain" />
+          )}
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">
+            {snapshot.league} · {teamName}
+          </p>
+        </div>
+        <p className="mt-1 text-xs text-soft">{labels.unavailable}</p>
+        <p className="mt-0.5 break-all font-mono text-[10px] text-soft/70">{errors.join(" · ")}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="border-b border-card-border/60 pb-2 last:border-b-0 last:pb-0">
