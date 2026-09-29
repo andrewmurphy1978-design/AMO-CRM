@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { auth } from "@/lib/auth";
-import { withScopedPrismaClient } from "@/lib/prisma";
+import { withScopedPrismaClient, runInBackground } from "@/lib/prisma";
 import {
   formatDistanceToNow,
   format,
@@ -222,44 +222,39 @@ export default async function DashboardPage() {
     linkAffiliatePrograms,
     allAffiliatePrograms,
   } = await withScopedPrismaClient(async (db) => {
-    // Was ~25 sequential `await`s in a row (plus the two external syncs
-    // below) — nothing here actually depends on anything else in this
-    // batch, so each `await` was pure serialized round-trip latency to
-    // Hyperdrive/Neon added on top of the last, which is what made every
-    // Dashboard load take as long as it did. Running them together lets
-    // Postgres work on as many of them at once as the pool allows (see
-    // prisma.ts) instead of one at a time. The two external syncs
-    // (Make, Buffer) are equally independent of this batch, so they run
-    // alongside it too — only the reads that need their result
-    // (recentRuns, socialSnapshots, just below) wait on them specifically.
+    // Was ~25 sequential `await`s in a row — nothing here actually depends
+    // on anything else in this batch, so each `await` was pure serialized
+    // round-trip latency to Hyperdrive/Neon added on top of the last,
+    // which is what made every Dashboard load take as long as it did.
+    // Running them together lets Postgres work on as many of them at once
+    // as the pool allows (see prisma.ts) instead of one at a time.
     const [
-      [
-        activeProjectCount,
-        activePhaseCount,
-        activeTaskCount,
-        deadlineTasksList,
-        dueSoonTasks,
-        activeProjects,
-        newContactsList,
-        totalContactCount,
-        contactsBySource,
-        contactsByStage,
-        integration,
-        googleAccessToken,
-        hour12,
-        worldClockZones,
-        marketsPicks,
-        sportsPicks,
-        hiddenHeaderWidgets,
-        addressColors,
-        linkContacts,
-        linkProjects,
-        linkTasks,
-        linkAffiliatePrograms,
-        allAffiliatePrograms,
-      ],
+      activeProjectCount,
+      activePhaseCount,
+      activeTaskCount,
+      deadlineTasksList,
+      dueSoonTasks,
+      activeProjects,
+      newContactsList,
+      totalContactCount,
+      contactsBySource,
+      contactsByStage,
+      integration,
+      googleAccessToken,
+      hour12,
+      worldClockZones,
+      marketsPicks,
+      sportsPicks,
+      hiddenHeaderWidgets,
+      addressColors,
+      linkContacts,
+      linkProjects,
+      linkTasks,
+      linkAffiliatePrograms,
+      allAffiliatePrograms,
+      recentRuns,
+      socialSnapshots,
     ] = await Promise.all([
-      Promise.all([
         // Feeds the Project Summary card. Same status set the removed
         // Open-Tasks stat used for "active" — TODO/IN_PROGRESS/BLOCKED,
         // everything short of DONE.
@@ -359,19 +354,14 @@ export default async function DashboardPage() {
             followUpDate: true,
           },
         }),
-      ]),
-      // Zapier runs arrive live via its own webhook, but Make only reports
-      // in when pulled — refreshing here keeps the Automations card
-      // current on every Dashboard load without the user having to visit
-      // Settings and click "Sync now" first. Reuses this same `db` rather
-      // than calling runMakeSync() (which opens its own scoped client) —
-      // see refreshMakeRunsQuietly's own comment.
-      refreshMakeRunsQuietly(db),
-      // Same reasoning: keeps the Social Media Analytics card current on
-      // every Dashboard load without a manual "Sync now" first, reusing
-      // this same `db` rather than opening a second scoped client — see
-      // refreshBufferSyncQuietly's own comment.
-      refreshBufferSyncQuietly(db),
+        // recentRuns/socialSnapshots read whatever Make/Buffer data is
+        // already on file rather than waiting on a fresh pull from either
+        // (see the background syncs below) — on the same trade-off as the
+        // email refresh further down: a Dashboard load may show data that's
+        // up to one load old instead of always blocking on 1-2 more
+        // external API round-trips.
+        db.automationRun.findMany({ orderBy: { occurredAt: "desc" }, take: 30 }),
+        getLatestSocialSnapshots(db),
     ]);
     const { worldZones, headerZones, headerZoneMobile } = worldClockZones;
     const { currency: marketsCurrency, items: marketsItems, itemMobile: marketsItemMobile } = marketsPicks;
@@ -385,56 +375,53 @@ export default async function DashboardPage() {
       teamNba: sportsTeamNba,
       leagueMobile: sportsLeagueMobile,
     } = sportsPicks;
-    // These two only need the Make/Buffer refreshes above to have finished
-    // (not anything else in the big batch), so they run together too
-    // rather than one after the other.
-    const [recentRuns, socialSnapshots] = await Promise.all([
-      db.automationRun.findMany({ orderBy: { occurredAt: "desc" }, take: 30 }),
-      getLatestSocialSnapshots(db),
-    ]);
+    // Zapier runs arrive live via its own webhook, but Make only reports in
+    // when pulled, and Buffer/social stats are pulled the same way — both
+    // used to block every Dashboard load waiting on their own external API
+    // call before recentRuns/socialSnapshots above could even be read.
+    // Neither needs to hold up this response: each gets its own scoped
+    // client (this request's `db` is about to be disconnected) and runs
+    // via the platform's own "finish after the response is sent" mechanism
+    // instead, so the data it fetches shows up on the NEXT load rather than
+    // this one — same trade-off Weather/Sports/Markets already make with
+    // their own manual "Refresh" buttons.
+    runInBackground(() => withScopedPrismaClient((bgDb) => refreshMakeRunsQuietly(bgDb)));
+    runInBackground(() => withScopedPrismaClient((bgDb) => refreshBufferSyncQuietly(bgDb)));
 
     // Reads the same cached inbox snapshot the Email page maintains — a
     // plain DB read shares this block's one connection instead of the
     // email card doing its own scoped read from inside a concurrently-
     // rendered Suspense boundary (which is exactly the pattern that trips
     // Cloudflare's Error 1102: two Suspense children each opening their
-    // own connection at once). But a snapshot that's gone stale (cron
-    // hiccup, or mail simply arriving faster than the 15-minute cron/
-    // client refresh cadence) is exactly what made the Email Summary
-    // card's "new emails today" count read low — that count is computed
-    // once here, server-side, and unlike the Email card below it never
-    // gets a chance to self-correct via a client-side refresh. Refreshing
-    // here when stale, on the same window the Email page's own client
-    // check already uses (src/lib/staleness.ts), means the very first
-    // paint is already correct, and it also means the Email card's own
-    // "is my initialData stale?" check below finds nothing to do.
+    // own connection at once). A snapshot that's gone stale (cron hiccup,
+    // or mail simply arriving faster than the 15-minute cron/client
+    // refresh cadence) used to be refreshed live, right here, before the
+    // Dashboard could render at all — a live Gmail/IONOS round-trip is
+    // real network latency with no cap, and was a direct contributor to
+    // how slow every Dashboard load was. Now it just serves the cache as
+    // found and kicks the refresh off in the background (own scoped
+    // client, since this request's `db` is about to be disconnected): the
+    // Email Summary card's "new emails today" count may read up to one
+    // load stale, but the Email page's own client-side check
+    // (src/lib/staleness.ts) still catches up the moment it's opened.
     const emailInitialData: EmailScreeningPayload | null =
       googleAccessToken && session
         ? await (async () => {
             const cached = await getCachedInbox(db, session.user.id);
-            let snapshot = cached;
             if (!cached || isStale(cached.fetchedAt)) {
-              try {
-                snapshot = await refreshEmailInboxCache(
-                  db,
-                  session.user.id,
-                  googleAccessToken,
-                );
-              } catch {
-                // A transient Gmail/IONOS hiccup should never take down
-                // the whole Dashboard — fall back to the last known
-                // snapshot (possibly still null on a genuine first-ever
-                // visit, same as before this refresh existed).
-                snapshot = cached;
-              }
+              runInBackground(() =>
+                withScopedPrismaClient((bgDb) =>
+                  refreshEmailInboxCache(bgDb, session.user.id, googleAccessToken).then(() => undefined),
+                ),
+              );
             }
-            if (!snapshot) return null;
+            if (!cached) return null;
             const extras = await getScreeningExtras(
               db,
-              snapshot,
+              cached,
               session.user.id,
             );
-            return { ...snapshot, ...extras };
+            return { ...cached, ...extras };
           })()
         : null;
 

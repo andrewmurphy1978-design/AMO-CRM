@@ -110,3 +110,25 @@ export async function withScopedPrismaClient<T>(fn: (db: PrismaClient) => Promis
     await client.$disconnect().catch(() => {});
   }
 }
+
+// Runs `fn` without making the current request wait for it — for a "nice
+// to have this refreshed" background sync (Make/Buffer/email-inbox) that
+// would otherwise sit directly in the Dashboard's critical path for no
+// benefit to the response it's returning. On Cloudflare Workers, a request
+// handler returning does NOT mean the Worker's execution stops — anything
+// still running gets killed the moment nothing is registered to keep it
+// alive — so this hands `fn` to the request's own `ExecutionContext.
+// waitUntil`, the documented way to keep work alive past the response.
+// Outside Workers (local dev, seed scripts) there's no such context and no
+// such risk, so it just runs fn() without awaiting it.
+export function runInBackground(fn: () => Promise<void>): void {
+  const task = fn().catch(() => {});
+  if (!isCloudflareWorkers()) return;
+  try {
+    getCloudflareContext().ctx.waitUntil(task);
+  } catch {
+    // Not actually inside a request (shouldn't happen given the
+    // isCloudflareWorkers() check above just succeeded, but this is
+    // exactly the kind of edge case worth not crashing over).
+  }
+}
