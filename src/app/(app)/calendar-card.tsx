@@ -480,19 +480,34 @@ function UpcomingTable({
         className="flex w-full cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-left transition-opacity hover:opacity-90"
         style={{ backgroundColor: color.bg, color: color.fg }}
       >
-        <span className="w-16 shrink-0 font-bold">
-          {!event.allDay && event.start
-            ? formatClockTime(new Date(event.start), hour12, intlLocale)
-            : ""}
-        </span>
-        <span className="min-w-0 flex-1 truncate">{event.title}</span>
-        <span className="shrink-0 text-[10px] opacity-90">
-          {!event.allDay && event.end
-            ? formatClockTime(new Date(event.end), hour12, intlLocale)
-            : ""}
-        </span>
+        {event.allDay ? (
+          // No reserved time columns — the title starts right at the row's
+          // own left inset (the same spot the Start time occupies on a
+          // timed event below) and runs the full width, instead of being
+          // squeezed between two empty time spans that still claimed their
+          // width.
+          <span className="min-w-0 flex-1 truncate">{event.title}</span>
+        ) : (
+          <>
+            <span className="w-16 shrink-0 font-bold">
+              {event.start ? formatClockTime(new Date(event.start), hour12, intlLocale) : ""}
+            </span>
+            <span className="min-w-0 flex-1 truncate">{event.title}</span>
+            <span className="shrink-0 text-[10px] opacity-90">
+              {event.end ? formatClockTime(new Date(event.end), hour12, intlLocale) : ""}
+            </span>
+          </>
+        )}
       </button>
     );
+  }
+
+  // All-day events (holidays, reminders with no specific time) read best
+  // pinned above the timed events on the same day, not wherever the
+  // Calendar API happened to return them — a stable sort so same-priority
+  // events (all-day vs all-day, timed vs timed) keep their original order.
+  function sortedForDay(dayEvents: CalendarEventSummary[]): CalendarEventSummary[] {
+    return [...dayEvents].sort((a, b) => Number(b.allDay) - Number(a.allDay));
   }
 
   return (
@@ -516,7 +531,7 @@ function UpcomingTable({
               <span className="text-soft">{labels.noEvents}</span>
             ) : (
               <div className="mt-1 space-y-1">
-                {eventsByDay[i].map((event) => eventRow(event))}
+                {sortedForDay(eventsByDay[i]).map((event) => eventRow(event))}
               </div>
             )}
           </div>
@@ -539,7 +554,7 @@ function UpcomingTable({
                   <span className="text-soft">{labels.noEvents}</span>
                 ) : (
                   <div className="space-y-1">
-                    {eventsByDay[i].map((event) => eventRow(event))}
+                    {sortedForDay(eventsByDay[i]).map((event) => eventRow(event))}
                   </div>
                 )}
               </td>
