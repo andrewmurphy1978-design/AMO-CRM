@@ -442,37 +442,76 @@ function tsdbScore(v: string | number | null | undefined): number | null {
 
 // TheSportsDB's own strTeamBadge came back empty for every NFL/CFL/MLS/NBA
 // team live (confirmed by the user — scores and names work, logos never
-// show), so logos for these leagues come from ESPN's static logo CDN
-// instead — a different host from the JSON API that returns 403s, and one
-// that (unlike that API) uses a plain, unauthenticated, predictable path.
-// Confirmed live-documented pattern: espncdn.com/i/teamlogos/{sport}/500/
-// {abbrev}.png works for NFL and NBA specifically; MLS/soccer uses numeric
-// ESPN ids instead of abbreviations there and CFL's own path is
-// unconfirmed, so this is only wired up for NFL/NBA below — CFL/MLS keep
-// trying TheSportsDB's badge as a best-effort fallback, which may still
-// come back blank.
+// show), so logos for these leagues come from elsewhere:
+//
+// - NFL/NBA: ESPN's static logo CDN — a different host from the JSON API
+//   that 403s this Worker, unauthenticated, with a confirmed-reliable
+//   espncdn.com/i/teamlogos/{sport}/500/{abbrev}.png path for these two
+//   leagues specifically.
+// - CFL/MLS: MLS's ESPN CDN entries use numeric ids instead of team
+//   abbreviations (a mapping this file doesn't have), and CFL's own ESPN
+//   path is unconfirmed — guessing either risked repeating the exact
+//   "wrong CDN path, silently 404s" mistake already hit once this session.
+//   Wikipedia's page-summary API needs no per-team id mapping at all: its
+//   lead image for a sports-franchise article is, by long-standing
+//   Wikipedia infobox convention, the team's own crest/logo — and it can
+//   be queried directly with the exact same full team-name strings this
+//   file already keys everything by.
 function espnLogoUrl(spritePath: string, abbrev: string): string {
   return `https://a.espncdn.com/i/teamlogos/${spritePath}/500/${abbrev.toLowerCase()}.png`;
+}
+
+// Wikipedia's API etiquette policy asks every caller to identify itself
+// with a descriptive User-Agent (unlike ESPN's block, this is a documented,
+// compliance-friendly requirement, not an anti-bot measure) —
+// https://meta.wikimedia.org/wiki/User-Agent_policy.
+async function fetchWikipediaLogo(title: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, "_"))}`, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "AMO-CRM/1.0 (https://crm.andrewmurphy.online)",
+      },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { thumbnail?: { source?: string }; originalimage?: { source?: string } };
+    return data.thumbnail?.source ?? data.originalimage?.source ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function reverseNameMap(names: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(names).map(([abbrev, name]) => [name, abbrev]));
 }
 
-interface EspnLogoConfig {
-  sportPath: string;
-  // TheSportsDB's opponent name strings won't always exactly match this
-  // file's own team-name strings (punctuation, "LA" vs "Los Angeles", …) —
-  // a miss here just falls back to no logo for that one opponent rather
-  // than breaking anything.
-  nameToAbbrev: Record<string, string>;
+interface LogoOptions {
+  espn?: {
+    sportPath: string;
+    // TheSportsDB's opponent name strings won't always exactly match this
+    // file's own team-name strings (punctuation, "LA" vs "Los Angeles", …)
+    // — a miss here just falls back to no logo for that one opponent
+    // rather than breaking anything.
+    nameToAbbrev: Record<string, string>;
+  };
+  wikipedia?: boolean;
+}
+
+async function resolveOpponentLogo(opponentName: string, opponentId: string | undefined, logos: LogoOptions | undefined): Promise<string> {
+  const espnAbbrev = logos?.espn?.nameToAbbrev[opponentName];
+  if (espnAbbrev) return espnLogoUrl(logos!.espn!.sportPath, espnAbbrev);
+  if (logos?.wikipedia) {
+    const wiki = await fetchWikipediaLogo(opponentName);
+    if (wiki) return wiki;
+  }
+  return opponentId ? ((await lookupTsdbBadge(opponentId)) ?? "") : "";
 }
 
 async function toTsdbTeamGame(
   e: RawTsdbEvent,
   myTeamId: string,
   status: SportsTeamGame["status"],
-  espnLogo?: EspnLogoConfig,
+  logos: LogoOptions | undefined,
 ): Promise<SportsTeamGame | null> {
   const isHome = e.idHomeTeam === myTeamId;
   const isAway = e.idAwayTeam === myTeamId;
@@ -483,18 +522,11 @@ async function toTsdbTeamGame(
     ? new Date(e.strTimestamp).toISOString()
     : new Date(`${e.dateEvent ?? ""}T${e.strTime || "00:00:00"}Z`).toISOString();
 
-  const opponentEspnAbbrev = espnLogo?.nameToAbbrev[opponentName];
-  const opponentLogo = opponentEspnAbbrev
-    ? espnLogoUrl(espnLogo!.sportPath, opponentEspnAbbrev)
-    : opponentId
-      ? ((await lookupTsdbBadge(opponentId)) ?? "")
-      : "";
-
   return {
     gameId: String(e.idEvent ?? `${e.dateEvent}-${opponentName}`),
     date,
     opponentName,
-    opponentLogo,
+    opponentLogo: await resolveOpponentLogo(opponentName, opponentId, logos),
     homeAway: isHome ? "home" : "away",
     status,
     teamScore: tsdbScore(isHome ? e.intHomeScore : e.intAwayScore),
@@ -506,13 +538,13 @@ async function getTheSportsDbSnapshot(
   teamAbbrev: string,
   teamNames: Record<string, string>,
   leagueHint: string,
-  espnLogo?: EspnLogoConfig,
+  logos?: LogoOptions,
 ): Promise<TeamSnapshot> {
   const errors: string[] = [];
   const teamName = teamNames[teamAbbrev] ?? teamAbbrev;
   let lastGame: SportsTeamGame | null = null;
   let nextGame: SportsTeamGame | null = null;
-  let teamLogo: string | null = espnLogo ? espnLogoUrl(espnLogo.sportPath, teamAbbrev) : null;
+  let teamLogo: string | null = logos?.espn ? espnLogoUrl(logos.espn.sportPath, teamAbbrev) : logos?.wikipedia ? await fetchWikipediaLogo(teamName) : null;
 
   try {
     const found = await findTsdbTeam(teamName, leagueHint);
@@ -532,8 +564,8 @@ async function getTheSportsDbSnapshot(
       ]);
       const lastRaw = lastEvents[lastEvents.length - 1];
       const nextRaw = nextEvents[0];
-      if (lastRaw) lastGame = await toTsdbTeamGame(lastRaw, found.id, "final", espnLogo);
-      if (nextRaw) nextGame = await toTsdbTeamGame(nextRaw, found.id, "upcoming", espnLogo);
+      if (lastRaw) lastGame = await toTsdbTeamGame(lastRaw, found.id, "final", logos);
+      if (nextRaw) nextGame = await toTsdbTeamGame(nextRaw, found.id, "upcoming", logos);
     }
   } catch (error) {
     errors.push(`thesportsdb(${leagueHint}): ${error instanceof Error ? error.message : String(error)}`);
@@ -588,7 +620,7 @@ export const NFL_TEAM_NAMES: Record<string, string> = {
 const NFL_NAME_TO_ABBREV = reverseNameMap(NFL_TEAM_NAMES);
 
 export async function getNflSnapshot(teamAbbrev: string = DEFAULT_NFL_TEAM): Promise<TeamSnapshot> {
-  return getTheSportsDbSnapshot(teamAbbrev, NFL_TEAM_NAMES, "NFL", { sportPath: "nfl", nameToAbbrev: NFL_NAME_TO_ABBREV });
+  return getTheSportsDbSnapshot(teamAbbrev, NFL_TEAM_NAMES, "NFL", { espn: { sportPath: "nfl", nameToAbbrev: NFL_NAME_TO_ABBREV } });
 }
 
 const DEFAULT_CFL_TEAM = "MTL"; // Montreal Alouettes
@@ -606,7 +638,7 @@ export const CFL_TEAM_NAMES: Record<string, string> = {
 };
 
 export async function getCflSnapshot(teamAbbrev: string = DEFAULT_CFL_TEAM): Promise<TeamSnapshot> {
-  return getTheSportsDbSnapshot(teamAbbrev, CFL_TEAM_NAMES, "CFL");
+  return getTheSportsDbSnapshot(teamAbbrev, CFL_TEAM_NAMES, "CFL", { wikipedia: true });
 }
 
 const DEFAULT_MLS_TEAM = "MTL"; // CF Montréal
@@ -645,7 +677,7 @@ export const MLS_TEAM_NAMES: Record<string, string> = {
 };
 
 export async function getMlsSnapshot(teamAbbrev: string = DEFAULT_MLS_TEAM): Promise<TeamSnapshot> {
-  return getTheSportsDbSnapshot(teamAbbrev, MLS_TEAM_NAMES, "American Major League Soccer");
+  return getTheSportsDbSnapshot(teamAbbrev, MLS_TEAM_NAMES, "American Major League Soccer", { wikipedia: true });
 }
 
 const DEFAULT_NBA_TEAM = "TOR"; // Toronto Raptors — only Canadian NBA team
@@ -686,5 +718,5 @@ export const NBA_TEAM_NAMES: Record<string, string> = {
 const NBA_NAME_TO_ABBREV = reverseNameMap(NBA_TEAM_NAMES);
 
 export async function getNbaSnapshot(teamAbbrev: string = DEFAULT_NBA_TEAM): Promise<TeamSnapshot> {
-  return getTheSportsDbSnapshot(teamAbbrev, NBA_TEAM_NAMES, "NBA", { sportPath: "nba", nameToAbbrev: NBA_NAME_TO_ABBREV });
+  return getTheSportsDbSnapshot(teamAbbrev, NBA_TEAM_NAMES, "NBA", { espn: { sportPath: "nba", nameToAbbrev: NBA_NAME_TO_ABBREV } });
 }
