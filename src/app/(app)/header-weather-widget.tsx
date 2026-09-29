@@ -100,7 +100,7 @@ export default function HeaderWeatherWidget({
 
   if (!weather) {
     return (
-      <div className="flex items-center rounded-lg bg-white/10 px-2.5 py-1.5 text-xs text-amo-white/70">
+      <div className="flex max-w-[6rem] items-center truncate rounded-lg bg-white/10 px-1.5 py-0.5 text-[10px] text-amo-white/70 sm:max-w-none sm:px-2.5 sm:py-1.5 sm:text-xs">
         {labels.unavailable}
       </div>
     );
@@ -114,7 +114,7 @@ export default function HeaderWeatherWidget({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15 sm:gap-2"
+        className="flex items-center gap-1 rounded-lg bg-white/10 px-1.5 py-0.5 text-amo-white transition-colors hover:bg-white/15 sm:gap-2 sm:px-2.5 sm:py-1.5"
       >
         <span className="text-base leading-none sm:text-xl">
           {weatherCodeEmoji(weather.weatherCode)}

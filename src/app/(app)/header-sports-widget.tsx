@@ -43,6 +43,7 @@ function Pill({
   const logoSize = compact ? "h-4 w-4" : "h-5 w-5";
   const scoreText = compact ? "text-xs" : "text-sm";
   const gap = compact ? "gap-1" : "gap-1.5";
+  const padding = compact ? "px-1.5 py-0.5" : "px-2.5 py-1.5";
 
   return (
     <button
@@ -51,8 +52,8 @@ function Pill({
       aria-expanded={open}
       className={
         hasGame
-          ? "flex flex-col items-center gap-0.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15"
-          : "flex items-center rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] text-amo-white/70 transition-colors hover:bg-white/15"
+          ? `flex flex-col items-center gap-0 rounded-lg bg-white/10 ${padding} text-amo-white transition-colors hover:bg-white/15`
+          : `flex items-center rounded-lg bg-white/10 ${padding} text-[10px] text-amo-white/70 transition-colors hover:bg-white/15`
       }
     >
       {hasGame ? (
@@ -71,7 +72,7 @@ function Pill({
           )}
         </>
       ) : (
-        unavailableLabel
+        <span className={compact ? "block max-w-[8rem] truncate" : ""}>{unavailableLabel}</span>
       )}
     </button>
   );

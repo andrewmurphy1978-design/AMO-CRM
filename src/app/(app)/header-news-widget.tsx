@@ -7,7 +7,7 @@ import NewsCard, { type NewsLabels } from "./news-card";
 // Matches the Weather widget's own placeholder pill size/shape — see
 // header-weather-widget.tsx's WeatherWidgetSkeleton for why this exists.
 export function NewsWidgetSkeleton() {
-  return <div className="h-9 w-9 animate-pulse rounded-lg bg-white/10" />;
+  return <div className="h-6 w-6 animate-pulse rounded-lg bg-white/10 sm:h-9 sm:w-9" />;
 }
 
 // Condensed header pill that opens the exact same News card
@@ -35,14 +35,14 @@ export default function HeaderNewsWidget({ initial, labels }: { initial: NewsDig
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-amo-white transition-colors hover:bg-white/15"
+        className="relative flex h-6 w-6 items-center justify-center rounded-lg bg-white/10 text-amo-white transition-colors hover:bg-white/15 sm:h-9 sm:w-9"
         aria-label={labels.title}
       >
-        <span className="text-lg leading-none" aria-hidden>
+        <span className="text-xs leading-none sm:text-lg" aria-hidden>
           📰
         </span>
         {headlineCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amo-gold px-1 text-[9px] font-bold text-amo-green">
+          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amo-gold px-1 text-[8px] font-bold text-amo-green sm:h-4 sm:min-w-4 sm:text-[9px]">
             {headlineCount}
           </span>
         )}

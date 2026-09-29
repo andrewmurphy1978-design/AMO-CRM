@@ -44,8 +44,8 @@ export default function DateTimeCard({
   const compactDateFormat = dateLocale ? "d MMM" : "MMM d";
 
   return (
-    <div className="text-right leading-tight text-amo-white">
-      <p className="text-xs font-medium opacity-90 sm:hidden">{now ? format(now, compactDateFormat, { locale: dateLocale }) : " "}</p>
+    <div className="shrink-0 text-right leading-tight text-amo-white">
+      <p className="whitespace-nowrap text-xs font-medium opacity-90 sm:hidden">{now ? format(now, compactDateFormat, { locale: dateLocale }) : " "}</p>
       <p className="hidden text-xs font-medium opacity-90 sm:block">
         {now ? format(now, "EEEE, MMMM d yyyy", { locale: dateLocale }) : " "}
       </p>

@@ -68,7 +68,7 @@ export default function HeaderWorldClockWidget({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15 sm:gap-3"
+        className="flex items-center gap-1.5 rounded-lg bg-white/10 px-1.5 py-0.5 text-amo-white transition-colors hover:bg-white/15 sm:gap-3 sm:px-2.5 sm:py-1.5"
       >
         <span className="flex items-baseline gap-1 whitespace-nowrap text-xs font-bold sm:hidden">
           <span className="uppercase tracking-wide opacity-75">{zoneShortLabel(mobile)}</span>
