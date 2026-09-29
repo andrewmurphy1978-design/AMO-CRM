@@ -6,12 +6,13 @@ import { FIELD_CLASS, LABEL_CLASS } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
 import { CARD_COLORS } from "@/components/section-card";
 
-// Grid-cols-[140px_1fr_1fr_1fr] layout at lg (a desktop "table" without an
-// actual <table>, so the same markup can restack to one column on mobile
-// instead of forcing a fixed-width table to scroll horizontally) — each
-// field's own label is shown only below lg, since the header row above
-// already labels the desktop columns.
-const GRID_COLS = "lg:grid-cols-[140px_1fr_1fr_1fr]";
+// Grid-cols layout at lg (a desktop "table" without an actual <table>, so
+// the same markup can restack to one column on mobile instead of forcing a
+// fixed-width table to scroll horizontally) — each field's own label is
+// shown only below lg, since the header row above already labels the
+// desktop columns. Domain gets a larger share since domain names run
+// noticeably longer than hosting-provider/app names.
+const GRID_COLS = "lg:grid-cols-[140px_1.6fr_1fr_1fr]";
 
 function TechStackFieldGroup({
   label,

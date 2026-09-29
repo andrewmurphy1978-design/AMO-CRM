@@ -57,7 +57,7 @@ export default function PhoneField({
   return (
     <div>
       {!hideLabel && <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{label}</label>}
-      <div className={`flex items-center gap-1.5 ${hideLabel ? "" : "mt-1"}`}>
+      <div className={`flex flex-wrap items-center gap-1.5 sm:flex-nowrap ${hideLabel ? "" : "mt-1"}`}>
         {/* Fixed width, not flex-1 — so the number field is always the same
             size across every row in a column regardless of whether that
             particular row also has an extension field and/or a remove

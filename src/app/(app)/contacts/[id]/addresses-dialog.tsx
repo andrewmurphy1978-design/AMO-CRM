@@ -83,10 +83,8 @@ export default function AddressesDialog({
         </div>
         <div className="self-start">
           <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} lang={lang} values={values}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={values.billingContactName} />
-              <PhoneField name="billingPhone" label={t.contactForm.billingPhone} defaultCountry={billingPhoneCountry} defaultValue={values.billingPhone} />
-            </div>
+            <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={values.billingContactName} />
+            <PhoneField name="billingPhone" label={t.contactForm.billingPhone} defaultCountry={billingPhoneCountry} defaultValue={values.billingPhone} />
             <Field label={t.contactForm.billingEmail} name="billingEmail" type="email" defaultValue={values.billingEmail} />
           </AddressGroup>
         </div>

@@ -1253,7 +1253,7 @@ export function AppHandleListBody({
   return (
     <div className="space-y-1.5">
       {rows.map((row) => (
-        <div key={row.id} className="flex items-center gap-1.5">
+        <div key={row.id} className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap">
           <AppSelect
             name={appFieldName}
             value={row.app}
@@ -1265,7 +1265,7 @@ export function AppHandleListBody({
             name={handleFieldName}
             defaultValue={row.handle}
             placeholder={handlePlaceholder}
-            className={`${FIELD_CLASS} mt-0 flex-1`}
+            className={`${FIELD_CLASS} mt-0 min-w-0 flex-1`}
           />
           <button
             type="button"
