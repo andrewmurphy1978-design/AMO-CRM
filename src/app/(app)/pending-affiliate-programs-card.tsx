@@ -34,10 +34,18 @@ export interface PendingAffiliateProgramsLabels {
 }
 
 export default function PendingAffiliateProgramsCard({
+  id,
   programs,
   lang,
   labels,
 }: {
+  // Desktop and mobile each render their own instance of this card (see
+  // page.tsx) since desktop needs it directly below Email in the grid
+  // while mobile needs it after the Tasks card in the single-column
+  // stack — two DOM positions a single grid item can't satisfy at once.
+  // Each instance needs its own id so the Summary card's scroll target
+  // never collides with a duplicate id.
+  id: string;
   programs: PendingAffiliateProgramRow[];
   lang: "en" | "fr";
   labels: PendingAffiliateProgramsLabels;
@@ -48,7 +56,7 @@ export default function PendingAffiliateProgramsCard({
 
   return (
     <div
-      id="dashboard-pending-affiliate-programs-card"
+      id={id}
       className={`relative flex scroll-mt-20 flex-col overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${AFFILIATE_CARD_BG}`}
     >
       <div

@@ -1010,6 +1010,25 @@ export default async function DashboardPage() {
             />
           </div>
 
+          {/* Desktop only, directly below Email — given an explicit
+              lg:row-start (not just lg:col-start like every other item
+              here) so it never enters the auto-placement cursor at all:
+              an auto-placed item in this same column would advance that
+              shared cursor and knock Calendar/the Contacts group out of
+              Email's own row (see the mobile-only copy's comment below
+              for the full story). Explicit-position items are placed in
+              their own pass before auto-placement runs, so this reserves
+              col1/row2 up front and every other (auto) item then simply
+              flows around it. */}
+          <div className="hidden lg:col-start-1 lg:row-start-2 lg:block">
+            <PendingAffiliateProgramsCard
+              id="dashboard-pending-affiliate-programs-card-desktop"
+              programs={pendingAffiliatePrograms}
+              lang={lang}
+              labels={pendingAffiliateProgramsLabels}
+            />
+          </div>
+
           <div
             id="dashboard-calendar-card"
             className="lg:col-start-2 scroll-mt-20"
@@ -1130,20 +1149,18 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* DOM position (not the earlier spot right after Email) matters
-              here: with only lg:col-start on every item and no row-start,
-              CSS grid's auto-placement cursor advances across the *whole*
-              grid, not per column — an item placed here, after the Email/
-              Calendar/Contacts-group row has fully filled row 1, starts its
-              own search at row 2 without disturbing that row. Placed right
-              after Email instead, it would fill row 1's column 1 itself and
-              push Calendar/Contacts down into row 2 with it. This position
-              also gives the right mobile stacking order for free: single-
-              column layout follows DOM order, so this lands right after the
-              Tasks card (the last card in the Contacts/Projects/Tasks
-              group), exactly where it belongs on mobile. */}
-          <div className="lg:col-start-1">
+          {/* Mobile only — its own separate instance from the desktop copy
+              above (see that one's comment for why desktop needs an
+              explicit lg:row-start instead of sharing this DOM position).
+              Single-column mobile stacking follows DOM order, so sitting
+              here — right after the Contacts/Projects/Tasks group — lands
+              this card right after the Tasks card, exactly where it
+              belongs on mobile; lg:hidden then removes it from the desktop
+              grid entirely so it can't collide with the desktop copy's
+              explicit cell or disturb the auto-placement cursor there. */}
+          <div className="lg:hidden">
             <PendingAffiliateProgramsCard
+              id="dashboard-pending-affiliate-programs-card-mobile"
               programs={pendingAffiliatePrograms}
               lang={lang}
               labels={pendingAffiliateProgramsLabels}
