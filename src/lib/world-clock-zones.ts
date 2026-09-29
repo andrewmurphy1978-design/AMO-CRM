@@ -54,6 +54,15 @@ export function effectiveHeaderClockZones(stored: string[], worldZones: string[]
   return picks;
 }
 
+// There's only room for one zone in the Dashboard header on mobile — this
+// picks which of the (up to HEADER_CLOCK_COUNT) header zones that is.
+// Falls back to the first header zone when unset or when it names a zone
+// that's no longer one of them.
+export function effectiveHeaderZoneMobile(stored: string | null, headerZones: string[]): string | null {
+  if (stored && headerZones.includes(stored)) return stored;
+  return headerZones[0] ?? null;
+}
+
 // Reads the signed-in user's own zone picks fresh from the DB — same
 // "session is only reissued at login" reasoning as getHour12 in
 // src/lib/time-format.ts. `db` has no default on purpose; every caller
@@ -61,18 +70,21 @@ export function effectiveHeaderClockZones(stored: string[], worldZones: string[]
 export async function getUserWorldClockZones(
   session: { user: { id: string } } | null,
   db: PrismaClient,
-): Promise<{ worldZones: string[]; headerZones: string[] }> {
+): Promise<{ worldZones: string[]; headerZones: string[]; headerZoneMobile: string | null }> {
   if (!session) {
+    const headerZones = [...DEFAULT_HEADER_CLOCK_ZONES];
     return {
       worldZones: [...DEFAULT_WORLD_CLOCK_ZONES],
-      headerZones: [...DEFAULT_HEADER_CLOCK_ZONES],
+      headerZones,
+      headerZoneMobile: headerZones[0] ?? null,
     };
   }
   const user = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { worldClockZones: true, headerClockZones: true },
+    select: { worldClockZones: true, headerClockZones: true, headerZoneMobile: true },
   });
   const worldZones = effectiveWorldClockZones(user?.worldClockZones ?? []);
   const headerZones = effectiveHeaderClockZones(user?.headerClockZones ?? [], worldZones);
-  return { worldZones, headerZones };
+  const headerZoneMobile = effectiveHeaderZoneMobile(user?.headerZoneMobile ?? null, headerZones);
+  return { worldZones, headerZones, headerZoneMobile };
 }

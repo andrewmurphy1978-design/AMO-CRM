@@ -13,13 +13,15 @@ import type { MarketsLabels } from "./markets-card";
 export default async function MarketsHeaderServer({
   currency,
   items,
+  itemMobile,
   labels,
 }: {
   currency: string;
   items: string[];
+  itemMobile: string | null;
   labels: MarketsLabels;
 }) {
   const snapshot = await getMarketsSnapshot();
   const pill = pickMarketsWidgetData(snapshot, currency, items);
-  return <HeaderMarketsWidget pill={pill} snapshot={snapshot} labels={labels} />;
+  return <HeaderMarketsWidget pill={pill} snapshot={snapshot} labels={labels} mobileItemKey={itemMobile} />;
 }

@@ -187,11 +187,14 @@ export default async function DashboardPage() {
     hour12,
     worldZones,
     headerZones,
+    headerZoneMobile,
     marketsCurrency,
     marketsItems,
+    marketsItemMobile,
     sportsLeague,
     sportsTeamNhl,
     sportsTeamMlb,
+    sportsLeagueMobile,
     hiddenHeaderWidgets,
     emailInitialData,
     addressColors,
@@ -282,12 +285,14 @@ export default async function DashboardPage() {
       : null;
     const socialSnapshots = await getLatestSocialSnapshots(db);
     const hour12 = await getHour12(session, db);
-    const { worldZones, headerZones } = await getUserWorldClockZones(session, db);
-    const { currency: marketsCurrency, items: marketsItems } = await getUserMarketsPicks(session, db);
-    const { league: sportsLeague, teamNhl: sportsTeamNhl, teamMlb: sportsTeamMlb } = await getUserSportsPicks(
-      session,
-      db,
-    );
+    const { worldZones, headerZones, headerZoneMobile } = await getUserWorldClockZones(session, db);
+    const { currency: marketsCurrency, items: marketsItems, itemMobile: marketsItemMobile } = await getUserMarketsPicks(session, db);
+    const {
+      league: sportsLeague,
+      teamNhl: sportsTeamNhl,
+      teamMlb: sportsTeamMlb,
+      leagueMobile: sportsLeagueMobile,
+    } = await getUserSportsPicks(session, db);
     const hiddenHeaderWidgets = await getUserHiddenHeaderWidgets(session, db);
     // Same address-color lookup the Email page's own dialogs use for their
     // colored header strip — fetched here too now that this card opens
@@ -384,11 +389,14 @@ export default async function DashboardPage() {
       hour12,
       worldZones,
       headerZones,
+      headerZoneMobile,
       marketsCurrency,
       marketsItems,
+      marketsItemMobile,
       sportsLeague,
       sportsTeamNhl,
       sportsTeamMlb,
+      sportsLeagueMobile,
       hiddenHeaderWidgets,
       emailInitialData,
       addressColors,
@@ -796,48 +804,70 @@ export default async function DashboardPage() {
         location={t.dashboard.myLocation}
         logoUrl={AMO_LOGO_URL}
         logoAccessory={
-          <>
+          // Mobile: Weather stacked directly above Sports (2 rows), News
+          // beside them spanning both rows — desktop keeps the original
+          // single-row Weather/News/Sports order. Same named-area trick as
+          // the dateTimeAccessory pairing below, just with a 3rd widget
+          // (News) that needs to sit outside the stack at both sizes.
+          <div className="grid grid-cols-2 grid-rows-2 items-center gap-x-2 gap-y-0.5 [grid-template-areas:'weather_news'_'sports_news'] sm:grid-cols-3 sm:grid-rows-1 sm:gap-3 sm:[grid-template-areas:'weather_news_sports']">
             {!hiddenHeaderWidgets.includes("weather") && (
-              <Suspense fallback={<WeatherWidgetSkeleton />}>
-                <WeatherHeaderServer lang={lang} labels={weatherLabels} />
-              </Suspense>
+              <div className="[grid-area:weather]">
+                <Suspense fallback={<WeatherWidgetSkeleton />}>
+                  <WeatherHeaderServer lang={lang} labels={weatherLabels} />
+                </Suspense>
+              </div>
             )}
             {!hiddenHeaderWidgets.includes("news") && (
-              <Suspense fallback={<NewsWidgetSkeleton />}>
-                <NewsHeaderServer labels={newsLabels} />
-              </Suspense>
+              <div className="self-center [grid-area:news]">
+                <Suspense fallback={<NewsWidgetSkeleton />}>
+                  <NewsHeaderServer labels={newsLabels} />
+                </Suspense>
+              </div>
             )}
             {!hiddenHeaderWidgets.includes("sports") && (
-              <Suspense fallback={<SportsWidgetSkeleton />}>
-                <SportsHeaderServer
-                  league={sportsLeague}
-                  teamNhl={sportsTeamNhl}
-                  teamMlb={sportsTeamMlb}
-                  lang={lang}
-                  hour12={hour12}
-                  cardLabels={sportsLabels}
-                  unavailableLabel={sportsUnavailableLabel}
-                />
-              </Suspense>
+              <div className="[grid-area:sports]">
+                <Suspense fallback={<SportsWidgetSkeleton />}>
+                  <SportsHeaderServer
+                    league={sportsLeague}
+                    teamNhl={sportsTeamNhl}
+                    teamMlb={sportsTeamMlb}
+                    leagueMobile={sportsLeagueMobile}
+                    lang={lang}
+                    hour12={hour12}
+                    cardLabels={sportsLabels}
+                    unavailableLabel={sportsUnavailableLabel}
+                  />
+                </Suspense>
+              </div>
             )}
-          </>
+          </div>
         }
         dateTimeAccessory={
-          <>
+          // Mobile: Markets stacked directly above World Clock — desktop
+          // keeps them side by side, same order, via the plain flex-col/
+          // flex-row swap (no 3rd widget interleaved here, unlike the
+          // Weather/News/Sports group above, so no grid-area trick needed).
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-3">
             {!hiddenHeaderWidgets.includes("markets") && (
               <Suspense fallback={<MarketsWidgetSkeleton />}>
-                <MarketsHeaderServer currency={marketsCurrency} items={marketsItems} labels={marketsLabels} />
+                <MarketsHeaderServer
+                  currency={marketsCurrency}
+                  items={marketsItems}
+                  itemMobile={marketsItemMobile}
+                  labels={marketsLabels}
+                />
               </Suspense>
             )}
             {!hiddenHeaderWidgets.includes("worldClock") && (
               <HeaderWorldClockWidget
                 headerZones={headerZones}
                 allZones={worldZones}
+                mobileZone={headerZoneMobile}
                 hour12={hour12}
                 title={t.dashboard.worldClocksTitle}
               />
             )}
-          </>
+          </div>
         }
         hideDateTimeCard={hiddenHeaderWidgets.includes("dateTime")}
       />

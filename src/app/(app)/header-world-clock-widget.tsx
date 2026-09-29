@@ -11,11 +11,16 @@ import { zoneShortLabel, offsetMinutes, formatOffsetShort } from "@/lib/timezone
 export default function HeaderWorldClockWidget({
   headerZones,
   allZones,
+  mobileZone,
   hour12,
   title,
 }: {
   headerZones: string[];
   allZones: string[];
+  // Which one of headerZones shows on mobile (there's only room for one) —
+  // see Settings' "Header clock on mobile" picker. Falls back to the first
+  // header zone when unset/not found.
+  mobileZone: string | null;
   hour12: boolean;
   title: string;
 }) {
@@ -53,20 +58,24 @@ export default function HeaderWorldClockWidget({
 
   if (headerZones.length === 0) return null;
 
+  // Mobile only has room for one zone — the one chosen in Settings,
+  // falling back to the first when unset or no longer one of the header
+  // zones. Desktop still shows every header zone.
+  const mobile = headerZones.find((z) => z === mobileZone) ?? headerZones[0];
+
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-3 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15"
+        className="flex items-center gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15 sm:gap-3"
       >
-        {/* Mobile only has room for one of the header zones — the rest
-            stay sm+ only, matching the Markets pill's own mobile limit. */}
-        {headerZones.map((zone, i) => (
-          <span
-            key={zone}
-            className={`max-w-[5.5rem] min-w-0 text-center leading-tight ${i > 0 ? "hidden sm:block" : ""}`}
-          >
+        <span className="flex items-baseline gap-1 whitespace-nowrap text-xs font-bold sm:hidden">
+          <span className="uppercase tracking-wide opacity-75">{zoneShortLabel(mobile)}</span>
+          <span className="font-display tabular-nums">{timeIn(mobile)}</span>
+        </span>
+        {headerZones.map((zone) => (
+          <span key={zone} className="hidden max-w-[5.5rem] min-w-0 text-center leading-tight sm:block">
             <span className="block truncate text-[9px] uppercase tracking-wide opacity-75">
               {zoneShortLabel(zone)}
             </span>
@@ -77,7 +86,9 @@ export default function HeaderWorldClockWidget({
         ))}
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-[26rem] max-w-[calc(100vw-2rem)] rounded-xl border border-card-border bg-card-bg p-4 text-left shadow-lg">
+        <div
+          className="fixed inset-4 z-40 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-[26rem] overflow-y-auto rounded-xl border border-card-border bg-card-bg p-4 text-left shadow-lg sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:m-0 sm:mt-2 sm:h-auto sm:max-h-none sm:w-[26rem] sm:max-w-none"
+        >
           <h3 className="font-display text-sm font-semibold text-ink">{title}</h3>
           <div className="mt-2 grid grid-cols-3 gap-1.5">
             {allZones.map((zone) => (

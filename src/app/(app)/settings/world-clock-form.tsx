@@ -11,15 +11,18 @@ export default function WorldClockForm({
   lang,
   initialZones,
   initialHeaderZones,
+  initialHeaderZoneMobile,
 }: {
   lang: Lang;
   initialZones: string[];
   initialHeaderZones: string[];
+  initialHeaderZoneMobile: string | null;
 }) {
   const t = getDict(lang);
   const [state, formAction, pending] = useActionState(saveWorldClockSettings, undefined);
   const [zones, setZones] = useState(initialZones);
   const [headerZones, setHeaderZones] = useState(initialHeaderZones);
+  const [headerZoneMobile, setHeaderZoneMobile] = useState(initialHeaderZoneMobile ?? "");
   // Pure/deterministic (Intl.supportedValuesOf + a fixed reference date —
   // see src/lib/timezones.ts), so computing it at render time is fine.
   const options = getWorldTimeZoneOptions();
@@ -28,6 +31,7 @@ export default function WorldClockForm({
     if (next.length > MAX_WORLD_CLOCK_ZONES) return;
     setZones(next);
     setHeaderZones((h) => h.filter((z) => next.includes(z)));
+    setHeaderZoneMobile((m) => (next.includes(m) ? m : ""));
   }
 
   // `zones`' own array order is what the World Clock header widget's
@@ -46,7 +50,10 @@ export default function WorldClockForm({
 
   function toggleHeaderZone(zone: string) {
     setHeaderZones((h) => {
-      if (h.includes(zone)) return h.filter((z) => z !== zone);
+      if (h.includes(zone)) {
+        setHeaderZoneMobile((m) => (m === zone ? "" : m));
+        return h.filter((z) => z !== zone);
+      }
       if (h.length >= HEADER_CLOCK_COUNT) return h;
       return [...h, zone];
     });
@@ -60,6 +67,7 @@ export default function WorldClockForm({
       {headerZones.map((z) => (
         <input key={z} type="hidden" name="headerZones" value={z} />
       ))}
+      <input type="hidden" name="headerZoneMobile" value={headerZoneMobile} />
 
       <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
         {t.settings.worldClockZonesLabel}
@@ -135,6 +143,37 @@ export default function WorldClockForm({
                     onChange={() => toggleHeaderZone(zone)}
                     disabled={!checked && headerZones.length >= HEADER_CLOCK_COUNT}
                     className="h-3.5 w-3.5 rounded border-card-border"
+                  />
+                  {zoneShortLabel(zone)}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {headerZones.length > 0 && (
+        <div className="mt-4">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
+            {t.settings.worldClockHeaderMobileLabel}
+          </label>
+          <p className="mt-1 text-xs text-soft">{t.settings.worldClockHeaderMobileDesc}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {headerZones.map((zone) => {
+              const checked = headerZoneMobile === zone;
+              return (
+                <label
+                  key={zone}
+                  className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
+                    checked ? "border-amo-gold bg-amo-gold/10 text-ink" : "border-card-border text-soft"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="headerZoneMobileRadio"
+                    checked={checked}
+                    onChange={() => setHeaderZoneMobile(zone)}
+                    className="h-3.5 w-3.5"
                   />
                   {zoneShortLabel(zone)}
                 </label>

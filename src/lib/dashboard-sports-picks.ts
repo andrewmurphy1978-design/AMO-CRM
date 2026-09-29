@@ -105,22 +105,36 @@ export function effectiveSportsTeamMlb(stored: string | null): string {
   return stored && MLB_TEAM_OPTIONS.some((o) => o.value === stored) ? stored : DEFAULT_SPORTS_TEAM_MLB;
 }
 
+// The Dashboard header's Sports widget can show a different league on
+// mobile than on desktop (e.g. NHL on desktop, MLB on mobile) — this
+// resolves that pick, falling back to the desktop league when unset.
+export function effectiveSportsLeagueMobile(stored: string | null, desktopLeague: SportsLeague): SportsLeague {
+  return stored === "NHL" || stored === "MLB" ? stored : desktopLeague;
+}
+
 // Reads the signed-in user's own Sports picks fresh from the DB — same
 // "session is only reissued at login" reasoning as getUserWorldClockZones.
 export async function getUserSportsPicks(
   session: { user: { id: string } } | null,
   db: PrismaClient,
-): Promise<{ league: SportsLeague; teamNhl: string; teamMlb: string }> {
+): Promise<{ league: SportsLeague; teamNhl: string; teamMlb: string; leagueMobile: SportsLeague }> {
   if (!session) {
-    return { league: DEFAULT_SPORTS_LEAGUE, teamNhl: DEFAULT_SPORTS_TEAM_NHL, teamMlb: DEFAULT_SPORTS_TEAM_MLB };
+    return {
+      league: DEFAULT_SPORTS_LEAGUE,
+      teamNhl: DEFAULT_SPORTS_TEAM_NHL,
+      teamMlb: DEFAULT_SPORTS_TEAM_MLB,
+      leagueMobile: DEFAULT_SPORTS_LEAGUE,
+    };
   }
   const user = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { sportsLeague: true, sportsTeamNhl: true, sportsTeamMlb: true },
+    select: { sportsLeague: true, sportsTeamNhl: true, sportsTeamMlb: true, sportsLeagueMobile: true },
   });
+  const league = effectiveSportsLeague(user?.sportsLeague ?? null);
   return {
-    league: effectiveSportsLeague(user?.sportsLeague ?? null),
+    league,
     teamNhl: effectiveSportsTeamNhl(user?.sportsTeamNhl ?? null),
     teamMlb: effectiveSportsTeamMlb(user?.sportsTeamMlb ?? null),
+    leagueMobile: effectiveSportsLeagueMobile(user?.sportsLeagueMobile ?? null, league),
   };
 }

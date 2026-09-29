@@ -10,23 +10,27 @@ export default function SportsPicksForm({
   initialLeague,
   initialTeamNhl,
   initialTeamMlb,
+  initialLeagueMobile,
 }: {
   lang: Lang;
   initialLeague: string;
   initialTeamNhl: string;
   initialTeamMlb: string;
+  initialLeagueMobile: string | null;
 }) {
   const t = getDict(lang);
   const [state, formAction, pending] = useActionState(saveSportsSettings, undefined);
   const [league, setLeague] = useState(initialLeague);
   const [teamNhl, setTeamNhl] = useState(initialTeamNhl);
   const [teamMlb, setTeamMlb] = useState(initialTeamMlb);
+  const [leagueMobile, setLeagueMobile] = useState(initialLeagueMobile ?? initialLeague);
 
   return (
     <form action={formAction} className="mt-6 border-t border-card-border pt-5">
       <input type="hidden" name="sportsLeague" value={league} />
       <input type="hidden" name="sportsTeamNhl" value={teamNhl} />
       <input type="hidden" name="sportsTeamMlb" value={teamMlb} />
+      <input type="hidden" name="sportsLeagueMobile" value={leagueMobile} />
 
       <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
         {t.settings.sportsPicksLabel}
@@ -50,6 +54,32 @@ export default function SportsPicksForm({
                 name="sportsLeagueRadio"
                 checked={league === opt.value}
                 onChange={() => setLeague(opt.value)}
+                className="h-3.5 w-3.5"
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-soft">
+          {t.settings.sportsPicksLeagueMobileLabel}
+        </p>
+        <p className="mt-1 text-xs text-soft">{t.settings.sportsPicksLeagueMobileDesc}</p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {SPORTS_LEAGUE_OPTIONS.map((opt) => (
+            <label
+              key={opt.value}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
+                leagueMobile === opt.value ? "border-amo-gold bg-amo-gold/10 text-ink" : "border-card-border text-soft"
+              }`}
+            >
+              <input
+                type="radio"
+                name="sportsLeagueMobileRadio"
+                checked={leagueMobile === opt.value}
+                onChange={() => setLeagueMobile(opt.value)}
                 className="h-3.5 w-3.5"
               />
               {opt.label}

@@ -60,21 +60,33 @@ export function effectiveMarketItems(stored: string[]): string[] {
   return valid.length > 0 ? valid : [...DEFAULT_MARKET_ITEMS];
 }
 
+// There's only room for one item (alongside the currency row) in the
+// Dashboard header on mobile — this picks which of the configured items
+// that is. Falls back to the first item when unset or when it names an
+// item that's no longer one of them.
+export function effectiveMarketItemMobile(stored: string | null, items: string[]): string | null {
+  if (stored && items.includes(stored)) return stored;
+  return items[0] ?? null;
+}
+
 // Reads the signed-in user's own Markets picks fresh from the DB — same
 // "session is only reissued at login" reasoning as getUserWorldClockZones.
 export async function getUserMarketsPicks(
   session: { user: { id: string } } | null,
   db: PrismaClient,
-): Promise<{ currency: MarketCurrencyOption; items: string[] }> {
+): Promise<{ currency: MarketCurrencyOption; items: string[]; itemMobile: string | null }> {
   if (!session) {
-    return { currency: DEFAULT_MARKET_CURRENCY, items: [...DEFAULT_MARKET_ITEMS] };
+    const items = [...DEFAULT_MARKET_ITEMS];
+    return { currency: DEFAULT_MARKET_CURRENCY, items, itemMobile: items[0] ?? null };
   }
   const user = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { marketsCurrency: true, marketsItems: true },
+    select: { marketsCurrency: true, marketsItems: true, marketsItemMobile: true },
   });
+  const items = effectiveMarketItems(user?.marketsItems ?? []);
   return {
     currency: effectiveMarketCurrency(user?.marketsCurrency ?? null),
-    items: effectiveMarketItems(user?.marketsItems ?? []),
+    items,
+    itemMobile: effectiveMarketItemMobile(user?.marketsItemMobile ?? null, items),
   };
 }

@@ -48,7 +48,7 @@ export default function HeaderNewsWidget({ initial, labels }: { initial: NewsDig
         )}
       </button>
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] text-left">
+        <div className="fixed inset-4 z-40 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-80 overflow-y-auto text-left sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:m-0 sm:mt-2 sm:h-auto sm:max-h-none sm:w-80 sm:max-w-none">
           <NewsCard initial={initial} labels={labels} />
         </div>
       )}

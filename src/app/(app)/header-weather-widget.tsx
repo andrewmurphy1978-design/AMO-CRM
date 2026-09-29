@@ -114,16 +114,17 @@ export default function HeaderWeatherWidget({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15"
+        className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15 sm:gap-2"
       >
-        <span className="text-xl leading-none">
+        <span className="text-base leading-none sm:text-xl">
           {weatherCodeEmoji(weather.weatherCode)}
         </span>
-        <span className="font-display text-sm font-bold tabular-nums leading-none">
+        <span className="font-display text-xs font-bold tabular-nums leading-none sm:text-sm">
           {weather.temperature}
           {degree}
         </span>
-        <span className="text-[9px] leading-tight opacity-80">
+        {/* High/low is desktop-only — there isn't room for it on mobile. */}
+        <span className="hidden text-[9px] leading-tight opacity-80 sm:block">
           <span className="block">
             {weather.highTemp}
             {degree}
@@ -135,7 +136,7 @@ export default function HeaderWeatherWidget({
         </span>
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-2 w-72 rounded-xl border border-card-border bg-card-bg p-4 text-left shadow-lg">
+        <div className="fixed inset-4 z-40 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-72 overflow-y-auto rounded-xl border border-card-border bg-card-bg p-4 text-left shadow-lg sm:absolute sm:inset-auto sm:left-0 sm:top-full sm:m-0 sm:mt-2 sm:h-auto sm:max-h-none sm:w-72 sm:max-w-none">
           <div className="flex items-center justify-between gap-2">
             <div>
               <h3 className="font-display text-sm font-semibold text-ink">

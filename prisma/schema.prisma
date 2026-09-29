@@ -75,6 +75,10 @@ model User {
   // defaults still reaches anyone who never customized their own.
   worldClockZones            String[]   @default([])
   headerClockZones           String[]   @default([])
+  // Which single one of headerClockZones is shown in the Dashboard header
+  // on mobile (there's only room for one there) — must be one of
+  // headerClockZones or it's ignored; null means "use the first one".
+  headerZoneMobile           String?
   // The Dashboard header's condensed Markets widget: one currency (shown
   // as "1 CAD = x <currency>") plus up to 3 other picks, each a
   // "index:<symbol>" / "commodity:<symbol>" / "crypto:<id>" key into the
@@ -83,6 +87,11 @@ model User {
   // World Clock zones above.
   marketsCurrency            String?
   marketsItems               String[]   @default([])
+  // Which single one of marketsItems is shown in the Dashboard header on
+  // mobile (there's only room for one there, next to the currency row) —
+  // must be one of marketsItems or it's ignored; null means "use the
+  // first one".
+  marketsItemMobile          String?
   // The Dashboard header's condensed Sports widget: which league is
   // currently shown, plus a separately-remembered home team per league so
   // switching leagues doesn't lose the other one's pick — see
@@ -90,6 +99,10 @@ model User {
   sportsLeague               String?
   sportsTeamNhl              String?
   sportsTeamMlb              String?
+  // Which league's game is shown in the Dashboard header on mobile —
+  // independent of sportsLeague (desktop) so the two can differ. Null
+  // means "same as sportsLeague".
+  sportsLeagueMobile         String?
   // Which Dashboard header widgets this user has hidden — any of "weather",
   // "news", "sports", "markets", "worldClock", "dateTime". Empty means all
   // shown (the default) — see src/lib/dashboard-header-widgets.ts.

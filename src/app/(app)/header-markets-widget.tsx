@@ -31,6 +31,11 @@ function ChangeText({ changePct }: { changePct: number | null }) {
   );
 }
 
+// Centers the drop-down panel on the viewport on mobile — see the
+// identical comment on header-sports-widget.tsx's PANEL_CLASS.
+const PANEL_CLASS =
+  "fixed inset-4 z-40 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-[26rem] overflow-y-auto text-left sm:absolute sm:inset-auto sm:left-0 sm:top-full sm:m-0 sm:mt-2 sm:h-auto sm:max-h-none sm:w-[26rem] sm:max-w-none";
+
 // Compact "4 market info" pill for the Dashboard header — 1 currency
 // conversion (1 CAD = x <code>) plus up to 3 other picks (indices/
 // commodities/crypto), each showing its % change. Clicking it opens the
@@ -42,10 +47,15 @@ export default function HeaderMarketsWidget({
   pill,
   snapshot,
   labels,
+  mobileItemKey,
 }: {
   pill: MarketsWidgetData | null;
   snapshot: MarketsSnapshot | null;
   labels: MarketsLabels;
+  // Which of pill.itemRows shows on mobile (there's only room for one,
+  // next to the currency row) — see Settings' "Item shown on mobile"
+  // picker. Falls back to the first item row when unset/not found.
+  mobileItemKey: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pillData, setPillData] = useState(pill);
@@ -97,47 +107,49 @@ export default function HeaderMarketsWidget({
     );
   }
 
+  // Mobile only has room for one item pick (next to the currency row) —
+  // the one chosen in Settings, falling back to the first when unset or
+  // no longer configured. Desktop still shows every item row.
+  const mobileItem =
+    pillData.itemRows.find((item) => item.key === mobileItemKey) ?? pillData.itemRows[0] ?? null;
+
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-3 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15"
+        className="flex items-center gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15 sm:gap-3"
       >
         {pillData.currencyRow && (
-          <span className="max-w-[8rem] min-w-0 text-center leading-tight">
-            <span className="flex items-center justify-center gap-1 truncate text-[9px] uppercase tracking-wide opacity-75">
-              1
-              {/* eslint-disable-next-line @next/next/no-img-element -- external flag CDN, not a local asset */}
-              <img
-                src={countryFlagUrl(CAD_COUNTRY_CODE)}
-                alt="CAD"
-                title="CAD"
-                className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover"
-              />
-            </span>
-            <span className="flex items-center justify-center gap-1 truncate font-display text-xs font-bold tabular-nums">
-              = {pillData.currencyRow.rateFromBase.toFixed(2)}
-              {/* eslint-disable-next-line @next/next/no-img-element -- external flag CDN, not a local asset */}
-              <img
-                src={countryFlagUrl(pillData.currencyRow.countryCode)}
-                alt={pillData.currencyRow.code}
-                title={pillData.currencyRow.code}
-                className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover"
-              />
+          <span className="flex items-center gap-1 whitespace-nowrap text-[10px] font-bold tabular-nums sm:text-xs">
+            1
+            {/* eslint-disable-next-line @next/next/no-img-element -- external flag CDN, not a local asset */}
+            <img
+              src={countryFlagUrl(CAD_COUNTRY_CODE)}
+              alt="CAD"
+              title="CAD"
+              className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover"
+            />
+            = {pillData.currencyRow.rateFromBase.toFixed(2)}
+            {/* eslint-disable-next-line @next/next/no-img-element -- external flag CDN, not a local asset */}
+            <img
+              src={countryFlagUrl(pillData.currencyRow.countryCode)}
+              alt={pillData.currencyRow.code}
+              title={pillData.currencyRow.code}
+              className="h-2.5 w-3.5 shrink-0 rounded-[1px] object-cover"
+            />
+          </span>
+        )}
+        {mobileItem && (
+          <span className="max-w-[4.5rem] min-w-0 text-center leading-tight sm:hidden">
+            <span className="block truncate text-[9px] uppercase tracking-wide opacity-75">{mobileItem.label}</span>
+            <span className="block truncate font-display text-xs font-bold tabular-nums">
+              <ChangeText changePct={mobileItem.changePct} />
             </span>
           </span>
         )}
-        {/* Mobile only has room for one of the 4 picks — the currency row
-            if there is one, otherwise the first item pick — the rest stay
-            sm+ only, matching the header's 2-row wrap on small screens. */}
-        {pillData.itemRows.map((item, i) => (
-          <span
-            key={item.key}
-            className={`max-w-[4.5rem] min-w-0 text-center leading-tight ${
-              pillData.currencyRow || i > 0 ? "hidden sm:block" : ""
-            }`}
-          >
+        {pillData.itemRows.map((item) => (
+          <span key={item.key} className="hidden max-w-[4.5rem] min-w-0 text-center leading-tight sm:block">
             <span className="block truncate text-[9px] uppercase tracking-wide opacity-75">{item.label}</span>
             <span className="block truncate font-display text-xs font-bold tabular-nums">
               <ChangeText changePct={item.changePct} />
@@ -146,7 +158,7 @@ export default function HeaderMarketsWidget({
         ))}
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-40 mt-2 w-[26rem] max-w-[calc(100vw-2rem)] text-left">
+        <div className={PANEL_CLASS}>
           <MarketsCard initial={snapshot} labels={labels} />
         </div>
       )}

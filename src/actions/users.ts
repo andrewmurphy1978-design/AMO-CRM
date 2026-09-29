@@ -255,6 +255,8 @@ export async function saveWorldClockSettings(
 
   const zones = formData.getAll("zones").map(String).filter(Boolean);
   const headerZones = formData.getAll("headerZones").map(String).filter(Boolean);
+  const headerZoneMobileRaw = String(formData.get("headerZoneMobile") ?? "");
+  const headerZoneMobile = headerZoneMobileRaw || null;
 
   if (zones.length > MAX_WORLD_CLOCK_ZONES || headerZones.length > HEADER_CLOCK_COUNT) {
     return { error: t.actions.invalidInput };
@@ -262,11 +264,14 @@ export async function saveWorldClockSettings(
   if (headerZones.some((z) => !zones.includes(z))) {
     return { error: t.actions.invalidInput };
   }
+  if (headerZoneMobile && !headerZones.includes(headerZoneMobile)) {
+    return { error: t.actions.invalidInput };
+  }
 
   await withScopedPrismaClient((db) =>
     db.user.update({
       where: { id: session.user.id },
-      data: { worldClockZones: zones, headerClockZones: headerZones },
+      data: { worldClockZones: zones, headerClockZones: headerZones, headerZoneMobile },
     })
   );
   revalidatePath("/settings");
@@ -285,6 +290,8 @@ export async function saveMarketsSettings(
 
   const currency = String(formData.get("marketsCurrency") ?? "");
   const items = formData.getAll("marketsItems").map(String).filter(Boolean);
+  const marketsItemMobileRaw = String(formData.get("marketsItemMobile") ?? "");
+  const marketsItemMobile = marketsItemMobileRaw || null;
 
   if (!(MARKET_CURRENCY_OPTIONS as readonly string[]).includes(currency)) {
     return { error: t.actions.invalidInput };
@@ -292,11 +299,14 @@ export async function saveMarketsSettings(
   if (items.length > MAX_MARKET_ITEMS || items.some((key) => !MARKET_ITEM_OPTIONS.some((o) => o.key === key))) {
     return { error: t.actions.invalidInput };
   }
+  if (marketsItemMobile && !items.includes(marketsItemMobile)) {
+    return { error: t.actions.invalidInput };
+  }
 
   await withScopedPrismaClient((db) =>
     db.user.update({
       where: { id: session.user.id },
-      data: { marketsCurrency: currency, marketsItems: items },
+      data: { marketsCurrency: currency, marketsItems: items, marketsItemMobile },
     })
   );
   revalidatePath("/settings");
@@ -316,6 +326,8 @@ export async function saveSportsSettings(
   const league = String(formData.get("sportsLeague") ?? "");
   const teamNhl = String(formData.get("sportsTeamNhl") ?? "");
   const teamMlb = String(formData.get("sportsTeamMlb") ?? "");
+  const sportsLeagueMobileRaw = String(formData.get("sportsLeagueMobile") ?? "");
+  const sportsLeagueMobile = sportsLeagueMobileRaw || null;
 
   if (!SPORTS_LEAGUE_OPTIONS.some((o) => o.value === league)) {
     return { error: t.actions.invalidInput };
@@ -323,11 +335,14 @@ export async function saveSportsSettings(
   if (!NHL_TEAM_OPTIONS.some((o) => o.value === teamNhl) || !MLB_TEAM_OPTIONS.some((o) => o.value === teamMlb)) {
     return { error: t.actions.invalidInput };
   }
+  if (sportsLeagueMobile && !SPORTS_LEAGUE_OPTIONS.some((o) => o.value === sportsLeagueMobile)) {
+    return { error: t.actions.invalidInput };
+  }
 
   await withScopedPrismaClient((db) =>
     db.user.update({
       where: { id: session.user.id },
-      data: { sportsLeague: league, sportsTeamNhl: teamNhl, sportsTeamMlb: teamMlb },
+      data: { sportsLeague: league, sportsTeamNhl: teamNhl, sportsTeamMlb: teamMlb, sportsLeagueMobile },
     })
   );
   revalidatePath("/settings");

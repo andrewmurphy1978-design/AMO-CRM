@@ -27,10 +27,15 @@ import BuildVersion from "./build-version";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getWatchedPeople, isPersonalSectionUser } from "@/lib/personal-watch";
-import { effectiveWorldClockZones, effectiveHeaderClockZones } from "@/lib/world-clock-zones";
-import { effectiveMarketCurrency, effectiveMarketItems } from "@/lib/dashboard-markets-picks";
+import { effectiveWorldClockZones, effectiveHeaderClockZones, effectiveHeaderZoneMobile } from "@/lib/world-clock-zones";
+import { effectiveMarketCurrency, effectiveMarketItems, effectiveMarketItemMobile } from "@/lib/dashboard-markets-picks";
 import MarketsPicksForm from "./markets-picks-form";
-import { effectiveSportsLeague, effectiveSportsTeamNhl, effectiveSportsTeamMlb } from "@/lib/dashboard-sports-picks";
+import {
+  effectiveSportsLeague,
+  effectiveSportsTeamNhl,
+  effectiveSportsTeamMlb,
+  effectiveSportsLeagueMobile,
+} from "@/lib/dashboard-sports-picks";
 import SportsPicksForm from "./sports-picks-form";
 import { effectiveHiddenHeaderWidgets } from "@/lib/dashboard-header-widgets";
 import HeaderWidgetsForm from "./header-widgets-form";
@@ -90,11 +95,14 @@ export default async function SettingsPage({
               defaultFontSize: true,
               worldClockZones: true,
               headerClockZones: true,
+              headerZoneMobile: true,
               marketsCurrency: true,
               marketsItems: true,
+              marketsItemMobile: true,
               sportsLeague: true,
               sportsTeamNhl: true,
               sportsTeamMlb: true,
+              sportsLeagueMobile: true,
               hiddenHeaderWidgets: true,
             },
           })
@@ -153,11 +161,14 @@ export default async function SettingsPage({
     currentUser?.headerClockZones ?? [],
     worldClockZones,
   );
+  const headerZoneMobile = effectiveHeaderZoneMobile(currentUser?.headerZoneMobile ?? null, headerClockZones);
   const marketsCurrency = effectiveMarketCurrency(currentUser?.marketsCurrency ?? null);
   const marketsItems = effectiveMarketItems(currentUser?.marketsItems ?? []);
+  const marketsItemMobile = effectiveMarketItemMobile(currentUser?.marketsItemMobile ?? null, marketsItems);
   const sportsLeague = effectiveSportsLeague(currentUser?.sportsLeague ?? null);
   const sportsTeamNhl = effectiveSportsTeamNhl(currentUser?.sportsTeamNhl ?? null);
   const sportsTeamMlb = effectiveSportsTeamMlb(currentUser?.sportsTeamMlb ?? null);
+  const sportsLeagueMobile = effectiveSportsLeagueMobile(currentUser?.sportsLeagueMobile ?? null, sportsLeague);
   const hiddenHeaderWidgets = effectiveHiddenHeaderWidgets(currentUser?.hiddenHeaderWidgets ?? []);
   // Set by .github/workflows/deploy.yml right before the Cloudflare build —
   // absent in local dev, where there's no deploy to report. Shown in the
@@ -229,6 +240,7 @@ export default async function SettingsPage({
                 lang={lang}
                 initialZones={worldClockZones}
                 initialHeaderZones={headerClockZones}
+                initialHeaderZoneMobile={headerZoneMobile}
               />
             )}
             {currentUser && (
@@ -236,6 +248,7 @@ export default async function SettingsPage({
                 lang={lang}
                 initialCurrency={marketsCurrency}
                 initialItems={marketsItems}
+                initialItemMobile={marketsItemMobile}
               />
             )}
             {currentUser && (
@@ -244,6 +257,7 @@ export default async function SettingsPage({
                 initialLeague={sportsLeague}
                 initialTeamNhl={sportsTeamNhl}
                 initialTeamMlb={sportsTeamMlb}
+                initialLeagueMobile={sportsLeagueMobile}
               />
             )}
             {currentUser && (
