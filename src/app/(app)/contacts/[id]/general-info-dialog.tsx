@@ -14,6 +14,8 @@ import { CARD_COLORS } from "@/components/section-card";
 import { Field, FIELD_CLASS, LABEL_CLASS } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
 import AvatarPicker from "./avatar-picker";
+import TagManager from "./tag-manager";
+import type { TagLike } from "@/lib/tag-colors";
 
 export interface GeneralInfoValues {
   firstName?: string | null;
@@ -40,11 +42,17 @@ export default function GeneralInfoDialog({
   values,
   lang,
   hour12,
+  contactId,
+  tags,
+  allTags,
 }: {
   action: (prevState: { error?: string; success?: string } | undefined, formData: FormData) => Promise<{ error?: string; success?: string }>;
   values: GeneralInfoValues;
   lang: Lang;
   hour12: boolean;
+  contactId: string;
+  tags: ({ id: string } & TagLike)[];
+  allTags: ({ id: string } & TagLike)[];
 }) {
   const t = getDict(lang);
   const [open, setOpen] = useState(false);
@@ -165,9 +173,12 @@ export default function GeneralInfoDialog({
           </div>
         </div>
 
-        {/* Row 4: Website / Nickname / Birthday / Image */}
+        {/* Row 4: Website (+ Tags below it) / Nickname / Birthday / Image */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label={t.contactForm.website} name="website" type="url" defaultValue={values.website} placeholder="https://…" />
+          <div className="space-y-3">
+            <Field label={t.contactForm.website} name="website" type="url" defaultValue={values.website} placeholder="https://…" />
+            <TagManager contactId={contactId} tags={tags} allTags={allTags} lang={lang} />
+          </div>
           <Field label={t.contactForm.nickname} name="nickname" defaultValue={values.nickname} />
           <Field label={t.contactForm.birthday} name="birthday" type="date" defaultValue={values.birthday} placeholder="YYYY-MM-DD" />
           <div>

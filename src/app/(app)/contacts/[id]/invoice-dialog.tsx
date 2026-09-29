@@ -6,6 +6,7 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { CURRENCIES, PAYMENT_TERMS, PAYMENT_SCHEDULES } from "@/lib/currencies";
 import { FIELD_CLASS, LABEL_CLASS } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
+import { CARD_COLORS } from "@/components/section-card";
 
 export interface InvoiceValues {
   autoSendInvoiceReminders?: boolean | null;
@@ -30,7 +31,14 @@ export default function InvoiceDialog({
   return (
     <>
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
-    <SectionDialog open={open} onOpenChange={setOpen} title={t.contactForm.cardInvoice} action={action} labels={t.phaseDialog}>
+    <SectionDialog
+      open={open}
+      onOpenChange={setOpen}
+      title={t.contactForm.cardInvoice}
+      action={action}
+      labels={t.phaseDialog}
+      headerColorClassName={CARD_COLORS.billing}
+    >
       <div>
         <label className="flex items-center gap-2 text-sm text-ink">
           <input type="checkbox" name="autoSendInvoiceReminders" defaultChecked={values.autoSendInvoiceReminders ?? false} className="accent-amo-lime" />

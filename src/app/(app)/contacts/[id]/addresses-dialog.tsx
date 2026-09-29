@@ -6,6 +6,7 @@ import { countryToCode } from "@/lib/country-flag";
 import PhoneField from "@/components/phone-field";
 import { AddressGroup, Field, type ExtraAddress } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
+import { CARD_COLORS } from "@/components/section-card";
 
 export interface AddressesValues {
   address?: string | null;
@@ -42,7 +43,15 @@ export default function AddressesDialog({
   return (
     <>
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
-    <SectionDialog open={open} onOpenChange={setOpen} title={t.contactForm.cardAddresses} action={action} labels={t.phaseDialog} wide>
+    <SectionDialog
+      open={open}
+      onOpenChange={setOpen}
+      title={t.contactForm.cardAddresses}
+      action={action}
+      labels={t.phaseDialog}
+      wide
+      headerColorClassName={CARD_COLORS.addresses}
+    >
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <AddressGroup title={t.contactForm.mainAddressTitle} prefix="" t={t} lang={lang} values={values} />
@@ -74,7 +83,7 @@ export default function AddressesDialog({
         </div>
         <div className="self-start">
           <AddressGroup title={t.contactForm.billingAddressTitle} prefix="billing" t={t} lang={lang} values={values}>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label={t.contactForm.billingContactName} name="billingContactName" defaultValue={values.billingContactName} />
               <PhoneField name="billingPhone" label={t.contactForm.billingPhone} defaultCountry={billingPhoneCountry} defaultValue={values.billingPhone} />
             </div>

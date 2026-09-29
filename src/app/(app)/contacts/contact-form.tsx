@@ -127,8 +127,13 @@ export const SOCIAL_PLATFORMS = ["Facebook", "Instagram", "LinkedIn", "TikTok", 
 // client might have is open-ended (same reasoning as companyType/industry).
 export const RELATION_TYPE_OPTIONS = ["Spouse", "Child", "Parent", "Sibling", "Business partner", "Employee", "Employer", "Referral", "Other"];
 
+// min-w-0 is harmless outside a flex/grid context and essential inside one
+// — without it, a flex-1 text input keeps its browser-default intrinsic
+// width instead of actually shrinking, which is what was causing rows with
+// a fixed-width sibling (a remove button, a platform select) to overflow
+// and force horizontal scrolling on mobile.
 export const FIELD_CLASS =
-  "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
+  "mt-1 w-full min-w-0 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 export const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
 
 // One accent color per card — same "solid header bar" approach as the
@@ -1367,7 +1372,7 @@ export function AddressGroup({
           <label className={LABEL_CLASS}>{t.contactForm.addressLine}</label>
           <input name={field("Address")} defaultValue={get("Address")} className={FIELD_CLASS} />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={t.contactForm.city} name={field("City")} defaultValue={get("City")} />
           {regionOptions ? (
             <div>
@@ -1385,7 +1390,7 @@ export function AddressGroup({
             <Field label={stateLabelForCountry(country, lang)} name={field("State")} defaultValue={get("State")} />
           )}
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={zipLabelForCountry(country, lang)} name={field("Zip")} defaultValue={get("Zip")} />
           <div>
             <label className={LABEL_CLASS}>{t.contactForm.country}</label>

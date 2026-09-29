@@ -95,14 +95,14 @@ export default function SectionDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => onOpenChange(false)}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={() => onOpenChange(false)}>
       <div
         className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl ${extraWide ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <form ref={formRef} action={formAction} className="flex min-h-0 flex-1 flex-col">
           {headerColorClassName ? (
-            <div className={`flex shrink-0 items-center justify-between gap-3 px-4 py-3 text-white ${headerColorClassName}`}>
+            <div className={`flex shrink-0 items-center justify-between gap-3 px-3 py-2.5 text-white sm:px-4 sm:py-3 ${headerColorClassName}`}>
               <h3 className="truncate font-display text-base font-semibold sm:text-lg">{title}</h3>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
@@ -124,9 +124,9 @@ export default function SectionDialog({
               </div>
             </div>
           ) : (
-            <h3 className="shrink-0 px-5 pt-5 font-display text-lg font-semibold text-ink">{title}</h3>
+            <h3 className="shrink-0 px-3 pt-4 font-display text-lg font-semibold text-ink sm:px-5 sm:pt-5">{title}</h3>
           )}
-          <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto p-5 ${headerColorClassName ? "" : "pt-4"}`}>
+          <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden p-3 sm:p-5 ${headerColorClassName ? "" : "pt-3 sm:pt-4"}`}>
             {children}
             {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
             {!headerColorClassName && (
@@ -184,6 +184,11 @@ export function EditCardButton({ onClick, label }: { onClick: () => void; label:
   );
 }
 
+// min-w-0 is harmless outside a flex/grid context and essential inside one
+// — without it, a flex-1 text input keeps its browser-default intrinsic
+// width instead of actually shrinking, which is what was causing rows with
+// a fixed-width sibling (a remove button, a platform select) to overflow
+// and force horizontal scrolling on mobile.
 export const FIELD_CLASS =
-  "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
+  "mt-1 w-full min-w-0 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 export const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";

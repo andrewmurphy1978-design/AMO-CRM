@@ -520,11 +520,17 @@ export default async function ContactDetailPage({
   const contactTimeZone = contact.timeZone || getTimezoneForCountryState(contact.country, contact.state);
 
   const birthdayInfo = formatBirthday(contact.birthday, lang);
-  const birthdayLine = birthdayInfo
-    ? birthdayInfo.age != null
-      ? `${birthdayInfo.display} · ${t.contactForm.ageYearsOld(birthdayInfo.age)}`
-      : birthdayInfo.display
-    : undefined;
+  const birthdayLine = birthdayInfo ? (
+    <>
+      {birthdayInfo.display}
+      {birthdayInfo.age != null && (
+        <>
+          <br />
+          {t.contactForm.ageYearsOld(birthdayInfo.age)}
+        </>
+      )}
+    </>
+  ) : undefined;
   // Mobile-only compact jurisdiction field: region+country merged into one
   // line (e.g. "QC Canada", "NSW Australia") instead of the two separate
   // columns desktop has room for.
@@ -562,6 +568,9 @@ export default async function ContactDetailPage({
                 values={contact}
                 lang={lang}
                 hour12={hour12}
+                contactId={contact.id}
+                tags={contact.tags.map((ct) => ct.tag)}
+                allTags={allTags}
               />
             }
           >
