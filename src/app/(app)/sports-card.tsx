@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { getDateLocale } from "@/lib/i18n/date-locale";
-import type { Lang } from "@/lib/i18n/dictionaries";
+import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import type {
   NhlSnapshot,
   MlbSnapshot,
@@ -25,8 +25,6 @@ export interface SportsLabels {
   series: string;
   refresh: string;
   refreshing: string;
-  seasonStartsOn: (date: string) => string;
-  regularSeasonFinished: string;
 }
 
 export type SportsCardSnapshot =
@@ -199,6 +197,7 @@ function SimpleGamesGrid({
   teamLogo,
   hour12,
   dateLocale,
+  lang,
   labels,
 }: {
   lastGame: SportsTeamGame | null;
@@ -207,8 +206,17 @@ function SimpleGamesGrid({
   teamLogo: string;
   hour12: boolean;
   dateLocale: ReturnType<typeof getDateLocale>;
+  // The "season starts on"/"regular season finished" strings are read
+  // straight off the dictionary here (via `lang`) rather than through
+  // `labels`, since `sportsSeasonStartsOn` is a function — and a Server
+  // Component (page.tsx builds `labels` server-side) can never pass a
+  // plain function down into a Client Component prop; React throws
+  // "Functions cannot be passed directly to Client Components" the moment
+  // it tries to serialize one, which was crashing the whole Dashboard.
+  lang: Lang;
   labels: SportsLabels;
 }) {
+  const t = getDict(lang);
   return (
     <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
       {lastGame ? (
@@ -216,7 +224,7 @@ function SimpleGamesGrid({
       ) : nextGame ? (
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{labels.lastGame}</p>
-          <p className="mt-1 text-xs text-soft">{labels.seasonStartsOn(safeFormatDate(nextGame.date, "MMM d", dateLocale))}</p>
+          <p className="mt-1 text-xs text-soft">{t.dashboard.sportsSeasonStartsOn(safeFormatDate(nextGame.date, "MMM d", dateLocale))}</p>
         </div>
       ) : null}
       {nextGame ? (
@@ -226,7 +234,7 @@ function SimpleGamesGrid({
       ) : lastGame ? (
         <div className="hidden sm:block">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{labels.nextGame}</p>
-          <p className="mt-1 text-xs text-soft">{labels.regularSeasonFinished}</p>
+          <p className="mt-1 text-xs text-soft">{t.dashboard.sportsRegularSeasonFinished}</p>
         </div>
       ) : null}
     </div>
@@ -277,11 +285,13 @@ function LeagueSection({
   snapshot,
   hour12,
   dateLocale,
+  lang,
   labels,
 }: {
   snapshot: SportsCardSnapshot;
   hour12: boolean;
   dateLocale: ReturnType<typeof getDateLocale>;
+  lang: Lang;
   labels: SportsLabels;
 }) {
   const simple = simpleSnapshotOf(snapshot);
@@ -335,6 +345,7 @@ function LeagueSection({
           teamLogo={simple.teamLogo}
           hour12={hour12}
           dateLocale={dateLocale}
+          lang={lang}
           labels={labels}
         />
       ) : mlb ? (
@@ -365,6 +376,7 @@ function LeagueSection({
             teamLogo={mlb.teamLogo}
             hour12={hour12}
             dateLocale={dateLocale}
+            lang={lang}
             labels={labels}
           />
         )
@@ -423,6 +435,7 @@ export default function SportsCard({
             snapshot={snapshot}
             hour12={hour12}
             dateLocale={dateLocale}
+            lang={lang}
             labels={labels}
           />
         ))}

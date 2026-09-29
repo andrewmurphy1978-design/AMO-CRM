@@ -698,8 +698,6 @@ export default async function DashboardPage() {
     series: t.dashboard.sportsSeries,
     refresh: t.dashboard.refresh,
     refreshing: t.dashboard.refreshing,
-    seasonStartsOn: t.dashboard.sportsSeasonStartsOn,
-    regularSeasonFinished: t.dashboard.sportsRegularSeasonFinished,
   };
 
   const emailLabels = {
