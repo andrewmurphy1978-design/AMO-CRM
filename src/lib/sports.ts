@@ -372,6 +372,25 @@ function tsdbUrl(path: string): string {
   return `https://www.thesportsdb.com/api/v1/json/${THESPORTSDB_KEY}/${path}`;
 }
 
+// The free key is shared globally across every developer using TheSportsDB's
+// free tier, not just this app — a burst of other people's traffic is enough
+// to trip its rate limit and hand back HTTP 429 on an otherwise-fine
+// request. A couple of short retries rides out that kind of transient
+// contention; it does nothing for sustained rate-limiting (that needs a
+// personal, non-shared key), but the widget's own Suspense boundary already
+// keeps this off the Dashboard's critical path, so the extra latency here
+// costs nothing else on the page.
+async function fetchTsdb(url: string): Promise<Response> {
+  const delaysMs = [300, 900];
+  let res = await fetch(url);
+  for (const delay of delaysMs) {
+    if (res.status !== 429) break;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    res = await fetch(url);
+  }
+  return res;
+}
+
 // TheSportsDB has no per-league "get team by abbreviation" lookup — its own
 // team ids are looked up by full name via search, then reused for the
 // events calls below. leagueHint is only a best-effort disambiguator (this
@@ -380,7 +399,7 @@ function tsdbUrl(path: string): string {
 // since every team name here (e.g. "Montreal Alouettes") is specific enough
 // that cross-sport collisions are unlikely.
 async function findTsdbTeam(teamName: string, leagueHint: string): Promise<{ id: string; badge: string | null } | null> {
-  const res = await fetch(tsdbUrl(`searchteams.php?t=${encodeURIComponent(teamName)}`));
+  const res = await fetchTsdb(tsdbUrl(`searchteams.php?t=${encodeURIComponent(teamName)}`));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = (await res.json()) as { teams?: RawTsdbTeam[] | null };
   const teams = Array.isArray(data.teams) ? data.teams : [];
@@ -397,7 +416,7 @@ async function findTsdbTeam(teamName: string, leagueHint: string): Promise<{ id:
 // unlike the NHL/MLB/former-ESPN code above there's no need to fetch a whole
 // season and filter it by the current time client-side.
 async function fetchTsdbEvents(endpoint: "eventslast" | "eventsnext", teamId: string): Promise<RawTsdbEvent[]> {
-  const res = await fetch(tsdbUrl(`${endpoint}.php?id=${teamId}`));
+  const res = await fetchTsdb(tsdbUrl(`${endpoint}.php?id=${teamId}`));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = (await res.json()) as { results?: RawTsdbEvent[] | null; events?: RawTsdbEvent[] | null };
   const events = data.results ?? data.events ?? [];
@@ -406,7 +425,7 @@ async function fetchTsdbEvents(endpoint: "eventslast" | "eventsnext", teamId: st
 
 async function lookupTsdbBadge(teamId: string): Promise<string | null> {
   try {
-    const res = await fetch(tsdbUrl(`lookupteam.php?id=${teamId}`));
+    const res = await fetchTsdb(tsdbUrl(`lookupteam.php?id=${teamId}`));
     if (!res.ok) return null;
     const data = (await res.json()) as { teams?: RawTsdbTeam[] | null };
     return data.teams?.[0]?.strTeamBadge ?? null;
