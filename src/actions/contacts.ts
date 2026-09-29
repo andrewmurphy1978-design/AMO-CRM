@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import type { Contact } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
@@ -541,6 +542,82 @@ async function syncMissingAppLinksWith(
   return status;
 }
 
+// Best-effort push back to systeme.io/Google Contacts for a contact that's
+// already linked to one (or both), plus the authoritative Google group
+// (tag) sync — shared by updateContact's whole-form save and by every
+// per-card section action in contact-sections.ts, since any of them can
+// touch a column DEFAULT_PUSH_FIELD_SLUGS pushes or change tags indirectly
+// via createContact's own Google link. `updated` is expected to be the full
+// Contact row straight out of a `db.contact.update()` with no `select` —
+// every DEFAULT_PUSH_FIELD_SLUGS column and ContactPushInput field needs to
+// be present on it. Never throws; always returns a status string to append
+// to the caller's own "Contact updated" message.
+export async function applyContactExternalSyncs(
+  db: PrismaClient,
+  session: { user: { id: string } },
+  updated: Contact,
+  appSyncRows: { app: string; enabled: boolean; direction: ContactSyncDirection }[],
+  t: ReturnType<typeof getDict>
+): Promise<string> {
+  const systemeSync = appSyncRows.find((row) => row.app === "systeme_io");
+  const googleSync = appSyncRows.find((row) => row.app === "google_contacts");
+  let syncStatus = "";
+
+  if (updated.systemeIoId && systemeSync?.enabled && systemeSync.direction !== "FROM_APP") {
+    try {
+      const client = await getSystemeIoClient(db);
+      if (client) {
+        const fields: Record<string, string> = {};
+        for (const [column, slug] of Object.entries(DEFAULT_PUSH_FIELD_SLUGS)) {
+          const value = (updated as unknown as Record<string, string | undefined>)[column];
+          if (!value) continue;
+          // systeme.io's "country" field expects a 2-letter ISO 3166 code
+          // (per its API docs), not the full country name the CRM stores.
+          fields[slug] = column === "country" ? (countryToCode(value) ?? value) : value;
+        }
+        const { skipped } = await client.updateContactFields(updated.systemeIoId, fields);
+        syncStatus = skipped.length > 0 ? t.actions.contactUpdatedPartialWarning(skipped) : t.actions.contactUpdatedSystemeIoSynced;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      syncStatus = t.actions.contactUpdatedWarning(message);
+    }
+  }
+
+  // Requires the read/write `contacts` scope (see api/google/connect/
+  // route.ts); an account still on the older contacts.readonly grant needs
+  // to reconnect once before this can succeed.
+  if (updated.googleContactId && googleSync?.enabled && googleSync.direction !== "FROM_APP") {
+    try {
+      const accessToken = await getValidAccessToken(session.user.id, db);
+      if (accessToken) {
+        const pushResult = await pushContactToGoogle(accessToken, updated.googleContactId, updated);
+        syncStatus += pushResult.error ? t.actions.contactUpdatedGoogleWarning(pushResult.error) : t.actions.contactUpdatedGoogleSynced;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "unknown error";
+      syncStatus += t.actions.contactUpdatedGoogleWarning(message);
+    }
+  }
+
+  // Assigns every one of this contact's current tags (every category, per
+  // the "assign all tags" ask) as Google contact groups — re-read fresh
+  // here rather than taken as a parameter, since a section action that
+  // doesn't touch tags at all (e.g. Addresses) still needs this to reflect
+  // whatever the tags actually are right now.
+  if (googleSync?.enabled && googleSync.direction !== "FROM_APP" && updated.googleContactId) {
+    try {
+      const tagRows = await db.contactTag.findMany({ where: { contactId: updated.id }, include: { tag: true } });
+      const accessToken = await getValidAccessToken(session.user.id, db);
+      if (accessToken) await syncGoogleContactGroups(accessToken, updated.googleContactId, tagRows.map((ct) => ct.tag.name));
+    } catch {
+      // Best-effort — the field-level push above already reported sync status.
+    }
+  }
+
+  return syncStatus;
+}
+
 export async function createContact(
   _prevState: { error?: string } | undefined,
   formData: FormData
@@ -784,78 +861,17 @@ export async function updateContact(
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     await syncContactTagsWith(db, contactId, desiredTags, session.user.id);
 
-    // Best-effort push back to systeme.io — never fails the CRM save itself.
-    // Reported back either way (success or failure) so "Contact updated"
-    // doesn't leave the user guessing whether systeme.io actually got it.
-    // Gated on the app-sync setting the user just saved above — a contact
-    // whose systeme.io sync was switched off/to FROM_APP-only no longer
-    // gets pushed to, same as one that was never linked.
-    const systemeSync = appSyncRows.find((row) => row.app === "systeme_io");
-    const googleSync = appSyncRows.find((row) => row.app === "google_contacts");
-    let syncStatus = "";
-    if (updated.systemeIoId && systemeSync?.enabled && systemeSync.direction !== "FROM_APP") {
-      try {
-        const client = await getSystemeIoClient(db);
-        if (client) {
-          const fields: Record<string, string> = {};
-          for (const [column, slug] of Object.entries(DEFAULT_PUSH_FIELD_SLUGS)) {
-            const value = (data as unknown as Record<string, string | undefined>)[column];
-            if (!value) continue;
-            // systeme.io's "country" field expects a 2-letter ISO 3166 code
-            // (per its API docs), not the full country name the CRM stores.
-            fields[slug] = column === "country" ? (countryToCode(value) ?? value) : value;
-          }
-          const { skipped } = await client.updateContactFields(updated.systemeIoId, fields);
-          syncStatus =
-            skipped.length > 0 ? t.actions.contactUpdatedPartialWarning(skipped) : t.actions.contactUpdatedSystemeIoSynced;
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "unknown error";
-        syncStatus = t.actions.contactUpdatedWarning(message);
-      }
-    }
-
-    // Best-effort push back to Google Contacts too, for a contact that was
-    // imported from (or linked to) one — same "never fails the CRM save,
-    // always reported" shape as the systeme.io push above. Requires the
-    // read/write `contacts` scope (see api/google/connect/route.ts); an
-    // account still on the older contacts.readonly grant needs to
-    // reconnect once before this can succeed.
-    if (updated.googleContactId && googleSync?.enabled && googleSync.direction !== "FROM_APP") {
-      try {
-        const accessToken = await getValidAccessToken(session.user.id, db);
-        if (accessToken) {
-          const pushResult = await pushContactToGoogle(accessToken, updated.googleContactId, updated);
-          syncStatus += pushResult.error ? t.actions.contactUpdatedGoogleWarning(pushResult.error) : t.actions.contactUpdatedGoogleSynced;
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "unknown error";
-        syncStatus += t.actions.contactUpdatedGoogleWarning(message);
-      }
-    }
+    // Best-effort push back to systeme.io/Google Contacts, plus the
+    // authoritative Google group (tag) sync — shared with the per-card
+    // section actions in contact-sections.ts, since every one of those
+    // touches the same two external services and must report the same
+    // "Contact updated, systeme.io/Google warning" status shape.
+    let syncStatus = await applyContactExternalSyncs(db, session, updated, appSyncRows, t);
 
     // Create this contact in any app that's enabled but not linked yet —
     // e.g. sync to Google Contacts was just turned on for a contact that
     // has never been pushed there before.
     syncStatus += await syncMissingAppLinksWith(db, session, updated, appSyncRows, t);
-
-    // Authoritative Google group sync for this save — assigns every one of
-    // this contact's current tags (every category, per the "assign all
-    // tags" ask) as Google contact groups, whether the contact was already
-    // linked or was just linked above. The per-tag syncs inside
-    // syncContactTagsWith above already cover live TagManager edits
-    // elsewhere; this is what makes a plain "Save" on this form correct too.
-    if (googleSync?.enabled && googleSync.direction !== "FROM_APP") {
-      const finalGoogleContactId = updated.googleContactId ?? (await db.contact.findUnique({ where: { id: contactId }, select: { googleContactId: true } }))?.googleContactId;
-      if (finalGoogleContactId) {
-        try {
-          const accessToken = await getValidAccessToken(session.user.id, db);
-          if (accessToken) await syncGoogleContactGroups(accessToken, finalGoogleContactId, desiredTags);
-        } catch {
-          // Best-effort — the field-level push above already reported sync status.
-        }
-      }
-    }
 
     return { syncStatus };
   });
