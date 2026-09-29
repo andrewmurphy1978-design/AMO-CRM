@@ -222,98 +222,159 @@ export default async function DashboardPage() {
     linkAffiliatePrograms,
     allAffiliatePrograms,
   } = await withScopedPrismaClient(async (db) => {
-    const activeProjectCount = await db.project.count({
-      where: { status: "ACTIVE" },
-    });
-    // Feeds the Project Summary card. Same status set the removed Open-
-    // Tasks stat used for "active" — TODO/IN_PROGRESS/BLOCKED, everything
-    // short of DONE.
-    const activePhaseCount = await db.projectPhase.count({
-      where: { status: "ACTIVE" },
-    });
-    const activeTaskCount = await db.task.count({
-      where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } },
-    });
-    // Today/tomorrow/this-week deadline buckets (computed below, once
-    // we're back on plain JS Dates) — every non-done task due in the next
-    // 7 days, not just the ones the "Upcoming tasks" list below happens to
-    // show.
-    const deadlineTasksList = await db.task.findMany({
-      where: {
-        status: { not: "DONE" },
-        dueDate: { gte: todayStart, lte: sevenDaysFromNow },
-      },
-      select: { id: true, dueDate: true },
-    });
-    const dueSoonTasks = await db.task.findMany({
-      where: {
-        status: { in: ["TODO", "IN_PROGRESS"] },
-        dueDate: { not: null },
-      },
-      orderBy: { dueDate: "asc" },
-      take: 5,
-      include: { project: { include: { contact: true } } },
-    });
-    const activeProjects = await db.project.findMany({
-      where: { status: "ACTIVE" },
-      orderBy: [
-        { dueDate: { sort: "asc", nulls: "last" } },
-        { updatedAt: "desc" },
+    // Was ~25 sequential `await`s in a row (plus the two external syncs
+    // below) — nothing here actually depends on anything else in this
+    // batch, so each `await` was pure serialized round-trip latency to
+    // Hyperdrive/Neon added on top of the last, which is what made every
+    // Dashboard load take as long as it did. Running them together lets
+    // Postgres work on as many of them at once as the pool allows (see
+    // prisma.ts) instead of one at a time. The two external syncs
+    // (Make, Buffer) are equally independent of this batch, so they run
+    // alongside it too — only the reads that need their result
+    // (recentRuns, socialSnapshots, just below) wait on them specifically.
+    const [
+      [
+        activeProjectCount,
+        activePhaseCount,
+        activeTaskCount,
+        deadlineTasksList,
+        dueSoonTasks,
+        activeProjects,
+        newContactsList,
+        totalContactCount,
+        contactsBySource,
+        contactsByStage,
+        integration,
+        googleAccessToken,
+        hour12,
+        worldClockZones,
+        marketsPicks,
+        sportsPicks,
+        hiddenHeaderWidgets,
+        addressColors,
+        linkContacts,
+        linkProjects,
+        linkTasks,
+        linkAffiliatePrograms,
+        allAffiliatePrograms,
       ],
-      take: 5,
-      include: { contact: true },
-    });
-    // Feeds the new-contacts Dashboard card (today/yesterday/this week
-    // buckets computed below, once we're back on plain JS Dates) — every
-    // matching row, not just the card's own visible 2/2/5 rows-before-
-    // scroll, since the card's own scrollbar (not this query) is what
-    // limits what's actually on screen. The 1000 cap is just a sanity
-    // ceiling, not a real-world limit.
-    const newContactsList = await db.contact.findMany({
-      where: { createdAt: { gte: sevenDaysAgo } },
-      orderBy: { createdAt: "desc" },
-      take: 1000,
-      include: { tags: { include: { tag: true } } },
-    });
-    // Feeds the Contact Summary card's total/by-source/by-stage counts —
-    // groupBy rather than fetching every row, since the total contact
-    // count can run well past newContactsList's 1000-row cap.
-    const totalContactCount = await db.contact.count();
-    const contactsBySource = await db.contact.groupBy({
-      by: ["source"],
-      _count: { _all: true },
-    });
-    const contactsByStage = await db.contact.groupBy({
-      by: ["stage"],
-      _count: { _all: true },
-    });
-    const integration = await db.integrationSetting.findUnique({
-      where: { provider: "systeme_io" },
-    });
-    // Zapier runs arrive live via its own webhook, but Make only reports
-    // in when pulled — refreshing here keeps the Automations card current
-    // on every Dashboard load without the user having to visit Settings
-    // and click "Sync now" first. Reuses this same `db` rather than
-    // calling runMakeSync() (which opens its own scoped client) — see
-    // refreshMakeRunsQuietly's own comment.
-    await refreshMakeRunsQuietly(db);
-    const recentRuns = await db.automationRun.findMany({
-      orderBy: { occurredAt: "desc" },
-      take: 30,
-    });
-    const googleAccessToken = session
-      ? await getValidAccessToken(session.user.id, db)
-      : null;
-    // Same reasoning as the Automations refresh just above: keeps the
-    // Social Media Analytics card current on every Dashboard load without
-    // a manual "Sync now" first, reusing this same `db` rather than
-    // opening a second scoped client — see refreshBufferSyncQuietly's own
-    // comment.
-    await refreshBufferSyncQuietly(db);
-    const socialSnapshots = await getLatestSocialSnapshots(db);
-    const hour12 = await getHour12(session, db);
-    const { worldZones, headerZones, headerZoneMobile } = await getUserWorldClockZones(session, db);
-    const { currency: marketsCurrency, items: marketsItems, itemMobile: marketsItemMobile } = await getUserMarketsPicks(session, db);
+    ] = await Promise.all([
+      Promise.all([
+        // Feeds the Project Summary card. Same status set the removed
+        // Open-Tasks stat used for "active" — TODO/IN_PROGRESS/BLOCKED,
+        // everything short of DONE.
+        db.project.count({ where: { status: "ACTIVE" } }),
+        db.projectPhase.count({ where: { status: "ACTIVE" } }),
+        db.task.count({ where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } } }),
+        // Today/tomorrow/this-week deadline buckets (computed below, once
+        // we're back on plain JS Dates) — every non-done task due in the
+        // next 7 days, not just the ones the "Upcoming tasks" list below
+        // happens to show.
+        db.task.findMany({
+          where: { status: { not: "DONE" }, dueDate: { gte: todayStart, lte: sevenDaysFromNow } },
+          select: { id: true, dueDate: true },
+        }),
+        db.task.findMany({
+          where: { status: { in: ["TODO", "IN_PROGRESS"] }, dueDate: { not: null } },
+          orderBy: { dueDate: "asc" },
+          take: 5,
+          include: { project: { include: { contact: true } } },
+        }),
+        db.project.findMany({
+          where: { status: "ACTIVE" },
+          orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
+          take: 5,
+          include: { contact: true },
+        }),
+        // Feeds the new-contacts Dashboard card (today/yesterday/this week
+        // buckets computed below, once we're back on plain JS Dates) —
+        // every matching row, not just the card's own visible 2/2/5 rows-
+        // before-scroll, since the card's own scrollbar (not this query)
+        // is what limits what's actually on screen. The 1000 cap is just
+        // a sanity ceiling, not a real-world limit.
+        db.contact.findMany({
+          where: { createdAt: { gte: sevenDaysAgo } },
+          orderBy: { createdAt: "desc" },
+          take: 1000,
+          include: { tags: { include: { tag: true } } },
+        }),
+        // Feeds the Contact Summary card's total/by-source/by-stage
+        // counts — groupBy rather than fetching every row, since the
+        // total contact count can run well past newContactsList's
+        // 1000-row cap.
+        db.contact.count(),
+        db.contact.groupBy({ by: ["source"], _count: { _all: true } }),
+        db.contact.groupBy({ by: ["stage"], _count: { _all: true } }),
+        db.integrationSetting.findUnique({ where: { provider: "systeme_io" } }),
+        session ? getValidAccessToken(session.user.id, db) : Promise.resolve(null),
+        getHour12(session, db),
+        getUserWorldClockZones(session, db),
+        getUserMarketsPicks(session, db),
+        getUserSportsPicks(session, db),
+        getUserHiddenHeaderWidgets(session, db),
+        // Same address-color lookup the Email page's own dialogs use for
+        // their colored header strip — fetched here too now that this
+        // card opens those same dialogs instead of deep-linking out to
+        // Gmail.
+        db.emailAddressColor.findMany({ orderBy: { order: "asc" } }),
+        // Same full option lists (not the filtered/limited ones above)
+        // the Email page's own "Linked to" contact/project/task/program
+        // picker uses — this card opens the identical dialog, so it needs
+        // the same full lists to offer, not the Dashboard's own
+        // top-5/last-7-days ones.
+        db.contact.findMany({
+          orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+          take: 300,
+          select: { id: true, firstName: true, lastName: true, email: true, extraEmails: true },
+        }),
+        db.project.findMany({
+          orderBy: { name: "asc" },
+          take: 300,
+          select: { id: true, name: true, contactId: true },
+        }),
+        db.task.findMany({
+          where: { status: { not: "DONE" } },
+          orderBy: { title: "asc" },
+          take: 300,
+          select: { id: true, title: true, projectId: true },
+        }),
+        db.affiliateProgram.findMany({
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, email: true, extraEmails: true },
+        }),
+        // Feeds the Affiliate Programs Summary card's 4-bucket breakdown
+        // and the Pending Affiliate Programs list card below — every
+        // program, since the summary card's totals must reflect all of
+        // them, not just the pending ones the list card shows.
+        db.affiliateProgram.findMany({
+          orderBy: { name: "asc" },
+          select: {
+            id: true,
+            tab: true,
+            name: true,
+            type: true,
+            iconUrl: true,
+            affiliateStatus: true,
+            followUpNeeded: true,
+            followUpDate: true,
+          },
+        }),
+      ]),
+      // Zapier runs arrive live via its own webhook, but Make only reports
+      // in when pulled — refreshing here keeps the Automations card
+      // current on every Dashboard load without the user having to visit
+      // Settings and click "Sync now" first. Reuses this same `db` rather
+      // than calling runMakeSync() (which opens its own scoped client) —
+      // see refreshMakeRunsQuietly's own comment.
+      refreshMakeRunsQuietly(db),
+      // Same reasoning: keeps the Social Media Analytics card current on
+      // every Dashboard load without a manual "Sync now" first, reusing
+      // this same `db` rather than opening a second scoped client — see
+      // refreshBufferSyncQuietly's own comment.
+      refreshBufferSyncQuietly(db),
+    ]);
+    const { worldZones, headerZones, headerZoneMobile } = worldClockZones;
+    const { currency: marketsCurrency, items: marketsItems, itemMobile: marketsItemMobile } = marketsPicks;
     const {
       league: sportsLeague,
       teamNhl: sportsTeamNhl,
@@ -323,55 +384,14 @@ export default async function DashboardPage() {
       teamMls: sportsTeamMls,
       teamNba: sportsTeamNba,
       leagueMobile: sportsLeagueMobile,
-    } = await getUserSportsPicks(session, db);
-    const hiddenHeaderWidgets = await getUserHiddenHeaderWidgets(session, db);
-    // Same address-color lookup the Email page's own dialogs use for their
-    // colored header strip — fetched here too now that this card opens
-    // those same dialogs instead of deep-linking out to Gmail.
-    const addressColors = await db.emailAddressColor.findMany({
-      orderBy: { order: "asc" },
-    });
-    // Same full option lists (not the filtered/limited ones above) the
-    // Email page's own "Linked to" contact/project/task/program picker
-    // uses — this card opens the identical dialog, so it needs the same
-    // full lists to offer, not the Dashboard's own top-5/last-7-days ones.
-    const linkContacts = await db.contact.findMany({
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      take: 300,
-      select: { id: true, firstName: true, lastName: true, email: true, extraEmails: true },
-    });
-    const linkProjects = await db.project.findMany({
-      orderBy: { name: "asc" },
-      take: 300,
-      select: { id: true, name: true, contactId: true },
-    });
-    const linkTasks = await db.task.findMany({
-      where: { status: { not: "DONE" } },
-      orderBy: { title: "asc" },
-      take: 300,
-      select: { id: true, title: true, projectId: true },
-    });
-    const linkAffiliatePrograms = await db.affiliateProgram.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, email: true, extraEmails: true },
-    });
-    // Feeds the Affiliate Programs Summary card's 4-bucket breakdown and the
-    // Pending Affiliate Programs list card below — every program, since the
-    // summary card's totals must reflect all of them, not just the pending
-    // ones the list card shows.
-    const allAffiliatePrograms = await db.affiliateProgram.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        tab: true,
-        name: true,
-        type: true,
-        iconUrl: true,
-        affiliateStatus: true,
-        followUpNeeded: true,
-        followUpDate: true,
-      },
-    });
+    } = sportsPicks;
+    // These two only need the Make/Buffer refreshes above to have finished
+    // (not anything else in the big batch), so they run together too
+    // rather than one after the other.
+    const [recentRuns, socialSnapshots] = await Promise.all([
+      db.automationRun.findMany({ orderBy: { occurredAt: "desc" }, take: 30 }),
+      getLatestSocialSnapshots(db),
+    ]);
 
     // Reads the same cached inbox snapshot the Email page maintains — a
     // plain DB read shares this block's one connection instead of the

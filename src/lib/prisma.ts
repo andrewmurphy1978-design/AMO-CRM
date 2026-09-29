@@ -54,8 +54,13 @@ function createPrismaClient(workers: boolean): PrismaClient {
   const PrismaClient = loadPrismaClientClass(workers);
   // Cloudflare Hyperdrive already pools connections on its side, so the
   // local pool here only ever needs to hold the connection(s) for a single
-  // request; keep it small.
-  const pool = new Pool({ connectionString: resolveConnectionString(workers), max: workers ? 1 : 3 });
+  // request — but a request can legitimately want a handful of those at
+  // once (e.g. the Dashboard batches ~20 independent reads with
+  // Promise.all), and Hyperdrive is built to multiplex many short-lived
+  // Worker connections cheaply, so a small non-1 ceiling here is safe: it
+  // just caps how much of that batching can actually run concurrently
+  // instead of forcing every query onto one connection one at a time.
+  const pool = new Pool({ connectionString: resolveConnectionString(workers), max: workers ? 5 : 5 });
   // @prisma/adapter-pg's default behavior for a caller-supplied Pool
   // instance (as opposed to a bare connection config it builds its own
   // Pool from) is to treat the Pool's lifecycle as the caller's
