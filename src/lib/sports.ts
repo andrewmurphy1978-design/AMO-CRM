@@ -341,10 +341,12 @@ export type TeamSnapshot = NhlSnapshot;
 // fix it either, pointing at an IP/ASN-level block rather than a header
 // check). Switched to TheSportsDB (thesportsdb.com), the only free sports
 // API found that covers all four of these leagues — including CFL, which
-// almost nothing else does — in one consistent shape. The free shared test
-// key ("3") is the default; set THESPORTSDB_KEY (a $1/mo Patreon personal
-// key removes the shared-key rate-limit risk) to override it.
-const THESPORTSDB_KEY = process.env.THESPORTSDB_KEY || "3";
+// almost nothing else does — in one consistent shape. "123" is TheSportsDB's
+// own current official free test key (an older "3" key still works but is
+// undocumented and more restricted) — used as the default; set
+// THESPORTSDB_KEY (a $1/mo Patreon personal key removes the shared-key
+// rate-limit risk) to override it.
+const THESPORTSDB_KEY = process.env.THESPORTSDB_KEY || "123";
 
 interface RawTsdbTeam {
   idTeam?: string;

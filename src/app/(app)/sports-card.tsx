@@ -241,11 +241,9 @@ function SimpleGamesGrid({
         </div>
       ) : null}
       {nextGame ? (
-        <div className="hidden sm:block">
-          <TeamGameRow label={labels.nextGame} game={nextGame} teamName={teamName} teamLogo={teamLogo} hour12={hour12} dateLocale={dateLocale} labels={labels} />
-        </div>
+        <TeamGameRow label={labels.nextGame} game={nextGame} teamName={teamName} teamLogo={teamLogo} hour12={hour12} dateLocale={dateLocale} labels={labels} />
       ) : lastGame ? (
-        <div className="hidden sm:block">
+        <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{labels.nextGame}</p>
           <p className="mt-1 text-xs text-soft">{t.dashboard.sportsRegularSeasonFinished}</p>
         </div>

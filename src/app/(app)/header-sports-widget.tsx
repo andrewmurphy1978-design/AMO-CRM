@@ -83,8 +83,15 @@ function Pill({
 // panel without it running off-screen) while keeping it anchored to the
 // trigger like before at sm+ — see the identical comment on the other
 // header widgets' panels.
+// sm:w-80 (320px) was too narrow for the Last/Next Game columns (each a
+// sm:grid-cols-2 half of the panel) to show a full opponent name like
+// "New England Patriots" or "Winnipeg Blue Bombers" without truncating —
+// widened to 30rem. sm:max-h-none used to remove the mobile cap entirely on
+// desktop, which let the panel grow past the viewport with no way to
+// scroll the rest into view; capped it at 70vh instead so the already-
+// present overflow-y-auto (from the shared base classes) actually kicks in.
 const PANEL_CLASS =
-  "fixed inset-4 z-40 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-80 overflow-y-auto text-left sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:m-0 sm:mt-2 sm:h-auto sm:max-h-none sm:w-80 sm:max-w-none";
+  "fixed inset-4 z-40 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-80 overflow-y-auto text-left sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:m-0 sm:mt-2 sm:h-auto sm:max-h-[70vh] sm:w-[30rem] sm:max-w-none";
 
 // Compact "latest game" pill for the Dashboard header — just the two team
 // logos and the final score of the picked league/team's most recently
