@@ -440,7 +440,40 @@ function tsdbScore(v: string | number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function toTsdbTeamGame(e: RawTsdbEvent, myTeamId: string, status: SportsTeamGame["status"]): Promise<SportsTeamGame | null> {
+// TheSportsDB's own strTeamBadge came back empty for every NFL/CFL/MLS/NBA
+// team live (confirmed by the user — scores and names work, logos never
+// show), so logos for these leagues come from ESPN's static logo CDN
+// instead — a different host from the JSON API that returns 403s, and one
+// that (unlike that API) uses a plain, unauthenticated, predictable path.
+// Confirmed live-documented pattern: espncdn.com/i/teamlogos/{sport}/500/
+// {abbrev}.png works for NFL and NBA specifically; MLS/soccer uses numeric
+// ESPN ids instead of abbreviations there and CFL's own path is
+// unconfirmed, so this is only wired up for NFL/NBA below — CFL/MLS keep
+// trying TheSportsDB's badge as a best-effort fallback, which may still
+// come back blank.
+function espnLogoUrl(spritePath: string, abbrev: string): string {
+  return `https://a.espncdn.com/i/teamlogos/${spritePath}/500/${abbrev.toLowerCase()}.png`;
+}
+
+function reverseNameMap(names: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(names).map(([abbrev, name]) => [name, abbrev]));
+}
+
+interface EspnLogoConfig {
+  sportPath: string;
+  // TheSportsDB's opponent name strings won't always exactly match this
+  // file's own team-name strings (punctuation, "LA" vs "Los Angeles", …) —
+  // a miss here just falls back to no logo for that one opponent rather
+  // than breaking anything.
+  nameToAbbrev: Record<string, string>;
+}
+
+async function toTsdbTeamGame(
+  e: RawTsdbEvent,
+  myTeamId: string,
+  status: SportsTeamGame["status"],
+  espnLogo?: EspnLogoConfig,
+): Promise<SportsTeamGame | null> {
   const isHome = e.idHomeTeam === myTeamId;
   const isAway = e.idAwayTeam === myTeamId;
   if (!isHome && !isAway) return null;
@@ -450,11 +483,18 @@ async function toTsdbTeamGame(e: RawTsdbEvent, myTeamId: string, status: SportsT
     ? new Date(e.strTimestamp).toISOString()
     : new Date(`${e.dateEvent ?? ""}T${e.strTime || "00:00:00"}Z`).toISOString();
 
+  const opponentEspnAbbrev = espnLogo?.nameToAbbrev[opponentName];
+  const opponentLogo = opponentEspnAbbrev
+    ? espnLogoUrl(espnLogo!.sportPath, opponentEspnAbbrev)
+    : opponentId
+      ? ((await lookupTsdbBadge(opponentId)) ?? "")
+      : "";
+
   return {
     gameId: String(e.idEvent ?? `${e.dateEvent}-${opponentName}`),
     date,
     opponentName,
-    opponentLogo: opponentId ? ((await lookupTsdbBadge(opponentId)) ?? "") : "",
+    opponentLogo,
     homeAway: isHome ? "home" : "away",
     status,
     teamScore: tsdbScore(isHome ? e.intHomeScore : e.intAwayScore),
@@ -462,19 +502,24 @@ async function toTsdbTeamGame(e: RawTsdbEvent, myTeamId: string, status: SportsT
   };
 }
 
-async function getTheSportsDbSnapshot(teamAbbrev: string, teamNames: Record<string, string>, leagueHint: string): Promise<TeamSnapshot> {
+async function getTheSportsDbSnapshot(
+  teamAbbrev: string,
+  teamNames: Record<string, string>,
+  leagueHint: string,
+  espnLogo?: EspnLogoConfig,
+): Promise<TeamSnapshot> {
   const errors: string[] = [];
   const teamName = teamNames[teamAbbrev] ?? teamAbbrev;
   let lastGame: SportsTeamGame | null = null;
   let nextGame: SportsTeamGame | null = null;
-  let teamLogo: string | null = null;
+  let teamLogo: string | null = espnLogo ? espnLogoUrl(espnLogo.sportPath, teamAbbrev) : null;
 
   try {
     const found = await findTsdbTeam(teamName, leagueHint);
     if (!found) {
       errors.push(`thesportsdb(${leagueHint}): could not find team "${teamName}"`);
     } else {
-      teamLogo = found.badge;
+      teamLogo = teamLogo ?? found.badge;
       const [lastEvents, nextEvents] = await Promise.all([
         fetchTsdbEvents("eventslast", found.id).catch((error: unknown) => {
           errors.push(`thesportsdb(${leagueHint}) eventslast: ${error instanceof Error ? error.message : String(error)}`);
@@ -487,8 +532,8 @@ async function getTheSportsDbSnapshot(teamAbbrev: string, teamNames: Record<stri
       ]);
       const lastRaw = lastEvents[lastEvents.length - 1];
       const nextRaw = nextEvents[0];
-      if (lastRaw) lastGame = await toTsdbTeamGame(lastRaw, found.id, "final");
-      if (nextRaw) nextGame = await toTsdbTeamGame(nextRaw, found.id, "upcoming");
+      if (lastRaw) lastGame = await toTsdbTeamGame(lastRaw, found.id, "final", espnLogo);
+      if (nextRaw) nextGame = await toTsdbTeamGame(nextRaw, found.id, "upcoming", espnLogo);
     }
   } catch (error) {
     errors.push(`thesportsdb(${leagueHint}): ${error instanceof Error ? error.message : String(error)}`);
@@ -540,8 +585,10 @@ export const NFL_TEAM_NAMES: Record<string, string> = {
   WSH: "Washington Commanders",
 };
 
+const NFL_NAME_TO_ABBREV = reverseNameMap(NFL_TEAM_NAMES);
+
 export async function getNflSnapshot(teamAbbrev: string = DEFAULT_NFL_TEAM): Promise<TeamSnapshot> {
-  return getTheSportsDbSnapshot(teamAbbrev, NFL_TEAM_NAMES, "NFL");
+  return getTheSportsDbSnapshot(teamAbbrev, NFL_TEAM_NAMES, "NFL", { sportPath: "nfl", nameToAbbrev: NFL_NAME_TO_ABBREV });
 }
 
 const DEFAULT_CFL_TEAM = "MTL"; // Montreal Alouettes
@@ -636,6 +683,8 @@ export const NBA_TEAM_NAMES: Record<string, string> = {
   WSH: "Washington Wizards",
 };
 
+const NBA_NAME_TO_ABBREV = reverseNameMap(NBA_TEAM_NAMES);
+
 export async function getNbaSnapshot(teamAbbrev: string = DEFAULT_NBA_TEAM): Promise<TeamSnapshot> {
-  return getTheSportsDbSnapshot(teamAbbrev, NBA_TEAM_NAMES, "NBA");
+  return getTheSportsDbSnapshot(teamAbbrev, NBA_TEAM_NAMES, "NBA", { sportPath: "nba", nameToAbbrev: NBA_NAME_TO_ABBREV });
 }
