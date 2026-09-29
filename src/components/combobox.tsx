@@ -13,12 +13,21 @@ export default function Combobox({
   defaultValue,
   options,
   placeholder,
+  labelClassName = LABEL_CLASS,
+  inputClassName = FIELD_CLASS,
 }: {
   label: string;
   name: string;
   defaultValue?: string | null;
   options: readonly string[];
   placeholder?: string;
+  // Lets a caller hide the label at desktop (e.g. `${LABEL_CLASS} lg:hidden`)
+  // when it's showing a column-header row instead — same convention every
+  // other field in those "table via grid" dialogs already follows.
+  labelClassName?: string;
+  // Same idea for the input — e.g. `${FIELD_CLASS} lg:mt-0` to cancel the
+  // label's margin-top once the label above it is hidden.
+  inputClassName?: string;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
@@ -37,7 +46,7 @@ export default function Combobox({
 
   return (
     <div ref={rootRef} className="relative">
-      <label htmlFor={name} className={LABEL_CLASS}>
+      <label htmlFor={name} className={labelClassName}>
         {label}
       </label>
       <input
@@ -52,7 +61,7 @@ export default function Combobox({
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        className={FIELD_CLASS}
+        className={inputClassName}
       />
       {open && filtered.length > 0 && (
         <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-card-border bg-card-bg shadow-lg">

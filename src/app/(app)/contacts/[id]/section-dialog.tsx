@@ -24,6 +24,7 @@ export default function SectionDialog({
   children,
   wide,
   extraWide,
+  maxWide,
   headerColorClassName,
 }: {
   open: boolean;
@@ -39,6 +40,10 @@ export default function SectionDialog({
   // Wider still than `wide` — for Contact Info, whose phone-extension and
   // messaging-handle fields need more horizontal room than max-w-3xl gives.
   extraWide?: boolean;
+  // Wider still than `extraWide` — Domains needed the Managed By/Notes
+  // columns widened without shrinking any of its other columns, which
+  // only fits by growing the panel itself past max-w-5xl.
+  maxWide?: boolean;
   // Opts a single dialog into the Email/Calendar-style colored header —
   // a Tailwind bg-* class (see CARD_COLORS in section-card.tsx) that
   // becomes the header bar itself, with Cancel/Save moved into it instead
@@ -97,7 +102,7 @@ export default function SectionDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={() => onOpenChange(false)}>
       <div
-        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl ${extraWide ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg"}`}
+        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl ${maxWide ? "max-w-7xl" : extraWide ? "max-w-5xl" : wide ? "max-w-3xl" : "max-w-lg"}`}
         onClick={(e) => e.stopPropagation()}
       >
         <form ref={formRef} action={formAction} className="flex min-h-0 flex-1 flex-col">

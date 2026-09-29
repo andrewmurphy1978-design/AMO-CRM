@@ -5,55 +5,29 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { FIELD_CLASS, LABEL_CLASS, type DomainRow } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
 import { CARD_COLORS } from "@/components/section-card";
+import Combobox from "@/components/combobox";
 
 // A desktop "table" built from grid instead of an actual <table>, so the
 // same markup can restack to full-width labeled fields on mobile instead of
 // forcing a fixed-width table to scroll horizontally (same pattern as
-// tech-stack-dialog.tsx). Domain/Registrar/DNS Provider get the most room
-// since that's where the longest values land.
-const GRID_COLS = "lg:grid-cols-[2fr_1.4fr_1.4fr_0.9fr_0.8fr_1.3fr_1.1fr_auto]";
+// tech-stack-dialog.tsx). Managed By and Notes get the most extra room
+// (the dialog itself is `maxWide` so growing them doesn't come at the
+// expense of any other column).
+const GRID_COLS = "lg:grid-cols-[2fr_1.4fr_1.4fr_0.9fr_0.8fr_1.8fr_1.6fr_auto]";
 
-// Suggestions for the Registrar/DNS Provider fields — plain <input>s with a
-// <datalist> rather than a <select>, since a client's actual registrar/DNS
-// host is very often something not on any fixed list (a reseller, a niche
-// host, etc) and free text must always stay possible.
-const COMMON_REGISTRARS = [
-  "GoDaddy",
-  "Namecheap",
-  "IONOS",
-  "Google Domains",
-  "Cloudflare Registrar",
-  "Network Solutions",
-  "Bluehost",
-  "Hover",
-  "Domain.com",
-  "OVHcloud",
-  "Gandi",
-  "Squarespace Domains",
-  "Wix",
-  "1&1",
-  "Dynadot",
-  "Porkbun",
-  "Name.com",
-  "Tucows",
-];
+// Suggestions for the Registrar/DNS Provider comboboxes (see Combobox) —
+// still free text underneath, since a client's actual registrar/DNS host
+// is very often something not on any fixed list.
+const COMMON_REGISTRARS = ["GoDaddy", "IONOS", "Namecheap", "Cloudflare", "Porkbun", "Squarespace", "NameSilo", "Dynadot"];
 const COMMON_DNS_PROVIDERS = [
-  "Cloudflare",
   "GoDaddy",
+  "Cloudflare",
   "IONOS",
   "Amazon Route 53",
   "Google Cloud DNS",
-  "Namecheap",
-  "DNS Made Easy",
-  "NS1",
-  "Azure DNS",
-  "OVHcloud",
-  "DigitalOcean",
-  "Vercel",
-  "Netlify",
-  "Squarespace",
-  "Hurricane Electric",
-  "No-IP",
+  "DNSimple",
+  "NS1 (IBM)",
+  "Dyn/Oracle Cloud",
 ];
 
 export default function DomainsDialog({
@@ -89,15 +63,17 @@ export default function DomainsDialog({
       title={t.contactForm.cardDomains}
       action={action}
       labels={t.phaseDialog}
-      extraWide
+      maxWide
       headerColorClassName={CARD_COLORS.domains}
     >
       <div className="divide-y divide-card-border rounded-lg border border-card-border">
-        <div className={`hidden border-b border-card-border bg-black/[0.02] py-2 text-left text-xs uppercase tracking-wide text-soft lg:grid lg:gap-2 ${GRID_COLS}`}>
-          {/* pl-3 (not the row's own px-3) lines each label up with the text
-              inside the input box below it, which is itself indented by the
-              input's own px-3 padding — aligning to the box edge instead
-              would leave the label looking shifted left of its field. */}
+        <div className={`hidden border-b border-card-border bg-black/[0.02] px-3 py-2 text-left text-xs uppercase tracking-wide text-soft lg:grid lg:gap-2 ${GRID_COLS}`}>
+          {/* Each row's own container is `lg:px-3` and each field's input/
+              combobox has its own px-3 on top of that, so the row's text
+              sits 24px in from the row's left edge (12 + 12). This header
+              row's container is a plain `px-3` (12px) — matching that same
+              24px total needs one more 12px of its own, hence `pl-3` on
+              every label span. */}
           <span className="pl-3">{t.contactForm.domain}</span>
           <span className="pl-3">{t.contactForm.registrar}</span>
           <span className="pl-3">{t.contactForm.dnsProvider}</span>
@@ -113,24 +89,22 @@ export default function DomainsDialog({
               <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.domain}</label>
               <input name="domainDomain" defaultValue={row.domain} placeholder="example.com" className={`${FIELD_CLASS} lg:mt-0`} />
             </div>
-            <div>
-              <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.registrar}</label>
-              <input
-                name="domainRegistrar"
-                list="domainRegistrarOptions"
-                defaultValue={row.registrar ?? ""}
-                className={`${FIELD_CLASS} lg:mt-0`}
-              />
-            </div>
-            <div>
-              <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.dnsProvider}</label>
-              <input
-                name="domainDnsProvider"
-                list="domainDnsProviderOptions"
-                defaultValue={row.dnsProvider ?? ""}
-                className={`${FIELD_CLASS} lg:mt-0`}
-              />
-            </div>
+            <Combobox
+              label={t.contactForm.registrar}
+              labelClassName={`${LABEL_CLASS} lg:hidden`}
+              inputClassName={`${FIELD_CLASS} lg:mt-0`}
+              name="domainRegistrar"
+              defaultValue={row.registrar}
+              options={COMMON_REGISTRARS}
+            />
+            <Combobox
+              label={t.contactForm.dnsProvider}
+              labelClassName={`${LABEL_CLASS} lg:hidden`}
+              inputClassName={`${FIELD_CLASS} lg:mt-0`}
+              name="domainDnsProvider"
+              defaultValue={row.dnsProvider}
+              options={COMMON_DNS_PROVIDERS}
+            />
             <div>
               <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.expiryDate}</label>
               <input type="date" name="domainExpiryDate" defaultValue={row.expiryDate ?? ""} className={`${FIELD_CLASS} lg:mt-0`} />
@@ -171,16 +145,6 @@ export default function DomainsDialog({
           </div>
         ))}
       </div>
-      <datalist id="domainRegistrarOptions">
-        {COMMON_REGISTRARS.map((option) => (
-          <option key={option} value={option} />
-        ))}
-      </datalist>
-      <datalist id="domainDnsProviderOptions">
-        {COMMON_DNS_PROVIDERS.map((option) => (
-          <option key={option} value={option} />
-        ))}
-      </datalist>
       <button
         type="button"
         onClick={() =>
