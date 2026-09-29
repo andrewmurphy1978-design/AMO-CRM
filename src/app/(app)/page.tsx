@@ -42,6 +42,8 @@ import AffiliateProgramsSummaryCard, {
 import AutomationsSummaryCard, {
   type AutomationsSummaryCounts,
 } from "./automations-summary-card";
+import { AUTOMATIONS_CARD_ACCENT_BAR, AUTOMATIONS_CARD_BG } from "./automations-summary-colors";
+import AutomationsIcon from "./automations-icon";
 import PendingAffiliateProgramsCard, {
   type PendingAffiliateProgramRow,
 } from "./pending-affiliate-programs-card";
@@ -900,11 +902,14 @@ export default async function DashboardPage() {
   // desktop/mobile card pair on this page — see the Pending Affiliate
   // Programs card's own comment) rather than duplicating this markup.
   const automationsCard = (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <h2 className="font-display text-lg font-semibold text-ink">
-        {t.dashboard.automationsTitle}
-      </h2>
+    <div className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${AUTOMATIONS_CARD_BG}`}>
+      <div className={`absolute inset-x-0 top-0 h-[3px] ${AUTOMATIONS_CARD_ACCENT_BAR}`} />
+      <div className="flex items-center gap-2">
+        <AutomationsIcon />
+        <h2 className="font-display text-lg font-semibold text-ink">
+          {t.dashboard.automationsTitle}
+        </h2>
+      </div>
       {automationEntries.length === 0 ? (
         <p className="mt-1.5 sm:mt-3 text-sm text-soft">
           {t.dashboard.noAutomationRuns}
