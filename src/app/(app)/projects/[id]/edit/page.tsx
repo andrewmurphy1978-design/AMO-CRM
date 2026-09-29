@@ -54,6 +54,7 @@ export default async function EditProjectPage({
           status: p.status,
           phaseType: p.phaseType,
           teamMemberIds: p.teamMemberIds,
+          supervisorId: p.supervisorId,
           startDate: toDateInput(p.startDate),
           dueDate: toDateInput(p.dueDate),
           description: p.description,

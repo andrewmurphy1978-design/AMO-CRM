@@ -10,6 +10,7 @@ type TaskFormValues = {
   status?: string;
   priority?: string;
   assigneeId?: string | null;
+  supervisorId?: string | null;
   startDate?: Date | string | null;
   dueDate?: Date | string | null;
 };
@@ -98,6 +99,21 @@ export default function TaskForm({
           <select
             name="assigneeId"
             defaultValue={defaultValues?.assigneeId ?? ""}
+            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+          >
+            <option value="">{t.common.unassigned}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.supervisor}</label>
+          <select
+            name="supervisorId"
+            defaultValue={defaultValues?.supervisorId ?? ""}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
             <option value="">{t.common.unassigned}</option>

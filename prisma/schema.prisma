@@ -114,10 +114,13 @@ model User {
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @updatedAt
 
-  ownedProjects   Project[]           @relation("ProjectOwner")
-  ownedContacts   Contact[]           @relation("ContactOwner")
-  assignedTasks   Task[]              @relation("TaskAssignee")
-  projectTeams    ProjectTeamMember[]
+  ownedProjects      Project[]           @relation("ProjectOwner")
+  supervisedProjects Project[]           @relation("ProjectSupervisor")
+  ownedContacts      Contact[]           @relation("ContactOwner")
+  assignedTasks      Task[]              @relation("TaskAssignee")
+  supervisedTasks    Task[]              @relation("TaskSupervisor")
+  supervisedPhases   ProjectPhase[]      @relation("PhaseSupervisor")
+  projectTeams       ProjectTeamMember[]
   activityEntries ActivityLogEntry[]
   interactions    Interaction[]
   googleAccount   GoogleAccount?
@@ -665,6 +668,9 @@ model Project {
   ownerId String?
   owner   User?   @relation("ProjectOwner", fields: [ownerId], references: [id])
 
+  supervisorId String?
+  supervisor   User?   @relation("ProjectSupervisor", fields: [supervisorId], references: [id])
+
   startDate DateTime?
   dueDate   DateTime?
 
@@ -683,6 +689,7 @@ model Project {
 
   @@index([status])
   @@index([contactId])
+  @@index([supervisorId])
   @@map("projects")
 }
 
@@ -717,6 +724,8 @@ model ProjectPhase {
   // simple, non-relational snapshot (no addedAt/unique-constraint needs),
   // same pattern as Contact.extraPhones/extraEmails.
   teamMemberIds String[]  @default([])
+  supervisorId  String?
+  supervisor    User?     @relation("PhaseSupervisor", fields: [supervisorId], references: [id])
   startDate     DateTime?
   dueDate       DateTime?
   description   String?   @db.Text
@@ -725,6 +734,7 @@ model ProjectPhase {
   tasks Task[]
 
   @@index([projectId])
+  @@index([supervisorId])
   @@map("project_phases")
 }
 
@@ -909,6 +919,9 @@ model Task {
   assigneeId String?
   assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
 
+  supervisorId String?
+  supervisor   User?   @relation("TaskSupervisor", fields: [supervisorId], references: [id])
+
   // "dueDate" predates the standalone Task feature and is kept as the
   // column name to avoid a rename migration — the Task UI presents it as
   // "End date" alongside the newer startDate.
@@ -925,6 +938,7 @@ model Task {
   @@index([projectId])
   @@index([status])
   @@index([phaseId])
+  @@index([supervisorId])
   @@map("tasks")
 }
 

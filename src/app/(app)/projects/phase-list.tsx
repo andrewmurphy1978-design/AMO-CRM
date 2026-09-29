@@ -11,6 +11,7 @@ export interface PhaseRowData {
   status: PhaseValues["status"];
   phaseType: string | null;
   teamMemberIds: string[];
+  supervisorId: string | null;
   startDate: string;
   dueDate: string;
   description: string | null;
@@ -29,12 +30,13 @@ const BLANK: PhaseValues = {
   status: "PLANNING",
   phaseType: "",
   teamMemberIds: [],
+  supervisorId: "",
   startDate: "",
   dueDate: "",
   description: "",
 };
 
-// Phases, listed as small cards (name + status pill), each opening
+// Phases, listed as a table (name/status/type/team/dates), each row opening
 // PhaseDialog to edit its full set of fields — mirrors how a Project
 // itself is edited via a dedicated form rather than inline inputs.
 export default function PhaseList({
@@ -56,25 +58,64 @@ export default function PhaseList({
 
   const STATUS_LABELS = t.projectStatuses;
 
+  function teamNamesFor(ids: string[]): string {
+    const names = ids.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean) as string[];
+    return names.length > 0 ? names.join(", ") : "—";
+  }
+
+  function supervisorNameFor(id: string | null): string {
+    return (id && users.find((u) => u.id === id)?.name) || "—";
+  }
+
   return (
     <div>
       <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.phasesTitle}</label>
-      <div className="mt-1 space-y-1.5">
-        {phases.length === 0 && <p className="text-sm text-soft">{t.projectForm.noPhasesYet}</p>}
-        {phases.map((phase) => (
-          <button
-            key={phase.id}
-            type="button"
-            onClick={() => setDialog({ phase })}
-            className="flex w-full items-center justify-between gap-2 rounded-md border border-card-border bg-field-bg px-3 py-2 text-left text-sm text-ink shadow-sm hover:bg-black/[0.03]"
-          >
-            <span className="truncate">{phase.name}</span>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[phase.status]}`}>
-              {STATUS_LABELS[phase.status]}
-            </span>
-          </button>
-        ))}
-        <button type="button" onClick={() => setDialog({ phase: null })} className="text-xs font-semibold text-amo-lime hover:underline">
+      <div className="mt-1.5">
+        {phases.length === 0 ? (
+          <p className="text-sm text-soft">{t.projectForm.noPhasesYet}</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-card-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-card-border bg-black/[0.02] text-left text-xs uppercase tracking-wide text-soft">
+                  <th className="px-3 py-2 font-semibold">{t.phaseDialog.name}</th>
+                  <th className="px-3 py-2 font-semibold">{t.phaseDialog.status}</th>
+                  <th className="px-3 py-2 font-semibold">{t.phaseDialog.phaseType}</th>
+                  <th className="px-3 py-2 font-semibold">{t.phaseDialog.team}</th>
+                  <th className="px-3 py-2 font-semibold">{t.phaseDialog.supervisor}</th>
+                  <th className="px-3 py-2 font-semibold">{t.phaseDialog.startDate}</th>
+                  <th className="px-3 py-2 font-semibold">{t.phaseDialog.dueDate}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-card-border">
+                {phases.map((phase) => (
+                  <tr
+                    key={phase.id}
+                    onClick={() => setDialog({ phase })}
+                    className="cursor-pointer text-ink hover:bg-black/[0.03]"
+                  >
+                    <td className="px-3 py-2 font-medium">{phase.name}</td>
+                    <td className="px-3 py-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[phase.status]}`}>
+                        {STATUS_LABELS[phase.status]}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-soft">{phase.phaseType || "—"}</td>
+                    <td className="px-3 py-2 text-soft">{teamNamesFor(phase.teamMemberIds)}</td>
+                    <td className="px-3 py-2 text-soft">{supervisorNameFor(phase.supervisorId)}</td>
+                    <td className="px-3 py-2 text-soft">{phase.startDate ? new Date(phase.startDate).toLocaleDateString() : "—"}</td>
+                    <td className="px-3 py-2 text-soft">{phase.dueDate ? new Date(phase.dueDate).toLocaleDateString() : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setDialog({ phase: null })}
+          className="mt-1.5 text-xs font-semibold text-amo-lime hover:underline"
+        >
           + {t.projectForm.addPhase}
         </button>
       </div>
@@ -92,6 +133,7 @@ export default function PhaseList({
                   status: dialog.phase.status,
                   phaseType: dialog.phase.phaseType ?? "",
                   teamMemberIds: dialog.phase.teamMemberIds,
+                  supervisorId: dialog.phase.supervisorId ?? "",
                   startDate: dialog.phase.startDate,
                   dueDate: dialog.phase.dueDate,
                   description: dialog.phase.description ?? "",
@@ -105,7 +147,13 @@ export default function PhaseList({
               setPhases((rows) =>
                 rows.map((r) =>
                   r.id === dialog.phase!.id
-                    ? { ...r, ...values, phaseType: values.phaseType || null, description: values.description || null }
+                    ? {
+                        ...r,
+                        ...values,
+                        phaseType: values.phaseType || null,
+                        supervisorId: values.supervisorId || null,
+                        description: values.description || null,
+                      }
                     : r
                 )
               );
@@ -120,6 +168,7 @@ export default function PhaseList({
                     id: newId,
                     ...values,
                     phaseType: values.phaseType || null,
+                    supervisorId: values.supervisorId || null,
                     description: values.description || null,
                   },
                 ]);

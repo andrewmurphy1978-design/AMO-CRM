@@ -11,6 +11,7 @@ type TaskFormValues = {
   status?: string;
   priority?: string;
   assigneeId?: string | null;
+  supervisorId?: string | null;
   startDate?: Date | string | null;
   dueDate?: Date | string | null;
 };
@@ -126,7 +127,17 @@ export default function TaskForm({
             ))}
           </select>
         </div>
-        <div />
+        <div>
+          <label className={LABEL_CLASS}>{t.taskForm.supervisor}</label>
+          <select name="supervisorId" defaultValue={defaultValues?.supervisorId ?? ""} className={FIELD_CLASS}>
+            <option value="">{t.common.unassigned}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className={LABEL_CLASS}>{t.taskForm.startDate}</label>
           <input type="date" name="startDate" defaultValue={toDateInput(defaultValues?.startDate)} className={FIELD_CLASS} />

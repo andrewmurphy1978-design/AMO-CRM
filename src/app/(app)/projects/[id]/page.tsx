@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { format, type Locale } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import TaskRow from "./task-row";
-import QuickAddTask from "./quick-add-task";
+import AddTaskButton from "./add-task-button";
 import DeleteProjectButton from "./delete-button";
 import QuickAddProposal from "./quick-add-proposal";
 import ProposalRow from "./proposal-row";
@@ -52,6 +52,7 @@ export default async function ProjectDetailPage({
   const {
     project,
     hour12,
+    users,
     calendarEvents,
     calendarEventLinks,
     calendarContactOptions,
@@ -67,7 +68,9 @@ export default async function ProjectDetailPage({
       include: {
         contact: true,
         owner: true,
+        supervisor: true,
         teamMembers: { include: { user: true } },
+        phases: { orderBy: { order: "asc" } },
         tasks: {
           orderBy: [{ status: "asc" }, { dueDate: "asc" }],
           include: { assignee: true },
@@ -80,6 +83,7 @@ export default async function ProjectDetailPage({
         invoices: { orderBy: { createdAt: "desc" } },
       },
     });
+    const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
     const calendarEvents = project ? await getLinkedCalendarEvents(db, { projectId: project.id }, googleAccessToken) : [];
     const calendarEventLinks = calendarEvents.length > 0 ? await getEventLinkTargets(db, calendarEvents.map((e) => e.id)) : {};
 
@@ -114,6 +118,7 @@ export default async function ProjectDetailPage({
     return {
       project,
       hour12,
+      users,
       calendarEvents,
       calendarEventLinks,
       calendarContactOptions: allContacts.map((c) => ({
@@ -208,7 +213,10 @@ export default async function ProjectDetailPage({
                 <p className={LABEL_CLASS}>{t.projects.colTeam}</p>
                 <p className="mt-1 text-sm text-ink">{teamNames.length > 0 ? teamNames.join(", ") : "—"}</p>
               </div>
-              <div />
+              <div>
+                <p className={LABEL_CLASS}>{t.projects.colSupervisor}</p>
+                <p className="mt-1 text-sm text-ink">{project.supervisor?.name ?? t.common.unassigned}</p>
+              </div>
 
               <div>
                 <p className={LABEL_CLASS}>{t.projects.colStart}</p>
@@ -223,9 +231,62 @@ export default async function ProjectDetailPage({
 
           <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.projectDetail.tasksTitle}</h2>
-            <div className="mt-3">
-              <QuickAddTask projectId={project.id} lang={lang} />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.projectForm.phasesTitle}</h2>
+
+            {project.phases.length === 0 ? (
+              <p className="mt-3 text-sm text-soft">{t.projectForm.noPhasesYet}</p>
+            ) : (
+              <div className="mt-3 overflow-x-auto rounded-lg border border-card-border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-card-border bg-black/[0.02] text-left text-xs uppercase tracking-wide text-soft">
+                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.name}</th>
+                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.status}</th>
+                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.phaseType}</th>
+                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.team}</th>
+                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.supervisor}</th>
+                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.startDate}</th>
+                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.dueDate}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-card-border">
+                    {project.phases.map((phase) => {
+                      const phaseTeamNames = phase.teamMemberIds
+                        .map((id) => users.find((u) => u.id === id)?.name)
+                        .filter(Boolean) as string[];
+                      const supervisorName = (phase.supervisorId && users.find((u) => u.id === phase.supervisorId)?.name) || "—";
+                      return (
+                        <tr key={phase.id} className="text-ink">
+                          <td className="px-3 py-2 font-medium">{phase.name}</td>
+                          <td className="px-3 py-2">
+                            <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-soft">
+                              {STATUS_LABELS[phase.status]}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-soft">{phase.phaseType || "—"}</td>
+                          <td className="px-3 py-2 text-soft">{phaseTeamNames.length > 0 ? phaseTeamNames.join(", ") : "—"}</td>
+                          <td className="px-3 py-2 text-soft">{supervisorName}</td>
+                          <td className="px-3 py-2 text-soft">{phase.startDate ? longDate(phase.startDate, lang, dateLocale) : "—"}</td>
+                          <td className="px-3 py-2 text-soft">{phase.dueDate ? longDate(phase.dueDate, lang, dateLocale) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-semibold text-ink">{t.projectDetail.tasksTitle}</h2>
+              <AddTaskButton
+                projectId={project.id}
+                users={users}
+                phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
+                lang={lang}
+              />
             </div>
 
             {openTasks.length === 0 && doneTasks.length === 0 ? (

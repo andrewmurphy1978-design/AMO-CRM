@@ -33,6 +33,7 @@ export default function PhaseDialog({
   const [status, setStatus] = useState(initial.status);
   const [phaseType, setPhaseType] = useState(initial.phaseType);
   const [teamMemberIds, setTeamMemberIds] = useState(initial.teamMemberIds);
+  const [supervisorId, setSupervisorId] = useState(initial.supervisorId);
   const [startDate, setStartDate] = useState(initial.startDate);
   const [dueDate, setDueDate] = useState(initial.dueDate);
   const [description, setDescription] = useState(initial.description);
@@ -51,7 +52,7 @@ export default function PhaseDialog({
 
   function save() {
     startTransition(async () => {
-      const result = await onSave({ name, status, phaseType, teamMemberIds, startDate, dueDate, description });
+      const result = await onSave({ name, status, phaseType, teamMemberIds, supervisorId, startDate, dueDate, description });
       if (result?.error) setError(result.error);
       else onClose();
     });
@@ -114,6 +115,22 @@ export default function PhaseDialog({
               onChange={setTeamMemberIds}
             />
           </div>
+        </div>
+
+        <div className="mt-3">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.supervisor}</label>
+          <select
+            value={supervisorId}
+            onChange={(e) => setSupervisorId(e.target.value)}
+            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+          >
+            <option value="">{t.common.unassigned}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3">

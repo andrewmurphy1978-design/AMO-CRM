@@ -15,6 +15,7 @@ const TaskSchema = z.object({
   status: z.enum(["TODO", "IN_PROGRESS", "BLOCKED", "DONE"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
   assigneeId: z.string().optional(),
+  supervisorId: z.string().optional(),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
 });
@@ -28,10 +29,64 @@ function readTaskForm(formData: FormData) {
     status: String(formData.get("status") ?? "TODO"),
     priority: String(formData.get("priority") ?? "MEDIUM"),
     assigneeId: String(formData.get("assigneeId") ?? "") || undefined,
+    supervisorId: String(formData.get("supervisorId") ?? "") || undefined,
     startDate: String(formData.get("startDate") ?? "") || undefined,
     dueDate: String(formData.get("dueDate") ?? "") || undefined,
   };
   return TaskSchema.parse(raw);
+}
+
+export interface TaskDialogValues {
+  title: string;
+  phaseId: string;
+  status: "TODO" | "IN_PROGRESS" | "BLOCKED" | "DONE";
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  assigneeId: string;
+  supervisorId: string;
+  startDate: string;
+  dueDate: string;
+  description: string;
+}
+
+// Used by TaskDialog (project-info page's "Add task" button) — same shape
+// as createPhase: saved immediately via a plain value object rather than a
+// <form action> + FormData, since the dialog isn't a form submission.
+export async function createTaskViaDialog(
+  projectId: string,
+  values: TaskDialogValues
+): Promise<{ id?: string; error?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  let data;
+  try {
+    data = TaskSchema.parse({ ...values, projectId });
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid input" };
+    throw error;
+  }
+
+  const task = await withScopedPrismaClient((db) =>
+    db.task.create({
+      data: {
+        title: data.title,
+        projectId,
+        phaseId: data.phaseId || null,
+        description: data.description,
+        status: data.status,
+        priority: data.priority,
+        assigneeId: data.assigneeId || null,
+        supervisorId: data.supervisorId || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        completedAt: data.status === "DONE" ? new Date() : null,
+      },
+    })
+  );
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/tasks");
+  return { id: task.id };
 }
 
 export async function createTask(
@@ -62,6 +117,7 @@ export async function createTask(
         status: data.status,
         priority: data.priority,
         assigneeId: data.assigneeId || null,
+        supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         completedAt: data.status === "DONE" ? new Date() : null,
@@ -105,6 +161,7 @@ export async function createTaskAndRedirect(
         status: data.status,
         priority: data.priority,
         assigneeId: data.assigneeId || null,
+        supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         completedAt: data.status === "DONE" ? new Date() : null,
@@ -153,6 +210,7 @@ export async function updateTask(
         status: data.status,
         priority: data.priority,
         assigneeId: data.assigneeId || null,
+        supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         completedAt: data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,

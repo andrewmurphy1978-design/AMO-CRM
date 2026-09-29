@@ -14,6 +14,7 @@ const ProjectSchema = z.object({
   status: z.enum(["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"]),
   type: z.enum(["WEBSITE", "FUNNEL", "APP", "SOCIAL_MEDIA", "CONSULTING", "OTHER"]),
   ownerId: z.string().optional(),
+  supervisorId: z.string().optional(),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
   teamMemberIds: z.array(z.string()),
@@ -27,6 +28,7 @@ function readProjectForm(formData: FormData) {
     status: String(formData.get("status") ?? "PLANNING"),
     type: String(formData.get("type") ?? "OTHER"),
     ownerId: String(formData.get("ownerId") ?? "") || undefined,
+    supervisorId: String(formData.get("supervisorId") ?? "") || undefined,
     startDate: String(formData.get("startDate") ?? "") || undefined,
     dueDate: String(formData.get("dueDate") ?? "") || undefined,
     teamMemberIds: [...new Set(formData.getAll("teamMemberIds").map(String).filter(Boolean))],
@@ -39,6 +41,7 @@ export interface PhaseValues {
   status: "PLANNING" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
   phaseType: string;
   teamMemberIds: string[];
+  supervisorId: string;
   startDate: string;
   dueDate: string;
   description: string;
@@ -49,6 +52,7 @@ const PhaseSchema = z.object({
   status: z.enum(["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"]),
   phaseType: z.string().trim().optional(),
   teamMemberIds: z.array(z.string()),
+  supervisorId: z.string().optional(),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
   description: z.string().trim().optional(),
@@ -61,6 +65,7 @@ function phaseData(values: PhaseValues) {
     status: data.status,
     phaseType: data.phaseType || null,
     teamMemberIds: data.teamMemberIds,
+    supervisorId: data.supervisorId || null,
     startDate: data.startDate ? new Date(data.startDate) : null,
     dueDate: data.dueDate ? new Date(data.dueDate) : null,
     description: data.description || null,
@@ -151,6 +156,7 @@ export async function createProject(
         status: data.status,
         type: data.type,
         ownerId: data.ownerId || session.user.id,
+        supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : undefined,
         dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
       },
@@ -210,6 +216,7 @@ export async function updateProject(
         status: data.status,
         type: data.type,
         ownerId: data.ownerId || null,
+        supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
       },
