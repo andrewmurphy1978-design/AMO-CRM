@@ -467,9 +467,63 @@ function UpcomingTable({
     onRequestCreate(target);
   }
 
+  function eventRow(event: CalendarEventSummary) {
+    const color = eventColor(event.colorId);
+    return (
+      <button
+        key={event.id}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRequestEdit(event);
+        }}
+        className="flex w-full cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-left transition-opacity hover:opacity-90"
+        style={{ backgroundColor: color.bg, color: color.fg }}
+      >
+        <span className="w-16 shrink-0 font-bold">
+          {!event.allDay && event.start
+            ? formatClockTime(new Date(event.start), hour12, intlLocale)
+            : ""}
+        </span>
+        <span className="min-w-0 flex-1 truncate">{event.title}</span>
+        <span className="shrink-0 text-[10px] opacity-90">
+          {!event.allDay && event.end
+            ? formatClockTime(new Date(event.end), hour12, intlLocale)
+            : ""}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="mt-1.5 sm:mt-3 max-h-64 overflow-y-auto overflow-x-hidden rounded-xl border border-card-border">
-      <table className="w-full border-collapse text-xs">
+      {/* Mobile: the date sits above its events instead of in its own left
+          column — a fixed w-20 date column left too little room for the
+          event title once the time prefix/suffix were also in play on a
+          narrow screen. Desktop (sm+) keeps the original two-column table,
+          which has the width to spare. */}
+      <div className="divide-y divide-card-border sm:hidden">
+        {days.map((day, i) => (
+          <div
+            key={i}
+            onClick={() => handleRowClick(day)}
+            className="cursor-pointer px-2 py-1.5 hover:bg-black/5"
+          >
+            <p className="font-medium text-ink">
+              {format(day, "EEE d MMM", { locale: dateLocale })}
+            </p>
+            {eventsByDay[i].length === 0 ? (
+              <span className="text-soft">{labels.noEvents}</span>
+            ) : (
+              <div className="mt-1 space-y-1">
+                {eventsByDay[i].map((event) => eventRow(event))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <table className="hidden w-full border-collapse text-xs sm:table">
         <tbody>
           {days.map((day, i) => (
             <tr
@@ -485,43 +539,7 @@ function UpcomingTable({
                   <span className="text-soft">{labels.noEvents}</span>
                 ) : (
                   <div className="space-y-1">
-                    {eventsByDay[i].map((event) => {
-                      const color = eventColor(event.colorId);
-                      return (
-                        <button
-                          key={event.id}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onRequestEdit(event);
-                          }}
-                          className="flex w-full cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-left transition-opacity hover:opacity-90"
-                          style={{ backgroundColor: color.bg, color: color.fg }}
-                        >
-                          <span className="w-16 shrink-0 font-bold">
-                            {!event.allDay && event.start
-                              ? formatClockTime(
-                                  new Date(event.start),
-                                  hour12,
-                                  intlLocale,
-                                )
-                              : ""}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate">
-                            {event.title}
-                          </span>
-                          <span className="shrink-0 text-[10px] opacity-90">
-                            {!event.allDay && event.end
-                              ? formatClockTime(
-                                  new Date(event.end),
-                                  hour12,
-                                  intlLocale,
-                                )
-                              : ""}
-                          </span>
-                        </button>
-                      );
-                    })}
+                    {eventsByDay[i].map((event) => eventRow(event))}
                   </div>
                 )}
               </td>

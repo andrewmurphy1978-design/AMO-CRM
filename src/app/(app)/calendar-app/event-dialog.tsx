@@ -889,6 +889,14 @@ export default function EventDialog({
         ) : loadError ? (
           <p className="mt-4 text-sm text-red-600">{loadError === "not_connected" ? labels.notConnected : labels.loadFailed}</p>
         ) : (
+          (() => {
+            const descriptionField = (
+              <div>
+                <label className={LABEL_CLASS}>{labels.description}</label>
+                <RichTextarea value={form.description} onChange={(html) => update("description", html)} className="mt-1" />
+              </div>
+            );
+            return (
           <div className="mt-4 space-y-4">
             <input
               type="text"
@@ -950,6 +958,11 @@ export default function EventDialog({
                 )}
               </div>
             </div>
+
+            {/* Mobile only — right below Start/End so it doesn't get buried
+                under Location/Color/Reminders/Guests on a long scroll (see
+                the desktop-only copy further down, inside the 2/3 column). */}
+            <div className="lg:hidden">{descriptionField}</div>
 
             <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
             <div className="min-w-0 space-y-4">
@@ -1102,10 +1115,11 @@ export default function EventDialog({
                 </div>
               </div>
 
-              <div>
-                <label className={LABEL_CLASS}>{labels.description}</label>
-                <RichTextarea value={form.description} onChange={(html) => update("description", html)} className="mt-1" />
-              </div>
+              {/* Desktop only — mobile shows this same field right after
+                  the Start/End block above instead (see descriptionField
+                  below), since scrolling past Location/Color/Reminders/
+                  Guests to reach it on a phone buries it too deep. */}
+              <div className="hidden lg:block">{descriptionField}</div>
             </div>
 
             <div className="min-w-0 space-y-3 border-t border-card-border pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
@@ -1194,6 +1208,8 @@ export default function EventDialog({
             </div>
           </div>
           </div>
+            );
+          })()
         )}
         </div>
       </div>
