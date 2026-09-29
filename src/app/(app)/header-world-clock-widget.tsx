@@ -54,14 +54,19 @@ export default function HeaderWorldClockWidget({
   if (headerZones.length === 0) return null;
 
   return (
-    <div className="relative hidden sm:block" ref={ref}>
+    <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-3 rounded-lg bg-white/10 px-2.5 py-1.5 text-amo-white transition-colors hover:bg-white/15"
       >
-        {headerZones.map((zone) => (
-          <span key={zone} className="max-w-[5.5rem] min-w-0 text-center leading-tight">
+        {/* Mobile only has room for one of the header zones — the rest
+            stay sm+ only, matching the Markets pill's own mobile limit. */}
+        {headerZones.map((zone, i) => (
+          <span
+            key={zone}
+            className={`max-w-[5.5rem] min-w-0 text-center leading-tight ${i > 0 ? "hidden sm:block" : ""}`}
+          >
             <span className="block truncate text-[9px] uppercase tracking-wide opacity-75">
               {zoneShortLabel(zone)}
             </span>

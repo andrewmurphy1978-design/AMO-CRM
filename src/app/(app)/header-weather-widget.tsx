@@ -30,9 +30,7 @@ export interface HeaderWeatherLabels {
 // real (network) weather fetch is still in flight, so the rest of the
 // Dashboard header never waits on it.
 export function WeatherWidgetSkeleton() {
-  return (
-    <div className="hidden h-9 w-20 animate-pulse rounded-lg bg-white/10 sm:block" />
-  );
+  return <div className="h-9 w-20 animate-pulse rounded-lg bg-white/10" />;
 }
 
 // Replaces the old dashboard-wide Weather card (weather-card.tsx) — same
@@ -102,7 +100,7 @@ export default function HeaderWeatherWidget({
 
   if (!weather) {
     return (
-      <div className="hidden items-center rounded-lg bg-white/10 px-2.5 py-1.5 text-xs text-amo-white/70 sm:flex">
+      <div className="flex items-center rounded-lg bg-white/10 px-2.5 py-1.5 text-xs text-amo-white/70">
         {labels.unavailable}
       </div>
     );
@@ -112,7 +110,7 @@ export default function HeaderWeatherWidget({
   const windUnitLabel = weather.windUnit === "mph" ? "mph" : "km/h";
 
   return (
-    <div className="relative hidden sm:block" ref={ref}>
+    <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

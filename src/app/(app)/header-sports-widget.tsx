@@ -8,7 +8,7 @@ import SportsCard, { type SportsCardSnapshot, type SportsLabels } from "./sports
 // Matches the Weather/News widgets' own placeholder pill size/shape — see
 // header-weather-widget.tsx's WeatherWidgetSkeleton for why this exists.
 export function SportsWidgetSkeleton() {
-  return <div className="hidden h-9 w-24 animate-pulse rounded-lg bg-white/10 sm:block" />;
+  return <div className="h-9 w-24 animate-pulse rounded-lg bg-white/10" />;
 }
 
 // Compact "latest game" pill for the Dashboard header — just the two team
@@ -60,7 +60,7 @@ export default function HeaderSportsWidget({
   const secondScore = teamFirst ? game?.opponentScore : game?.teamScore;
 
   return (
-    <div className="relative hidden sm:block" ref={ref}>
+    <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

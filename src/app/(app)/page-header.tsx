@@ -84,8 +84,8 @@ export default function PageHeader({
 }) {
   if (logoUrl) {
     return (
-      <header className="@container sticky top-0 z-30 -mx-4 -mt-4 flex items-center justify-between gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
-        <div className="flex shrink-0 items-center gap-3">
+      <header className="@container sticky top-0 z-30 -mx-4 -mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-amo-green px-4 py-3 sm:flex-nowrap sm:-mx-8 sm:-mt-8 sm:px-8">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:flex-nowrap sm:gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={logoUrl} alt="Andrew Murphy Online" className="hidden h-auto w-36 shrink-0 object-contain sm:block sm:w-56" />
           {logoAccessory}
@@ -104,10 +104,10 @@ export default function PageHeader({
             header itself doesn't have enough room to show it without
             overlapping. Still truncates and flows normally below `sm`,
             where there's no absolute overlay to begin with. */}
-        <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:invisible sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-2xl sm:@min-[1500px]:visible">
+        <h1 className="hidden min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:block sm:invisible sm:absolute sm:left-1/2 sm:-translate-x-1/2 sm:text-2xl sm:@min-[1500px]:visible">
           {title}
         </h1>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:flex-nowrap sm:gap-3">
           {actions}
           {dateTimeAccessory}
           {!hideDateTimeCard && <DateTimeCard hour12={hour12} lang={lang} location={location} />}

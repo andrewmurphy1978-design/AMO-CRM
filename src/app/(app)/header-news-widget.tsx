@@ -7,7 +7,7 @@ import NewsCard, { type NewsLabels } from "./news-card";
 // Matches the Weather widget's own placeholder pill size/shape — see
 // header-weather-widget.tsx's WeatherWidgetSkeleton for why this exists.
 export function NewsWidgetSkeleton() {
-  return <div className="hidden h-9 w-9 animate-pulse rounded-lg bg-white/10 sm:block" />;
+  return <div className="h-9 w-9 animate-pulse rounded-lg bg-white/10" />;
 }
 
 // Condensed header pill that opens the exact same News card
@@ -31,7 +31,7 @@ export default function HeaderNewsWidget({ initial, labels }: { initial: NewsDig
   const headlineCount = initial?.categories.reduce((n, c) => n + c.items.length, 0) ?? 0;
 
   return (
-    <div className="relative hidden sm:block" ref={ref}>
+    <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

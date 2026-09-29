@@ -18,7 +18,7 @@ export interface MarketsWidgetData {
 // Matches the Weather widget's own placeholder pill size/shape — see
 // header-weather-widget.tsx's WeatherWidgetSkeleton for why this exists.
 export function MarketsWidgetSkeleton() {
-  return <div className="hidden h-9 w-40 animate-pulse rounded-lg bg-white/10 sm:block" />;
+  return <div className="h-9 w-40 animate-pulse rounded-lg bg-white/10" />;
 }
 
 function ChangeText({ changePct }: { changePct: number | null }) {
@@ -91,14 +91,14 @@ export default function HeaderMarketsWidget({
 
   if (!pillData || (!pillData.currencyRow && pillData.itemRows.length === 0)) {
     return (
-      <div className="hidden items-center rounded-lg bg-white/10 px-2.5 py-1.5 text-xs text-amo-white/70 sm:flex">
+      <div className="flex items-center rounded-lg bg-white/10 px-2.5 py-1.5 text-xs text-amo-white/70">
         {labels.unavailable}
       </div>
     );
   }
 
   return (
-    <div className="relative hidden sm:block" ref={ref}>
+    <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -128,8 +128,16 @@ export default function HeaderMarketsWidget({
             </span>
           </span>
         )}
-        {pillData.itemRows.map((item) => (
-          <span key={item.key} className="max-w-[4.5rem] min-w-0 text-center leading-tight">
+        {/* Mobile only has room for one of the 4 picks — the currency row
+            if there is one, otherwise the first item pick — the rest stay
+            sm+ only, matching the header's 2-row wrap on small screens. */}
+        {pillData.itemRows.map((item, i) => (
+          <span
+            key={item.key}
+            className={`max-w-[4.5rem] min-w-0 text-center leading-tight ${
+              pillData.currencyRow || i > 0 ? "hidden sm:block" : ""
+            }`}
+          >
             <span className="block truncate text-[9px] uppercase tracking-wide opacity-75">{item.label}</span>
             <span className="block truncate font-display text-xs font-bold tabular-nums">
               <ChangeText changePct={item.changePct} />
