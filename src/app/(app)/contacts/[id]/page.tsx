@@ -17,7 +17,7 @@ import { countryFullName } from "@/lib/country-flag";
 import { getTimezoneForCountryState, utcOffsetLabel } from "@/lib/timezone";
 import { stateLabelForCountry } from "@/lib/address-labels";
 import { CURRENCIES } from "@/lib/currencies";
-import { tagKind, TAG_KIND_COLORS, TAG_KIND_RANK } from "@/lib/tag-colors";
+import { sortTags, tagPillStyle, type TagLike } from "@/lib/tag-colors";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import PlatformIcon from "@/components/platform-icon";
@@ -26,7 +26,9 @@ import Card from "@/components/section-card";
 import LocalTimeCard from "@/components/local-time-card";
 import LinkedEmailsList from "../../linked-emails-list";
 import ContactCredentialsCard from "./contact-credentials-card";
+import ContactEmailLinks from "./contact-email-links";
 import { CONTACT_SYNC_APPS } from "@/lib/contact-sync";
+import { telHref, messagingAppLink, voipAppLink } from "@/lib/app-deep-links";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -84,7 +86,23 @@ function InfoField({ label, value }: { label: string; value?: React.ReactNode })
 
 // Icon + app/platform name + ID (handle, username, or link) — the shared
 // look for Instant messaging, Social media, and VoIP app rows.
-function AppIdChip({ platform, id, href }: { platform: string; id: string; href?: string }) {
+function AppIdChip({
+  platform,
+  id,
+  href,
+  mobileHref,
+}: {
+  platform: string;
+  id: string;
+  href?: string;
+  // A separate href used only on mobile (see app-deep-links.ts) — either a
+  // custom app scheme with no web fallback (Skype/Viber/FaceTime), or the
+  // same URL as `href` opened without target="_blank" so a mobile OS's
+  // Universal/App Link handling can intercept it (which a new-tab open
+  // doesn't reliably trigger). When set, this renders two chips — one
+  // visible only below `sm`, one only at `sm` and up — instead of one.
+  mobileHref?: string;
+}) {
   const content = (
     <>
       <PlatformIcon platform={platform} className="h-4 w-4 shrink-0" />
@@ -94,6 +112,24 @@ function AppIdChip({ platform, id, href }: { platform: string; id: string; href?
   );
   const className =
     "flex max-w-full items-center gap-1.5 rounded-full border border-card-border bg-field-bg px-3 py-1.5 text-xs font-medium text-ink";
+
+  if (mobileHref) {
+    return (
+      <>
+        <a href={mobileHref} className={`${className} hover:border-amo-gold sm:hidden`}>
+          {content}
+        </a>
+        {href ? (
+          <a href={href} target="_blank" rel="noreferrer" className={`${className} hover:border-amo-gold hidden sm:flex`}>
+            {content}
+          </a>
+        ) : (
+          <span className={`${className} hidden sm:flex`}>{content}</span>
+        )}
+      </>
+    );
+  }
+
   return href ? (
     <a href={href} target="_blank" rel="noreferrer" className={`${className} hover:border-amo-gold`}>
       {content}
@@ -103,8 +139,39 @@ function AppIdChip({ platform, id, href }: { platform: string; id: string; href?
   );
 }
 
-function TagPill({ name }: { name: string }) {
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(name)]}`}>{name}</span>;
+// Wraps PhoneDisplay so the number auto-dials on mobile (tel:) while
+// staying plain, non-clickable text on desktop — matching "on mobile,
+// clicking a phone number should open the phone app" without adding a
+// dead tel: link on a desktop browser that can't act on it.
+function PhoneLine({ value, country }: { value?: string | null; country?: string | null }) {
+  if (!value) return <PhoneDisplay value={value} country={country} />;
+  return (
+    <>
+      <a href={telHref(value)} className="sm:hidden">
+        <PhoneDisplay value={value} country={country} />
+      </a>
+      <span className="hidden sm:inline">
+        <PhoneDisplay value={value} country={country} />
+      </span>
+    </>
+  );
+}
+
+function TagPill({ tag }: { tag: TagLike }) {
+  const style = tagPillStyle(tag);
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${style.className}`} style={style.style}>
+      {tag.name}
+    </span>
+  );
+}
+
+// A universal maps.google.com link — mobile browsers/webviews hand this off
+// to the Google Maps app when it's installed (no separate deep-link scheme
+// needed), and it just opens in the browser on desktop.
+function googleMapsUrl(address?: string | null, city?: string | null, state?: string | null, zip?: string | null, country?: string | null): string {
+  const query = [address, city, state, zip, country].filter(Boolean).join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 function AddressBlock({
@@ -131,7 +198,7 @@ function AddressBlock({
         {isEmpty ? (
           <p className="text-soft">—</p>
         ) : (
-          <>
+          <a href={googleMapsUrl(address, city, state, zip, country)} target="_blank" rel="noreferrer" className="block hover:underline">
             {address && <p className="break-words">{address}</p>}
             {cityLine && <p className="break-words">{cityLine}</p>}
             {country && (
@@ -139,7 +206,7 @@ function AddressBlock({
                 <CountryFlag country={country} /> {countryFullName(country)}
               </p>
             )}
-          </>
+          </a>
         )}
       </div>
     </div>
@@ -211,6 +278,7 @@ export default async function ContactDetailPage({
   const {
     contact,
     hour12,
+    defaultComposeSource,
     addressColors,
     calendarEvents,
     calendarEventLinks,
@@ -222,6 +290,9 @@ export default async function ContactDetailPage({
   } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
+    const composePrefs = session
+      ? await db.user.findUnique({ where: { id: session.user.id }, select: { defaultComposeSource: true } })
+      : null;
     const contact = await db.contact.findUnique({
       where: { id },
       include: {
@@ -293,6 +364,7 @@ export default async function ContactDetailPage({
     return {
       contact,
       hour12,
+      defaultComposeSource: composePrefs?.defaultComposeSource ?? null,
       calendarEvents,
       calendarEventLinks,
       addressColors,
@@ -398,11 +470,9 @@ export default async function ContactDetailPage({
   // billing addresses) drives the fallback guess.
   const contactTimeZone = contact.timeZone || getTimezoneForCountryState(contact.country, contact.state);
 
-  // Language tags first (matching the Edit form and the Contacts list
-  // page's own ordering), each colored the same way everywhere.
-  const sortedTagRows = [...contact.tags].sort(
-    (a, b) => TAG_KIND_RANK[tagKind(a.tag.name)] - TAG_KIND_RANK[tagKind(b.tag.name)] || a.tag.name.localeCompare(b.tag.name)
-  );
+  // Language, then personal, then systeme.io tags — matching the Edit
+  // form's own ordering/coloring everywhere.
+  const sortedTagRows = sortTags(contact.tags);
 
   return (
     // Mobile: main's own p-4 (see app-shell.tsx) puts a 16px gap between
@@ -450,7 +520,7 @@ export default async function ContactDetailPage({
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {sortedTagRows.length === 0 && <p className="text-sm text-soft">—</p>}
                   {sortedTagRows.map((ct) => (
-                    <TagPill key={ct.tagId} name={ct.tag.name} />
+                    <TagPill key={ct.tagId} tag={ct.tag} />
                   ))}
                 </div>
               </div>
@@ -509,44 +579,54 @@ export default async function ContactDetailPage({
           </Card>
 
           <Card color="contact" title={t.contactForm.cardContactInfo} compact>
-            <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
+            <div className="grid grid-cols-1 gap-2 sm:gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
               <div className="min-w-0">
                 <p className={LABEL_CLASS}>{t.contactForm.emails}</p>
                 <div className="mt-1 space-y-0.5 text-sm text-ink">
-                  <p className="break-words">{contact.email}</p>
-                  {contact.email2 && <p className="break-words">{contact.email2}</p>}
-                  {contact.extraEmails.map((email) => (
-                    <p key={email} className="break-words">
-                      {email}
-                    </p>
-                  ))}
+                  <ContactEmailLinks
+                    emails={[contact.email, contact.email2, ...contact.extraEmails].filter((e): e is string => Boolean(e))}
+                    defaultComposeSource={defaultComposeSource}
+                    dateLocale={dateLocale}
+                    intlLocale={intlLocale}
+                    hour12={hour12}
+                    emailComposeLabels={t.emailCompose}
+                  />
                 </div>
               </div>
               <div className="min-w-0">
                 <p className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</p>
                 <div className="mt-1 space-y-0.5 text-sm text-ink">
                   <p>
-                    <PhoneDisplay value={contact.phone} country={contact.country} />
+                    <PhoneLine value={contact.phone} country={contact.country} />
                   </p>
                   {contact.phone2 && (
                     <p>
-                      <PhoneDisplay value={contact.phone2} country={contact.country} />
+                      <PhoneLine value={contact.phone2} country={contact.country} />
                     </p>
                   )}
                   {contact.extraPhones.map((phone) => (
                     <p key={phone}>
-                      <PhoneDisplay value={phone} country={contact.country} />
+                      <PhoneLine value={phone} country={contact.country} />
                     </p>
                   ))}
                 </div>
               </div>
-              <div className="col-span-2 min-w-0 lg:col-span-1">
+              <div className="min-w-0">
                 <p className={LABEL_CLASS}>{t.contactForm.messagingAppsTitle}</p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {contact.messagingAccounts.length === 0 && <p className="text-sm text-soft">—</p>}
-                  {contact.messagingAccounts.map((row) => (
-                    <AppIdChip key={row.id} platform={row.app} id={row.handle} />
-                  ))}
+                  {contact.messagingAccounts.map((row) => {
+                    const link = messagingAppLink(row.app, row.handle);
+                    return (
+                      <AppIdChip
+                        key={row.id}
+                        platform={row.app}
+                        id={row.handle}
+                        href={link && !link.mobileOnly ? link.href : undefined}
+                        mobileHref={link?.href}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -557,16 +637,25 @@ export default async function ContactDetailPage({
               <div className="flex flex-wrap gap-1.5">
                 {contact.socialLinks.length === 0 && <p className="text-sm text-soft">—</p>}
                 {contact.socialLinks.map((link) => (
-                  <AppIdChip key={link.id} platform={link.platform} id={link.url} href={link.url} />
+                  <AppIdChip key={link.id} platform={link.platform} id={link.url} href={link.url} mobileHref={link.url} />
                 ))}
               </div>
             </Card>
             <Card color="voip" title={t.contactForm.cardVoipApps} compact>
               <div className="flex flex-wrap gap-1.5">
                 {contact.voipAccounts.length === 0 && <p className="text-sm text-soft">—</p>}
-                {contact.voipAccounts.map((row) => (
-                  <AppIdChip key={row.id} platform={row.app} id={row.handle} />
-                ))}
+                {contact.voipAccounts.map((row) => {
+                  const link = voipAppLink(row.app, row.handle);
+                  return (
+                    <AppIdChip
+                      key={row.id}
+                      platform={row.app}
+                      id={row.handle}
+                      href={link && !link.mobileOnly ? link.href : undefined}
+                      mobileHref={link?.href}
+                    />
+                  );
+                })}
               </div>
             </Card>
           </div>
@@ -585,7 +674,7 @@ export default async function ContactDetailPage({
                 {contact.extraAddresses.map((addr) => (
                   <AddressBlock
                     key={addr.id}
-                    title={t.contactDetail.additionalAddressTitle}
+                    title={addr.description || t.contactDetail.additionalAddressTitle}
                     address={addr.address}
                     city={addr.city}
                     state={addr.state}

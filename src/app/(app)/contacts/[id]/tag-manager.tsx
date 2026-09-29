@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { addTagToContact, removeTagFromContact } from "@/actions/contacts";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { tagKind, TAG_KIND_COLORS, sortTags } from "@/lib/tag-colors";
+import { sortTags, tagPillStyle, type TagLike } from "@/lib/tag-colors";
 
 export default function TagManager({
   contactId,
@@ -12,8 +12,8 @@ export default function TagManager({
   lang,
 }: {
   contactId: string;
-  tags: { id: string; name: string }[];
-  allTags: { id: string; name: string }[];
+  tags: ({ id: string } & TagLike)[];
+  allTags: ({ id: string } & TagLike)[];
   lang: Lang;
 }) {
   const [pending, startTransition] = useTransition();
@@ -26,10 +26,13 @@ export default function TagManager({
   return (
     <div className="mt-3">
       <div className="flex flex-wrap gap-2">
-        {displayTags.map(({ tag }) => (
+        {displayTags.map(({ tag }) => {
+          const style = tagPillStyle(tag);
+          return (
           <span
             key={tag.id}
-            className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${TAG_KIND_COLORS[tagKind(tag.name)]}`}
+            className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${style.className}`}
+            style={style.style}
           >
             {tag.name}
             <button
@@ -42,7 +45,8 @@ export default function TagManager({
               ×
             </button>
           </span>
-        ))}
+          );
+        })}
         {tags.length === 0 && <p className="text-sm text-soft">{t.tagManager.noTags}</p>}
       </div>
       <select

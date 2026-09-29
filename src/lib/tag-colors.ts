@@ -1,6 +1,16 @@
+import type { TagCategory } from "@prisma/client";
+
 // Shared tag pill coloring — used by the Contacts list, the contact detail
 // Tags card, and the tag combobox — so a given tag always looks the same
 // wherever it appears.
+//
+// This started as a purely name-based heuristic (NAME_TO_KIND below) before
+// Tag rows carried their own category/color/order columns. It's kept as the
+// fallback for every tag that predates those columns (every real systeme.io
+// tag synced so far, e.g. "VIP") so their look and relative order doesn't
+// change. New tags — starting with the CRM-only "personal" ones managed
+// from Settings — carry an explicit category/color/order on the row instead
+// of needing a name added here.
 export type TagKind =
   | "fr"
   | "en"
@@ -79,10 +89,76 @@ export const TAG_KIND_COLORS: Record<TagKind, string> = {
   other: "bg-black/5 text-soft",
 };
 
-export function sortTags<T extends { tag: { name: string } }>(tags: T[]): T[] {
-  return [...tags].sort((a, b) => {
-    const rankDiff = TAG_KIND_RANK[tagKind(a.tag.name)] - TAG_KIND_RANK[tagKind(b.tag.name)];
-    if (rankDiff !== 0) return rankDiff;
-    return a.tag.name.localeCompare(b.tag.name);
-  });
+// The shape every tag-coloring/sorting helper below needs — a subset of the
+// Prisma Tag row, so callers can pass either the full row or a narrower
+// shape without extra mapping.
+export interface TagLike {
+  name: string;
+  category?: TagCategory | null;
+  color?: string | null;
+  order?: number | null;
+}
+
+// Same three-group layout the Contact form's tag picker renders (language,
+// then personal, then systeme.io), separated visually by a divider between
+// each — see groupTagsByCategory below.
+const CATEGORY_RANK: Record<TagCategory, number> = { LANGUAGE: 0, PERSONAL: 1, SYSTEME_IO: 2 };
+
+function effectiveCategory(tag: TagLike): TagCategory {
+  return tag.category ?? "SYSTEME_IO";
+}
+
+// PERSONAL tags sort by their admin-set `order` (Settings has up/down
+// reorder controls); LANGUAGE/SYSTEME_IO tags keep the legacy name-based
+// rank so pre-existing systeme.io tag ordering is unaffected by this.
+function sortKey(tag: TagLike): [number, number, string] {
+  const category = effectiveCategory(tag);
+  const secondary = category === "PERSONAL" ? (tag.order ?? 0) : TAG_KIND_RANK[tagKind(tag.name)];
+  return [CATEGORY_RANK[category], secondary, tag.name.toLowerCase()];
+}
+
+function compareTags(a: TagLike, b: TagLike): number {
+  const [ra, sa, na] = sortKey(a);
+  const [rb, sb, nb] = sortKey(b);
+  return ra - rb || sa - sb || na.localeCompare(nb);
+}
+
+export function sortTagLikes<T extends TagLike>(tags: T[]): T[] {
+  return [...tags].sort(compareTags);
+}
+
+export function sortTags<T extends { tag: TagLike }>(tags: T[]): T[] {
+  return [...tags].sort((a, b) => compareTags(a.tag, b.tag));
+}
+
+// Splits an already-sorted (or not) list into the three display groups —
+// used by the Contact form's tag checklist to render a divider between
+// each, mirroring the divider that used to sit only between language and
+// everything else.
+export function groupTagsByCategory<T extends TagLike>(tags: T[]): { language: T[]; personal: T[]; systemeIo: T[] } {
+  const sorted = sortTagLikes(tags);
+  return {
+    language: sorted.filter((t) => effectiveCategory(t) === "LANGUAGE"),
+    personal: sorted.filter((t) => effectiveCategory(t) === "PERSONAL"),
+    systemeIo: sorted.filter((t) => effectiveCategory(t) === "SYSTEME_IO"),
+  };
+}
+
+// A tag with its own `color` (hex) renders with that exact light background
+// and a fixed dark, readable text color via inline style; everything else
+// falls back to the legacy name-based Tailwind classes above.
+export function tagPillStyle(tag: TagLike): { className: string; style?: { backgroundColor: string; color: string } } {
+  if (tag.color) {
+    return { className: "", style: { backgroundColor: tag.color, color: "#1f2937" } };
+  }
+  return { className: TAG_KIND_COLORS[tagKind(tag.name)] };
+}
+
+// Whether this tag should ever be created/attached on systeme.io — gates
+// the push in addTagToContactWith (actions/contacts.ts). PERSONAL tags are
+// CRM-only organizational labels (e.g. "Famille", "Fournisseur") and never
+// touch systeme.io; LANGUAGE and SYSTEME_IO tags (the default for every tag
+// that existed before this category was added) keep today's behavior.
+export function isSystemeIoPushable(tag: TagLike): boolean {
+  return effectiveCategory(tag) !== "PERSONAL";
 }

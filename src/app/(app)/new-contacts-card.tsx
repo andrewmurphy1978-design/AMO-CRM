@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ContactStage } from "@prisma/client";
-import { tagKind, TAG_KIND_COLORS, isLanguageTag } from "@/lib/tag-colors";
+import { isLanguageTag, tagPillStyle, type TagLike } from "@/lib/tag-colors";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import ContactsIcon from "./contacts-icon";
@@ -70,7 +70,7 @@ export interface NewContactRow {
   email: string | null;
   phone: string | null;
   source: string | null;
-  tags: { tagId: string; tag: { name: string } }[];
+  tags: { tagId: string; tag: TagLike }[];
 }
 
 export interface NewContactsCardLabels {
@@ -144,13 +144,15 @@ function ContactRow({
         >
           {stageLabels[contact.stage]}
         </span>
-        {languageTags[0] && (
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(languageTags[0].tag.name)]}`}
-          >
-            {languageTags[0].tag.name}
-          </span>
-        )}
+        {languageTags[0] &&
+          (() => {
+            const style = tagPillStyle(languageTags[0].tag);
+            return (
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${style.className}`} style={style.style}>
+                {languageTags[0].tag.name}
+              </span>
+            );
+          })()}
       </div>
       <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
       <div className="mt-0.5 flex items-center justify-between gap-2">

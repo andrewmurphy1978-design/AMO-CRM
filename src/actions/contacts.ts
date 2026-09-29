@@ -11,8 +11,9 @@ import { countryToCode } from "@/lib/country-flag";
 import { normalizeRegionForCountry } from "@/lib/regions";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getValidAccessToken } from "@/lib/google";
-import { pushContactToGoogle, deleteGoogleContact, createGoogleContact } from "@/lib/google-contacts";
+import { pushContactToGoogle, deleteGoogleContact, createGoogleContact, syncGoogleContactGroups } from "@/lib/google-contacts";
 import { CONTACT_SYNC_APPS, type ContactSyncDirection } from "@/lib/contact-sync";
+import { isSystemeIoPushable } from "@/lib/tag-colors";
 
 // Google Contacts import (see google-contacts.ts) leaves email null for a
 // phone-only personal contact, and Contact.email is nullable in the schema
@@ -150,12 +151,13 @@ function readSocialLinks(formData: FormData): { platform: string; url: string }[
 // the Contact form's "+" button. A row is kept if any field beyond country
 // (the select always has some value) is filled in.
 function readExtraAddresses(formData: FormData) {
+  const descriptions = formData.getAll("extraAddressDescription").map(String);
   const addresses = formData.getAll("extraAddressAddress").map(String);
   const cities = formData.getAll("extraAddressCity").map(String);
   const states = formData.getAll("extraAddressState").map(String);
   const zips = formData.getAll("extraAddressZip").map(String);
   const countries = formData.getAll("extraAddressCountry").map(String);
-  const rows: { address: string; city: string; state: string; zip: string; country: string; order: number }[] = [];
+  const rows: { description: string | null; address: string; city: string; state: string; zip: string; country: string; order: number }[] = [];
   for (let i = 0; i < addresses.length; i++) {
     const address = addresses[i]?.trim() ?? "";
     const city = cities[i]?.trim() ?? "";
@@ -163,6 +165,7 @@ function readExtraAddresses(formData: FormData) {
     if (!address && !city && !zip) continue;
     const country = countries[i]?.trim() ?? "";
     rows.push({
+      description: descriptions[i]?.trim() || null,
       address,
       city,
       state: normalizeRegionForCountry(country, states[i]?.trim()) ?? "",
@@ -370,7 +373,7 @@ function readContactForm(formData: FormData) {
 // directly instead of each opening their own fresh connection. The
 // exported `addTagToContact` below is the entry point for callers that
 // don't have one yet (e.g. a standalone "add tag" button).
-async function addTagToContactWith(db: PrismaClient, contactId: string, tagName: string) {
+async function addTagToContactWith(db: PrismaClient, contactId: string, tagName: string, actingUserId: string) {
   const name = tagName.trim();
   if (!name) return;
 
@@ -386,37 +389,46 @@ async function addTagToContactWith(db: PrismaClient, contactId: string, tagName:
     create: { contactId, tagId: tag.id },
   });
 
+  const contact = await db.contact.findUnique({ where: { id: contactId } });
+
   // Best-effort push back to systeme.io — never fails the CRM save itself.
-  try {
-    const contact = await db.contact.findUnique({ where: { id: contactId } });
-    if (contact?.systemeIoId) {
-      const client = await getSystemeIoClient(db);
-      if (client) {
-        let systemeIoTagId = tag.systemeIoId;
-        if (!systemeIoTagId) {
-          const created = await client.createTag(tag.name);
-          systemeIoTagId = created.id;
-          await db.tag.update({ where: { id: tag.id }, data: { systemeIoId: created.id } });
+  // PERSONAL tags (e.g. "Famille", "Fournisseur" — managed from Settings)
+  // are CRM-only and never created/attached on systeme.io; see
+  // isSystemeIoPushable in tag-colors.ts.
+  if (isSystemeIoPushable(tag)) {
+    try {
+      if (contact?.systemeIoId) {
+        const client = await getSystemeIoClient(db);
+        if (client) {
+          let systemeIoTagId = tag.systemeIoId;
+          if (!systemeIoTagId) {
+            const created = await client.createTag(tag.name);
+            systemeIoTagId = created.id;
+            await db.tag.update({ where: { id: tag.id }, data: { systemeIoId: created.id } });
+          }
+          await client.addTagToContact(contact.systemeIoId, systemeIoTagId);
         }
-        await client.addTagToContact(contact.systemeIoId, systemeIoTagId);
       }
+    } catch {
+      // Tag is still saved locally even if the systeme.io push fails.
     }
-  } catch {
-    // Tag is still saved locally even if the systeme.io push fails.
   }
+
+  await syncContactGoogleGroupsWith(db, contactId, contact?.googleContactId, actingUserId);
 
   revalidatePath(`/contacts/${contactId}`);
 }
 
-async function removeTagFromContactWith(db: PrismaClient, contactId: string, tagId: string) {
+async function removeTagFromContactWith(db: PrismaClient, contactId: string, tagId: string, actingUserId: string) {
   await db.contactTag.delete({
     where: { contactId_tagId: { contactId, tagId } },
   });
 
+  const contact = await db.contact.findUnique({ where: { id: contactId } });
+  const tag = await db.tag.findUnique({ where: { id: tagId } });
+
   // Best-effort push back to systeme.io — never fails the CRM save itself.
   try {
-    const contact = await db.contact.findUnique({ where: { id: contactId } });
-    const tag = await db.tag.findUnique({ where: { id: tagId } });
     if (contact?.systemeIoId && tag?.systemeIoId) {
       const client = await getSystemeIoClient(db);
       if (client) {
@@ -427,22 +439,42 @@ async function removeTagFromContactWith(db: PrismaClient, contactId: string, tag
     // Non-fatal — the tag is still removed locally either way.
   }
 
+  await syncContactGoogleGroupsWith(db, contactId, contact?.googleContactId, actingUserId);
+
   revalidatePath(`/contacts/${contactId}`);
 }
 
-async function syncContactTagsWith(db: PrismaClient, contactId: string, desiredNames: string[]) {
+// Best-effort — mirrors this contact's full current tag set (every
+// category, per the "assign all tags to Google" ask) onto its Google
+// contact groups. Called after every tag add/remove so Google stays in
+// sync even outside a full contact-form save. Uses the acting user's own
+// Google connection (whoever is logged in and made the change), same as
+// every other Google push in this file.
+async function syncContactGoogleGroupsWith(db: PrismaClient, contactId: string, googleContactId: string | null | undefined, actingUserId: string) {
+  if (!googleContactId) return;
+  try {
+    const currentTags = await db.contactTag.findMany({ where: { contactId }, include: { tag: true } });
+    const accessToken = await getValidAccessToken(actingUserId, db);
+    if (!accessToken) return;
+    await syncGoogleContactGroups(accessToken, googleContactId, currentTags.map((ct) => ct.tag.name));
+  } catch {
+    // Best-effort — never blocks the tag change itself.
+  }
+}
+
+async function syncContactTagsWith(db: PrismaClient, contactId: string, desiredNames: string[], actingUserId: string) {
   const current = await db.contactTag.findMany({ where: { contactId }, include: { tag: true } });
   const currentNames = new Set(current.map((ct) => ct.tag.name));
   const desiredSet = new Set(desiredNames);
 
   for (const name of desiredNames) {
     if (!currentNames.has(name)) {
-      await addTagToContactWith(db, contactId, name);
+      await addTagToContactWith(db, contactId, name, actingUserId);
     }
   }
   for (const ct of current) {
     if (!desiredSet.has(ct.tag.name)) {
-      await removeTagFromContactWith(db, contactId, ct.tagId);
+      await removeTagFromContactWith(db, contactId, ct.tagId, actingUserId);
     }
   }
 }
@@ -611,10 +643,26 @@ export async function createContact(
 
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
     for (const name of desiredTags) {
-      await addTagToContactWith(db, contact.id, name);
+      await addTagToContactWith(db, contact.id, name, session.user.id);
     }
 
     const syncStatus = await syncMissingAppLinksWith(db, session, contact, appSyncRows, t);
+
+    // Assign every tag (any category) to the Google contact groups now that
+    // syncMissingAppLinksWith may have just linked this brand-new contact
+    // to Google — each addTagToContactWith call above no-opped on this
+    // since there was no googleContactId yet at that point.
+    if (desiredTags.length > 0) {
+      const googleContactId = (await db.contact.findUnique({ where: { id: contact.id }, select: { googleContactId: true } }))?.googleContactId;
+      if (googleContactId) {
+        try {
+          const accessToken = await getValidAccessToken(session.user.id, db);
+          if (accessToken) await syncGoogleContactGroups(accessToken, googleContactId, desiredTags);
+        } catch {
+          // Best-effort — never blocks contact creation.
+        }
+      }
+    }
 
     await db.activityLogEntry.create({
       data: {
@@ -734,7 +782,7 @@ export async function updateContact(
     ]);
 
     const desiredTags = formData.getAll("tags").map(String).filter(Boolean);
-    await syncContactTagsWith(db, contactId, desiredTags);
+    await syncContactTagsWith(db, contactId, desiredTags, session.user.id);
 
     // Best-effort push back to systeme.io — never fails the CRM save itself.
     // Reported back either way (success or failure) so "Contact updated"
@@ -790,6 +838,24 @@ export async function updateContact(
     // e.g. sync to Google Contacts was just turned on for a contact that
     // has never been pushed there before.
     syncStatus += await syncMissingAppLinksWith(db, session, updated, appSyncRows, t);
+
+    // Authoritative Google group sync for this save — assigns every one of
+    // this contact's current tags (every category, per the "assign all
+    // tags" ask) as Google contact groups, whether the contact was already
+    // linked or was just linked above. The per-tag syncs inside
+    // syncContactTagsWith above already cover live TagManager edits
+    // elsewhere; this is what makes a plain "Save" on this form correct too.
+    if (googleSync?.enabled && googleSync.direction !== "FROM_APP") {
+      const finalGoogleContactId = updated.googleContactId ?? (await db.contact.findUnique({ where: { id: contactId }, select: { googleContactId: true } }))?.googleContactId;
+      if (finalGoogleContactId) {
+        try {
+          const accessToken = await getValidAccessToken(session.user.id, db);
+          if (accessToken) await syncGoogleContactGroups(accessToken, finalGoogleContactId, desiredTags);
+        } catch {
+          // Best-effort — the field-level push above already reported sync status.
+        }
+      }
+    }
 
     return { syncStatus };
   });
@@ -863,13 +929,13 @@ export async function deleteContact(contactId: string): Promise<never> {
 export async function addTagToContact(contactId: string, tagName: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
-  await withScopedPrismaClient((db) => addTagToContactWith(db, contactId, tagName));
+  await withScopedPrismaClient((db) => addTagToContactWith(db, contactId, tagName, session.user.id));
 }
 
 export async function removeTagFromContact(contactId: string, tagId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
-  await withScopedPrismaClient((db) => removeTagFromContactWith(db, contactId, tagId));
+  await withScopedPrismaClient((db) => removeTagFromContactWith(db, contactId, tagId, session.user.id));
 }
 
 export async function addContactNote(contactId: string, formData: FormData) {

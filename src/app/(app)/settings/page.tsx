@@ -21,6 +21,7 @@ import PersonalWatchForm from "./personal-watch-form";
 import EmailAddressColorForm from "./email-address-color-form";
 import EmailScreeningForm from "./email-screening-form";
 import ApiKeyVaultForm from "./api-key-vault-form";
+import TagsForm from "./tags-form";
 import ServicePriceListForm from "./service-price-list-form";
 import BillingSettingsForm from "./billing-settings-form";
 import EmailComposePreferencesForm from "./email-compose-preferences-form";
@@ -92,6 +93,7 @@ export default async function SettingsPage({
     serviceItems,
     billingSettings,
     emailSignatures,
+    allTags,
   } = await withScopedPrismaClient(async (db) => {
       const currentUser = session
         ? await db.user.findUnique({
@@ -153,6 +155,7 @@ export default async function SettingsPage({
         ? await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } })
         : null;
       const emailSignatures = isAdmin ? await db.emailSignature.findMany({ orderBy: { createdAt: "asc" } }) : [];
+      const allTags = isAdmin ? await db.tag.findMany() : [];
       return {
         currentUser,
         integration,
@@ -170,6 +173,7 @@ export default async function SettingsPage({
         serviceItems,
         billingSettings,
         emailSignatures,
+        allTags,
       };
     });
   const hour12 = currentUser?.timeFormat === "HOUR12";
@@ -486,6 +490,9 @@ export default async function SettingsPage({
       </SettingsCard>
 
       <SettingsGroupLabel>{t.settings.groupDataTools}</SettingsGroupLabel>
+      <SettingsCard title={t.settings.tagsTitle} description={t.settings.tagsDesc}>
+        <TagsForm tags={allTags} lang={lang} />
+      </SettingsCard>
       <SettingsCard title={t.contactDataFixes.title}>
         <ContactDataFixesForm lang={lang} />
       </SettingsCard>

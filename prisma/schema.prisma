@@ -360,6 +360,10 @@ model ContactAddress {
   id        String   @id @default(cuid())
   contactId String
   contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  // Free text label (e.g. "Cottage", "Office", "Storage unit") — extra
+  // addresses beyond the main one are otherwise indistinguishable from each
+  // other at a glance.
+  description String?
   address   String?
   city      String?
   state     String?
@@ -670,12 +674,37 @@ model Booking {
   @@map("bookings")
 }
 
-// Tag definitions, mirroring systeme.io tags (each has a systeme.io id/name).
+// Where a tag lives for display grouping and for deciding which external
+// app(s) it gets pushed to on contact save (see addTagToContactWith /
+// pushContactToGoogle in actions/contacts.ts):
+// - LANGUAGE: the fr/en tags — pushed to both systeme.io and Google.
+// - SYSTEME_IO: mirrors an actual systeme.io tag — pushed to both. This is
+//   the default so every tag synced from systeme.io before this category
+//   existed keeps its current (push-to-systeme.io) behavior unchanged.
+// - PERSONAL: a CRM-only organizational tag (e.g. "Famille", "Fournisseur")
+//   — pushed to Google Contacts only, never created/attached on systeme.io.
+enum TagCategory {
+  LANGUAGE
+  PERSONAL
+  SYSTEME_IO
+}
+
+// Tag definitions, mirroring systeme.io tags (each has a systeme.io id/name)
+// plus CRM-only personal tags managed from Settings.
 model Tag {
-  id          String  @id @default(cuid())
-  systemeIoId Int?    @unique
-  name        String  @unique
-  color       String? // for UI badges
+  id          String      @id @default(cuid())
+  systemeIoId Int?        @unique
+  name        String      @unique
+  // Hex background for a light-colored pill (e.g. "#dbeafe"); a fixed dark
+  // text color is used with it. When unset, rendering falls back to the
+  // legacy name-based lookup in tag-colors.ts (tagKind/TAG_KIND_COLORS) so
+  // existing systeme.io tags keep their current look without a backfill.
+  color       String?
+  category    TagCategory @default(SYSTEME_IO)
+  // Manual display order within its category — set from the Settings tag
+  // manager (reorder buttons), only meaningful for PERSONAL tags today;
+  // LANGUAGE/SYSTEME_IO tags keep sorting by the legacy name-based rank.
+  order       Int         @default(0)
 
   contacts ContactTag[]
 

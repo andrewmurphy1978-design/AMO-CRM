@@ -477,3 +477,68 @@ export async function deleteGoogleContact(accessToken: string, resourceName: str
   if (!res.ok) return { error: await describeError(res) };
   return {};
 }
+
+// NOTE: unverified against a real Google account — this sandbox has no
+// network access to people.googleapis.com. Written strictly per Google's
+// documented People API v1 shapes (contactGroups.create,
+// contactGroups.members.modify), the same level of confidence as the
+// systeme.io createContact method in systemeio.ts. Test against a real
+// connected account before relying on it.
+async function createContactGroup(accessToken: string, name: string): Promise<string | null> {
+  const res = await fetch("https://people.googleapis.com/v1/contactGroups", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ contactGroup: { name } }),
+  });
+  if (!res.ok) return null;
+  const created = (await res.json()) as { resourceName?: string };
+  return created.resourceName ?? null;
+}
+
+// Adds this person to every named group, creating any group that doesn't
+// exist yet under that exact name. Deliberately additive-only — it never
+// removes a membership, so a group the contact belongs to for reasons
+// outside this CRM's own tags (set up directly in Google Contacts) is never
+// touched. Called after every tag add/remove and after every contact save,
+// per the "assign all tags to Google" behavior in actions/contacts.ts.
+export async function syncGoogleContactGroups(accessToken: string, personResourceName: string, tagNames: string[]): Promise<void> {
+  const names = [...new Set(tagNames.map((n) => n.trim()).filter(Boolean))];
+  if (names.length === 0) return;
+
+  const existingGroups = await listUserContactGroupNames(accessToken); // resourceName -> name
+  const nameToResourceName = new Map<string, string>();
+  for (const [resourceName, name] of existingGroups) {
+    if (!nameToResourceName.has(name)) nameToResourceName.set(name, resourceName);
+  }
+
+  const resourceNames: string[] = [];
+  for (const name of names) {
+    let resourceName = nameToResourceName.get(name);
+    if (!resourceName) {
+      resourceName = (await createContactGroup(accessToken, name)) ?? undefined;
+      if (resourceName) nameToResourceName.set(name, resourceName);
+    }
+    if (resourceName) resourceNames.push(resourceName);
+  }
+  if (resourceNames.length === 0) return;
+
+  const personRes = await fetch(`https://people.googleapis.com/v1/${personResourceName}?personFields=memberships`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!personRes.ok) return;
+  const person = (await personRes.json()) as { memberships?: RawMembership[] };
+  const currentGroupResourceNames = new Set(
+    (person.memberships ?? [])
+      .map((m) => m.contactGroupMembership?.contactGroupResourceName)
+      .filter((v): v is string => Boolean(v))
+  );
+
+  for (const resourceName of resourceNames) {
+    if (currentGroupResourceNames.has(resourceName)) continue;
+    await fetch(`https://people.googleapis.com/v1/${resourceName}/members:modify`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ resourceNamesToAdd: [personResourceName] }),
+    }).catch(() => {});
+  }
+}

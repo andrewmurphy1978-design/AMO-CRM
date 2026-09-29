@@ -8,7 +8,7 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { COUNTRIES } from "@/lib/countries";
 import { countryToCode } from "@/lib/country-flag";
 import { regionOptionsForCountry, normalizeRegionForCountry } from "@/lib/regions";
-import { tagKind, TAG_KIND_COLORS, TAG_KIND_RANK, isLanguageTag } from "@/lib/tag-colors";
+import { groupTagsByCategory, tagPillStyle, type TagLike } from "@/lib/tag-colors";
 import { normalizeFieldSlug, SERVICES_REQUIRED_DEFAULT_SLUG, PROJECT_GOAL_DEFAULT_SLUG } from "@/lib/custom-field-slugs";
 import { COMPANY_TYPES } from "@/lib/company-types";
 import { stateLabelForCountry, zipLabelForCountry } from "@/lib/address-labels";
@@ -24,7 +24,14 @@ import LocalTimeCard from "@/components/local-time-card";
 import ContactCredentialsCard, { type ContactCredentialRow } from "./[id]/contact-credentials-card";
 import { CONTACT_SYNC_APPS, type ContactSyncDirection } from "@/lib/contact-sync";
 
-type ExtraAddress = { address?: string | null; city?: string | null; state?: string | null; zip?: string | null; country?: string | null };
+type ExtraAddress = {
+  description?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  country?: string | null;
+};
 type AppHandleRow = { app: string; handle: string };
 type FieldValueRow = { fieldSlug: string; value: string | null };
 type DomainRow = {
@@ -149,7 +156,7 @@ export default function ContactForm({
   defaultValues?: ContactFormValues;
   submitLabel: string;
   lang: Lang;
-  allTags: { id: string; name: string }[];
+  allTags: ({ id: string } & TagLike)[];
   currentTags?: string[];
   title: ReactNode;
   hour12: boolean;
@@ -256,13 +263,13 @@ export default function ContactForm({
   // given a fixed reference date, so no server/client hydration mismatch).
   const [timeZoneOptions] = useState(() => getWorldTimeZoneOptions());
 
-  // Language tags first (matching the Contacts list page's own ordering),
-  // then everything else, each colored the same way it is there.
-  const sortedTags = [...allTags].sort(
-    (a, b) => TAG_KIND_RANK[tagKind(a.name)] - TAG_KIND_RANK[tagKind(b.name)] || a.name.localeCompare(b.name)
-  );
-  const languageTagList = sortedTags.filter((tag) => isLanguageTag(tag.name));
-  const otherTagList = sortedTags.filter((tag) => !isLanguageTag(tag.name));
+  // Three groups, matching the Contacts list page's own ordering/coloring:
+  // language tags, then the CRM-only "personal" tags (Settings-managed, own
+  // order), then everything from systeme.io — a divider is drawn between
+  // each non-empty pair, same as the single language/everything-else
+  // divider this used to be.
+  const { language: languageTagList, personal: personalTagList, systemeIo: systemeIoTagList } = groupTagsByCategory(allTags);
+  const sortedTags = [...languageTagList, ...personalTagList, ...systemeIoTagList];
 
   // Extra phones/emails beyond the first two — each row keeps a stable id
   // (independent of array position) so removing one from the middle doesn't
@@ -463,10 +470,23 @@ export default function ContactForm({
                   }
                 />
               ))}
-              {languageTagList.length > 0 && otherTagList.length > 0 && (
+              {languageTagList.length > 0 && personalTagList.length > 0 && (
                 <div className="my-2 border-t-2 border-dashed border-ink/20" />
               )}
-              {otherTagList.map((tag) => (
+              {personalTagList.map((tag) => (
+                <TagCheckbox
+                  key={tag.id}
+                  tag={tag}
+                  checked={selectedTags.includes(tag.name)}
+                  onToggle={() =>
+                    setSelectedTags((prev) => (prev.includes(tag.name) ? prev.filter((n) => n !== tag.name) : [...prev, tag.name]))
+                  }
+                />
+              ))}
+              {(languageTagList.length > 0 || personalTagList.length > 0) && systemeIoTagList.length > 0 && (
+                <div className="my-2 border-t-2 border-dashed border-ink/20" />
+              )}
+              {systemeIoTagList.map((tag) => (
                 <TagCheckbox
                   key={tag.id}
                   tag={tag}
@@ -758,19 +778,23 @@ export default function ContactForm({
             {extraAddresses.map((row) => (
               <AddressGroup
                 key={row.id}
-                title={t.contactForm.additionalAddressTitle}
+                title={row.description?.trim() || t.contactForm.additionalAddressTitle}
                 prefix="extraAddress"
                 t={t}
                 lang={lang}
                 values={row}
                 onRemove={() => setExtraAddresses((rows) => rows.filter((r) => r.id !== row.id))}
                 removeLabel={t.contactForm.removeEntry}
+                showDescription
               />
             ))}
             <button
               type="button"
               onClick={() =>
-                setExtraAddresses((rows) => [...rows, { id: nextAddressId.current++, address: "", city: "", state: "", zip: "", country: "Canada" }])
+                setExtraAddresses((rows) => [
+                  ...rows,
+                  { id: nextAddressId.current++, description: "", address: "", city: "", state: "", zip: "", country: "Canada" },
+                ])
               }
               className="text-xs font-semibold text-amo-lime hover:underline"
             >
@@ -1147,12 +1171,16 @@ function TagCheckbox({
   checked,
   onToggle,
 }: {
-  tag: { id: string; name: string };
+  tag: { id: string } & TagLike;
   checked: boolean;
   onToggle: () => void;
 }) {
+  const { className, style } = tagPillStyle(tag);
   return (
-    <label className={`mt-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm first:mt-0 ${TAG_KIND_COLORS[tagKind(tag.name)]}`}>
+    <label
+      className={`mt-1 flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm first:mt-0 ${className}`}
+      style={style}
+    >
       <input type="checkbox" checked={checked} onChange={onToggle} className="h-4 w-4 rounded border-card-border accent-amo-lime" />
       {tag.name}
     </label>
@@ -1274,6 +1302,7 @@ function AddressGroup({
   children,
   onRemove,
   removeLabel,
+  showDescription,
 }: {
   title: string;
   prefix: "" | "billing" | "extraAddress";
@@ -1289,6 +1318,9 @@ function AddressGroup({
   children?: React.ReactNode;
   onRemove?: () => void;
   removeLabel?: string;
+  // Only extra addresses get a free-text Description ("Cottage", "Office")
+  // — the main and billing addresses are already unambiguous.
+  showDescription?: boolean;
 }) {
   const field = (suffix: string) => (prefix ? `${prefix}${suffix}` : suffix.charAt(0).toLowerCase() + suffix.slice(1));
   const get = (suffix: string): string => {
@@ -1320,6 +1352,17 @@ function AddressGroup({
         )}
       </div>
       <div className="mt-3 grid gap-4">
+        {showDescription && (
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.addressDescription}</label>
+            <input
+              name={field("Description")}
+              defaultValue={get("Description")}
+              placeholder={t.contactForm.addressDescriptionPlaceholder}
+              className={FIELD_CLASS}
+            />
+          </div>
+        )}
         <div>
           <label className={LABEL_CLASS}>{t.contactForm.addressLine}</label>
           <input name={field("Address")} defaultValue={get("Address")} className={FIELD_CLASS} />

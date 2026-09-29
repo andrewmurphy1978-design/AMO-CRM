@@ -7,7 +7,7 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import { getHour12 } from "@/lib/time-format";
 import PageHeader from "../page-header";
 import ContactsIcon from "../contacts-icon";
-import { tagKind, TAG_KIND_COLORS, sortTags, isLanguageTag } from "@/lib/tag-colors";
+import { sortTags, isLanguageTag, tagPillStyle } from "@/lib/tag-colors";
 import { countryFullName } from "@/lib/country-flag";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
@@ -106,17 +106,17 @@ function SortableHeader({
   );
 }
 
-function TagPills({ tags, vertical }: { tags: { tagId: string; tag: { name: string } }[]; vertical?: boolean }) {
+function TagPills({ tags, vertical }: { tags: { tagId: string; tag: import("@/lib/tag-colors").TagLike }[]; vertical?: boolean }) {
   return (
     <div className={vertical ? "flex flex-col items-start gap-1" : "flex flex-wrap gap-1"}>
-      {sortTags(tags).map((ct) => (
-        <span
-          key={ct.tagId}
-          className={`rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(ct.tag.name)]}`}
-        >
-          {ct.tag.name}
-        </span>
-      ))}
+      {sortTags(tags).map((ct) => {
+        const style = tagPillStyle(ct.tag);
+        return (
+          <span key={ct.tagId} className={`rounded-full px-2 py-0.5 text-xs font-medium ${style.className}`} style={style.style}>
+            {ct.tag.name}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -333,11 +333,15 @@ export default async function ContactsPage({
                 <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[contact.stage]}`}>
                   {STAGE_LABELS[contact.stage]}
                 </span>
-                {languageTags[0] && (
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${TAG_KIND_COLORS[tagKind(languageTags[0].tag.name)]}`}>
-                    {languageTags[0].tag.name}
-                  </span>
-                )}
+                {languageTags[0] &&
+                  (() => {
+                    const style = tagPillStyle(languageTags[0].tag);
+                    return (
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${style.className}`} style={style.style}>
+                        {languageTags[0].tag.name}
+                      </span>
+                    );
+                  })()}
               </div>
               <p className="mt-1 truncate text-sm text-ink/70">{contact.email}</p>
               <div className="mt-0.5 flex items-center justify-between gap-2">
