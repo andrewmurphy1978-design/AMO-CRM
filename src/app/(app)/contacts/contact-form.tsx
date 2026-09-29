@@ -1308,6 +1308,7 @@ export function AddressGroup({
   onRemove,
   removeLabel,
   showDescription,
+  stacked,
 }: {
   title: string;
   prefix: "" | "billing" | "extraAddress";
@@ -1326,6 +1327,14 @@ export function AddressGroup({
   // Only extra addresses get a free-text Description ("Cottage", "Office")
   // — the main and billing addresses are already unambiguous.
   showDescription?: boolean;
+  // City/Province and Zip/Country normally pair up side by side once the
+  // viewport is wide enough — but Billing sits in a column that's already
+  // halved by the Addresses dialog's own 2-column split, so that same
+  // sm:grid-cols-2 pairing leaves each field too narrow for real values
+  // ("Sainte-Agathe-des-Monts", "Quebec (QC)") and pushes the dialog wider
+  // than its box. Stacking every field one-per-row there keeps each one
+  // full width instead.
+  stacked?: boolean;
 }) {
   const field = (suffix: string) => (prefix ? `${prefix}${suffix}` : suffix.charAt(0).toLowerCase() + suffix.slice(1));
   const get = (suffix: string): string => {
@@ -1372,7 +1381,7 @@ export function AddressGroup({
           <label className={LABEL_CLASS}>{t.contactForm.addressLine}</label>
           <input name={field("Address")} defaultValue={get("Address")} className={FIELD_CLASS} />
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className={`grid grid-cols-1 gap-4 ${stacked ? "" : "sm:grid-cols-2"}`}>
           <Field label={t.contactForm.city} name={field("City")} defaultValue={get("City")} />
           {regionOptions ? (
             <div>
@@ -1390,7 +1399,7 @@ export function AddressGroup({
             <Field label={stateLabelForCountry(country, lang)} name={field("State")} defaultValue={get("State")} />
           )}
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className={`grid grid-cols-1 gap-4 ${stacked ? "" : "sm:grid-cols-2"}`}>
           <Field label={zipLabelForCountry(country, lang)} name={field("Zip")} defaultValue={get("Zip")} />
           <div>
             <label className={LABEL_CLASS}>{t.contactForm.country}</label>
