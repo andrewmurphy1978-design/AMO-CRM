@@ -14,7 +14,7 @@ import type { Lang } from "@/lib/i18n/dictionaries";
 import HeaderSportsWidget, { type SportsHeaderPick } from "./header-sports-widget";
 import type { SportsCardSnapshot, SportsLabels } from "./sports-card";
 
-interface SportsTeamPicks {
+export interface SportsTeamPicks {
   nhl: string;
   mlb: string;
   nfl: string;
@@ -40,37 +40,47 @@ function toPick(
   };
 }
 
-async function loadPick(
-  league: SportsLeague,
-  teams: SportsTeamPicks,
-  dateLocale: ReturnType<typeof getDateLocale>,
-): Promise<{ pick: SportsHeaderPick; cardSnapshot: SportsCardSnapshot }> {
-  switch (league) {
-    case "MLB": {
-      const snapshot = await getMlbSnapshot(Number(teams.mlb));
-      return { pick: toPick(snapshot, dateLocale), cardSnapshot: { league: "MLB", mlb: snapshot } };
-    }
-    case "NFL": {
-      const snapshot = await getNflSnapshot(teams.nfl);
-      return { pick: toPick(snapshot, dateLocale), cardSnapshot: { league: "NFL", nfl: snapshot } };
-    }
-    case "CFL": {
-      const snapshot = await getCflSnapshot(teams.cfl);
-      return { pick: toPick(snapshot, dateLocale), cardSnapshot: { league: "CFL", cfl: snapshot } };
-    }
-    case "MLS": {
-      const snapshot = await getMlsSnapshot(teams.mls);
-      return { pick: toPick(snapshot, dateLocale), cardSnapshot: { league: "MLS", mls: snapshot } };
-    }
-    case "NBA": {
-      const snapshot = await getNbaSnapshot(teams.nba);
-      return { pick: toPick(snapshot, dateLocale), cardSnapshot: { league: "NBA", nba: snapshot } };
-    }
-    default: {
-      const snapshot = await getNhlSnapshot(teams.nhl);
-      return { pick: toPick(snapshot, dateLocale), cardSnapshot: { league: "NHL", nhl: snapshot } };
-    }
+function pickBase(snapshot: SportsCardSnapshot): { lastGame: SportsTeamGame | null; teamLogo: string; teamName: string } {
+  switch (snapshot.league) {
+    case "NHL":
+      return snapshot.nhl;
+    case "MLB":
+      return snapshot.mlb;
+    case "NFL":
+      return snapshot.nfl;
+    case "CFL":
+      return snapshot.cfl;
+    case "MLS":
+      return snapshot.mls;
+    case "NBA":
+      return snapshot.nba;
   }
+}
+
+// Fetches every league's snapshot in parallel — six independent external API
+// calls, not Postgres connections, so unlike this app's DB queries there's
+// no Cloudflare Hyperdrive connection-limit reason to serialize these — and
+// returns them in SPORTS_LEAGUE_OPTIONS order. The expanded drop-down card
+// (sports-card.tsx) now shows every league at once, so this always loads all
+// six rather than just the one or two the user has picked to show in the
+// compact header pill.
+async function loadAllSnapshots(teams: SportsTeamPicks): Promise<SportsCardSnapshot[]> {
+  const [nhl, mlb, nfl, cfl, mls, nba] = await Promise.all([
+    getNhlSnapshot(teams.nhl),
+    getMlbSnapshot(Number(teams.mlb)),
+    getNflSnapshot(teams.nfl),
+    getCflSnapshot(teams.cfl),
+    getMlsSnapshot(teams.mls),
+    getNbaSnapshot(teams.nba),
+  ]);
+  return [
+    { league: "NHL", nhl },
+    { league: "MLB", mlb },
+    { league: "NFL", nfl },
+    { league: "CFL", cfl },
+    { league: "MLS", mls },
+    { league: "NBA", nba },
+  ];
 }
 
 // Dedicated async Server Component so this (real network) fetch sits behind
@@ -79,11 +89,10 @@ async function loadPick(
 // user's own picks (see src/lib/dashboard-sports-picks.ts), resolved by the
 // caller inside its own withScopedPrismaClient block rather than here, so
 // this component never opens its own Prisma client.
-// `leagueMobile` can name a *different* league to show on the mobile pill
-// than the desktop one — when it does, this fetches both leagues' data
-// (one extra network call) so each pill gets its own game and its own
-// drop-down card; when it matches (the common case), only one fetch runs
-// and both pills share it.
+// `league`/`leagueMobile` only pick which league's score shows in the
+// compact header pill on desktop vs. mobile — the expanded drop-down card
+// both pills open shows every league regardless, built from the one shared
+// `loadAllSnapshots` fetch above.
 export default async function SportsHeaderServer({
   league,
   teams,
@@ -102,14 +111,19 @@ export default async function SportsHeaderServer({
   unavailableLabel: string;
 }) {
   const dateLocale = getDateLocale(lang);
-  const desktop = await loadPick(league, teams, dateLocale);
-  const mobile = leagueMobile === league ? desktop : await loadPick(leagueMobile, teams, dateLocale);
+  const allSnapshots = await loadAllSnapshots(teams);
+  const byLeague = new Map(allSnapshots.map((s) => [s.league, s]));
+
+  const desktopSnapshot = byLeague.get(league) ?? allSnapshots[0];
+  const mobileSnapshot = byLeague.get(leagueMobile) ?? desktopSnapshot;
+  const desktopPick = toPick(pickBase(desktopSnapshot), dateLocale);
+  const mobilePick = toPick(pickBase(mobileSnapshot), dateLocale);
+
   return (
     <HeaderSportsWidget
-      desktop={desktop.pick}
-      desktopCardSnapshot={desktop.cardSnapshot}
-      mobile={mobile.pick}
-      mobileCardSnapshot={mobile.cardSnapshot}
+      desktop={desktopPick}
+      mobile={mobilePick}
+      allSnapshots={allSnapshots}
       hour12={hour12}
       lang={lang}
       cardLabels={cardLabels}

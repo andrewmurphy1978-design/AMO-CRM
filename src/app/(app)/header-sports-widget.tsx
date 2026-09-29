@@ -90,29 +90,28 @@ const PANEL_CLASS =
 // logos and the final score of the picked league/team's most recently
 // played game (see src/lib/dashboard-sports-picks.ts for the league/team
 // picker in Settings). Clicking it opens the complete Sports card
-// (sports-card.tsx) as a drop-down, same pattern as Markets/News, so
-// Last game / Next game (and the postseason series view for MLB) are
-// still available even though the pill itself shows only one score.
+// (sports-card.tsx) as a drop-down, same pattern as Markets/News/World
+// Clock — every configured item shows in the expanded panel regardless of
+// which one the compact pill itself previews, so here that means every
+// league (not just the one/two picked to show in the pill).
 //
-// `desktop`/`mobile` can be different leagues (see Settings' "League shown
-// on mobile" picker) — two independent trigger+drop-down pairs are
-// rendered, one hidden at each breakpoint, each wired to its own snapshot
-// and its own open/closed state, so a click always opens the game that's
-// actually visible.
+// `desktop`/`mobile` can preview a different league in the compact pill
+// (see Settings' "League shown on mobile" picker) — two independent
+// trigger+drop-down pairs are rendered, one hidden at each breakpoint, each
+// wired to its own open/closed state so a click always opens the pill that
+// was actually clicked. Both drop-downs show the same `allSnapshots` list.
 export default function HeaderSportsWidget({
   desktop,
-  desktopCardSnapshot,
   mobile,
-  mobileCardSnapshot,
+  allSnapshots,
   hour12,
   lang,
   cardLabels,
   unavailableLabel,
 }: {
   desktop: SportsHeaderPick;
-  desktopCardSnapshot: SportsCardSnapshot | null;
   mobile: SportsHeaderPick;
-  mobileCardSnapshot: SportsCardSnapshot | null;
+  allSnapshots: SportsCardSnapshot[];
   hour12: boolean;
   lang: Lang;
   cardLabels: SportsLabels;
@@ -144,7 +143,7 @@ export default function HeaderSportsWidget({
         />
         {openDesktop && (
           <div className={PANEL_CLASS}>
-            <SportsCard initial={desktopCardSnapshot} hour12={hour12} lang={lang} labels={cardLabels} />
+            <SportsCard initial={allSnapshots} hour12={hour12} lang={lang} labels={cardLabels} />
           </div>
         )}
       </div>
@@ -158,7 +157,7 @@ export default function HeaderSportsWidget({
         />
         {openMobile && (
           <div className={PANEL_CLASS}>
-            <SportsCard initial={mobileCardSnapshot} hour12={hour12} lang={lang} labels={cardLabels} />
+            <SportsCard initial={allSnapshots} hour12={hour12} lang={lang} labels={cardLabels} />
           </div>
         )}
       </div>

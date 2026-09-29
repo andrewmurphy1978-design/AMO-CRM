@@ -166,69 +166,64 @@ function SeriesGameRow({
   );
 }
 
-// Full Sports card — shown as a click-to-open drop-down from the Dashboard
-// header's compact pill (header-sports-widget.tsx), same pattern as
-// Markets/News. Unlike the old full-width dashboard card this replaced,
-// it shows only the one league/team picked in Settings (see
-// src/lib/dashboard-sports-picks.ts) rather than NHL + MLB side by side.
-export default function SportsCard({
-  initial,
+function simpleSnapshotOf(snapshot: SportsCardSnapshot): TeamSnapshot | null {
+  switch (snapshot.league) {
+    case "NHL":
+      return snapshot.nhl;
+    case "NFL":
+      return snapshot.nfl;
+    case "CFL":
+      return snapshot.cfl;
+    case "MLS":
+      return snapshot.mls;
+    case "NBA":
+      return snapshot.nba;
+    case "MLB":
+      return null;
+  }
+}
+
+// One league's block inside the drop-down — every league renders here now
+// (see SportsCard below), not just the one picked in Settings for the
+// compact header pill. Next Game only shows at sm+ (`hidden sm:block` on
+// its own cell, not a prop) so the same markup self-adapts whichever pill's
+// panel is currently showing it, without SportsCard needing to know which
+// instance it is.
+function LeagueSection({
+  snapshot,
   hour12,
-  lang,
+  dateLocale,
   labels,
 }: {
-  initial: SportsCardSnapshot | null;
+  snapshot: SportsCardSnapshot;
   hour12: boolean;
-  lang: Lang;
+  dateLocale: ReturnType<typeof getDateLocale>;
   labels: SportsLabels;
 }) {
-  const [snapshot, setSnapshot] = useState(initial);
-  const [loading, setLoading] = useState(false);
-  const dateLocale = getDateLocale(lang);
-
-  async function refresh() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/dashboard/sports");
-      if (res.ok) setSnapshot(await res.json());
-    } catch {
-      // Keep showing the last known snapshot rather than clearing it.
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // NHL/NFL/CFL/MLS/NBA all render the same simple last-game/next-game way
-  // (no postseason-series special case like MLB gets below).
-  const simple: TeamSnapshot | null =
-    snapshot?.league === "NHL"
-      ? snapshot.nhl
-      : snapshot?.league === "NFL"
-        ? snapshot.nfl
-        : snapshot?.league === "CFL"
-          ? snapshot.cfl
-          : snapshot?.league === "MLS"
-            ? snapshot.mls
-            : snapshot?.league === "NBA"
-              ? snapshot.nba
-              : null;
-  const mlb = snapshot?.league === "MLB" ? snapshot.mlb : null;
+  const simple = simpleSnapshotOf(snapshot);
+  const mlb = snapshot.league === "MLB" ? snapshot.mlb : null;
   const hasData = Boolean(
     simple ? simple.lastGame || simple.nextGame : mlb ? mlb.seriesGames.length || mlb.lastGame || mlb.nextGame : false,
   );
+  const teamName = simple?.teamName ?? mlb?.teamName ?? "";
+  const teamLogo = simple?.teamLogo ?? mlb?.teamLogo ?? "";
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
-      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
-        <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
+    <div className="border-b border-card-border/60 pb-2 last:border-b-0 last:pb-0">
+      <div className="flex items-center gap-1.5">
+        {teamLogo && (
+          // eslint-disable-next-line @next/next/no-img-element -- external team-logo CDN, not a local asset
+          <img src={teamLogo} alt={teamName} className="h-5 w-5 object-contain" />
+        )}
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">
+          {snapshot.league} · {mlb?.inPostseason ? labels.series : teamName}
+        </p>
       </div>
 
       {!hasData ? (
-        <p className="mt-1.5 sm:mt-3 text-sm text-soft">{labels.unavailable}</p>
+        <p className="mt-1 text-xs text-soft">{labels.unavailable}</p>
       ) : simple ? (
-        <div className="mt-1.5 sm:mt-3 grid grid-cols-2 gap-3">
+        <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {simple.lastGame && (
             <TeamGameRow
               label={labels.lastGame}
@@ -241,60 +236,54 @@ export default function SportsCard({
             />
           )}
           {simple.nextGame && (
-            <TeamGameRow
-              label={labels.nextGame}
-              game={simple.nextGame}
-              teamName={simple.teamName}
-              teamLogo={simple.teamLogo}
-              hour12={hour12}
-              dateLocale={dateLocale}
-              labels={labels}
-            />
+            <div className="hidden sm:block">
+              <TeamGameRow
+                label={labels.nextGame}
+                game={simple.nextGame}
+                teamName={simple.teamName}
+                teamLogo={simple.teamLogo}
+                hour12={hour12}
+                dateLocale={dateLocale}
+                labels={labels}
+              />
+            </div>
           )}
         </div>
       ) : mlb ? (
-        <div className="mt-1.5 sm:mt-3">
-          <div className="flex items-center gap-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDN, not a local asset */}
-            <img src={mlb.teamLogo} alt={mlb.teamName} className="h-5 w-5 object-contain" />
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">
-              {mlb.inPostseason ? labels.series : mlb.teamName}
-            </p>
+        mlb.inPostseason ? (
+          <div className="mt-1 divide-y divide-card-border/60">
+            {mlb.seriesGames.map((game) => (
+              <SeriesGameRow
+                key={game.gameId}
+                game={game}
+                teamId={
+                  game.homeTeamName === mlb.teamName
+                    ? game.homeTeamId
+                    : game.awayTeamName === mlb.teamName
+                      ? game.awayTeamId
+                      : -1
+                }
+                hour12={hour12}
+                dateLocale={dateLocale}
+                labels={labels}
+              />
+            ))}
           </div>
-
-          {mlb.inPostseason ? (
-            <div className="mt-1 divide-y divide-card-border/60">
-              {mlb.seriesGames.map((game) => (
-                <SeriesGameRow
-                  key={game.gameId}
-                  game={game}
-                  teamId={
-                    game.homeTeamName === mlb.teamName
-                      ? game.homeTeamId
-                      : game.awayTeamName === mlb.teamName
-                        ? game.awayTeamId
-                        : -1
-                  }
-                  hour12={hour12}
-                  dateLocale={dateLocale}
-                  labels={labels}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-1 grid grid-cols-2 gap-3">
-              {mlb.lastGame && (
-                <TeamGameRow
-                  label={labels.lastGame}
-                  game={mlb.lastGame}
-                  teamName={mlb.teamName}
-                  teamLogo={mlb.teamLogo}
-                  hour12={hour12}
-                  dateLocale={dateLocale}
-                  labels={labels}
-                />
-              )}
-              {mlb.nextGame && (
+        ) : (
+          <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {mlb.lastGame && (
+              <TeamGameRow
+                label={labels.lastGame}
+                game={mlb.lastGame}
+                teamName={mlb.teamName}
+                teamLogo={mlb.teamLogo}
+                hour12={hour12}
+                dateLocale={dateLocale}
+                labels={labels}
+              />
+            )}
+            {mlb.nextGame && (
+              <div className="hidden sm:block">
                 <TeamGameRow
                   label={labels.nextGame}
                   game={mlb.nextGame}
@@ -304,11 +293,69 @@ export default function SportsCard({
                   dateLocale={dateLocale}
                   labels={labels}
                 />
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )
       ) : null}
+    </div>
+  );
+}
+
+// Full Sports card — shown as a click-to-open drop-down from the Dashboard
+// header's compact pill (header-sports-widget.tsx), same pattern as
+// Markets/News/World Clock: every configured league shows here (one
+// LeagueSection each), not just the single league/team picked in Settings
+// for the compact pill itself.
+export default function SportsCard({
+  initial,
+  hour12,
+  lang,
+  labels,
+}: {
+  initial: SportsCardSnapshot[];
+  hour12: boolean;
+  lang: Lang;
+  labels: SportsLabels;
+}) {
+  const [snapshots, setSnapshots] = useState(initial);
+  const [loading, setLoading] = useState(false);
+  const dateLocale = getDateLocale(lang);
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/dashboard/sports");
+      if (res.ok) {
+        const data = (await res.json()) as { snapshots: SportsCardSnapshot[] };
+        setSnapshots(data.snapshots);
+      }
+    } catch {
+      // Keep showing the last known snapshots rather than clearing them.
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-2 shadow-sm sm:p-5">
+      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-lg font-semibold text-ink">{labels.title}</h2>
+        <RefreshButton onClick={refresh} loading={loading} label={labels.refresh} loadingLabel={labels.refreshing} />
+      </div>
+
+      <div className="mt-1.5 space-y-2 sm:mt-3">
+        {snapshots.map((snapshot) => (
+          <LeagueSection
+            key={snapshot.league}
+            snapshot={snapshot}
+            hour12={hour12}
+            dateLocale={dateLocale}
+            labels={labels}
+          />
+        ))}
+      </div>
     </div>
   );
 }
