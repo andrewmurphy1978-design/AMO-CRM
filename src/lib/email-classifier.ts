@@ -26,6 +26,8 @@ function buildPrompt(emails: { id: string; from: string; subject: string; snippe
 - NEEDS_ATTENTION: important and needs the recipient's attention or action soon, but doesn't require writing a reply (an urgent alert, a bill due, a booking confirmation, a deadline reminder).
 - CAN_WAIT: worth reading eventually but not urgent (school/parent-association newsletters, community updates, general FYI messages).
 - LOW_PRIORITY: no real importance (marketing newsletters, promotional offers, automated receipts/invoices, notifications needing no action).
+
+Exception: a Google Calendar event reminder/notification (sender is Google Calendar or a calendar-notification address, or a subject like "Reminder:", "Notification:", or an event title followed by a time) is always LOW_PRIORITY, never NEEDS_ATTENTION — it's a routine automated reminder the calendar itself already surfaces, not something needing the recipient's attention here.
 ${extra}
 Respond with ONLY a JSON object mapping each email's "id" to its category — no other text, no markdown fences. Example: {"abc123":"NEEDS_REPLY","def456":"LOW_PRIORITY"}
 
@@ -103,6 +105,19 @@ async function callClaude(
   }
 }
 
+// Google Calendar's own reminder/notification emails always come from this
+// one fixed address regardless of the user's locale or calendar settings —
+// matching on it directly is more reliable than trusting the AI classifier
+// every time (see the prompt's own exception for these too), and it's what
+// lets an email already cached under the wrong category (from before this
+// rule existed) move over immediately instead of staying stuck there
+// forever, since classifications are otherwise cached permanently.
+const GOOGLE_CALENDAR_NOTIFICATION_ADDRESS = "calendar-notification@google.com";
+
+function isGoogleCalendarNotification(email: EmailSummary): boolean {
+  return email.fromEmail.toLowerCase() === GOOGLE_CALENDAR_NOTIFICATION_ADDRESS;
+}
+
 // Classifies whichever of these emails haven't been classified before —
 // an email's importance doesn't change once it exists, so results are
 // cached forever, keyed by Gmail's own message id. Revisiting the Email
@@ -122,6 +137,25 @@ export async function getEmailClassifications(
   const cached = await db.emailClassification.findMany({ where: { gmailMessageId: { in: ids } } });
   const result: Record<string, EmailCategory> = {};
   for (const c of cached) result[c.gmailMessageId] = c.category as EmailCategory;
+
+  const staleCalendarOverrides = emails.filter(
+    (e) => isGoogleCalendarNotification(e) && e.id in result && result[e.id] !== "LOW_PRIORITY"
+  );
+  const newCalendarOverrides = emails.filter((e) => isGoogleCalendarNotification(e) && !(e.id in result));
+  for (const e of [...staleCalendarOverrides, ...newCalendarOverrides]) result[e.id] = "LOW_PRIORITY";
+  // Sequential, not Promise.all — same Hyperdrive-connection-limit reason
+  // as every other multi-query loop in this codebase (see e.g. page.tsx's
+  // own withScopedPrismaClient comment); this only ever runs for the rare
+  // handful of already-cached rows this rule retroactively corrects.
+  for (const e of staleCalendarOverrides) {
+    await db.emailClassification.update({ where: { gmailMessageId: e.id }, data: { category: "LOW_PRIORITY" } });
+  }
+  if (newCalendarOverrides.length > 0) {
+    await db.emailClassification.createMany({
+      data: newCalendarOverrides.map((e) => ({ gmailMessageId: e.id, category: "LOW_PRIORITY" as const })),
+      skipDuplicates: true,
+    });
+  }
 
   const uncached = emails.filter((e) => !(e.id in result));
   if (uncached.length === 0) return result;
