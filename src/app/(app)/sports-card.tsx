@@ -100,35 +100,41 @@ function TeamGameRow({
   const isFinal = game.status === "final";
   const teamFirst = game.homeAway === "home";
   return (
-    <div>
+    // min-w-0 here (both as this grid cell's own sizing and as the ancestor
+    // the flex row's truncation below depends on) is load-bearing — without
+    // it, a grid item's default min-width:auto keeps a long opponent name
+    // (e.g. "Toronto Maple Leafs") at its full intrinsic width, overflowing
+    // this narrow two-column layout and visually overlapping the other
+    // column instead of wrapping or truncating.
+    <div className="min-w-0">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">
         {label}
       </p>
-      <div className="mt-1 flex items-center gap-2">
+      <div className="mt-1 flex min-w-0 items-center gap-1.5">
         {teamFirst ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets */}
-            <img src={teamLogo} alt={teamName} className="h-7 w-7 object-contain" />
-            {isFinal && <span className="text-sm font-semibold text-ink">{game.teamScore}</span>}
-            <span className="text-xs text-soft">{isFinal ? "–" : labels.vs}</span>
-            {isFinal && <span className="text-sm font-semibold text-ink">{game.opponentScore}</span>}
+            <img src={teamLogo} alt={teamName} className="h-7 w-7 shrink-0 object-contain" />
+            {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.teamScore}</span>}
+            <span className="shrink-0 text-xs text-soft">{isFinal ? "–" : labels.vs}</span>
+            {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.opponentScore}</span>}
             {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets */}
-            <img src={game.opponentLogo} alt={game.opponentName} className="h-7 w-7 object-contain" />
+            <img src={game.opponentLogo} alt={game.opponentName} className="h-7 w-7 shrink-0 object-contain" />
           </>
         ) : (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets */}
-            <img src={game.opponentLogo} alt={game.opponentName} className="h-7 w-7 object-contain" />
-            {isFinal && <span className="text-sm font-semibold text-ink">{game.opponentScore}</span>}
-            <span className="text-xs text-soft">{isFinal ? "–" : labels.vs}</span>
-            {isFinal && <span className="text-sm font-semibold text-ink">{game.teamScore}</span>}
+            <img src={game.opponentLogo} alt={game.opponentName} className="h-7 w-7 shrink-0 object-contain" />
+            {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.opponentScore}</span>}
+            <span className="shrink-0 text-xs text-soft">{isFinal ? "–" : labels.vs}</span>
+            {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.teamScore}</span>}
             {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets */}
-            <img src={teamLogo} alt={teamName} className="h-7 w-7 object-contain" />
+            <img src={teamLogo} alt={teamName} className="h-7 w-7 shrink-0 object-contain" />
           </>
         )}
-        <span className="text-xs text-soft">{game.opponentName}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-soft">{game.opponentName}</span>
       </div>
-      <p className="mt-0.5 text-xs text-soft">
+      <p className="mt-0.5 truncate text-xs text-soft">
         {isFinal ? (
           <>
             {labels.final} · {safeFormatDate(game.date, "MMM d", dateLocale)}

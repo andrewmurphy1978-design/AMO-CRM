@@ -456,6 +456,20 @@ async function getEspnTeamSnapshot(
   try {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamAbbrev.toLowerCase()}/schedule`,
+      {
+        // Confirmed live (see the widget's own surfaced error) that ESPN's
+        // site.api returns a flat HTTP 403 for every NFL/CFL/MLS/NBA request
+        // from this Worker — a Cloudflare Workers fetch() sends no
+        // User-Agent by default, which is a common trigger for exactly this
+        // kind of anti-bot block. A browser-shaped User-Agent (and Accept)
+        // is the standard, low-risk way past that; NHL/MLB use entirely
+        // different APIs and were never affected.
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+          Accept: "application/json",
+        },
+      },
     );
     if (!res.ok) {
       errors.push(`espn(${sportPath}): HTTP ${res.status}`);
