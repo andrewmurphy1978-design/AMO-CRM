@@ -27,7 +27,7 @@ export interface SocialLabels {
   syncing: string;
 }
 
-interface RowStyle {
+export interface RowStyle {
   rowBg: string;
   text: string;
   soft: string;
@@ -38,7 +38,7 @@ interface RowStyle {
 // Row tint follows each platform's own brand color, per explicit request —
 // most are a light tint so text stays readable, except TikTok (asked for
 // as solid black) which flips to light text instead.
-const ROW_STYLE: Record<SocialPlatform, RowStyle> = {
+export const ROW_STYLE: Record<SocialPlatform, RowStyle> = {
   facebook: {
     rowBg: "bg-[#1877F2]/10",
     text: "text-ink",
@@ -83,7 +83,7 @@ const ROW_STYLE: Record<SocialPlatform, RowStyle> = {
   },
 };
 
-function PlatformIcon({
+export function PlatformIcon({
   platform,
   style,
 }: {

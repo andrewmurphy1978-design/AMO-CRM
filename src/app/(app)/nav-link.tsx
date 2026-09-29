@@ -12,6 +12,7 @@ import DashboardIcon from "./dashboard-icon";
 import TasksIcon from "./tasks-icon";
 import InvoicesIcon from "./invoices-icon";
 import MarketingIcon from "./marketing-icon";
+import SocialIcon from "./social-icon";
 import BookingsIcon from "./bookings-icon";
 import PersonalIcon from "./personal-icon";
 import SettingsIcon from "./settings-icon";
@@ -32,6 +33,7 @@ const NAV_PILL_ICONS: Record<
   "/projects": ProjectsIcon,
   "/invoices": InvoicesIcon,
   "/marketing": MarketingIcon,
+  "/social-analytics": SocialIcon,
   "/bookings": BookingsIcon,
   "/personal": PersonalIcon,
   "/settings": SettingsIcon,

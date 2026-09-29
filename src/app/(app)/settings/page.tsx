@@ -11,6 +11,8 @@ import AnthropicKeyForm from "./anthropic-key-form";
 import MakeForm from "./make-form";
 import ShortIoForm from "./shortio-form";
 import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buffer-form";
+import SocialLinksForm from "./social-links-form";
+import type { SocialPlatform } from "@/lib/social";
 import UserManagement from "./user-management";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
@@ -80,6 +82,7 @@ export default async function SettingsPage({
     anthropicIntegration,
     shortioIntegration,
     bufferSettings,
+    socialLinksSetting,
     googleConnection,
     ionosMailbox,
     users,
@@ -132,6 +135,9 @@ export default async function SettingsPage({
       const bufferSettings = await db.integrationSetting.findMany({
         where: { provider: { in: ["buffer_en", "buffer_fr", "buffer_fb", "buffer_li"] } },
       });
+      const socialLinksSetting = await db.integrationSetting.findUnique({
+        where: { provider: "social_links" },
+      });
       const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
       const ionosMailbox = session ? await getIonosMailbox(session.user.id, db) : null;
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
@@ -154,6 +160,7 @@ export default async function SettingsPage({
         anthropicIntegration,
         shortioIntegration,
         bufferSettings,
+        socialLinksSetting,
         googleConnection,
         ionosMailbox,
         users,
@@ -212,6 +219,15 @@ export default async function SettingsPage({
       lastSyncError: setting?.lastSyncError ?? null,
     };
   });
+  const socialLinks = (socialLinksSetting?.metadata as Record<string, string> | null) ?? {};
+  const socialPlatformNames: Record<SocialPlatform, string> = {
+    facebook: t.dashboard.socialFacebook,
+    instagram: t.dashboard.socialInstagram,
+    linkedin: t.dashboard.socialLinkedin,
+    youtube: t.dashboard.socialYoutube,
+    tiktok: t.dashboard.socialTiktok,
+    x: t.dashboard.socialX,
+  };
 
   // Everything any signed-in user can see and change for themselves —
   // account/password, dashboard personalization, and their own mail
@@ -447,6 +463,9 @@ export default async function SettingsPage({
         <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
           https://crm.andrewmurphy.online/api/webhooks/social-analytics
         </code>
+      </SettingsCard>
+      <SettingsCard title={t.settings.socialLinksTitle} description={t.settings.socialLinksDesc}>
+        <SocialLinksForm initialLinks={socialLinks} platformNames={socialPlatformNames} lang={lang} />
       </SettingsCard>
 
       {mailAccounts.length > 0 && (

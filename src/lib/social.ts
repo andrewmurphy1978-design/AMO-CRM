@@ -6,6 +6,29 @@ export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 export const SOCIAL_LANGUAGES = ["EN", "FR"] as const;
 export type SocialLanguage = (typeof SOCIAL_LANGUAGES)[number];
 
+// Approximate brand color per platform, as a single hex value — used only
+// by the chart components on the detailed Social Analytics page (a bar
+// needs one solid fill color; the row tint in social-card.tsx has its own
+// separate, sometimes-gradient palette for a different purpose). TikTok
+// and X are both black-on-white brand marks, so they're kept visually
+// distinct here (near-black vs. dark slate) purely so two bars/lines next
+// to each other are still tellable apart.
+export const SOCIAL_CHART_COLOR: Record<SocialPlatform, string> = {
+  facebook: "#1877F2",
+  instagram: "#DD2A7B",
+  linkedin: "#0A66C2",
+  tiktok: "#000000",
+  x: "#1F2937",
+  youtube: "#FF0000",
+};
+
+// Key used both for storing a per-platform+language "social page" URL in
+// IntegrationSetting("social_links").metadata and for reading it back —
+// one function so the two directions can never drift apart.
+export function socialLinkKey(platform: SocialPlatform, language: SocialLanguage): string {
+  return `${platform}_${language}`;
+}
+
 // America/Montreal, not UTC — a sync run just after midnight UTC shouldn't
 // get tagged with the previous Montreal day. Shared by every social
 // analytics source (the Make webhook, the Buffer sync) so same-day runs
@@ -125,4 +148,43 @@ export async function getLatestSocialSnapshots(db: PrismaClient): Promise<Social
     }
   }
   return results;
+}
+
+export interface SocialHistoryPoint {
+  platform: SocialPlatform;
+  language: SocialLanguage;
+  dateKey: string;
+  followers: number | null;
+  engagement: number | null;
+  views: number | null;
+}
+
+// Unlike getLatestSocialSnapshots above (one findMany per platform+language,
+// latest 2 rows each), this is a single findMany across every platform —
+// used only for the detailed Social Analytics page's trend charts, where
+// what's needed is the whole recent history rather than just the latest
+// snapshot, so there's no reason to split it into 12 separate queries.
+export async function getSocialSnapshotHistory(db: PrismaClient, days = 30): Promise<SocialHistoryPoint[]> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const rows = await db.socialAnalyticsSnapshot.findMany({
+    where: { capturedAt: { gte: since } },
+    orderBy: { capturedAt: "asc" },
+    select: { platform: true, language: true, dateKey: true, followers: true, engagement: true, views: true },
+  });
+  return rows.map((row) => ({
+    platform: row.platform as SocialPlatform,
+    language: row.language as SocialLanguage,
+    dateKey: row.dateKey,
+    followers: row.followers,
+    engagement: row.engagement,
+    views: row.views,
+  }));
+}
+
+// The per-platform+language "social page" URLs an admin enters in Settings
+// (see social-links-form.tsx) — stored as one IntegrationSetting row's JSON
+// metadata rather than 12 columns, same reasoning as Make's zone/teamId.
+export async function getSocialLinks(db: PrismaClient): Promise<Record<string, string>> {
+  const setting = await db.integrationSetting.findUnique({ where: { provider: "social_links" } });
+  return (setting?.metadata as Record<string, string> | null) ?? {};
 }
