@@ -35,19 +35,27 @@ export default function Card({
   title,
   actions,
   children,
+  // Tighter header/body padding on mobile (unchanged at sm+) — opt-in so
+  // every other page using this shared component keeps its current
+  // spacing; only the Contact Info page's dense multi-card layout asks
+  // for this today.
+  compact,
 }: {
   color: CardColor;
   title: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm">
-      <div className={`flex items-center justify-between gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white ${CARD_COLORS[color]}`}>
+      <div
+        className={`flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-white ${CARD_COLORS[color]} ${compact ? "px-2 py-1.5 sm:px-4 sm:py-2" : "px-4 py-2"}`}
+      >
         <span className="flex items-center gap-2">{title}</span>
         {actions}
       </div>
-      <div className="space-y-4 p-4">{children}</div>
+      <div className={compact ? "space-y-2 p-2 sm:space-y-4 sm:p-4" : "space-y-4 p-4"}>{children}</div>
     </section>
   );
 }

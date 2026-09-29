@@ -51,7 +51,7 @@ function colonSep(lang: Lang): string {
 
 function ColonLine({ label, value, lang }: { label: string; value: string; lang: Lang }) {
   return (
-    <p className="text-sm">
+    <p className="break-words text-sm">
       <span className={LABEL_CLASS}>{label}</span>
       <span className="text-ink">
         {colonSep(lang)}
@@ -73,9 +73,9 @@ function languageDisplay(locale: string | null, t: ReturnType<typeof getDict>): 
 // styling, for the General info / Other info cards' plain-text fields.
 function InfoField({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className={LABEL_CLASS}>{label}</p>
-      <p className="mt-1 text-sm text-ink">{value || "—"}</p>
+      <p className="mt-1 break-words text-sm text-ink">{value || "—"}</p>
     </div>
   );
 }
@@ -123,15 +123,15 @@ function AddressBlock({
   const cityLine = [city, state, zip].filter(Boolean).join(" ");
   const isEmpty = !address && !cityLine && !country;
   return (
-    <div>
+    <div className="min-w-0">
       <h3 className={LABEL_CLASS}>{title}</h3>
       <div className="mt-2 text-sm text-ink">
         {isEmpty ? (
           <p className="text-soft">—</p>
         ) : (
           <>
-            {address && <p>{address}</p>}
-            {cityLine && <p>{cityLine}</p>}
+            {address && <p className="break-words">{address}</p>}
+            {cityLine && <p className="break-words">{cityLine}</p>}
             {country && (
               <p className="inline-flex items-center gap-1.5">
                 <CountryFlag country={country} /> {countryFullName(country)}
@@ -161,19 +161,27 @@ function TechStackBlock({
 }) {
   if (!domain && !hostingProvider && !app) {
     return (
-      <div>
+      <div className="min-w-0">
         <h4 className={LABEL_CLASS}>{title}</h4>
         <p className="mt-2 text-sm text-soft">—</p>
       </div>
     );
   }
   return (
-    <div>
+    <div className="min-w-0">
       <h4 className={LABEL_CLASS}>{title}</h4>
       <div className="mt-2 space-y-1 text-sm text-ink">
-        {domain && <p>{domain}</p>}
-        {hostingProvider && <p className="text-soft">{t.contactForm.hostingProvider}: {hostingProvider}</p>}
-        {app && <p className="text-soft">{appLabel}: {app}</p>}
+        {domain && <p className="break-words">{domain}</p>}
+        {hostingProvider && (
+          <p className="break-words text-soft">
+            {t.contactForm.hostingProvider}: {hostingProvider}
+          </p>
+        )}
+        {app && (
+          <p className="break-words text-soft">
+            {appLabel}: {app}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -359,26 +367,43 @@ export default async function ContactDetailPage({
   );
 
   return (
-    <div className="space-y-6">
+    // Mobile: main's own p-4 (see app-shell.tsx) puts a 16px gap between
+    // this page's cards and both the sidebar and the right edge of the
+    // screen — cancelled (-mx-4) and replaced with a tighter 8px (px-2),
+    // same convention as the Dashboard/Marketing pages. Desktop (sm+) is
+    // unaffected (mx-0/px-0 leaves main's own sm:p-8 as the only inset).
+    <div className="-mx-4 space-y-2 px-2 sm:mx-0 sm:space-y-6 sm:px-0">
       <PageHeader
         title={fullName}
         hour12={hour12}
         lang={lang}
         location={t.dashboard.myLocation}
         actions={
-          <div className="flex gap-2">
-            <Link href={`/contacts/${contact.id}/edit`} className="btn-primary rounded-md px-4 py-2 text-sm font-semibold shadow-sm">
-              {t.contactDetail.edit}
+          <div className="flex gap-1.5 sm:gap-2">
+            <Link
+              href={`/contacts/${contact.id}/edit`}
+              title={t.contactDetail.edit}
+              aria-label={t.contactDetail.edit}
+              className="btn-primary flex items-center justify-center gap-1.5 rounded-md p-2 text-sm font-semibold shadow-sm sm:px-4 sm:py-2"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4 shrink-0">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16.862 4.487 18.549 2.8a2.121 2.121 0 0 1 3 3l-1.687 1.688m-3-3L6.832 15.845a4.5 4.5 0 0 0-1.13 1.897l-.845 2.815a.75.75 0 0 0 .933.933l2.815-.845a4.5 4.5 0 0 0 1.897-1.13L19.5 8.487m-3-3 3 3"
+                />
+              </svg>
+              <span className="hidden sm:inline">{t.contactDetail.edit}</span>
             </Link>
             <DeleteContactButton lang={lang} contactId={contact.id} />
           </div>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card color="general" title={t.contactForm.cardGeneralInfo}>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-2 sm:space-y-6 lg:col-span-2">
+          <Card color="general" title={t.contactForm.cardGeneralInfo} compact>
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
               <InfoField label={t.contactForm.firstName} value={contact.firstName} />
               <InfoField label={t.contactForm.lastName} value={contact.lastName} />
               <InfoField label={t.contactForm.company} value={contact.company} />
@@ -401,7 +426,12 @@ export default async function ContactDetailPage({
 
               <InfoField label={t.contactForm.industry} value={contact.industry} />
               <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
-              <div className="flex flex-col justify-end lg:row-span-2">
+              {/* col-span-2 at the base 2-col layout: this bordered card is
+                  taller than a plain label+value cell, and row-spanning it
+                  next to Language there (like at lg's row-span-2) leaves an
+                  odd gap in Language's own cell — a full-width row of its
+                  own avoids that instead. */}
+              <div className="col-span-2 flex flex-col justify-end lg:col-span-1 lg:row-span-2">
                 {contactTimeZone ? (
                   <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} />
                 ) : null}
@@ -414,13 +444,13 @@ export default async function ContactDetailPage({
               />
             </div>
 
-            <div className="rounded-lg border border-card-border bg-black/[0.02] p-4">
+            <div className="rounded-lg border border-card-border bg-black/[0.02] p-2 sm:p-4">
               <h3 className={LABEL_CLASS}>{t.contactForm.cardInvoice}</h3>
-              <div className="mt-3 space-y-4">
+              <div className="mt-2 space-y-2 sm:mt-3 sm:space-y-4">
                 <p className="text-sm text-ink">
                   {contact.autoSendInvoiceReminders ? t.contactDetail.invoiceRemindersAuto : t.contactDetail.invoiceRemindersManual}
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
                   <InfoField
                     label={t.contactForm.preferredCurrency}
                     value={CURRENCIES.find((c) => c.value === contact.preferredCurrency)?.label}
@@ -437,8 +467,8 @@ export default async function ContactDetailPage({
           </Card>
 
           {(contact.nickname || contact.jobTitle || contact.birthday || contact.avatarUrl) && (
-            <Card color="personal" title={t.contactForm.cardPersonalInfo}>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card color="personal" title={t.contactForm.cardPersonalInfo} compact>
+              <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
                 {contact.avatarUrl && (
                   // eslint-disable-next-line @next/next/no-img-element -- an arbitrary external Google-hosted URL, not a local/optimizable asset
                   <img src={contact.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
@@ -450,19 +480,21 @@ export default async function ContactDetailPage({
             </Card>
           )}
 
-          <Card color="contact" title={t.contactForm.cardContactInfo}>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
-              <div>
+          <Card color="contact" title={t.contactForm.cardContactInfo} compact>
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.7fr)_minmax(0,1.9fr)]">
+              <div className="min-w-0">
                 <p className={LABEL_CLASS}>{t.contactForm.emails}</p>
                 <div className="mt-1 space-y-0.5 text-sm text-ink">
-                  <p>{contact.email}</p>
-                  {contact.email2 && <p>{contact.email2}</p>}
+                  <p className="break-words">{contact.email}</p>
+                  {contact.email2 && <p className="break-words">{contact.email2}</p>}
                   {contact.extraEmails.map((email) => (
-                    <p key={email}>{email}</p>
+                    <p key={email} className="break-words">
+                      {email}
+                    </p>
                   ))}
                 </div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className={LABEL_CLASS}>{t.contactDetail.fieldPhones}</p>
                 <div className="mt-1 space-y-0.5 text-sm text-ink">
                   <p>
@@ -480,7 +512,7 @@ export default async function ContactDetailPage({
                   ))}
                 </div>
               </div>
-              <div>
+              <div className="col-span-2 min-w-0 lg:col-span-1">
                 <p className={LABEL_CLASS}>{t.contactForm.messagingAppsTitle}</p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {contact.messagingAccounts.length === 0 && <p className="text-sm text-soft">—</p>}
@@ -492,9 +524,9 @@ export default async function ContactDetailPage({
             </div>
           </Card>
 
-          <Card color="addresses" title={t.contactForm.cardAddresses}>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-4">
+          <Card color="addresses" title={t.contactForm.cardAddresses} compact>
+            <div className="grid gap-2 sm:gap-4 lg:grid-cols-2">
+              <div className="space-y-2 sm:space-y-4">
                 <AddressBlock
                   title={t.contactDetail.mainAddressTitle}
                   address={contact.address}
@@ -547,8 +579,8 @@ export default async function ContactDetailPage({
             </div>
           </Card>
 
-          <Card color="techStack" title={t.contactForm.techStackTitle}>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Card color="techStack" title={t.contactForm.techStackTitle} compact>
+            <div className="grid grid-cols-2 gap-2 sm:gap-6 lg:grid-cols-4">
               <TechStackBlock
                 title={t.contactForm.websiteGroupTitle}
                 domain={contact.websiteDomain}
@@ -595,8 +627,8 @@ export default async function ContactDetailPage({
             </div>
           </Card>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card color="social" title={t.contactForm.cardSocialMedia}>
+          <div className="grid grid-cols-2 gap-2 sm:gap-4">
+            <Card color="social" title={t.contactForm.cardSocialMedia} compact>
               <div className="flex flex-wrap gap-1.5">
                 {contact.socialLinks.length === 0 && <p className="text-sm text-soft">—</p>}
                 {contact.socialLinks.map((link) => (
@@ -604,7 +636,7 @@ export default async function ContactDetailPage({
                 ))}
               </div>
             </Card>
-            <Card color="voip" title={t.contactForm.cardVoipApps}>
+            <Card color="voip" title={t.contactForm.cardVoipApps} compact>
               <div className="flex flex-wrap gap-1.5">
                 {contact.voipAccounts.length === 0 && <p className="text-sm text-soft">—</p>}
                 {contact.voipAccounts.map((row) => (
@@ -614,8 +646,8 @@ export default async function ContactDetailPage({
             </Card>
           </div>
 
-          <Card color="other" title={t.contactForm.cardOtherInfo}>
-            <div className="grid gap-4 sm:grid-cols-3">
+          <Card color="other" title={t.contactForm.cardOtherInfo} compact>
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-3">
               <InfoField label={t.contactDetail.fieldSource} value={contact.source} />
               <InfoField
                 label={t.contactDetail.registeredPrefix}
@@ -633,7 +665,7 @@ export default async function ContactDetailPage({
               />
             </div>
             {otherFields.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2 sm:gap-4 sm:grid-cols-2">
                 {otherFields.map((fv) => (
                   <InfoField key={fv.id} label={fieldLabel(fv, t)} value={fv.value} />
                 ))}
@@ -641,16 +673,17 @@ export default async function ContactDetailPage({
             )}
           </Card>
 
-          <Card color="notes" title={t.contactForm.cardNotes}>
-            <p className="whitespace-pre-wrap text-sm text-ink">{contact.notes || "—"}</p>
+          <Card color="notes" title={t.contactForm.cardNotes} compact>
+            <p className="whitespace-pre-wrap break-words text-sm text-ink">{contact.notes || "—"}</p>
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-2 sm:space-y-6">
           <div id="projects">
             <Card
               color="projects"
               title={t.contactDetail.projectsTitle}
+              compact
               actions={
                 <Link href={`/projects/new?contactId=${contact.id}`} className="text-xs font-semibold text-white hover:underline">
                   + {t.contactDetail.newProject}
@@ -704,6 +737,7 @@ export default async function ContactDetailPage({
                 )}
               </>
             }
+            compact
           >
             <LinkedEmailsList
               emailLinks={contact.emailLinks.map((link) => ({
@@ -725,7 +759,7 @@ export default async function ContactDetailPage({
             />
           </Card>
 
-          <Card color="purchases" title={t.contactDetail.purchasesTitle}>
+          <Card color="purchases" title={t.contactDetail.purchasesTitle} compact>
             {contact.subscriptions.length === 0 &&
             contact.courseEnrollments.length === 0 &&
             contact.communityMemberships.length === 0 ? (
@@ -791,6 +825,7 @@ export default async function ContactDetailPage({
           <Card
             color="proposals"
             title={t.proposals.title}
+            compact
             actions={
               <Link href="#projects" className="text-xs font-semibold text-white hover:underline">
                 + {t.contactDetail.newProposal}
@@ -822,6 +857,7 @@ export default async function ContactDetailPage({
           <Card
             color="invoices"
             title={t.invoices.title}
+            compact
             actions={
               <Link href="#projects" className="text-xs font-semibold text-white hover:underline">
                 + {t.contactDetail.newInvoice}
@@ -850,7 +886,7 @@ export default async function ContactDetailPage({
             )}
           </Card>
 
-          <Card color="interactions" title={t.contactDetail.callsEmails}>
+          <Card color="interactions" title={t.contactDetail.callsEmails} compact>
             <InteractionLog
               lang={lang}
               contactId={contact.id}
@@ -866,7 +902,7 @@ export default async function ContactDetailPage({
             />
           </Card>
 
-          <Card color="activity" title={t.contactDetail.systemActivity}>
+          <Card color="activity" title={t.contactDetail.systemActivity} compact>
             <NoteForm lang={lang} contactId={contact.id} />
             <ul className="space-y-3">
               {contact.activity.map((entry) => (
