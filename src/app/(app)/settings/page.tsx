@@ -24,6 +24,8 @@ import BillingSettingsForm from "./billing-settings-form";
 import EmailComposePreferencesForm from "./email-compose-preferences-form";
 import EmailSignaturesForm from "./email-signatures-form";
 import BuildVersion from "./build-version";
+import SettingsCard, { SettingsGroupLabel } from "./settings-card";
+import SettingsTabs from "./settings-tabs";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getWatchedPeople, isPersonalSectionUser } from "@/lib/personal-watch";
@@ -199,367 +201,276 @@ export default async function SettingsPage({
     };
   });
 
+  // Everything any signed-in user can see and change for themselves —
+  // account/password, dashboard personalization, and their own mail
+  // connections. The Admin tab (below) never renders any of this, and this
+  // tab never renders anything admin-only, so the two stay fully separate
+  // regardless of screen size.
+  const myTabContent = (
+    <div className="space-y-3 sm:space-y-6">
+      <SettingsCard title={t.settings.crmLinkTitle} description={t.settings.crmLinkDesc}>
+        <a
+          href="https://crm.andrewmurphy.online"
+          className="mt-3 inline-block rounded-lg border border-card-border bg-field-bg px-4 py-2 font-mono text-sm text-emerald-700 hover:bg-black/5"
+        >
+          crm.andrewmurphy.online
+        </a>
+        <BuildVersion
+          buildSha={buildSha}
+          buildTimeIso={process.env.NEXT_PUBLIC_BUILD_TIME || null}
+          lang={lang}
+          versionLabel={t.settings.versionLabel}
+          localBuildLabel={t.settings.localBuildLabel}
+          deployedAtPrefix={t.settings.deployedAtPrefix}
+        />
+      </SettingsCard>
+
+      <SettingsGroupLabel>{t.settings.groupAccount}</SettingsGroupLabel>
+      <SettingsCard title={t.settings.accountTitle} description={t.settings.accountDesc}>
+        <ChangePasswordForm lang={lang} />
+      </SettingsCard>
+      {currentUser && (
+        <SettingsCard title={t.settings.timeFormatLabel} description={t.settings.timeFormatDesc}>
+          <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />
+        </SettingsCard>
+      )}
+
+      {currentUser && (
+        <>
+          <SettingsGroupLabel>{t.settings.groupDashboardWidgets}</SettingsGroupLabel>
+          <SettingsCard title={t.settings.worldClockZonesLabel} description={t.settings.worldClockZonesDesc}>
+            <WorldClockForm
+              lang={lang}
+              initialZones={worldClockZones}
+              initialHeaderZones={headerClockZones}
+              initialHeaderZoneMobile={headerZoneMobile}
+            />
+          </SettingsCard>
+          <SettingsCard title={t.settings.marketsPicksLabel} description={t.settings.marketsPicksDesc}>
+            <MarketsPicksForm
+              lang={lang}
+              initialCurrency={marketsCurrency}
+              initialItems={marketsItems}
+              initialItemMobile={marketsItemMobile}
+            />
+          </SettingsCard>
+          <SettingsCard title={t.settings.sportsPicksLabel} description={t.settings.sportsPicksDesc}>
+            <SportsPicksForm
+              lang={lang}
+              initialLeague={sportsLeague}
+              initialTeamNhl={sportsTeamNhl}
+              initialTeamMlb={sportsTeamMlb}
+              initialLeagueMobile={sportsLeagueMobile}
+            />
+          </SettingsCard>
+          <SettingsCard title={t.settings.headerWidgetsLabel} description={t.settings.headerWidgetsDesc}>
+            <HeaderWidgetsForm lang={lang} initialHidden={hiddenHeaderWidgets} />
+          </SettingsCard>
+        </>
+      )}
+
+      <SettingsGroupLabel>{t.settings.groupEmail}</SettingsGroupLabel>
+      {currentUser && (
+        <SettingsCard title={t.emailComposeSettings.title} description={t.emailComposeSettings.description}>
+          <EmailComposePreferencesForm
+            lang={lang}
+            accounts={mailAccounts}
+            defaultComposeSource={currentUser.defaultComposeSource}
+            defaultFontFamily={currentUser.defaultFontFamily}
+            defaultFontSize={currentUser.defaultFontSize}
+          />
+        </SettingsCard>
+      )}
+
+      <SettingsCard title={t.emailScreeningSettings.title} description={t.emailScreeningSettings.description}>
+        <EmailScreeningForm initialInstructions={currentUser?.emailScreeningInstructions ?? ""} lang={lang} />
+      </SettingsCard>
+
+      <SettingsCard title={t.settings.googleTitle} description={t.settings.googleDesc}>
+        {googleStatus === "error" && (
+          <p className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+            {googleErrorReason || "Connection failed."}
+          </p>
+        )}
+        {googleStatus === "connected" && !googleConnection && (
+          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Google said the connection succeeded, but nothing was saved — please try again.
+          </p>
+        )}
+        {googleConnection ? (
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-ink">
+                {t.settings.googleConnectedAs}{" "}
+                <span className="font-medium">{googleConnection.email ?? "—"}</span>
+              </p>
+              <form action={disconnectGoogleAccount}>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-card-border px-3 py-1.5 text-sm text-soft hover:bg-black/5"
+                >
+                  {t.settings.googleDisconnect}
+                </button>
+              </form>
+            </div>
+            <p className="mt-2 text-xs text-soft">{t.settings.googleReconnectForSend}</p>
+          </div>
+        ) : (
+          <a
+            href="/api/google/connect"
+            className="btn-primary inline-block rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
+          >
+            {t.settings.googleConnect}
+          </a>
+        )}
+        <GoogleContactsImportForm connected={Boolean(googleConnection)} lang={lang} />
+      </SettingsCard>
+
+      <SettingsCard title={t.ionosMailbox.title}>
+        <IonosMailboxForm
+          connected={Boolean(ionosMailbox)}
+          address={ionosMailbox?.address ?? ""}
+          displayName={ionosMailbox?.displayName ?? ""}
+          lastCheckedAt={ionosMailbox?.lastCheckedAt ?? null}
+          lastError={ionosMailbox?.lastError ?? null}
+          lang={lang}
+        />
+      </SettingsCard>
+
+      <SettingsCard title={t.settings.emailAddressColorTitle} description={t.settings.emailAddressColorDesc}>
+        <EmailAddressColorForm rows={emailAddressColors} lang={lang} />
+      </SettingsCard>
+
+      {showPersonalCard && (
+        <>
+          <SettingsGroupLabel>{t.personal.settingsTitle}</SettingsGroupLabel>
+          <SettingsCard description={t.personal.settingsDescription}>
+            <PersonalWatchForm people={watchedPeople} lang={lang} />
+          </SettingsCard>
+        </>
+      )}
+    </div>
+  );
+
+  // Everything only an admin can see — shared integrations, billing, team
+  // management, and org-wide credentials. Rendered only when isAdmin, and
+  // only ever reachable through the Admin Settings tab, which itself only
+  // exists for admins (see the `tabs` array below) — a non-admin user gets
+  // no trace of this content, not even a disabled placeholder.
+  const adminTabContent = isAdmin && session ? (
+    <div className="space-y-3 sm:space-y-6">
+      <SettingsGroupLabel>{t.settings.groupTeamAccess}</SettingsGroupLabel>
+      <SettingsCard>
+        <UserManagement users={users} currentUserId={session.user.id} lang={lang} />
+      </SettingsCard>
+
+      <SettingsGroupLabel>{t.settings.groupBilling}</SettingsGroupLabel>
+      {billingSettings && (
+        <SettingsCard title={t.billingSettings.title} description={t.billingSettings.description}>
+          <BillingSettingsForm
+            chargeCanadianTax={billingSettings.chargeCanadianTax}
+            gstNumber={billingSettings.gstNumber}
+            qstNumber={billingSettings.qstNumber}
+            lang={lang}
+          />
+        </SettingsCard>
+      )}
+      <SettingsCard>
+        <ServicePriceListForm items={serviceItems} lang={lang} />
+      </SettingsCard>
+
+      <SettingsGroupLabel>{t.settings.groupIntegrations}</SettingsGroupLabel>
+      <SettingsCard title={t.settings.systemeioTitle} description={t.settings.systemeioDesc}>
+        <SystemeIoForm
+          connected={Boolean(integration?.apiKeyEncrypted)}
+          lastSyncedAt={integration?.lastSyncedAt?.toISOString() ?? null}
+          lastSyncStatus={integration?.lastSyncStatus ?? null}
+          lastSyncError={integration?.lastSyncError ?? null}
+          autoSyncEnabled={integration?.autoSyncEnabled ?? false}
+          autoSyncTime={integration?.autoSyncTime ?? "03:00"}
+          lang={lang}
+        />
+      </SettingsCard>
+      <SettingsCard title={t.settings.makeTitle} description={t.settings.makeDesc}>
+        <MakeForm
+          connected={Boolean(makeIntegration?.apiKeyEncrypted)}
+          zone={makeMetadata.zone ?? "us2.make.com"}
+          teamId={makeMetadata.teamId ?? ""}
+          lastSyncedAt={makeIntegration?.lastSyncedAt?.toISOString() ?? null}
+          lastSyncStatus={makeIntegration?.lastSyncStatus ?? null}
+          lastSyncError={makeIntegration?.lastSyncError ?? null}
+          lang={lang}
+        />
+      </SettingsCard>
+      <SettingsCard title={t.shortio.title}>
+        <ShortIoForm
+          connected={Boolean(shortioIntegration?.apiKeyEncrypted)}
+          domain={shortioMetadata.domain ?? ""}
+          domainFr={shortioMetadata.domainFr ?? ""}
+          lang={lang}
+        />
+      </SettingsCard>
+      <SettingsCard title={t.settings.zapierTitle} description={t.settings.zapierDesc}>
+        <p className="mt-3 text-sm text-ink">{t.automations.zapierSetupNote}</p>
+        <div className="mt-2">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
+            {t.automations.webhookUrlLabel}
+          </label>
+          <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
+            https://crm.andrewmurphy.online/api/webhooks/zapier
+          </code>
+        </div>
+      </SettingsCard>
+      <SettingsCard title={t.settings.bufferTitle} description={t.settings.bufferDesc}>
+        <BufferForm accounts={bufferAccounts} lang={lang} />
+      </SettingsCard>
+      <SettingsCard title={t.settings.socialAnalyticsTitle} description={t.settings.socialAnalyticsDesc}>
+        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
+          {t.automations.webhookUrlLabel}
+        </label>
+        <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
+          https://crm.andrewmurphy.online/api/webhooks/social-analytics
+        </code>
+      </SettingsCard>
+
+      {mailAccounts.length > 0 && (
+        <>
+          <SettingsGroupLabel>{t.settings.groupSharedEmail}</SettingsGroupLabel>
+          <SettingsCard title={t.emailSignatures.title} description={t.emailSignatures.description}>
+            <EmailSignaturesForm signatures={emailSignatures} accounts={mailAccounts} lang={lang} />
+          </SettingsCard>
+        </>
+      )}
+
+      <SettingsGroupLabel>{t.settings.groupAiSecurity}</SettingsGroupLabel>
+      <SettingsCard title={t.anthropicKey.title} description={t.anthropicKey.description}>
+        <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} lang={lang} />
+      </SettingsCard>
+      <SettingsCard title={t.apiVault.title} description={t.apiVault.description}>
+        <ApiKeyVaultForm entries={vaultEntries} lang={lang} />
+      </SettingsCard>
+
+      <SettingsGroupLabel>{t.settings.groupDataTools}</SettingsGroupLabel>
+      <SettingsCard title={t.contactDataFixes.title}>
+        <ContactDataFixesForm lang={lang} />
+      </SettingsCard>
+    </div>
+  ) : null;
+
+  const tabs = [
+    { id: "user", label: t.settings.tabMySettings, content: myTabContent },
+    ...(adminTabContent ? [{ id: "admin", label: t.settings.tabAdminSettings, content: adminTabContent }] : []),
+  ];
+
   return (
-    <div className="space-y-8">
+    // Mobile: same -mx-4/px-2 inset-cancelling trick as the Dashboard/
+    // Marketing/Contact Info pages, plus a tighter vertical rhythm — this
+    // page stacks many more cards than most, so the usual sm:space-y-8 felt
+    // even longer here.
+    <div className="-mx-4 space-y-2 px-2 sm:mx-0 sm:space-y-6 sm:px-0">
       <PageHeader title={t.settings.title} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
       <p className="text-sm text-soft">{t.settings.subtitle}</p>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Left column: settings available to everyone. */}
-        <div className="space-y-6">
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.crmLinkTitle}</h2>
-            <p className="mt-1 text-sm text-soft">{t.settings.crmLinkDesc}</p>
-            <a
-              href="https://crm.andrewmurphy.online"
-              className="mt-3 inline-block rounded-lg border border-card-border bg-field-bg px-4 py-2 font-mono text-sm text-emerald-700 hover:bg-black/5"
-            >
-              crm.andrewmurphy.online
-            </a>
-            <BuildVersion
-              buildSha={buildSha}
-              buildTimeIso={process.env.NEXT_PUBLIC_BUILD_TIME || null}
-              lang={lang}
-              versionLabel={t.settings.versionLabel}
-              localBuildLabel={t.settings.localBuildLabel}
-              deployedAtPrefix={t.settings.deployedAtPrefix}
-            />
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.accountTitle}</h2>
-            <p className="mt-1 text-sm text-soft">{t.settings.accountDesc}</p>
-            <div className="mt-4">
-              <ChangePasswordForm lang={lang} />
-            </div>
-            {currentUser && <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />}
-            {currentUser && (
-              <WorldClockForm
-                lang={lang}
-                initialZones={worldClockZones}
-                initialHeaderZones={headerClockZones}
-                initialHeaderZoneMobile={headerZoneMobile}
-              />
-            )}
-            {currentUser && (
-              <MarketsPicksForm
-                lang={lang}
-                initialCurrency={marketsCurrency}
-                initialItems={marketsItems}
-                initialItemMobile={marketsItemMobile}
-              />
-            )}
-            {currentUser && (
-              <SportsPicksForm
-                lang={lang}
-                initialLeague={sportsLeague}
-                initialTeamNhl={sportsTeamNhl}
-                initialTeamMlb={sportsTeamMlb}
-                initialLeagueMobile={sportsLeagueMobile}
-              />
-            )}
-            {currentUser && (
-              <HeaderWidgetsForm lang={lang} initialHidden={hiddenHeaderWidgets} />
-            )}
-          </section>
-
-          {currentUser && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.emailComposeSettings.title}</h2>
-              <p className="mt-1 text-sm text-soft">{t.emailComposeSettings.description}</p>
-              <div className="mt-4">
-                <EmailComposePreferencesForm
-                  lang={lang}
-                  accounts={mailAccounts}
-                  defaultComposeSource={currentUser.defaultComposeSource}
-                  defaultFontFamily={currentUser.defaultFontFamily}
-                  defaultFontSize={currentUser.defaultFontSize}
-                />
-              </div>
-            </section>
-          )}
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.emailScreeningSettings.title}</h2>
-            <p className="mt-1 text-sm text-soft">{t.emailScreeningSettings.description}</p>
-            <div className="mt-4">
-              <EmailScreeningForm initialInstructions={currentUser?.emailScreeningInstructions ?? ""} lang={lang} />
-            </div>
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.googleTitle}</h2>
-            <p className="mt-1 text-sm text-soft">{t.settings.googleDesc}</p>
-            {googleStatus === "error" && (
-              <p className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
-                {googleErrorReason || "Connection failed."}
-              </p>
-            )}
-            {googleStatus === "connected" && !googleConnection && (
-              <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Google said the connection succeeded, but nothing was saved — please try again.
-              </p>
-            )}
-            <div className="mt-4">
-              {googleConnection ? (
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm text-ink">
-                      {t.settings.googleConnectedAs}{" "}
-                      <span className="font-medium">{googleConnection.email ?? "—"}</span>
-                    </p>
-                    <form action={disconnectGoogleAccount}>
-                      <button
-                        type="submit"
-                        className="rounded-lg border border-card-border px-3 py-1.5 text-sm text-soft hover:bg-black/5"
-                      >
-                        {t.settings.googleDisconnect}
-                      </button>
-                    </form>
-                  </div>
-                  <p className="mt-2 text-xs text-soft">{t.settings.googleReconnectForSend}</p>
-                </div>
-              ) : (
-                <a
-                  href="/api/google/connect"
-                  className="btn-primary inline-block rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
-                >
-                  {t.settings.googleConnect}
-                </a>
-              )}
-            </div>
-            <GoogleContactsImportForm connected={Boolean(googleConnection)} lang={lang} />
-          </section>
-
-          {isAdmin && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.contactDataFixes.title}</h2>
-              <div className="mt-4">
-                <ContactDataFixesForm lang={lang} />
-              </div>
-            </section>
-          )}
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.ionosMailbox.title}</h2>
-            <div className="mt-4">
-              <IonosMailboxForm
-                connected={Boolean(ionosMailbox)}
-                address={ionosMailbox?.address ?? ""}
-                displayName={ionosMailbox?.displayName ?? ""}
-                lastCheckedAt={ionosMailbox?.lastCheckedAt ?? null}
-                lastError={ionosMailbox?.lastError ?? null}
-                lang={lang}
-              />
-            </div>
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.emailAddressColorTitle}</h2>
-            <p className="mt-1 text-sm text-soft">{t.settings.emailAddressColorDesc}</p>
-            <div className="mt-4">
-              <EmailAddressColorForm rows={emailAddressColors} lang={lang} />
-            </div>
-          </section>
-
-          {showPersonalCard && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.personal.settingsTitle}</h2>
-              <p className="mt-1 text-sm text-soft">{t.personal.settingsDescription}</p>
-              <div className="mt-4">
-                <PersonalWatchForm people={watchedPeople} lang={lang} />
-              </div>
-            </section>
-          )}
-        </div>
-
-        {/* Right column: admin-only settings. */}
-        <div className="space-y-6">
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            {isAdmin && session ? (
-              <UserManagement users={users} currentUserId={session.user.id} lang={lang} />
-            ) : (
-              <>
-                <h2 className="font-display text-lg font-semibold text-ink">{t.settings.teamTitle}</h2>
-                <p className="mt-2 text-sm text-soft">{t.settings.teamAdminOnly}</p>
-              </>
-            )}
-          </section>
-
-          {isAdmin && billingSettings && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.billingSettings.title}</h2>
-              <p className="mt-1 text-sm text-soft">{t.billingSettings.description}</p>
-              <div className="mt-4">
-                <BillingSettingsForm
-                  chargeCanadianTax={billingSettings.chargeCanadianTax}
-                  gstNumber={billingSettings.gstNumber}
-                  qstNumber={billingSettings.qstNumber}
-                  lang={lang}
-                />
-              </div>
-            </section>
-          )}
-
-          {isAdmin && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <ServicePriceListForm items={serviceItems} lang={lang} />
-            </section>
-          )}
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.systemeioTitle}</h2>
-            <p className="mt-1 text-sm text-soft">{t.settings.systemeioDesc}</p>
-            <div className="mt-4">
-              {isAdmin ? (
-                <SystemeIoForm
-                  connected={Boolean(integration?.apiKeyEncrypted)}
-                  lastSyncedAt={integration?.lastSyncedAt?.toISOString() ?? null}
-                  lastSyncStatus={integration?.lastSyncStatus ?? null}
-                  lastSyncError={integration?.lastSyncError ?? null}
-                  autoSyncEnabled={integration?.autoSyncEnabled ?? false}
-                  autoSyncTime={integration?.autoSyncTime ?? "03:00"}
-                  lang={lang}
-                />
-              ) : (
-                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
-              )}
-            </div>
-          </section>
-
-          {isAdmin && mailAccounts.length > 0 && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.emailSignatures.title}</h2>
-              <p className="mt-1 text-sm text-soft">{t.emailSignatures.description}</p>
-              <div className="mt-4">
-                <EmailSignaturesForm signatures={emailSignatures} accounts={mailAccounts} lang={lang} />
-              </div>
-            </section>
-          )}
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.anthropicKey.title}</h2>
-            <p className="mt-1 text-sm text-soft">{t.anthropicKey.description}</p>
-            <div className="mt-4">
-              {isAdmin ? (
-                <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} lang={lang} />
-              ) : (
-                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
-              )}
-            </div>
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.apiVault.title}</h2>
-            <p className="mt-1 text-sm text-soft">{t.apiVault.description}</p>
-            <div className="mt-4">
-              {isAdmin ? (
-                <ApiKeyVaultForm entries={vaultEntries} lang={lang} />
-              ) : (
-                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
-              )}
-            </div>
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.settings.makeTitle}</h2>
-            <p className="mt-1 text-sm text-soft">{t.settings.makeDesc}</p>
-            <div className="mt-4">
-              {isAdmin ? (
-                <MakeForm
-                  connected={Boolean(makeIntegration?.apiKeyEncrypted)}
-                  zone={makeMetadata.zone ?? "us2.make.com"}
-                  teamId={makeMetadata.teamId ?? ""}
-                  lastSyncedAt={makeIntegration?.lastSyncedAt?.toISOString() ?? null}
-                  lastSyncStatus={makeIntegration?.lastSyncStatus ?? null}
-                  lastSyncError={makeIntegration?.lastSyncError ?? null}
-                  lang={lang}
-                />
-              ) : (
-                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
-              )}
-            </div>
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.shortio.title}</h2>
-            <div className="mt-4">
-              {isAdmin ? (
-                <ShortIoForm
-                  connected={Boolean(shortioIntegration?.apiKeyEncrypted)}
-                  domain={shortioMetadata.domain ?? ""}
-                  domainFr={shortioMetadata.domainFr ?? ""}
-                  lang={lang}
-                />
-              ) : (
-                <p className="text-sm text-soft">{t.settings.systemeioAdminOnly}</p>
-              )}
-            </div>
-          </section>
-
-          {isAdmin && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.settings.zapierTitle}</h2>
-              <p className="mt-1 text-sm text-soft">{t.settings.zapierDesc}</p>
-              <p className="mt-3 text-sm text-ink">{t.automations.zapierSetupNote}</p>
-              <div className="mt-2">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
-                  {t.automations.webhookUrlLabel}
-                </label>
-                <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
-                  https://crm.andrewmurphy.online/api/webhooks/zapier
-                </code>
-              </div>
-            </section>
-          )}
-
-          {isAdmin && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.settings.bufferTitle}</h2>
-              <p className="mt-1 text-sm text-soft">{t.settings.bufferDesc}</p>
-              <div className="mt-4">
-                <BufferForm accounts={bufferAccounts} lang={lang} />
-              </div>
-            </section>
-          )}
-
-          {isAdmin && (
-            <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm">
-              <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-              <h2 className="font-display text-lg font-semibold text-ink">{t.settings.socialAnalyticsTitle}</h2>
-              <p className="mt-1 text-sm text-soft">{t.settings.socialAnalyticsDesc}</p>
-              <div className="mt-2">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
-                  {t.automations.webhookUrlLabel}
-                </label>
-                <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
-                  https://crm.andrewmurphy.online/api/webhooks/social-analytics
-                </code>
-              </div>
-            </section>
-          )}
-        </div>
-      </div>
+      <SettingsTabs tabs={tabs} />
     </div>
   );
 }
