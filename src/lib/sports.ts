@@ -333,187 +333,153 @@ export async function getMlbSnapshot(teamId: number = DEFAULT_MLB_TEAM_ID): Prom
   };
 }
 
-// NFL/CFL/MLS/NBA all share the same last-game/next-game shape NHL already
-// uses (no postseason-series special case like MLB) and all sit on ESPN's
-// own public "site.api" — an undocumented but, like the NHL/MLB APIs above,
-// widely relied-on endpoint (`site.api.espn.com/apis/site/v2/sports/
-// {sport}/{league}/teams/{abbrev}/schedule`) rather than four more bespoke
-// per-league clients. This session's network egress can't reach it either
-// to confirm the live response shape, so parsing below is defensive in the
-// same way as everything above it.
 export type TeamSnapshot = NhlSnapshot;
 
-interface RawEspnTeamRef {
-  id?: string;
-  abbreviation?: string;
-  displayName?: string;
-  logo?: string;
-  // The team-schedule endpoint's competitors nest their logo as an array of
-  // {href} objects (ESPN's general team-summary shape) rather than the flat
-  // `logo` string above, which this repo's own code had assumed — kept as a
-  // fallback below since either shape has been seen in ESPN's site.api.
-  logos?: { href?: string }[];
+// NFL/CFL/MLS/NBA used to sit on ESPN's undocumented "site.api" — which
+// returns a flat HTTP 403 to every request from this Worker (confirmed live
+// via the widget's own surfaced error; a browser-shaped User-Agent didn't
+// fix it either, pointing at an IP/ASN-level block rather than a header
+// check). Switched to TheSportsDB (thesportsdb.com), the only free sports
+// API found that covers all four of these leagues — including CFL, which
+// almost nothing else does — in one consistent shape. The free shared test
+// key ("3") is the default; set THESPORTSDB_KEY (a $1/mo Patreon personal
+// key removes the shared-key rate-limit risk) to override it.
+const THESPORTSDB_KEY = process.env.THESPORTSDB_KEY || "3";
+
+interface RawTsdbTeam {
+  idTeam?: string;
+  strTeam?: string;
+  strTeamBadge?: string;
+  strLeague?: string;
 }
 
-interface RawEspnCompetitor {
-  homeAway?: "home" | "away";
-  score?: { value?: number; displayValue?: string } | string | number;
-  team?: RawEspnTeamRef;
+interface RawTsdbEvent {
+  idEvent?: string;
+  dateEvent?: string; // "YYYY-MM-DD"
+  strTime?: string; // "HH:MM:SS", UTC
+  strTimestamp?: string;
+  strHomeTeam?: string;
+  strAwayTeam?: string;
+  idHomeTeam?: string;
+  idAwayTeam?: string;
+  intHomeScore?: string | number | null;
+  intAwayScore?: string | number | null;
 }
 
-interface RawEspnCompetition {
-  date?: string;
-  competitors?: RawEspnCompetitor[];
-  status?: { type?: { state?: string; completed?: boolean } };
+function tsdbUrl(path: string): string {
+  return `https://www.thesportsdb.com/api/v1/json/${THESPORTSDB_KEY}/${path}`;
 }
 
-interface RawEspnEvent {
-  id?: string | number;
-  date?: string;
-  competitions?: RawEspnCompetition[];
+// TheSportsDB has no per-league "get team by abbreviation" lookup — its own
+// team ids are looked up by full name via search, then reused for the
+// events calls below. leagueHint is only a best-effort disambiguator (this
+// session can't confirm TheSportsDB's exact strLeague label strings live);
+// an exact team-name match or the first result are both safe fallbacks
+// since every team name here (e.g. "Montreal Alouettes") is specific enough
+// that cross-sport collisions are unlikely.
+async function findTsdbTeam(teamName: string, leagueHint: string): Promise<{ id: string; badge: string | null } | null> {
+  const res = await fetch(tsdbUrl(`searchteams.php?t=${encodeURIComponent(teamName)}`));
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = (await res.json()) as { teams?: RawTsdbTeam[] | null };
+  const teams = Array.isArray(data.teams) ? data.teams : [];
+  const match =
+    teams.find((t) => t.strLeague === leagueHint) ??
+    teams.find((t) => t.strTeam?.toLowerCase() === teamName.toLowerCase()) ??
+    teams[0];
+  if (!match?.idTeam) return null;
+  return { id: match.idTeam, badge: match.strTeamBadge ?? null };
 }
 
-interface RawEspnScheduleResponse {
-  // The team-schedule endpoint's own top-level team summary — a much more
-  // reliable way to identify "which competitor is us" in every event below
-  // than trusting this file's own hardcoded abbreviation to exactly match
-  // whatever format ESPN happens to use for a given league's competitors
-  // (this is the likely reason NFL/CFL/MLS games weren't matching: a small
-  // mismatch there makes parseEspnEvent's lookup fail for every event,
-  // silently, with zero games parsed and no fetch error to show for it).
-  team?: RawEspnTeamRef;
-  events?: RawEspnEvent[];
+// eventslast.php returns only past/completed games and eventsnext.php only
+// future/scheduled ones — that split is exactly "last game"/"next game", so
+// unlike the NHL/MLB/former-ESPN code above there's no need to fetch a whole
+// season and filter it by the current time client-side.
+async function fetchTsdbEvents(endpoint: "eventslast" | "eventsnext", teamId: string): Promise<RawTsdbEvent[]> {
+  const res = await fetch(tsdbUrl(`${endpoint}.php?id=${teamId}`));
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = (await res.json()) as { results?: RawTsdbEvent[] | null; events?: RawTsdbEvent[] | null };
+  const events = data.results ?? data.events ?? [];
+  return Array.isArray(events) ? events : [];
 }
 
-function parseEspnScore(score: RawEspnCompetitor["score"]): number | null {
-  if (typeof score === "number") return score;
-  if (typeof score === "string") {
-    const n = Number(score);
-    return Number.isFinite(n) ? n : null;
+async function lookupTsdbBadge(teamId: string): Promise<string | null> {
+  try {
+    const res = await fetch(tsdbUrl(`lookupteam.php?id=${teamId}`));
+    if (!res.ok) return null;
+    const data = (await res.json()) as { teams?: RawTsdbTeam[] | null };
+    return data.teams?.[0]?.strTeamBadge ?? null;
+  } catch {
+    return null;
   }
-  if (score && typeof score === "object") {
-    if (typeof score.value === "number") return score.value;
-    if (typeof score.displayValue === "string") {
-      const n = Number(score.displayValue);
-      return Number.isFinite(n) ? n : null;
-    }
-  }
-  return null;
 }
 
-function parseEspnEvent(
-  event: RawEspnEvent,
-  teamAbbrev: string,
-  teamId: string | undefined,
-  teamNames: Record<string, string>,
-  fallbackLogo: (abbrev: string) => string,
-): SportsTeamGame | null {
-  const competition = event.competitions?.[0];
-  const competitors = competition?.competitors;
-  if (!competition || !competitors || competitors.length < 2) return null;
-  // Match by the schedule response's own team id first (reliable regardless
-  // of abbreviation formatting quirks per league) and only fall back to
-  // abbreviation matching when the response didn't carry a top-level team id.
-  const mine = competitors.find(
-    (c) => (teamId && c.team?.id === teamId) || c.team?.abbreviation?.toUpperCase() === teamAbbrev.toUpperCase(),
-  );
-  const opponent = competitors.find((c) => c !== mine);
-  const opponentAbbrev = opponent?.team?.abbreviation?.toUpperCase();
-  if (!mine || !opponent) return null;
+function tsdbScore(v: string | number | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
-  const stateRaw = competition.status?.type?.state?.toLowerCase();
-  const completed = competition.status?.type?.completed === true;
-  const status: SportsTeamGame["status"] = completed ? "final" : stateRaw === "in" ? "live" : "upcoming";
+async function toTsdbTeamGame(e: RawTsdbEvent, myTeamId: string, status: SportsTeamGame["status"]): Promise<SportsTeamGame | null> {
+  const isHome = e.idHomeTeam === myTeamId;
+  const isAway = e.idAwayTeam === myTeamId;
+  if (!isHome && !isAway) return null;
+  const opponentId = isHome ? e.idAwayTeam : e.idHomeTeam;
+  const opponentName = (isHome ? e.strAwayTeam : e.strHomeTeam) ?? "?";
+  const date = e.strTimestamp
+    ? new Date(e.strTimestamp).toISOString()
+    : new Date(`${e.dateEvent ?? ""}T${e.strTime || "00:00:00"}Z`).toISOString();
 
   return {
-    gameId: String(event.id ?? `${event.date}-${opponentAbbrev ?? opponent.team?.displayName}`),
-    date: event.date ?? competition.date ?? new Date().toISOString(),
-    opponentName: (opponentAbbrev && teamNames[opponentAbbrev]) ?? opponent.team?.displayName ?? opponentAbbrev ?? "?",
-    opponentLogo: opponent.team?.logo ?? opponent.team?.logos?.[0]?.href ?? (opponentAbbrev ? fallbackLogo(opponentAbbrev) : ""),
-    homeAway: mine.homeAway === "home" ? "home" : "away",
+    gameId: String(e.idEvent ?? `${e.dateEvent}-${opponentName}`),
+    date,
+    opponentName,
+    opponentLogo: opponentId ? ((await lookupTsdbBadge(opponentId)) ?? "") : "",
+    homeAway: isHome ? "home" : "away",
     status,
-    teamScore: parseEspnScore(mine.score),
-    opponentScore: parseEspnScore(opponent.score),
+    teamScore: tsdbScore(isHome ? e.intHomeScore : e.intAwayScore),
+    opponentScore: tsdbScore(isHome ? e.intAwayScore : e.intHomeScore),
   };
 }
 
-async function getEspnTeamSnapshot(
-  sportPath: string, // e.g. "football/nfl"
-  teamAbbrev: string, // e.g. "NE" — also lowercased for the URL's own team slug
-  teamNames: Record<string, string>,
-  fallbackLogo: (abbrev: string) => string,
-): Promise<TeamSnapshot> {
+async function getTheSportsDbSnapshot(teamAbbrev: string, teamNames: Record<string, string>, leagueHint: string): Promise<TeamSnapshot> {
   const errors: string[] = [];
+  const teamName = teamNames[teamAbbrev] ?? teamAbbrev;
   let lastGame: SportsTeamGame | null = null;
   let nextGame: SportsTeamGame | null = null;
-  // The guessed CDN path below (espnLogoUrl) only actually resolves for the
-  // "major" leagues ESPN maintains that sprite folder for — NFL/NBA/NHL/MLB.
-  // CFL and MLS/soccer logos live at different paths, so guessing 404s for
-  // them; the schedule response's own team.logo/logos[] is the real one and
-  // always preferred when present, with the guess only as a last resort.
   let teamLogo: string | null = null;
 
   try {
-    const res = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/teams/${teamAbbrev.toLowerCase()}/schedule`,
-      {
-        // Confirmed live (see the widget's own surfaced error) that ESPN's
-        // site.api returns a flat HTTP 403 for every NFL/CFL/MLS/NBA request
-        // from this Worker — a Cloudflare Workers fetch() sends no
-        // User-Agent by default, which is a common trigger for exactly this
-        // kind of anti-bot block. A browser-shaped User-Agent (and Accept)
-        // is the standard, low-risk way past that; NHL/MLB use entirely
-        // different APIs and were never affected.
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-          Accept: "application/json",
-        },
-      },
-    );
-    if (!res.ok) {
-      errors.push(`espn(${sportPath}): HTTP ${res.status}`);
+    const found = await findTsdbTeam(teamName, leagueHint);
+    if (!found) {
+      errors.push(`thesportsdb(${leagueHint}): could not find team "${teamName}"`);
     } else {
-      const data = (await res.json()) as RawEspnScheduleResponse;
-      const events = Array.isArray(data.events) ? data.events : [];
-      const resolvedTeamId = data.team?.id;
-      teamLogo = data.team?.logo ?? data.team?.logos?.[0]?.href ?? null;
-      const parsed = events
-        .map((e) => parseEspnEvent(e, teamAbbrev, resolvedTeamId, teamNames, fallbackLogo))
-        .filter((g): g is SportsTeamGame => g !== null);
-      if (events.length > 0 && parsed.length === 0) {
-        // ESPN returned a real schedule but nothing in it matched our team —
-        // almost certainly an abbreviation/id mismatch in parseEspnEvent
-        // rather than "no games", so this is worth surfacing instead of
-        // quietly looking identical to an empty season.
-        errors.push(`espn(${sportPath}): received ${events.length} events but none matched team "${teamAbbrev}"`);
-      }
-      const now = Date.now();
-      const past = parsed.filter((g) => g.status === "final" && new Date(g.date).getTime() <= now);
-      const future = parsed
-        .filter((g) => g.status !== "final" && new Date(g.date).getTime() >= now)
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      lastGame = past.length > 0 ? past[past.length - 1] : null;
-      nextGame = future.length > 0 ? future[0] : null;
+      teamLogo = found.badge;
+      const [lastEvents, nextEvents] = await Promise.all([
+        fetchTsdbEvents("eventslast", found.id).catch((error: unknown) => {
+          errors.push(`thesportsdb(${leagueHint}) eventslast: ${error instanceof Error ? error.message : String(error)}`);
+          return [] as RawTsdbEvent[];
+        }),
+        fetchTsdbEvents("eventsnext", found.id).catch((error: unknown) => {
+          errors.push(`thesportsdb(${leagueHint}) eventsnext: ${error instanceof Error ? error.message : String(error)}`);
+          return [] as RawTsdbEvent[];
+        }),
+      ]);
+      const lastRaw = lastEvents[lastEvents.length - 1];
+      const nextRaw = nextEvents[0];
+      if (lastRaw) lastGame = await toTsdbTeamGame(lastRaw, found.id, "final");
+      if (nextRaw) nextGame = await toTsdbTeamGame(nextRaw, found.id, "upcoming");
     }
   } catch (error) {
-    errors.push(`espn(${sportPath}): ${error instanceof Error ? error.message : String(error)}`);
+    errors.push(`thesportsdb(${leagueHint}): ${error instanceof Error ? error.message : String(error)}`);
   }
 
   return {
-    teamName: teamNames[teamAbbrev] ?? teamAbbrev,
-    teamLogo: teamLogo ?? fallbackLogo(teamAbbrev),
+    teamName,
+    teamLogo: teamLogo ?? "",
     lastGame,
     nextGame,
     errors,
   };
-}
-
-// ESPN's own team-logo CDN follows this pattern for every sport it covers —
-// used only as a fallback since the schedule response above usually already
-// embeds each competitor's own `team.logo` URL directly.
-function espnLogoUrl(spritePath: string, abbrev: string): string {
-  return `https://a.espncdn.com/i/teamlogos/${spritePath}/500/${abbrev.toLowerCase()}.png`;
 }
 
 const DEFAULT_NFL_TEAM = "NE"; // New England Patriots — closest NFL market to Quebec
@@ -554,7 +520,7 @@ export const NFL_TEAM_NAMES: Record<string, string> = {
 };
 
 export async function getNflSnapshot(teamAbbrev: string = DEFAULT_NFL_TEAM): Promise<TeamSnapshot> {
-  return getEspnTeamSnapshot("football/nfl", teamAbbrev, NFL_TEAM_NAMES, (a) => espnLogoUrl("nfl", a));
+  return getTheSportsDbSnapshot(teamAbbrev, NFL_TEAM_NAMES, "NFL");
 }
 
 const DEFAULT_CFL_TEAM = "MTL"; // Montreal Alouettes
@@ -572,7 +538,7 @@ export const CFL_TEAM_NAMES: Record<string, string> = {
 };
 
 export async function getCflSnapshot(teamAbbrev: string = DEFAULT_CFL_TEAM): Promise<TeamSnapshot> {
-  return getEspnTeamSnapshot("football/cfl", teamAbbrev, CFL_TEAM_NAMES, (a) => espnLogoUrl("cfl", a));
+  return getTheSportsDbSnapshot(teamAbbrev, CFL_TEAM_NAMES, "CFL");
 }
 
 const DEFAULT_MLS_TEAM = "MTL"; // CF Montréal
@@ -611,7 +577,7 @@ export const MLS_TEAM_NAMES: Record<string, string> = {
 };
 
 export async function getMlsSnapshot(teamAbbrev: string = DEFAULT_MLS_TEAM): Promise<TeamSnapshot> {
-  return getEspnTeamSnapshot("soccer/usa.1", teamAbbrev, MLS_TEAM_NAMES, (a) => espnLogoUrl("soccer", a));
+  return getTheSportsDbSnapshot(teamAbbrev, MLS_TEAM_NAMES, "American Major League Soccer");
 }
 
 const DEFAULT_NBA_TEAM = "TOR"; // Toronto Raptors — only Canadian NBA team
@@ -650,5 +616,5 @@ export const NBA_TEAM_NAMES: Record<string, string> = {
 };
 
 export async function getNbaSnapshot(teamAbbrev: string = DEFAULT_NBA_TEAM): Promise<TeamSnapshot> {
-  return getEspnTeamSnapshot("basketball/nba", teamAbbrev, NBA_TEAM_NAMES, (a) => espnLogoUrl("nba", a));
+  return getTheSportsDbSnapshot(teamAbbrev, NBA_TEAM_NAMES, "NBA");
 }

@@ -80,6 +80,17 @@ function GameTime({
   );
 }
 
+// An empty `src` on an <img> makes the browser re-request the current page
+// URL — a real bug, not just a missing icon — which is a live possibility
+// now that TheSportsDB-backed leagues (NFL/CFL/MLS/NBA) fall back to "" when
+// a badge lookup fails, unlike the old ESPN/NHL/MLB code's guessed-CDN-URL
+// fallbacks that were never actually empty.
+function TeamLogo({ src, alt }: { src: string; alt: string }) {
+  if (!src) return <div className="h-7 w-7 shrink-0" />;
+  // eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets
+  return <img src={src} alt={alt} className="h-7 w-7 shrink-0 object-contain" />;
+}
+
 function TeamGameRow({
   label,
   game,
@@ -113,23 +124,19 @@ function TeamGameRow({
       <div className="mt-1 flex min-w-0 items-center gap-1.5">
         {teamFirst ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets */}
-            <img src={teamLogo} alt={teamName} className="h-7 w-7 shrink-0 object-contain" />
+            <TeamLogo src={teamLogo} alt={teamName} />
             {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.teamScore}</span>}
             <span className="shrink-0 text-xs text-soft">{isFinal ? "–" : labels.vs}</span>
             {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.opponentScore}</span>}
-            {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets */}
-            <img src={game.opponentLogo} alt={game.opponentName} className="h-7 w-7 shrink-0 object-contain" />
+            <TeamLogo src={game.opponentLogo} alt={game.opponentName} />
           </>
         ) : (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets */}
-            <img src={game.opponentLogo} alt={game.opponentName} className="h-7 w-7 shrink-0 object-contain" />
+            <TeamLogo src={game.opponentLogo} alt={game.opponentName} />
             {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.opponentScore}</span>}
             <span className="shrink-0 text-xs text-soft">{isFinal ? "–" : labels.vs}</span>
             {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.teamScore}</span>}
-            {/* eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets */}
-            <img src={teamLogo} alt={teamName} className="h-7 w-7 shrink-0 object-contain" />
+            <TeamLogo src={teamLogo} alt={teamName} />
           </>
         )}
         <span className="min-w-0 flex-1 truncate text-xs text-soft">{game.opponentName}</span>
