@@ -1010,14 +1010,6 @@ export default async function DashboardPage() {
             />
           </div>
 
-          <div className="lg:col-start-1">
-            <PendingAffiliateProgramsCard
-              programs={pendingAffiliatePrograms}
-              lang={lang}
-              labels={pendingAffiliateProgramsLabels}
-            />
-          </div>
-
           <div
             id="dashboard-calendar-card"
             className="lg:col-start-2 scroll-mt-20"
@@ -1136,6 +1128,26 @@ export default async function DashboardPage() {
                 </ul>
               )}
             </div>
+          </div>
+
+          {/* DOM position (not the earlier spot right after Email) matters
+              here: with only lg:col-start on every item and no row-start,
+              CSS grid's auto-placement cursor advances across the *whole*
+              grid, not per column — an item placed here, after the Email/
+              Calendar/Contacts-group row has fully filled row 1, starts its
+              own search at row 2 without disturbing that row. Placed right
+              after Email instead, it would fill row 1's column 1 itself and
+              push Calendar/Contacts down into row 2 with it. This position
+              also gives the right mobile stacking order for free: single-
+              column layout follows DOM order, so this lands right after the
+              Tasks card (the last card in the Contacts/Projects/Tasks
+              group), exactly where it belongs on mobile. */}
+          <div className="lg:col-start-1">
+            <PendingAffiliateProgramsCard
+              programs={pendingAffiliatePrograms}
+              lang={lang}
+              labels={pendingAffiliateProgramsLabels}
+            />
           </div>
 
           <div className="lg:col-start-2">
