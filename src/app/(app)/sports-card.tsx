@@ -183,12 +183,24 @@ function simpleSnapshotOf(snapshot: SportsCardSnapshot): TeamSnapshot | null {
   }
 }
 
-// One league's block inside the drop-down — every league renders here now
-// (see SportsCard below), not just the one picked in Settings for the
-// compact header pill. Next Game only shows at sm+ (`hidden sm:block` on
-// its own cell, not a prop) so the same markup self-adapts whichever pill's
-// panel is currently showing it, without SportsCard needing to know which
-// instance it is.
+// A league with no last/next game and no postseason series has nothing to
+// show — most often because its season hasn't started yet. Rather than
+// rendering an "unavailable" placeholder for it, SportsCard filters these
+// out entirely so the drop-down only lists leagues with something to say.
+function hasLeagueData(snapshot: SportsCardSnapshot): boolean {
+  const simple = simpleSnapshotOf(snapshot);
+  const mlb = snapshot.league === "MLB" ? snapshot.mlb : null;
+  return Boolean(
+    simple ? simple.lastGame || simple.nextGame : mlb ? mlb.seriesGames.length || mlb.lastGame || mlb.nextGame : false,
+  );
+}
+
+// One league's block inside the drop-down — every league with data renders
+// here (see SportsCard below, which filters out empty ones), not just the
+// one picked in Settings for the compact header pill. Next Game only shows
+// at sm+ (`hidden sm:block` on its own cell, not a prop) so the same markup
+// self-adapts whichever pill's panel is currently showing it, without
+// SportsCard needing to know which instance it is.
 function LeagueSection({
   snapshot,
   hour12,
@@ -202,9 +214,6 @@ function LeagueSection({
 }) {
   const simple = simpleSnapshotOf(snapshot);
   const mlb = snapshot.league === "MLB" ? snapshot.mlb : null;
-  const hasData = Boolean(
-    simple ? simple.lastGame || simple.nextGame : mlb ? mlb.seriesGames.length || mlb.lastGame || mlb.nextGame : false,
-  );
   const teamName = simple?.teamName ?? mlb?.teamName ?? "";
   const teamLogo = simple?.teamLogo ?? mlb?.teamLogo ?? "";
 
@@ -220,9 +229,7 @@ function LeagueSection({
         </p>
       </div>
 
-      {!hasData ? (
-        <p className="mt-1 text-xs text-soft">{labels.unavailable}</p>
-      ) : simple ? (
+      {simple ? (
         <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {simple.lastGame && (
             <TeamGameRow
@@ -346,7 +353,7 @@ export default function SportsCard({
       </div>
 
       <div className="mt-1.5 space-y-2 sm:mt-3">
-        {snapshots.map((snapshot) => (
+        {snapshots.filter(hasLeagueData).map((snapshot) => (
           <LeagueSection
             key={snapshot.league}
             snapshot={snapshot}
