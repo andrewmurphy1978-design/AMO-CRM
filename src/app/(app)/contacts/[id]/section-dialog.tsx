@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 
 export interface SectionDialogLabels {
   cancel: string;
@@ -23,6 +23,7 @@ export default function SectionDialog({
   labels,
   children,
   wide,
+  headerColorClassName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -34,16 +35,45 @@ export default function SectionDialog({
   // that the default max-w-lg panel would cramp them into a single narrow
   // column — this widens the panel instead of shrinking their grids.
   wide?: boolean;
+  // Opts a single dialog into the Email/Calendar-style colored header —
+  // a Tailwind bg-* class (see CARD_COLORS in section-card.tsx) that
+  // becomes the header bar itself, with Cancel/Save moved into it instead
+  // of a separate footer. Every other dialog omits this and keeps the
+  // original plain title + bottom button row.
+  headerColorClassName?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const formRef = useRef<HTMLFormElement>(null);
+  // The success message carries the systeme.io/Google Contacts sync status
+  // (see applyContactExternalSyncs) — worth surfacing even though the dialog
+  // itself closes right away, so it's kept as its own toast that outlives
+  // the dialog instead of being read once and discarded. Mirrors
+  // contact-form.tsx's own toast idiom: derived during render by comparing
+  // against the last-seen success message (React's recommended way to
+  // "adjust state when a prop changes") instead of calling setState
+  // synchronously inside a useEffect body.
+  const [dismissed, setDismissed] = useState(false);
+  const [lastSuccess, setLastSuccess] = useState<string | undefined>(undefined);
+  if (state?.success !== lastSuccess) {
+    setLastSuccess(state?.success);
+    setDismissed(false);
+  }
+  const toast = state?.success && !dismissed ? state.success : null;
 
   // A successful save closes the dialog — the read-only page behind it
   // re-renders from the revalidated data once Next.js applies the action's
-  // revalidatePath calls, so there's nothing else this needs to do.
+  // revalidatePath calls.
   useEffect(() => {
-    if (state?.success) onOpenChange(false);
+    if (!state?.success) return;
+    onOpenChange(false);
   }, [state, onOpenChange]);
+
+  // The sync-status toast dismisses itself after a few seconds.
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setDismissed(true), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     if (!open) return;
@@ -54,29 +84,77 @@ export default function SectionDialog({
     return () => document.removeEventListener("keydown", handler);
   }, [open, onOpenChange]);
 
-  if (!open) return null;
+  if (!open) {
+    return toast ? (
+      <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg bg-ink px-4 py-3 text-sm text-white shadow-lg">{toast}</div>
+    ) : null;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => onOpenChange(false)}>
       <div
-        className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-5 shadow-xl ${wide ? "max-w-3xl" : "max-w-lg"}`}
+        className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl ${wide ? "max-w-3xl" : "max-w-lg"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="font-display text-lg font-semibold text-ink">{title}</h3>
-        <form ref={formRef} action={formAction} className="mt-4 space-y-3">
-          {children}
-          {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-          <div className="mt-5 flex items-center justify-end gap-3 border-t border-card-border pt-4">
-            <button type="button" onClick={() => onOpenChange(false)} className="text-sm text-soft hover:underline">
-              {labels.cancel}
-            </button>
-            <button type="submit" disabled={pending} className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60">
-              {pending ? labels.saving : labels.save}
-            </button>
+        <form ref={formRef} action={formAction} className="flex min-h-0 flex-1 flex-col">
+          {headerColorClassName ? (
+            <div className={`flex shrink-0 items-center justify-between gap-3 px-4 py-3 text-white ${headerColorClassName}`}>
+              <h3 className="truncate font-display text-base font-semibold sm:text-lg">{title}</h3>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold opacity-90 hover:bg-white/15 hover:opacity-100"
+                >
+                  <CancelIcon />
+                  <span className="hidden sm:inline">{labels.cancel}</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="flex items-center gap-1.5 rounded-md bg-white/20 px-2 py-1.5 text-sm font-semibold hover:bg-white/30 disabled:opacity-60"
+                >
+                  <SaveIcon />
+                  <span className="hidden sm:inline">{pending ? labels.saving : labels.save}</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <h3 className="shrink-0 px-5 pt-5 font-display text-lg font-semibold text-ink">{title}</h3>
+          )}
+          <div className={`min-h-0 flex-1 space-y-3 overflow-y-auto p-5 ${headerColorClassName ? "" : "pt-4"}`}>
+            {children}
+            {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+            {!headerColorClassName && (
+              <div className="mt-5 flex items-center justify-end gap-3 border-t border-card-border pt-4">
+                <button type="button" onClick={() => onOpenChange(false)} className="text-sm text-soft hover:underline">
+                  {labels.cancel}
+                </button>
+                <button type="submit" disabled={pending} className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60">
+                  {pending ? labels.saving : labels.save}
+                </button>
+              </div>
+            )}
           </div>
         </form>
       </div>
     </div>
+  );
+}
+
+function CancelIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4 shrink-0">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4 shrink-0">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
   );
 }
 

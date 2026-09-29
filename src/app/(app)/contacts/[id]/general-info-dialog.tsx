@@ -9,8 +9,11 @@ import { COMPANY_TYPES } from "@/lib/company-types";
 import { INDUSTRIES } from "@/lib/industries";
 import { getWorldTimeZoneOptions } from "@/lib/timezones";
 import LocalTimeCard from "@/components/local-time-card";
+import Combobox from "@/components/combobox";
+import { CARD_COLORS } from "@/components/section-card";
 import { Field, FIELD_CLASS, LABEL_CLASS } from "../contact-form";
 import SectionDialog, { EditCardButton } from "./section-dialog";
+import AvatarPicker from "./avatar-picker";
 
 export interface GeneralInfoValues {
   firstName?: string | null;
@@ -64,107 +67,128 @@ export default function GeneralInfoDialog({
   return (
     <>
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
-      <SectionDialog open={open} onOpenChange={setOpen} title={t.contactForm.cardGeneralInfo} action={action} labels={t.phaseDialog} wide>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label={t.contactForm.firstName} name="firstName" defaultValue={values.firstName} />
-        <Field label={t.contactForm.lastName} name="lastName" defaultValue={values.lastName} />
-        <Field label={t.contactForm.company} name="company" defaultValue={values.company} />
-        <Field label={t.contactForm.companyType} name="companyType" defaultValue={values.companyType} list="companyTypeOptions" />
-        <div>
-          <label className={LABEL_CLASS}>{t.contactForm.jurisdictionCountry}</label>
-          <select
-            name="jurisdictionCountry"
-            value={jurisdictionCountry}
-            onChange={(e) => setJurisdictionCountry(e.target.value)}
-            className={FIELD_CLASS}
-          >
-            <option value="">—</option>
-            {COUNTRIES.map((c) => (
-              <option key={c.code} value={c.name}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+      <SectionDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={t.contactForm.cardGeneralInfo}
+        action={action}
+        labels={t.phaseDialog}
+        headerColorClassName={CARD_COLORS.general}
+        wide
+      >
+        {/* Row 1: First name / Last name / Company / Job title */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label={t.contactForm.firstName} name="firstName" defaultValue={values.firstName} />
+          <Field label={t.contactForm.lastName} name="lastName" defaultValue={values.lastName} />
+          <Field label={t.contactForm.company} name="company" defaultValue={values.company} />
+          <Field label={t.contactForm.jobTitle} name="jobTitle" defaultValue={values.jobTitle} />
         </div>
-        {jurisdictionRegionOptions ? (
+
+        {/* Row 2: Type of company / Country of jurisdiction / Region of jurisdiction / Industry */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Combobox label={t.contactForm.companyType} name="companyType" defaultValue={values.companyType} options={COMPANY_TYPES} />
           <div>
-            <label className={LABEL_CLASS}>
-              {stateLabelForCountry(jurisdictionCountry, lang)} {t.contactForm.ofJurisdiction}
-            </label>
-            <select name="jurisdictionRegion" defaultValue={normalizedJurisdictionRegion} className={FIELD_CLASS}>
+            <label className={LABEL_CLASS}>{t.contactForm.jurisdictionCountry}</label>
+            <select
+              name="jurisdictionCountry"
+              value={jurisdictionCountry}
+              onChange={(e) => setJurisdictionCountry(e.target.value)}
+              className={FIELD_CLASS}
+            >
               <option value="">—</option>
-              {jurisdictionRegionOptions.map((opt) => (
-                <option key={opt.code} value={opt.code}>
-                  {opt.name} ({opt.code})
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.name}>
+                  {c.name}
                 </option>
               ))}
             </select>
           </div>
-        ) : (
-          <Field
-            label={`${stateLabelForCountry(jurisdictionCountry, lang)} ${t.contactForm.ofJurisdiction}`}
-            name="jurisdictionRegion"
-            defaultValue={values.jurisdictionRegion}
-          />
-        )}
-        <Field label={t.contactForm.industry} name="industry" defaultValue={values.industry} list="industryOptions" />
-        <div>
-          <label className={LABEL_CLASS}>{t.contactForm.language}</label>
-          <div className="mt-2 flex items-center gap-4 text-sm text-ink">
-            <label className="flex items-center gap-1.5">
-              <input type="radio" name="locale" value="en" defaultChecked={(values.locale ?? "en").toLowerCase().startsWith("en")} className="accent-amo-lime" />
-              {t.team.english}
-            </label>
-            <label className="flex items-center gap-1.5">
-              <input type="radio" name="locale" value="fr" defaultChecked={(values.locale ?? "").toLowerCase().startsWith("fr")} className="accent-amo-lime" />
-              {t.team.french}
-            </label>
-          </div>
-        </div>
-        <Field label={t.contactForm.stage} name="stage" as="select" defaultValue={values.stage} options={STAGES} />
-        <div>
-          <label className={LABEL_CLASS}>{t.contactForm.timeZone}</label>
-          <select name="timeZone" value={timeZone} onChange={(e) => setTimeZone(e.target.value)} className={FIELD_CLASS}>
-            <option value="">—</option>
-            {timeZoneOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        {timeZone && (
-          <div className="flex flex-col justify-end">
-            <LocalTimeCard timeZone={timeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} />
-          </div>
-        )}
-        <Field label={t.contactForm.website} name="website" type="url" defaultValue={values.website} placeholder="https://…" />
-        {isManual && <Field label={t.contactDetail.fieldSource} name="source" defaultValue={values.source} />}
-      </div>
-
-      <div className="rounded-lg border border-card-border bg-black/[0.02] p-3">
-        <h3 className={LABEL_CLASS}>{t.contactForm.cardPersonalInfo}</h3>
-        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {values.avatarUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- an arbitrary external Google-hosted URL, not a local/optimizable asset
-            <img src={values.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
+          {jurisdictionRegionOptions ? (
+            <div>
+              <label className={LABEL_CLASS}>
+                {stateLabelForCountry(jurisdictionCountry, lang)} {t.contactForm.ofJurisdiction}
+              </label>
+              <select name="jurisdictionRegion" defaultValue={normalizedJurisdictionRegion} className={FIELD_CLASS}>
+                <option value="">—</option>
+                {jurisdictionRegionOptions.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.name} ({opt.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <Field
+              label={`${stateLabelForCountry(jurisdictionCountry, lang)} ${t.contactForm.ofJurisdiction}`}
+              name="jurisdictionRegion"
+              defaultValue={values.jurisdictionRegion}
+            />
           )}
-          <Field label={t.contactForm.nickname} name="nickname" defaultValue={values.nickname} />
-          <Field label={t.contactForm.jobTitle} name="jobTitle" defaultValue={values.jobTitle} />
-          <Field label={t.contactForm.birthday} name="birthday" defaultValue={values.birthday} placeholder="YYYY-MM-DD" />
+          <Combobox label={t.contactForm.industry} name="industry" defaultValue={values.industry} options={INDUSTRIES} />
         </div>
-      </div>
 
-      <datalist id="companyTypeOptions">
-        {COMPANY_TYPES.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
-      <datalist id="industryOptions">
-        {INDUSTRIES.map((i) => (
-          <option key={i} value={i} />
-        ))}
-      </datalist>
+        {/* Row 3: Stage / Time zone / Local time there / Language (Language isn't part of the
+            requested 3rd row, but it's real contact data with nowhere else to live in this
+            dialog now that the old bordered sub-card is gone, so it rides along here.) */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label={t.contactForm.stage} name="stage" as="select" defaultValue={values.stage} options={STAGES} />
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.timeZone}</label>
+            <select name="timeZone" value={timeZone} onChange={(e) => setTimeZone(e.target.value)} className={FIELD_CLASS}>
+              <option value="">—</option>
+              {timeZoneOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {timeZone ? (
+            <div className="flex flex-col justify-end">
+              <LocalTimeCard timeZone={timeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} />
+            </div>
+          ) : (
+            <div />
+          )}
+          <div>
+            <label className={LABEL_CLASS}>{t.contactForm.language}</label>
+            <div className="mt-2 flex items-center gap-4 text-sm text-ink">
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name="locale" value="en" defaultChecked={(values.locale ?? "en").toLowerCase().startsWith("en")} className="accent-amo-lime" />
+                {t.team.english}
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name="locale" value="fr" defaultChecked={(values.locale ?? "").toLowerCase().startsWith("fr")} className="accent-amo-lime" />
+                {t.team.french}
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Row 4: Website / Nickname / Birthday / Image */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label={t.contactForm.website} name="website" type="url" defaultValue={values.website} placeholder="https://…" />
+          <Field label={t.contactForm.nickname} name="nickname" defaultValue={values.nickname} />
+          <Field label={t.contactForm.birthday} name="birthday" defaultValue={values.birthday} placeholder="YYYY-MM-DD" />
+          <div>
+            <label className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</label>
+            <div className="mt-1">
+              <AvatarPicker
+                name="avatarUrl"
+                defaultValue={values.avatarUrl}
+                firstName={values.firstName}
+                lastName={values.lastName}
+                labels={{ upload: t.contactForm.avatarUpload, orChoose: t.contactForm.avatarOrChoose, remove: t.contactForm.avatarRemove }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {isManual && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label={t.contactDetail.fieldSource} name="source" defaultValue={values.source} />
+          </div>
+        )}
       </SectionDialog>
     </>
   );

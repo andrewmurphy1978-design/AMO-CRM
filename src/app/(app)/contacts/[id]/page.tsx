@@ -28,6 +28,8 @@ import ContactCredentialsCard from "./contact-credentials-card";
 import ContactEmailLinks from "./contact-email-links";
 import { CONTACT_SYNC_APPS } from "@/lib/contact-sync";
 import { telHref, messagingAppLink, voipAppLink } from "@/lib/app-deep-links";
+import { formatBirthday } from "@/lib/birthday";
+import { initialsFor } from "@/lib/avatar";
 import TagManager from "./tag-manager";
 import GeneralInfoDialog from "./general-info-dialog";
 import ContactInfoDialog from "./contact-info-dialog";
@@ -102,6 +104,21 @@ function InfoField({ label, value }: { label: string; value?: React.ReactNode })
     <div className="min-w-0">
       <p className={LABEL_CLASS}>{label}</p>
       <p className="mt-1 break-words text-sm text-ink">{value || "—"}</p>
+    </div>
+  );
+}
+
+// The contact's photo if one was set (an uploaded/letter-avatar data URI or
+// a Google-hosted URL), else a colored-circle initials placeholder — same
+// fallback the avatar picker itself shows before a first choice is made.
+function AvatarThumb({ url, firstName, lastName }: { url?: string | null; firstName?: string | null; lastName?: string | null }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element -- either an external Google-hosted URL or a locally-generated data URI, not a local/optimizable asset
+    return <img src={url} alt="" className="h-14 w-14 rounded-full object-cover" />;
+  }
+  return (
+    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/10 text-sm font-semibold text-soft">
+      {initialsFor(firstName, lastName)}
     </div>
   );
 }
@@ -490,6 +507,17 @@ export default async function ContactDetailPage({
   // billing addresses) drives the fallback guess.
   const contactTimeZone = contact.timeZone || getTimezoneForCountryState(contact.country, contact.state);
 
+  const birthdayInfo = formatBirthday(contact.birthday, lang);
+  const birthdayLine = birthdayInfo
+    ? birthdayInfo.age != null
+      ? `${birthdayInfo.display} · ${t.contactForm.ageYearsOld(birthdayInfo.age)}`
+      : birthdayInfo.display
+    : undefined;
+  // Mobile-only compact jurisdiction field: region+country merged into one
+  // line (e.g. "QC Canada", "NSW Australia") instead of the two separate
+  // columns desktop has room for.
+  const jurisdictionMobile = [contact.jurisdictionRegion, contact.jurisdictionCountry].filter(Boolean).join(" ") || undefined;
+
   return (
     // Mobile: main's own p-4 (see app-shell.tsx) puts a 16px gap between
     // this page's cards and both the sidebar and the right edge of the
@@ -520,40 +548,39 @@ export default async function ContactDetailPage({
               />
             }
           >
-            <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
+            {/* Desktop: explicit 4-row grid (Language has no row of its own in
+                this layout — it rides at the end of row 2 rather than being
+                dropped, since it's still real contact data). */}
+            <div className="hidden gap-4 lg:grid lg:grid-cols-4">
+              {/* Row 1 */}
               <InfoField label={t.contactForm.firstName} value={contact.firstName} />
               <InfoField label={t.contactForm.lastName} value={contact.lastName} />
               <InfoField label={t.contactForm.company} value={contact.company} />
-              <div className="lg:row-span-4">
-                <p className={LABEL_CLASS}>{t.contactForm.tags}</p>
-                <TagManager contactId={contact.id} tags={contact.tags.map((ct) => ct.tag)} allTags={allTags} lang={lang} />
-              </div>
+              <InfoField label={t.contactForm.jobTitle} value={contact.jobTitle} />
 
+              {/* Row 2 */}
               <InfoField label={t.contactForm.companyType} value={contact.companyType} />
               <InfoField label={t.contactForm.jurisdictionCountry} value={contact.jurisdictionCountry} />
               <InfoField
                 label={`${stateLabelForCountry(contact.jurisdictionCountry ?? undefined, lang)} ${t.contactForm.ofJurisdiction}`}
                 value={contact.jurisdictionRegion}
               />
-
               <InfoField label={t.contactForm.industry} value={contact.industry} />
-              <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
-              {/* col-span-2 at the base 2-col layout: this bordered card is
-                  taller than a plain label+value cell, and row-spanning it
-                  next to Language there (like at lg's row-span-2) leaves an
-                  odd gap in Language's own cell — a full-width row of its
-                  own avoids that instead. */}
-              <div className="col-span-2 flex flex-col justify-end lg:col-span-1 lg:row-span-2">
-                {contactTimeZone ? (
-                  <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} />
-                ) : null}
-              </div>
 
+              {/* Row 3 */}
               <InfoField label={t.contactForm.stage} value={STAGE_LABELS[contact.stage]} />
               <InfoField
                 label={t.contactForm.timeZone}
                 value={contact.timeZone ? `(${utcOffsetLabel(contact.timeZone)}) ${contact.timeZone.replace(/_/g, " ")}` : undefined}
               />
+              <div className="flex flex-col justify-end">
+                {contactTimeZone ? (
+                  <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} />
+                ) : null}
+              </div>
+              <TagManager contactId={contact.id} tags={contact.tags.map((ct) => ct.tag)} allTags={allTags} lang={lang} />
+
+              {/* Row 4 */}
               <InfoField
                 label={t.contactForm.website}
                 value={
@@ -564,22 +591,75 @@ export default async function ContactDetailPage({
                   ) : undefined
                 }
               />
-            </div>
-
-            {(contact.nickname || contact.jobTitle || contact.birthday || contact.avatarUrl) && (
-              <div className="rounded-lg border border-card-border bg-black/[0.02] p-2 sm:p-4">
-                <h3 className={LABEL_CLASS}>{t.contactForm.cardPersonalInfo}</h3>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-3 sm:gap-4 lg:grid-cols-4">
-                  {contact.avatarUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element -- an arbitrary external Google-hosted URL, not a local/optimizable asset
-                    <img src={contact.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
-                  )}
-                  <InfoField label={t.contactForm.nickname} value={contact.nickname} />
-                  <InfoField label={t.contactForm.jobTitle} value={contact.jobTitle} />
-                  <InfoField label={t.contactForm.birthday} value={contact.birthday} />
+              <InfoField label={t.contactForm.nickname} value={contact.nickname} />
+              <InfoField label={t.contactForm.birthday} value={birthdayLine} />
+              <div>
+                <p className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</p>
+                <div className="mt-1">
+                  <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} />
                 </div>
               </div>
-            )}
+
+              {/* Not part of the requested 4 rows, but still real data with
+                  nowhere else to show now that the bordered Personal info
+                  sub-card is gone — kept as a small trailing row. */}
+              <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
+            </div>
+
+            {/* Mobile: separate 7(+2)-row layout — a merged Jurisdiction field
+                instead of desktop's two columns, plus Industry and Tags as
+                trailing rows since the requested 7 rows didn't have room for
+                them but they're still real data. */}
+            <div className="grid grid-cols-2 gap-2 lg:hidden">
+              <InfoField label={t.contactForm.firstName} value={contact.firstName} />
+              <InfoField label={t.contactForm.lastName} value={contact.lastName} />
+
+              <InfoField label={t.contactForm.company} value={contact.company} />
+              <InfoField label={t.contactForm.jobTitle} value={contact.jobTitle} />
+
+              <InfoField label={t.contactForm.companyType} value={contact.companyType} />
+              <InfoField label={t.contactForm.jurisdictionShort} value={jurisdictionMobile} />
+
+              <InfoField label={t.contactForm.language} value={languageDisplay(contact.locale, t)} />
+              <InfoField label={t.contactForm.stage} value={STAGE_LABELS[contact.stage]} />
+
+              <InfoField
+                label={t.contactForm.timeZone}
+                value={contact.timeZone ? `(${utcOffsetLabel(contact.timeZone)}) ${contact.timeZone.replace(/_/g, " ")}` : undefined}
+              />
+              <div className="flex flex-col justify-end">
+                {contactTimeZone ? (
+                  <LocalTimeCard timeZone={contactTimeZone} hour12={hour12} lang={lang} label={t.contactForm.timeZoneNow} />
+                ) : null}
+              </div>
+
+              <InfoField
+                label={t.contactForm.website}
+                value={
+                  contact.website ? (
+                    <a href={contact.website} target="_blank" rel="noreferrer" className="break-words text-sky-700 hover:underline">
+                      {contact.website}
+                    </a>
+                  ) : undefined
+                }
+              />
+              <InfoField label={t.contactForm.nickname} value={contact.nickname} />
+
+              <InfoField label={t.contactForm.birthday} value={birthdayLine} />
+              <div>
+                <p className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</p>
+                <div className="mt-1">
+                  <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} />
+                </div>
+              </div>
+
+              <div className="col-span-2">
+                <InfoField label={t.contactForm.industry} value={contact.industry} />
+              </div>
+              <div className="col-span-2">
+                <TagManager contactId={contact.id} tags={contact.tags.map((ct) => ct.tag)} allTags={allTags} lang={lang} />
+              </div>
+            </div>
           </Card>
 
           <Card

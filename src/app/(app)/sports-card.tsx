@@ -25,6 +25,8 @@ export interface SportsLabels {
   series: string;
   refresh: string;
   refreshing: string;
+  seasonStartsOn: (date: string) => string;
+  regularSeasonFinished: string;
 }
 
 export type SportsCardSnapshot =
@@ -166,6 +168,54 @@ function SeriesGameRow({
   );
 }
 
+// The last-game/next-game pair every non-postseason league shows — but
+// either half can legitimately be absent for a reason worth explaining
+// instead of just rendering one column and leaving the other blank: no
+// last game at all (the season hasn't started yet, e.g. NBA in early fall)
+// shows when the season starts instead, and a last game with no next game
+// (the regular season just ended, e.g. MLB once the Blue Jays miss the
+// playoffs) says so instead of silently having nothing there.
+function SimpleGamesGrid({
+  lastGame,
+  nextGame,
+  teamName,
+  teamLogo,
+  hour12,
+  dateLocale,
+  labels,
+}: {
+  lastGame: SportsTeamGame | null;
+  nextGame: SportsTeamGame | null;
+  teamName: string;
+  teamLogo: string;
+  hour12: boolean;
+  dateLocale: ReturnType<typeof getDateLocale>;
+  labels: SportsLabels;
+}) {
+  return (
+    <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {lastGame ? (
+        <TeamGameRow label={labels.lastGame} game={lastGame} teamName={teamName} teamLogo={teamLogo} hour12={hour12} dateLocale={dateLocale} labels={labels} />
+      ) : nextGame ? (
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{labels.lastGame}</p>
+          <p className="mt-1 text-xs text-soft">{labels.seasonStartsOn(format(new Date(nextGame.date), "MMM d", { locale: dateLocale }))}</p>
+        </div>
+      ) : null}
+      {nextGame ? (
+        <div className="hidden sm:block">
+          <TeamGameRow label={labels.nextGame} game={nextGame} teamName={teamName} teamLogo={teamLogo} hour12={hour12} dateLocale={dateLocale} labels={labels} />
+        </div>
+      ) : lastGame ? (
+        <div className="hidden sm:block">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{labels.nextGame}</p>
+          <p className="mt-1 text-xs text-soft">{labels.regularSeasonFinished}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function simpleSnapshotOf(snapshot: SportsCardSnapshot): TeamSnapshot | null {
   switch (snapshot.league) {
     case "NHL":
@@ -261,32 +311,15 @@ function LeagueSection({
       </div>
 
       {simple ? (
-        <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {simple.lastGame && (
-            <TeamGameRow
-              label={labels.lastGame}
-              game={simple.lastGame}
-              teamName={simple.teamName}
-              teamLogo={simple.teamLogo}
-              hour12={hour12}
-              dateLocale={dateLocale}
-              labels={labels}
-            />
-          )}
-          {simple.nextGame && (
-            <div className="hidden sm:block">
-              <TeamGameRow
-                label={labels.nextGame}
-                game={simple.nextGame}
-                teamName={simple.teamName}
-                teamLogo={simple.teamLogo}
-                hour12={hour12}
-                dateLocale={dateLocale}
-                labels={labels}
-              />
-            </div>
-          )}
-        </div>
+        <SimpleGamesGrid
+          lastGame={simple.lastGame}
+          nextGame={simple.nextGame}
+          teamName={simple.teamName}
+          teamLogo={simple.teamLogo}
+          hour12={hour12}
+          dateLocale={dateLocale}
+          labels={labels}
+        />
       ) : mlb ? (
         mlb.inPostseason ? (
           <div className="mt-1 divide-y divide-card-border/60">
@@ -308,32 +341,15 @@ function LeagueSection({
             ))}
           </div>
         ) : (
-          <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {mlb.lastGame && (
-              <TeamGameRow
-                label={labels.lastGame}
-                game={mlb.lastGame}
-                teamName={mlb.teamName}
-                teamLogo={mlb.teamLogo}
-                hour12={hour12}
-                dateLocale={dateLocale}
-                labels={labels}
-              />
-            )}
-            {mlb.nextGame && (
-              <div className="hidden sm:block">
-                <TeamGameRow
-                  label={labels.nextGame}
-                  game={mlb.nextGame}
-                  teamName={mlb.teamName}
-                  teamLogo={mlb.teamLogo}
-                  hour12={hour12}
-                  dateLocale={dateLocale}
-                  labels={labels}
-                />
-              </div>
-            )}
-          </div>
+          <SimpleGamesGrid
+            lastGame={mlb.lastGame}
+            nextGame={mlb.nextGame}
+            teamName={mlb.teamName}
+            teamLogo={mlb.teamLogo}
+            hour12={hour12}
+            dateLocale={dateLocale}
+            labels={labels}
+          />
         )
       ) : null}
     </div>

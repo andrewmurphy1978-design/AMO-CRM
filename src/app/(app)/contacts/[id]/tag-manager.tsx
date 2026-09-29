@@ -1,9 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { addTagToContact, removeTagFromContact } from "@/actions/contacts";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { sortTags, tagPillStyle, type TagLike } from "@/lib/tag-colors";
+import { sortTags, tagPillStyle, groupTagsByCategory, type TagLike } from "@/lib/tag-colors";
+
+const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
 export default function TagManager({
   contactId,
@@ -17,55 +19,104 @@ export default function TagManager({
   lang: Lang;
 }) {
   const [pending, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
   const t = getDict(lang);
 
   const appliedIds = new Set(tags.map((tag) => tag.id));
-  const availableTags = allTags.filter((tag) => !appliedIds.has(tag.id));
   const displayTags = sortTags(tags.map((tag) => ({ tag })));
+  const groups = groupTagsByCategory(allTags);
+
+  function toggle(tag: { id: string } & TagLike) {
+    startTransition(() => {
+      if (appliedIds.has(tag.id)) removeTagFromContact(contactId, tag.id);
+      else addTagToContact(contactId, tag.name);
+    });
+  }
 
   return (
-    <div className="mt-3">
-      <div className="flex flex-wrap gap-2">
+    <div>
+      <div className="flex items-center gap-1.5">
+        <p className={LABEL_CLASS}>{t.contactForm.tags}</p>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title={t.tagManager.manage}
+          aria-label={t.tagManager.manage}
+          className="flex h-4 w-4 items-center justify-center rounded-full bg-black/10 text-soft hover:bg-black/20 hover:text-ink"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-2.5 w-2.5">
+            <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-2">
         {displayTags.map(({ tag }) => {
           const style = tagPillStyle(tag);
           return (
-          <span
-            key={tag.id}
-            className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${style.className}`}
-            style={style.style}
-          >
-            {tag.name}
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => startTransition(() => removeTagFromContact(contactId, tag.id))}
-              className="opacity-70 hover:opacity-100"
-              aria-label={`${t.tagManager.remove} ${tag.name}`}
+            <span
+              key={tag.id}
+              className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${style.className}`}
+              style={style.style}
             >
-              ×
-            </button>
-          </span>
+              {tag.name}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => startTransition(() => removeTagFromContact(contactId, tag.id))}
+                className="opacity-70 hover:opacity-100"
+                aria-label={`${t.tagManager.remove} ${tag.name}`}
+              >
+                ×
+              </button>
+            </span>
           );
         })}
         {tags.length === 0 && <p className="text-sm text-soft">{t.tagManager.noTags}</p>}
       </div>
-      <select
-        disabled={pending || availableTags.length === 0}
-        value=""
-        onChange={(e) => {
-          const name = e.target.value;
-          if (!name) return;
-          startTransition(() => addTagToContact(contactId, name));
-        }}
-        className="mt-3 w-full rounded-md border border-card-border bg-field-bg px-3 py-1.5 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30 disabled:opacity-60"
-      >
-        <option value="">{t.contactDetail.addTagPlaceholder}</option>
-        {availableTags.map((tag) => (
-          <option key={tag.id} value={tag.name}>
-            {tag.name}
-          </option>
-        ))}
-      </select>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
+          <div
+            className="max-h-[80vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-display text-base font-semibold text-ink">{t.tagManager.allTagsTitle}</h3>
+            <div className="mt-3 space-y-2">
+              {[groups.language, groups.personal, groups.systemeIo].map(
+                (group, i) =>
+                  group.length > 0 && (
+                    <div key={i} className={i > 0 ? "space-y-1 border-t border-card-border pt-2" : "space-y-1"}>
+                      {group.map((tag) => {
+                        const { className, style } = tagPillStyle(tag);
+                        return (
+                          <label
+                            key={tag.id}
+                            className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm ${className}`}
+                            style={style}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={appliedIds.has(tag.id)}
+                              disabled={pending}
+                              onChange={() => toggle(tag)}
+                              className="h-4 w-4 rounded border-card-border accent-amo-lime"
+                            />
+                            {tag.name}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )
+              )}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={() => setOpen(false)} className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
+                {t.tagManager.done}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

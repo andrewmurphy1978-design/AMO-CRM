@@ -344,9 +344,15 @@ export async function getMlbSnapshot(teamId: number = DEFAULT_MLB_TEAM_ID): Prom
 export type TeamSnapshot = NhlSnapshot;
 
 interface RawEspnTeamRef {
+  id?: string;
   abbreviation?: string;
   displayName?: string;
   logo?: string;
+  // The team-schedule endpoint's competitors nest their logo as an array of
+  // {href} objects (ESPN's general team-summary shape) rather than the flat
+  // `logo` string above, which this repo's own code had assumed — kept as a
+  // fallback below since either shape has been seen in ESPN's site.api.
+  logos?: { href?: string }[];
 }
 
 interface RawEspnCompetitor {
@@ -368,6 +374,14 @@ interface RawEspnEvent {
 }
 
 interface RawEspnScheduleResponse {
+  // The team-schedule endpoint's own top-level team summary — a much more
+  // reliable way to identify "which competitor is us" in every event below
+  // than trusting this file's own hardcoded abbreviation to exactly match
+  // whatever format ESPN happens to use for a given league's competitors
+  // (this is the likely reason NFL/CFL/MLS games weren't matching: a small
+  // mismatch there makes parseEspnEvent's lookup fail for every event,
+  // silently, with zero games parsed and no fetch error to show for it).
+  team?: RawEspnTeamRef;
   events?: RawEspnEvent[];
 }
 
@@ -390,26 +404,32 @@ function parseEspnScore(score: RawEspnCompetitor["score"]): number | null {
 function parseEspnEvent(
   event: RawEspnEvent,
   teamAbbrev: string,
+  teamId: string | undefined,
   teamNames: Record<string, string>,
   fallbackLogo: (abbrev: string) => string,
 ): SportsTeamGame | null {
   const competition = event.competitions?.[0];
   const competitors = competition?.competitors;
   if (!competition || !competitors || competitors.length < 2) return null;
-  const mine = competitors.find((c) => c.team?.abbreviation?.toUpperCase() === teamAbbrev.toUpperCase());
+  // Match by the schedule response's own team id first (reliable regardless
+  // of abbreviation formatting quirks per league) and only fall back to
+  // abbreviation matching when the response didn't carry a top-level team id.
+  const mine = competitors.find(
+    (c) => (teamId && c.team?.id === teamId) || c.team?.abbreviation?.toUpperCase() === teamAbbrev.toUpperCase(),
+  );
   const opponent = competitors.find((c) => c !== mine);
   const opponentAbbrev = opponent?.team?.abbreviation?.toUpperCase();
-  if (!mine || !opponent || !opponentAbbrev) return null;
+  if (!mine || !opponent) return null;
 
   const stateRaw = competition.status?.type?.state?.toLowerCase();
   const completed = competition.status?.type?.completed === true;
   const status: SportsTeamGame["status"] = completed ? "final" : stateRaw === "in" ? "live" : "upcoming";
 
   return {
-    gameId: String(event.id ?? `${event.date}-${opponentAbbrev}`),
+    gameId: String(event.id ?? `${event.date}-${opponentAbbrev ?? opponent.team?.displayName}`),
     date: event.date ?? competition.date ?? new Date().toISOString(),
-    opponentName: teamNames[opponentAbbrev] ?? opponent.team?.displayName ?? opponentAbbrev,
-    opponentLogo: opponent.team?.logo ?? fallbackLogo(opponentAbbrev),
+    opponentName: (opponentAbbrev && teamNames[opponentAbbrev]) ?? opponent.team?.displayName ?? opponentAbbrev ?? "?",
+    opponentLogo: opponent.team?.logo ?? opponent.team?.logos?.[0]?.href ?? (opponentAbbrev ? fallbackLogo(opponentAbbrev) : ""),
     homeAway: mine.homeAway === "home" ? "home" : "away",
     status,
     teamScore: parseEspnScore(mine.score),
@@ -426,6 +446,12 @@ async function getEspnTeamSnapshot(
   const errors: string[] = [];
   let lastGame: SportsTeamGame | null = null;
   let nextGame: SportsTeamGame | null = null;
+  // The guessed CDN path below (espnLogoUrl) only actually resolves for the
+  // "major" leagues ESPN maintains that sprite folder for — NFL/NBA/NHL/MLB.
+  // CFL and MLS/soccer logos live at different paths, so guessing 404s for
+  // them; the schedule response's own team.logo/logos[] is the real one and
+  // always preferred when present, with the guess only as a last resort.
+  let teamLogo: string | null = null;
 
   try {
     const res = await fetch(
@@ -436,9 +462,18 @@ async function getEspnTeamSnapshot(
     } else {
       const data = (await res.json()) as RawEspnScheduleResponse;
       const events = Array.isArray(data.events) ? data.events : [];
+      const resolvedTeamId = data.team?.id;
+      teamLogo = data.team?.logo ?? data.team?.logos?.[0]?.href ?? null;
       const parsed = events
-        .map((e) => parseEspnEvent(e, teamAbbrev, teamNames, fallbackLogo))
+        .map((e) => parseEspnEvent(e, teamAbbrev, resolvedTeamId, teamNames, fallbackLogo))
         .filter((g): g is SportsTeamGame => g !== null);
+      if (events.length > 0 && parsed.length === 0) {
+        // ESPN returned a real schedule but nothing in it matched our team —
+        // almost certainly an abbreviation/id mismatch in parseEspnEvent
+        // rather than "no games", so this is worth surfacing instead of
+        // quietly looking identical to an empty season.
+        errors.push(`espn(${sportPath}): received ${events.length} events but none matched team "${teamAbbrev}"`);
+      }
       const now = Date.now();
       const past = parsed.filter((g) => g.status === "final" && new Date(g.date).getTime() <= now);
       const future = parsed
@@ -453,7 +488,7 @@ async function getEspnTeamSnapshot(
 
   return {
     teamName: teamNames[teamAbbrev] ?? teamAbbrev,
-    teamLogo: fallbackLogo(teamAbbrev),
+    teamLogo: teamLogo ?? fallbackLogo(teamAbbrev),
     lastGame,
     nextGame,
     errors,

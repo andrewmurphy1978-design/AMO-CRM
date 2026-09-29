@@ -32,6 +32,10 @@ export const ContactSchema = z.object({
   nickname: z.string().trim().optional(),
   jobTitle: z.string().trim().optional(),
   birthday: z.string().trim().optional(),
+  // Nullable (not just optional): the avatar picker submits an explicit ""
+  // for "Remove photo", which needs to actually clear the column rather
+  // than leave it untouched the way an omitted/undefined field would.
+  avatarUrl: z.string().trim().nullable().optional(),
   companyType: z.string().trim().optional(),
   jurisdictionCountry: z.string().trim().optional(),
   jurisdictionRegion: z.string().trim().optional(),
