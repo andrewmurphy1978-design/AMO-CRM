@@ -7,7 +7,14 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
-import { statusGroupOf, statusStyle, shortStatusLabel, type AffiliateStatusGroup } from "@/lib/affiliate-status";
+import {
+  statusGroupOf,
+  statusStyle,
+  shortStatusLabel,
+  affiliateTabTitle,
+  AFFILIATE_TAB_TITLES,
+  type AffiliateStatusGroup,
+} from "@/lib/affiliate-status";
 import PageHeader from "../page-header";
 import Card, { type CardColor } from "@/components/section-card";
 import SyncShortIoButton from "./programs/sync-shortio-button";
@@ -28,16 +35,6 @@ type AffiliateProgramRow = {
   shortioClicksFr: number | null;
   emailLinks: { id: string; subject: string | null; fromLabel: string | null; messageDate: Date | null; gmailLink: string | null }[];
 };
-
-const TAB_TITLES: { tab: AffiliateProgramTab; key: "aiToolsTitle" | "trainingProgramsTitle" | "businessOpportunitiesTitle" }[] = [
-  { tab: "AI_TOOLS", key: "aiToolsTitle" },
-  { tab: "TRAINING_PROGRAMS", key: "trainingProgramsTitle" },
-  { tab: "BUSINESS_OPPORTUNITIES", key: "businessOpportunitiesTitle" },
-];
-
-function tabTitle(tab: AffiliateProgramTab, t: ReturnType<typeof getDict>): string {
-  return t.marketing[TAB_TITLES.find((section) => section.tab === tab)?.key ?? "aiToolsTitle"];
-}
 
 function AffiliateProgramCard({
   color,
@@ -70,7 +67,7 @@ function AffiliateProgramCard({
           <div className="divide-y divide-card-border sm:hidden">
             {programs.map((p) => {
               const styles = statusStyle(p.affiliateStatus);
-              const typeLine = [tabTitle(p.tab, t), p.type].filter(Boolean).join(" / ") || "—";
+              const typeLine = [affiliateTabTitle(p.tab, t), p.type].filter(Boolean).join(" / ") || "—";
               const followUp = p.followUpNeeded
                 ? p.followUpDate
                   ? format(p.followUpDate, "PP", { locale: dateLocale })
@@ -152,7 +149,7 @@ function AffiliateProgramCard({
                         {p.name}
                       </Link>
                     </td>
-                    <td className="truncate py-2 pr-4 align-top text-ink/70">{tabTitle(p.tab, t)}</td>
+                    <td className="truncate py-2 pr-4 align-top text-ink/70">{affiliateTabTitle(p.tab, t)}</td>
                     <td className="truncate py-2 pr-4 align-top text-ink/70">{p.type || "—"}</td>
                     <td className="py-2 pr-4 align-top">
                       <span className={`inline-flex max-w-full items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-xs font-medium ${styles.badge}`}>
@@ -222,9 +219,9 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
   }
 
   const countByTab = new Map(tabCounts.map((row) => [row.tab, row._count._all]));
-  const categoryOptions = TAB_TITLES.map((section) => ({
+  const categoryOptions = AFFILIATE_TAB_TITLES.map((section) => ({
     value: section.tab,
-    label: tabTitle(section.tab, t),
+    label: affiliateTabTitle(section.tab, t),
     count: countByTab.get(section.tab) ?? 0,
   }));
   const totalCount = tabCounts.reduce((sum, row) => sum + row._count._all, 0);

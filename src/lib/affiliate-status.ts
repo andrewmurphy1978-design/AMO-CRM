@@ -1,3 +1,6 @@
+import type { AffiliateProgramTab } from "@prisma/client";
+import type { getDict } from "@/lib/i18n/dictionaries";
+
 // The "Affiliate Status" field used to be free text, with dozens of
 // variants describing the same handful of real states (e.g. "Fallback
 // active — apply via Impact", "Declined - PartnerStack"). It's now a
@@ -41,6 +44,30 @@ const STATUS_GROUP: Record<AffiliateStatusValue, AffiliateStatusGroup> = {
 export function statusGroupOf(status: string | null | undefined): AffiliateStatusGroup {
   if (status && isAffiliateStatusValue(status)) return STATUS_GROUP[status];
   return "NO_PROGRAM_OR_DECLINED";
+}
+
+// The 4 buckets the Dashboard's Affiliate Programs Summary card breaks
+// out — same ACTIVE/PENDING split as the Marketing page's own grouping
+// above, but with NO_PROGRAM_OR_DECLINED split into "declined/blocked"
+// (something was actively tried and didn't work out) and "no program"
+// (nothing to chase at all) — a distinction the Marketing page's 3-card
+// layout doesn't need but the Summary card's 4-stat design does.
+export type AffiliateDashboardBucket = "ACTIVE" | "PENDING" | "DECLINED_BLOCKED" | "NO_PROGRAM";
+
+const DASHBOARD_BUCKET: Record<AffiliateStatusValue, AffiliateDashboardBucket> = {
+  "Link acquired": "ACTIVE",
+  "Approved - affiliate link active": "ACTIVE",
+  "Pending approval": "PENDING",
+  "Apply / verify": "PENDING",
+  "Application route to verify": "PENDING",
+  "Fallback active - no affiliate program": "NO_PROGRAM",
+  "Fallback active - Declined": "DECLINED_BLOCKED",
+  "Fallback active - Blocked": "DECLINED_BLOCKED",
+};
+
+export function dashboardBucketOf(status: string | null | undefined): AffiliateDashboardBucket {
+  if (status && isAffiliateStatusValue(status)) return DASHBOARD_BUCKET[status];
+  return "NO_PROGRAM";
 }
 
 const STATUS_STYLE: Record<AffiliateStatusValue, { badge: string; row: string; border: string; dot: string }> = {
@@ -142,3 +169,16 @@ export const AFFILIATE_TYPE_OPTIONS: Record<string, string[]> = {
   ],
   BUSINESS_OPPORTUNITIES: ["Print-On-Demand", "Drop shipping", "Digital products", "Freelancing", "Online Businesses", "Affiliate Business"],
 };
+
+// Shared by the Marketing list page and the Dashboard's own Pending
+// Affiliate Programs card — one source of truth for turning a program's
+// `tab` into its display title, so both stay in sync.
+export const AFFILIATE_TAB_TITLES: { tab: AffiliateProgramTab; key: "aiToolsTitle" | "trainingProgramsTitle" | "businessOpportunitiesTitle" }[] = [
+  { tab: "AI_TOOLS", key: "aiToolsTitle" },
+  { tab: "TRAINING_PROGRAMS", key: "trainingProgramsTitle" },
+  { tab: "BUSINESS_OPPORTUNITIES", key: "businessOpportunitiesTitle" },
+];
+
+export function affiliateTabTitle(tab: AffiliateProgramTab, t: ReturnType<typeof getDict>): string {
+  return t.marketing[AFFILIATE_TAB_TITLES.find((section) => section.tab === tab)?.key ?? "aiToolsTitle"];
+}

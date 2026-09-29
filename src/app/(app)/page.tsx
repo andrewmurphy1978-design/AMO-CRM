@@ -36,6 +36,13 @@ import CalendarSummaryCard from "./calendar-summary-card";
 import NewContactsCard from "./new-contacts-card";
 import ContactSummaryCard from "./contact-summary-card";
 import ProjectSummaryCard from "./project-summary-card";
+import AffiliateProgramsSummaryCard, {
+  type AffiliateProgramsSummaryCounts,
+} from "./affiliate-programs-summary-card";
+import PendingAffiliateProgramsCard, {
+  type PendingAffiliateProgramRow,
+} from "./pending-affiliate-programs-card";
+import { dashboardBucketOf } from "@/lib/affiliate-status";
 import ProjectsIcon from "./projects-icon";
 import TasksIcon from "./tasks-icon";
 import { PROJECT_CARD_ACCENT_BAR, PROJECT_CARD_BG } from "./project-summary-colors";
@@ -202,6 +209,7 @@ export default async function DashboardPage() {
     linkProjects,
     linkTasks,
     linkAffiliatePrograms,
+    allAffiliatePrograms,
   } = await withScopedPrismaClient(async (db) => {
     const activeProjectCount = await db.project.count({
       where: { status: "ACTIVE" },
@@ -324,6 +332,23 @@ export default async function DashboardPage() {
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true, extraEmails: true },
     });
+    // Feeds the Affiliate Programs Summary card's 4-bucket breakdown and the
+    // Pending Affiliate Programs list card below — every program, since the
+    // summary card's totals must reflect all of them, not just the pending
+    // ones the list card shows.
+    const allAffiliatePrograms = await db.affiliateProgram.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        tab: true,
+        name: true,
+        type: true,
+        iconUrl: true,
+        affiliateStatus: true,
+        followUpNeeded: true,
+        followUpDate: true,
+      },
+    });
 
     // Reads the same cached inbox snapshot the Email page maintains — a
     // plain DB read shares this block's one connection instead of the
@@ -404,9 +429,31 @@ export default async function DashboardPage() {
       linkProjects,
       linkTasks,
       linkAffiliatePrograms,
+      allAffiliatePrograms,
     };
   });
   const automationEntries = groupAutomationRuns(recentRuns).slice(0, 8);
+
+  // Bucket counts for the Affiliate Programs Summary card, and the pending-
+  // only subset for the Pending Affiliate Programs list card just below it.
+  const affiliateBucketCounts = { active: 0, pending: 0, declinedBlocked: 0, noProgram: 0 };
+  const pendingAffiliatePrograms: PendingAffiliateProgramRow[] = [];
+  for (const program of allAffiliatePrograms) {
+    const bucket = dashboardBucketOf(program.affiliateStatus);
+    if (bucket === "ACTIVE") affiliateBucketCounts.active++;
+    else if (bucket === "PENDING") {
+      affiliateBucketCounts.pending++;
+      pendingAffiliatePrograms.push(program);
+    } else if (bucket === "DECLINED_BLOCKED") affiliateBucketCounts.declinedBlocked++;
+    else affiliateBucketCounts.noProgram++;
+  }
+  const affiliateSummaryCounts: AffiliateProgramsSummaryCounts = {
+    total: allAffiliatePrograms.length,
+    active: affiliateBucketCounts.active,
+    pending: affiliateBucketCounts.pending,
+    declinedBlocked: affiliateBucketCounts.declinedBlocked,
+    noProgram: affiliateBucketCounts.noProgram,
+  };
 
   // Feeds the Email card's "Linked to" picker — same option shapes the
   // Email page itself builds from the equivalent full-list queries above.
@@ -554,6 +601,18 @@ export default async function DashboardPage() {
     today: tasksDueToday.length,
     tomorrow: tasksDueTomorrow.length,
     thisWeek: tasksDueThisWeek.length,
+  };
+  const affiliateSummaryLabels = {
+    title: t.dashboard.affiliateSummaryTitle,
+    totalLabel: t.dashboard.affiliateSummaryTotalLabel,
+    activeLabel: t.dashboard.affiliateSummaryActiveLabel,
+    pendingLabel: t.dashboard.affiliateSummaryPendingLabel,
+    declinedBlockedLabel: t.dashboard.affiliateSummaryDeclinedBlockedLabel,
+    noProgramLabel: t.dashboard.affiliateSummaryNoProgramLabel,
+  };
+  const pendingAffiliateProgramsLabels = {
+    title: t.dashboard.pendingAffiliateProgramsTitle,
+    noneYet: t.dashboard.noPendingAffiliatePrograms,
   };
 
   const weatherLabels = {
@@ -909,6 +968,16 @@ export default async function DashboardPage() {
           />
         </div>
 
+        {/* Second summary row, below the first — its own grid rather than a
+            5th slot in the row above, since more summary cards are expected
+            to join this row later. */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+          <AffiliateProgramsSummaryCard
+            counts={affiliateSummaryCounts}
+            labels={affiliateSummaryLabels}
+          />
+        </div>
+
         {/* A single flat grid (not three separately-flowing column divs) so
           each card can carry its own placement: no col-start below `lg`
           stacks every card full-width in DOM order (the mobile reading
@@ -938,6 +1007,14 @@ export default async function DashboardPage() {
               taskOptions={emailLinkTaskOptions}
               programOptions={emailLinkProgramOptions}
               labels={emailLabels}
+            />
+          </div>
+
+          <div className="lg:col-start-1">
+            <PendingAffiliateProgramsCard
+              programs={pendingAffiliatePrograms}
+              lang={lang}
+              labels={pendingAffiliateProgramsLabels}
             />
           </div>
 
