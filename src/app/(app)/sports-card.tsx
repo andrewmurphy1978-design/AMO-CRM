@@ -85,10 +85,10 @@ function GameTime({
 // now that TheSportsDB-backed leagues (NFL/CFL/MLS/NBA) fall back to "" when
 // a badge lookup fails, unlike the old ESPN/NHL/MLB code's guessed-CDN-URL
 // fallbacks that were never actually empty.
-function TeamLogo({ src, alt }: { src: string; alt: string }) {
-  if (!src) return <div className="h-7 w-7 shrink-0" />;
+function TeamLogo({ src, alt, sizeClassName = "h-7 w-7" }: { src: string; alt: string; sizeClassName?: string }) {
+  if (!src) return <div className={`${sizeClassName} shrink-0`} />;
   // eslint-disable-next-line @next/next/no-img-element -- external team-logo CDNs, not local assets
-  return <img src={src} alt={alt} className="h-7 w-7 shrink-0 object-contain" />;
+  return <img src={src} alt={alt} className={`${sizeClassName} shrink-0 object-contain`} />;
 }
 
 function TeamGameRow({
@@ -99,6 +99,7 @@ function TeamGameRow({
   hour12,
   dateLocale,
   labels,
+  logoSizeClassName,
 }: {
   label: string;
   game: SportsTeamGame;
@@ -107,6 +108,11 @@ function TeamGameRow({
   hour12: boolean;
   dateLocale: ReturnType<typeof getDateLocale>;
   labels: SportsLabels;
+  // NHL's own SVG logos (assets.nhle.com) carry a lot of internal padding
+  // around the actual mark, unlike the tightly-cropped ESPN/Wikipedia PNGs
+  // every other league uses — at the same box size they render visibly
+  // smaller, so NHL gets a larger box to compensate and look the same size.
+  logoSizeClassName?: string;
 }) {
   const isFinal = game.status === "final";
   const teamFirst = game.homeAway === "home";
@@ -124,19 +130,19 @@ function TeamGameRow({
       <div className="mt-1 flex min-w-0 items-center gap-1.5">
         {teamFirst ? (
           <>
-            <TeamLogo src={teamLogo} alt={teamName} />
+            <TeamLogo src={teamLogo} alt={teamName} sizeClassName={logoSizeClassName} />
             {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.teamScore}</span>}
             <span className="shrink-0 text-xs text-soft">{isFinal ? "–" : labels.vs}</span>
             {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.opponentScore}</span>}
-            <TeamLogo src={game.opponentLogo} alt={game.opponentName} />
+            <TeamLogo src={game.opponentLogo} alt={game.opponentName} sizeClassName={logoSizeClassName} />
           </>
         ) : (
           <>
-            <TeamLogo src={game.opponentLogo} alt={game.opponentName} />
+            <TeamLogo src={game.opponentLogo} alt={game.opponentName} sizeClassName={logoSizeClassName} />
             {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.opponentScore}</span>}
             <span className="shrink-0 text-xs text-soft">{isFinal ? "–" : labels.vs}</span>
             {isFinal && <span className="shrink-0 text-sm font-semibold text-ink">{game.teamScore}</span>}
-            <TeamLogo src={teamLogo} alt={teamName} />
+            <TeamLogo src={teamLogo} alt={teamName} sizeClassName={logoSizeClassName} />
           </>
         )}
         <span className="min-w-0 flex-1 truncate text-xs text-soft">{game.opponentName}</span>
@@ -212,6 +218,7 @@ function SimpleGamesGrid({
   dateLocale,
   lang,
   labels,
+  logoSizeClassName,
 }: {
   lastGame: SportsTeamGame | null;
   nextGame: SportsTeamGame | null;
@@ -228,12 +235,22 @@ function SimpleGamesGrid({
   // it tries to serialize one, which was crashing the whole Dashboard.
   lang: Lang;
   labels: SportsLabels;
+  logoSizeClassName?: string;
 }) {
   const t = getDict(lang);
   return (
     <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2">
       {lastGame ? (
-        <TeamGameRow label={labels.lastGame} game={lastGame} teamName={teamName} teamLogo={teamLogo} hour12={hour12} dateLocale={dateLocale} labels={labels} />
+        <TeamGameRow
+          label={labels.lastGame}
+          game={lastGame}
+          teamName={teamName}
+          teamLogo={teamLogo}
+          hour12={hour12}
+          dateLocale={dateLocale}
+          labels={labels}
+          logoSizeClassName={logoSizeClassName}
+        />
       ) : nextGame ? (
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{labels.lastGame}</p>
@@ -241,7 +258,16 @@ function SimpleGamesGrid({
         </div>
       ) : null}
       {nextGame ? (
-        <TeamGameRow label={labels.nextGame} game={nextGame} teamName={teamName} teamLogo={teamLogo} hour12={hour12} dateLocale={dateLocale} labels={labels} />
+        <TeamGameRow
+          label={labels.nextGame}
+          game={nextGame}
+          teamName={teamName}
+          teamLogo={teamLogo}
+          hour12={hour12}
+          dateLocale={dateLocale}
+          labels={labels}
+          logoSizeClassName={logoSizeClassName}
+        />
       ) : lastGame ? (
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-soft">{labels.nextGame}</p>
@@ -358,6 +384,7 @@ function LeagueSection({
           dateLocale={dateLocale}
           lang={lang}
           labels={labels}
+          logoSizeClassName={snapshot.league === "NHL" ? "h-9 w-9" : undefined}
         />
       ) : mlb ? (
         mlb.inPostseason ? (

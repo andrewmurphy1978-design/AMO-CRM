@@ -88,10 +88,14 @@ function Pill({
 // "New England Patriots" or "Winnipeg Blue Bombers" without truncating —
 // widened to 30rem. sm:max-h-none used to remove the mobile cap entirely on
 // desktop, which let the panel grow past the viewport with no way to
-// scroll the rest into view; capped it at 70vh instead so the already-
-// present overflow-y-auto (from the shared base classes) actually kicks in.
+// scroll the rest into view. A flat 70vh cap scrolled even on tall desktop
+// screens that had room to show everything — calc(100vh-4.5rem) instead
+// sizes the panel to (approximately) all the room actually available below
+// the sticky header down to the bottom of the viewport, so it only falls
+// back to the already-present overflow-y-auto when content genuinely
+// doesn't fit.
 const PANEL_CLASS =
-  "fixed inset-4 z-40 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-80 overflow-y-auto text-left sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:m-0 sm:mt-2 sm:h-auto sm:max-h-[70vh] sm:w-[30rem] sm:max-w-none";
+  "fixed inset-4 z-40 m-auto h-fit max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-80 overflow-y-auto text-left sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:m-0 sm:mt-2 sm:h-auto sm:max-h-[calc(100vh-4.5rem)] sm:w-[30rem] sm:max-w-none";
 
 // Compact "latest game" pill for the Dashboard header — just the two team
 // logos and the final score of the picked league/team's most recently
