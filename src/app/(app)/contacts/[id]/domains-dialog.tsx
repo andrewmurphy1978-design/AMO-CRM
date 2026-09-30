@@ -13,7 +13,7 @@ import Combobox from "@/components/combobox";
 // tech-stack-dialog.tsx). Managed By and Notes get the most extra room
 // (the dialog itself is `maxWide` so growing them doesn't come at the
 // expense of any other column).
-const GRID_COLS = "lg:grid-cols-[2fr_1.4fr_1.4fr_0.9fr_0.8fr_1.8fr_1.6fr_auto]";
+const GRID_COLS = "lg:grid-cols-[2fr_1.4fr_1.4fr_0.9fr_0.8fr_1.8fr_1.6fr_2.25rem]";
 
 // Suggestions for the Registrar/DNS Provider comboboxes (see Combobox) —
 // still free text underneath, since a client's actual registrar/DNS host
@@ -173,7 +173,7 @@ export default function DomainsDialog({
             <button
               type="button"
               onClick={() => setDomains((rows) => rows.filter((r) => r.id !== row.id))}
-              className="hidden shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink lg:block"
+              className="hidden w-full shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink lg:block"
               aria-label={t.contactForm.removeEntry}
             >
               ✕
