@@ -4,7 +4,6 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { formatDistanceToNow, format } from "date-fns";
 import NoteForm from "./note-form";
 import DeleteContactButton from "./delete-button";
-import InteractionLog from "../../interaction-log";
 import CalendarEventsCard from "../../calendar-events-card";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken, fetchGmailThreadSnapshot } from "@/lib/google";
@@ -27,6 +26,7 @@ import LinkedEmailsList from "../../linked-emails-list";
 import ContactCredentialsCard from "./contact-credentials-card";
 import ContactEmailLinks from "./contact-email-links";
 import NewEmailButton from "./new-email-button";
+import CallsSmsCard from "./calls-sms-card";
 import { CONTACT_SYNC_APPS } from "@/lib/contact-sync";
 import { reciprocalRelationType } from "@/lib/contact-form-fields";
 import { telHref, messagingAppLink, voipAppLink } from "@/lib/app-deep-links";
@@ -348,6 +348,7 @@ export default async function ContactDetailPage({
     calendarProgramOptions,
     allTags,
     allContacts: allContactsForRelations,
+    teamMembers,
   } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
@@ -371,7 +372,12 @@ export default async function ContactDetailPage({
         activity: { orderBy: { createdAt: "desc" }, take: 20, include: { user: true } },
         interactions: {
           orderBy: { occurredAt: "desc" },
-          include: { loggedBy: true, project: true },
+          include: {
+            loggedBy: true,
+            updatedBy: true,
+            project: true,
+            participants: { include: { contact: true, user: true } },
+          },
         },
         owner: true,
         subscriptions: { orderBy: { startedAt: "desc" } },
@@ -429,6 +435,7 @@ export default async function ContactDetailPage({
       select: { id: true, firstName: true, lastName: true, company: true, email: true, extraEmails: true },
     });
     const allTags = await db.tag.findMany();
+    const teamMembers = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
     const allProjects = await db.project.findMany({ orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, contactId: true } });
     const allTasks = await db.task.findMany({
       where: { status: { not: "DONE" } },
@@ -466,6 +473,7 @@ export default async function ContactDetailPage({
       calendarProgramOptions: allPrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails })),
       allTags,
       allContacts,
+      teamMembers,
     };
   });
 
@@ -481,6 +489,13 @@ export default async function ContactDetailPage({
       (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity) ||
       b.createdAt.getTime() - a.createdAt.getTime()
   );
+  // Related contacts (either direction) for the Calls & SMS participants.
+  const relatedContactOptions = [
+    ...contact.relationsFrom.map((r) => r.relatedContact),
+    ...contact.relationsTo.map((r) => r.contact),
+  ]
+    .filter((c, i, all) => all.findIndex((x) => x.id === c.id) === i)
+    .map((c) => ({ id: c.id, name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || "—" }));
   const credentialEntries = contact.credentials.map((c) => ({
     id: c.id,
     label: c.label,
@@ -1327,6 +1342,34 @@ export default async function ContactDetailPage({
             />
           </Card>
 
+          <CallsSmsCard
+            title={t.contactDetail.callsEmails}
+            contactId={contact.id}
+            contact={{ id: contact.id, name: [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.company || contact.email || "—" }}
+            relatedContacts={relatedContactOptions}
+            teamMembers={teamMembers.map((u) => ({ id: u.id, name: u.name }))}
+            projects={contact.projects.map((p) => ({ id: p.id, name: p.name }))}
+            currentUserId={session?.user.id ?? null}
+            lang={lang}
+            entries={contact.interactions.map((i) => ({
+              id: i.id,
+              type: i.type,
+              subject: i.subject,
+              notes: i.notes,
+              occurredAt: i.occurredAt.toISOString(),
+              createdAt: i.createdAt.toISOString(),
+              updatedAt: i.updatedAt.toISOString(),
+              createdBy: i.loggedBy?.name ?? null,
+              updatedBy: i.updatedBy?.name ?? null,
+              projectId: i.projectId,
+              participants: i.participants.map((p) =>
+                p.contact
+                  ? { kind: "contact" as const, id: p.contact.id, name: [p.contact.firstName, p.contact.lastName].filter(Boolean).join(" ") || p.contact.company || "—" }
+                  : { kind: "user" as const, id: p.user?.id ?? "", name: p.user?.name ?? "—" }
+              ),
+            }))}
+          />
+
           <Card color="purchases" title={t.contactDetail.purchasesTitle} compact>
             {contact.subscriptions.length === 0 &&
             contact.courseEnrollments.length === 0 &&
@@ -1452,22 +1495,6 @@ export default async function ContactDetailPage({
                 ))}
               </ul>
             )}
-          </Card>
-
-          <Card color="interactions" title={t.contactDetail.callsEmails} compact>
-            <InteractionLog
-              lang={lang}
-              contactId={contact.id}
-              interactions={contact.interactions.map((i) => ({
-                id: i.id,
-                type: i.type,
-                subject: i.subject,
-                notes: i.notes,
-                occurredAt: i.occurredAt.toISOString(),
-                loggedBy: i.loggedBy ? { name: i.loggedBy.name } : null,
-                project: i.project ? { id: i.project.id, name: i.project.name } : null,
-              }))}
-            />
           </Card>
 
           <Card color="activity" title={t.contactDetail.systemActivity} compact>

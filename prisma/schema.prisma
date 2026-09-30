@@ -114,18 +114,20 @@ model User {
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @updatedAt
 
-  ownedProjects      Project[]           @relation("ProjectOwner")
-  supervisedProjects Project[]           @relation("ProjectSupervisor")
-  ownedContacts      Contact[]           @relation("ContactOwner")
-  assignedTasks      Task[]              @relation("TaskAssignee")
-  supervisedTasks    Task[]              @relation("TaskSupervisor")
-  supervisedPhases   ProjectPhase[]      @relation("PhaseSupervisor")
-  projectTeams       ProjectTeamMember[]
-  activityEntries ActivityLogEntry[]
-  interactions    Interaction[]
-  googleAccount   GoogleAccount?
-  ionosMailbox    IonosMailboxAccount?
-  sentEmailRecords SentEmailRecord[]
+  ownedProjects             Project[]                @relation("ProjectOwner")
+  supervisedProjects        Project[]                @relation("ProjectSupervisor")
+  ownedContacts             Contact[]                @relation("ContactOwner")
+  assignedTasks             Task[]                   @relation("TaskAssignee")
+  supervisedTasks           Task[]                   @relation("TaskSupervisor")
+  supervisedPhases          ProjectPhase[]           @relation("PhaseSupervisor")
+  projectTeams              ProjectTeamMember[]
+  activityEntries           ActivityLogEntry[]
+  interactions              Interaction[]            @relation("InteractionLoggedBy")
+  interactionsUpdated       Interaction[]            @relation("InteractionUpdatedBy")
+  interactionParticipations InteractionParticipant[]
+  googleAccount             GoogleAccount?
+  ionosMailbox              IonosMailboxAccount?
+  sentEmailRecords          SentEmailRecord[]
 
   @@map("users")
 }
@@ -175,15 +177,15 @@ model IonosMailboxAccount {
 // instead and reconciled against the mailbox's own recent inbox messages
 // (matching In-Reply-To/References against messageId) on every refresh.
 model SentEmailRecord {
-  id       String   @id @default(cuid())
-  userId   String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messageId String  @unique // this sent message's own Message-ID header — what a reply's In-Reply-To/References is matched against
-  to       String
-  toEmail  String
-  subject  String
-  sentAt   DateTime @default(now())
-  status   String   @default("awaiting") // "awaiting" | "completed" — same two states as Gmail's own SentEmailSummary.status
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messageId String   @unique // this sent message's own Message-ID header — what a reply's In-Reply-To/References is matched against
+  to        String
+  toEmail   String
+  subject   String
+  sentAt    DateTime @default(now())
+  status    String   @default("awaiting") // "awaiting" | "completed" — same two states as Gmail's own SentEmailSummary.status
 
   @@index([userId])
   @@map("sent_email_records")
@@ -260,7 +262,7 @@ model Contact {
   // Legal structure (e.g. "LLC", "Inc.") and business category — free text
   // backed by a suggestion list on the form, not a rigid enum, since these
   // vary a lot by country.
-  companyType String?
+  companyType         String?
   // Where the company is legally registered — separate from the contact's
   // mailing address/country above (a company can be incorporated somewhere
   // other than where its owner lives or does business).
@@ -270,16 +272,16 @@ model Contact {
   // Only the core fields above (phone/address/city/state/zip/country) are
   // pushed back to systeme.io on save — everything below is CRM-only
   // enrichment with no systeme.io equivalent.
-  phone2      String?
-  email2      String?
+  phone2              String?
+  email2              String?
   // Unlimited additional phones/emails beyond the first two, added via the
   // "+" button on the Contact form — order in the array is display order.
-  extraPhones String[] @default([])
-  extraEmails String[] @default([])
+  extraPhones         String[] @default([])
+  extraEmails         String[] @default([])
   // IANA zone id (e.g. "America/Toronto"), explicitly chosen on the Contact
   // form — takes precedence over the country/state-derived guess in
   // getTimezoneForCountryState when set.
-  timeZone    String?
+  timeZone            String?
 
   billingAddress           String?
   billingCity              String?
@@ -325,28 +327,29 @@ model Contact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tags                 ContactTag[]
-  fieldValues          ContactFieldValue[]
-  projects             Project[]
-  activity             ActivityLogEntry[]
-  interactions         Interaction[]
-  subscriptions        Subscription[]
-  courseEnrollments    CourseEnrollment[]
-  communityMemberships CommunityMembership[]
-  emailLinks           EmailLink[]
-  calendarEventLinks   CalendarEventLink[]
-  bookings             Booking[]
-  socialLinks          ContactSocialLink[]
-  extraAddresses       ContactAddress[]
-  messagingAccounts    ContactMessagingAccount[]
-  voipAccounts         ContactVoipAccount[]
-  techStackItems       ContactTechStackItem[]
-  domains              ContactDomain[]
-  credentials          ContactCredential[]
-  appSyncSettings      ContactAppSync[]
-  relationsFrom        ContactRelation[]         @relation("ContactRelationsFrom")
-  relationsTo          ContactRelation[]         @relation("ContactRelationsTo")
-  contactNotes         ContactNote[]
+  tags                      ContactTag[]
+  fieldValues               ContactFieldValue[]
+  projects                  Project[]
+  activity                  ActivityLogEntry[]
+  interactions              Interaction[]
+  interactionParticipations InteractionParticipant[]
+  subscriptions             Subscription[]
+  courseEnrollments         CourseEnrollment[]
+  communityMemberships      CommunityMembership[]
+  emailLinks                EmailLink[]
+  calendarEventLinks        CalendarEventLink[]
+  bookings                  Booking[]
+  socialLinks               ContactSocialLink[]
+  extraAddresses            ContactAddress[]
+  messagingAccounts         ContactMessagingAccount[]
+  voipAccounts              ContactVoipAccount[]
+  techStackItems            ContactTechStackItem[]
+  domains                   ContactDomain[]
+  credentials               ContactCredential[]
+  appSyncSettings           ContactAppSync[]
+  relationsFrom             ContactRelation[]         @relation("ContactRelationsFrom")
+  relationsTo               ContactRelation[]         @relation("ContactRelationsTo")
+  contactNotes              ContactNote[]
 
   @@index([stage])
   @@index([lastName, firstName])
@@ -358,20 +361,20 @@ model Contact {
 // needs several fields so it's a related row rather than a plain string.
 // Replaces the old single otherAddress/otherCity/... columns.
 model ContactAddress {
-  id        String   @id @default(cuid())
-  contactId String
-  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  contactId   String
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   // Free text label (e.g. "Cottage", "Office", "Storage unit") — extra
   // addresses beyond the main one are otherwise indistinguishable from each
   // other at a glance.
   description String?
-  address   String?
-  city      String?
-  state     String?
-  zip       String?
-  country   String?
-  order     Int      @default(0)
-  createdAt DateTime @default(now())
+  address     String?
+  city        String?
+  state       String?
+  zip         String?
+  country     String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
 
   @@index([contactId])
   @@map("contact_addresses")
@@ -868,23 +871,23 @@ model ProjectTeamMember {
 // status/type/team/dates/description, defaulting the team to the parent
 // Project's own team members on creation.
 model ProjectPhase {
-  id        String        @id @default(cuid())
-  projectId String
-  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name      String
-  order     Int           @default(0)
-  status    ProjectStatus @default(PLANNING)
-  phaseType String?
+  id            String        @id @default(cuid())
+  projectId     String
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name          String
+  order         Int           @default(0)
+  status        ProjectStatus @default(PLANNING)
+  phaseType     String?
   // Plain array of User ids rather than a join table — a phase's team is a
   // simple, non-relational snapshot (no addedAt/unique-constraint needs),
   // same pattern as Contact.extraPhones/extraEmails.
-  teamMemberIds String[]  @default([])
+  teamMemberIds String[]      @default([])
   supervisorId  String?
-  supervisor    User?     @relation("PhaseSupervisor", fields: [supervisorId], references: [id])
+  supervisor    User?         @relation("PhaseSupervisor", fields: [supervisorId], references: [id])
   startDate     DateTime?
   dueDate       DateTime?
-  description   String?   @db.Text
-  createdAt     DateTime  @default(now())
+  description   String?       @db.Text
+  createdAt     DateTime      @default(now())
 
   tasks Task[]
 
@@ -1172,8 +1175,8 @@ model EmailLink {
 // this has no userId either — every signature is visible/assignable by
 // anyone with Settings access.
 model EmailSignature {
-  id   String @id @default(cuid())
-  name String // the Settings list's own label, e.g. "New emails"
+  id     String @id @default(cuid())
+  name   String // the Settings list's own label, e.g. "New emails"
   // Two full bodies rather than one translated at render time — a
   // signature's wording (title, closing line) is often genuinely
   // different between languages, not a mechanical translation, so both
@@ -1229,15 +1232,15 @@ model AffiliateProgram {
   // picked from the Email compose dialog's To/Cc/Bcc address book.
   email           String?
   extraEmails     String[] @default([])
-  shortioCreated  Boolean @default(false) // "Short.io Created?"
+  shortioCreated  Boolean  @default(false) // "Short.io Created?"
   brandedLink     String? // "go.andrewmurphy.online Link"
   destinationLink String? // "Real Destination Link"
   affiliateStatus String? // one of the 8 fixed values in AFFILIATE_STATUS_VALUES (src/lib/affiliate-status.ts)
-  statusDetails   String? @db.Text // free-text nuance moved out of affiliateStatus once it became a fixed set
+  statusDetails   String?  @db.Text // free-text nuance moved out of affiliateStatus once it became a fixed set
   frenchSlug      String? // "French go.andrewmurphy.online Slug"
   frenchLink      String? // "French Affiliate/Fallback Link"
-  followUpNeeded  Boolean @default(false) // "Follow-up Needed?"
-  notes           String? @db.Text // "Notes"
+  followUpNeeded  Boolean  @default(false) // "Follow-up Needed?"
+  notes           String?  @db.Text // "Notes"
   accountPlan     String? // "Account / Plan / Trial End"
 
   // Where/how to apply, and whether the program exposes its own API for
@@ -1436,6 +1439,7 @@ enum InteractionType {
   EMAIL
   MEETING
   NOTE
+  SMS
 }
 
 model Interaction {
@@ -1452,14 +1456,40 @@ model Interaction {
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  // Created by (loggedBy, on createdAt) and last modified by (updatedBy, on
+  // updatedAt) — both users are shown in the Calls & SMS dialog.
   loggedById String?
-  loggedBy   User?   @relation(fields: [loggedById], references: [id])
+  loggedBy   User?   @relation("InteractionLoggedBy", fields: [loggedById], references: [id])
+
+  updatedById String?
+  updatedBy   User?   @relation("InteractionUpdatedBy", fields: [updatedById], references: [id])
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  participants InteractionParticipant[]
 
   @@index([contactId])
   @@index([projectId])
   @@map("interactions")
+}
+
+// Who took part in a call/meeting/SMS: exactly one of contactId (the
+// contact itself or one of their related contacts) or userId (a team
+// member) is set per row.
+model InteractionParticipant {
+  id            String      @id @default(cuid())
+  interactionId String
+  interaction   Interaction @relation(fields: [interactionId], references: [id], onDelete: Cascade)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([interactionId])
+  @@map("interaction_participants")
 }
 
 // ---------------------------------------------------------------------------
