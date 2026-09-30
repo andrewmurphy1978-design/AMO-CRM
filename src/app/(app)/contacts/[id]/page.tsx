@@ -70,6 +70,13 @@ const DUPLICATE_FIELD_SLUGS = new Set(["companyname", "postcode", "streetnumber"
 // Services required / Project goal description now have their own dedicated
 // spot in the General info card (below Website) instead of showing generically
 // in "Other info" — excluded from that generic list so they don't show twice.
+const PROJECT_STATUS_COLORS: Record<string, string> = {
+  PLANNING: "bg-black/5 text-soft",
+  ACTIVE: "bg-emerald-50 text-emerald-700",
+  ON_HOLD: "bg-amber-50 text-amber-700",
+  COMPLETED: "bg-sky-50 text-sky-700",
+  CANCELLED: "bg-red-50 text-red-600",
+};
 const GENERAL_INFO_FIELD_SLUGS = new Set(["servicesrequired", "projectgoaldescription"]);
 
 function normalizeSlug(slug: string): string {
@@ -465,6 +472,15 @@ export default async function ContactDetailPage({
   if (!contact) notFound();
 
   const isAdmin = session?.user.role === "ADMIN";
+  // Planning/Active first, then On hold, then Completed/Cancelled — each
+  // group by due date (soonest first, undated last).
+  const projectGroup = (status: string) => (status === "ON_HOLD" ? 1 : status === "COMPLETED" || status === "CANCELLED" ? 2 : 0);
+  const sortedProjects = [...contact.projects].sort(
+    (a, b) =>
+      projectGroup(a.status) - projectGroup(b.status) ||
+      (a.dueDate?.getTime() ?? Infinity) - (b.dueDate?.getTime() ?? Infinity) ||
+      b.createdAt.getTime() - a.createdAt.getTime()
+  );
   const credentialEntries = contact.credentials.map((c) => ({
     id: c.id,
     label: c.label,
@@ -1164,6 +1180,7 @@ export default async function ContactDetailPage({
                 </>
               }
               compact
+              flushTop
               actions={
                 <Link
                   href={`/projects/new?contactId=${contact.id}`}
@@ -1176,32 +1193,41 @@ export default async function ContactDetailPage({
               }
             >
               {contact.projects.length === 0 ? (
-                <p className="text-sm text-soft">{t.contactDetail.noProjectsYet}</p>
+                <p className="pt-2 text-sm text-soft">{t.contactDetail.noProjectsYet}</p>
               ) : (
                 <ul className="divide-y divide-card-border">
-                  {contact.projects.map((project) => (
+                  {sortedProjects.map((project) => (
                     <li key={project.id}>
                       {/* The whole row is the link, not just the name. */}
-                      <Link href={`/projects/${project.id}`} className="-mx-2 block rounded-md px-2 py-2 hover:bg-black/5">
-                        <p className="flex flex-wrap items-baseline gap-x-2">
-                          <span className="font-medium text-ink">{project.name}</span>
-                          <span className="text-xs text-soft">{t.projectStatuses[project.status]}</span>
-                        </p>
-                        <p className="mt-0.5 text-xs text-soft">
-                          {(
-                            [
-                              [t.projectForm.type, t.projectTypes[project.type]],
-                              project.owner ? [t.projectForm.owner, project.owner.name] : null,
-                              project.supervisor ? [t.projectForm.supervisor, project.supervisor.name] : null,
-                              project.dueDate ? [t.projectForm.dueDate, format(project.dueDate, "PP", { locale: dateLocale })] : null,
-                            ].filter(Boolean) as [string, string][]
-                          ).map(([label, value], i) => (
-                            <span key={label}>
-                              {i > 0 && " · "}
-                              <span className="uppercase tracking-wide text-ink">{label}:</span> {value}
-                            </span>
-                          ))}
-                        </p>
+                      <Link href={`/projects/${project.id}`} className="-mx-2 flex items-start justify-between gap-3 rounded-md px-2 py-2 hover:bg-black/5">
+                        <div className="min-w-0 space-y-0.5">
+                          <p className="font-medium text-ink">{project.name}</p>
+                          <p className="text-xs text-soft">
+                            <span className="uppercase tracking-wide text-ink">{t.projectForm.typeShort}:</span> {t.projectTypes[project.type]}
+                          </p>
+                          {project.owner && (
+                            <p className="text-xs text-soft">
+                              <span className="uppercase tracking-wide text-ink">{t.projectForm.owner}:</span> {project.owner.name}
+                            </p>
+                          )}
+                          {project.supervisor && (
+                            <p className="text-xs text-soft">
+                              <span className="uppercase tracking-wide text-ink">{t.projectForm.supervisor}:</span> {project.supervisor.name}
+                            </p>
+                          )}
+                        </div>
+                        <div className="shrink-0 space-y-1 text-right">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PROJECT_STATUS_COLORS[project.status]}`}>
+                            {t.projectStatuses[project.status]}
+                          </span>
+                          {project.dueDate && (
+                            <p className="text-xs text-soft">
+                              <span className="uppercase tracking-wide text-ink">{t.projectForm.dueDate}:</span>
+                              <br />
+                              {format(project.dueDate, "PP", { locale: dateLocale })}
+                            </p>
+                          )}
+                        </div>
                       </Link>
                     </li>
                   ))}

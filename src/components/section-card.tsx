@@ -44,12 +44,16 @@ export default function Card({
   // spacing; only the Contact Info page's dense multi-card layout asks
   // for this today.
   compact,
+  flushTop,
 }: {
   color: CardColor;
   title: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   compact?: boolean;
+  // No padding between the header bar and the first thing in the body (for
+  // lists whose rows already carry their own spacing).
+  flushTop?: boolean;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm">
@@ -59,7 +63,11 @@ export default function Card({
         <span className="flex items-center gap-2">{title}</span>
         {actions}
       </div>
-      <div className={compact ? "space-y-2 p-2 sm:space-y-4 sm:p-4" : "space-y-4 p-4"}>{children}</div>
+      <div
+        className={`${compact ? "space-y-2 p-2 sm:space-y-4 sm:p-4" : "space-y-4 p-4"}${flushTop ? " pt-0!" : ""}`}
+      >
+        {children}
+      </div>
     </section>
   );
 }

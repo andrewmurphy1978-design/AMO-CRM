@@ -96,6 +96,7 @@ export default function CalendarEventsCard({
         </>
       }
       compact
+      flushTop
       actions={
         newEventLinks && (
           <button
