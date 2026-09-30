@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { addTagToContact, removeTagFromContact } from "@/actions/contacts";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { sortTags, tagPillStyle, groupTagsByCategory, type TagLike } from "@/lib/tag-colors";
+import { tagPillStyle, groupTagsByCategory, type TagLike } from "@/lib/tag-colors";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -23,7 +23,11 @@ export default function TagManager({
   const t = getDict(lang);
 
   const appliedIds = new Set(tags.map((tag) => tag.id));
-  const displayTags = sortTags(tags.map((tag) => ({ tag })));
+  const appliedGroups = groupTagsByCategory(tags);
+  const displayGroups = {
+    language: appliedGroups.language,
+    other: [...appliedGroups.personal, ...appliedGroups.systemeIo],
+  };
   const groups = groupTagsByCategory(allTags);
 
   function toggle(tag: { id: string } & TagLike) {
@@ -49,28 +53,37 @@ export default function TagManager({
           </svg>
         </button>
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-2">
-        {displayTags.map(({ tag }) => {
-          const style = tagPillStyle(tag);
-          return (
-            <span
-              key={tag.id}
-              className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${style.className}`}
-              style={style.style}
-            >
-              {tag.name}
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => startTransition(() => removeTagFromContact(contactId, tag.id))}
-                className="opacity-70 hover:opacity-100"
-                aria-label={`${t.tagManager.remove} ${tag.name}`}
-              >
-                ×
-              </button>
-            </span>
-          );
-        })}
+      {/* Language tags get the first line to themselves; every other tag
+          wraps on the lines below it. */}
+      <div className="mt-1.5 space-y-1.5">
+        {[displayGroups.language, displayGroups.other].map(
+          (row, i) =>
+            row.length > 0 && (
+              <div key={i} className="flex flex-wrap gap-2">
+                {row.map((tag) => {
+                  const style = tagPillStyle(tag);
+                  return (
+                    <span
+                      key={tag.id}
+                      className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${style.className}`}
+                      style={style.style}
+                    >
+                      {tag.name}
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => startTransition(() => removeTagFromContact(contactId, tag.id))}
+                        className="opacity-70 hover:opacity-100"
+                        aria-label={`${t.tagManager.remove} ${tag.name}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )
+        )}
         {tags.length === 0 && <p className="text-sm text-soft">{t.tagManager.noTags}</p>}
       </div>
 

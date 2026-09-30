@@ -342,6 +342,44 @@ function encodeBinaryStringToBase64Url(raw: string): string {
 // correctly in every client, which buildMimeMessage already sets, so
 // threadId here is a belt-and-suspenders addition, not the only thing
 // doing the work.
+// Subject / sender / date of a thread's most recent message, in the shape an
+// EmailLink snapshot stores — used to fill in link rows that were created
+// without one. Null when the thread can't be read with this token (e.g. it
+// belongs to another team member's mailbox, or was deleted).
+export async function fetchGmailThreadSnapshot(
+  accessToken: string,
+  threadId: string
+): Promise<{ subject: string; fromLabel: string; date: string | null; link: string } | null> {
+  try {
+    const res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (!res.ok) return null;
+    const thread = (await res.json()) as {
+      messages?: { labelIds?: string[]; internalDate?: string; payload?: { headers?: { name?: string; value?: string }[] } }[];
+    };
+    const last = thread.messages?.[thread.messages.length - 1];
+    if (!last) return null;
+    const headers = last.payload?.headers;
+    const parsed = extractHeader(headers, "Date") ? new Date(extractHeader(headers, "Date")) : null;
+    const date =
+      parsed && !isNaN(parsed.getTime())
+        ? parsed.toISOString()
+        : last.internalDate
+          ? new Date(Number(last.internalDate)).toISOString()
+          : null;
+    return {
+      subject: extractHeader(headers, "Subject") || "(no subject)",
+      fromLabel: formatFrom(extractHeader(headers, "From")),
+      date,
+      link: `https://mail.google.com/mail/u/0/#${last.labelIds?.includes("SENT") && !last.labelIds?.includes("INBOX") ? "sent" : "inbox"}/${threadId}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function sendGmailMessage(
   accessToken: string,
   raw: string,

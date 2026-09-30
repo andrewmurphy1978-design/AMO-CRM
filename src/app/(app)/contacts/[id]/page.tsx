@@ -7,7 +7,7 @@ import DeleteContactButton from "./delete-button";
 import InteractionLog from "../../interaction-log";
 import CalendarEventsCard from "../../calendar-events-card";
 import { auth } from "@/lib/auth";
-import { getValidAccessToken } from "@/lib/google";
+import { getValidAccessToken, fetchGmailThreadSnapshot } from "@/lib/google";
 import { getLinkedCalendarEvents, getEventLinkTargets } from "@/lib/calendar-links";
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -356,6 +356,8 @@ export default async function ContactDetailPage({
           include: {
             proposals: { orderBy: { createdAt: "desc" } },
             invoices: { orderBy: { createdAt: "desc" } },
+            owner: true,
+            supervisor: true,
           },
         },
         activity: { orderBy: { createdAt: "desc" }, take: 20, include: { user: true } },
@@ -381,6 +383,27 @@ export default async function ContactDetailPage({
         contactNotes: { orderBy: { createdAt: "desc" } },
       },
     });
+    // Some older links were saved with only a Gmail thread id and no
+    // subject/sender/date snapshot, which the Linked emails card can only
+    // show as "—". Fill those in from Gmail (and store them, so this is a
+    // one-time cost per link). Sequential for the same Hyperdrive reason as
+    // the reads around it; a thread this account can't read stays as is.
+    if (contact && googleAccessToken) {
+      const blank = contact.emailLinks.filter((l) => !l.subject && !l.gmailThreadId.startsWith("ionos:")).slice(0, 15);
+      for (const link of blank) {
+        const snap = await fetchGmailThreadSnapshot(googleAccessToken, link.gmailThreadId);
+        if (!snap) continue;
+        const messageDate = snap.date ? new Date(snap.date) : null;
+        await db.emailLink.update({
+          where: { id: link.id },
+          data: { subject: snap.subject, fromLabel: snap.fromLabel, messageDate, gmailLink: snap.link },
+        });
+        Object.assign(link, { subject: snap.subject, fromLabel: snap.fromLabel, messageDate, gmailLink: snap.link });
+      }
+      if (blank.length > 0) {
+        contact.emailLinks.sort((a, b) => (b.messageDate?.getTime() ?? 0) - (a.messageDate?.getTime() ?? 0));
+      }
+    }
     const calendarEvents = contact ? await getLinkedCalendarEvents(db, { contactId: contact.id }, googleAccessToken) : [];
     const calendarEventLinks = calendarEvents.length > 0 ? await getEventLinkTargets(db, calendarEvents.map((e) => e.id)) : {};
 
@@ -1129,7 +1152,16 @@ export default async function ContactDetailPage({
           <div id="projects">
             <Card
               color="projects"
-              title={t.contactDetail.projectsTitle}
+              title={
+                <>
+                  {t.contactDetail.projectsTitle}
+                  {contact.projects.length > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">
+                      {contact.projects.length}
+                    </span>
+                  )}
+                </>
+              }
               compact
               actions={
                 <Link
@@ -1147,11 +1179,29 @@ export default async function ContactDetailPage({
               ) : (
                 <ul className="divide-y divide-card-border">
                   {contact.projects.map((project) => (
-                    <li key={project.id} className="py-2 first:pt-0">
-                      <Link href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
-                        {project.name}
+                    <li key={project.id}>
+                      {/* The whole row is the link, not just the name. */}
+                      <Link href={`/projects/${project.id}`} className="-mx-2 block rounded-md px-2 py-2 hover:bg-black/5">
+                        <p className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="font-medium text-ink">{project.name}</span>
+                          <span className="text-xs text-soft">{t.projectStatuses[project.status]}</span>
+                        </p>
+                        <p className="mt-0.5 text-xs text-soft">
+                          {(
+                            [
+                              [t.projectForm.type, t.projectTypes[project.type]],
+                              project.owner ? [t.projectForm.owner, project.owner.name] : null,
+                              project.supervisor ? [t.projectForm.supervisor, project.supervisor.name] : null,
+                              project.dueDate ? [t.projectForm.dueDate, format(project.dueDate, "PP", { locale: dateLocale })] : null,
+                            ].filter(Boolean) as [string, string][]
+                          ).map(([label, value], i) => (
+                            <span key={label}>
+                              {i > 0 && " · "}
+                              <span className="uppercase tracking-wide text-ink">{label}:</span> {value}
+                            </span>
+                          ))}
+                        </p>
                       </Link>
-                      <span className="ml-2 text-xs text-soft">{t.projectStatuses[project.status]}</span>
                     </li>
                   ))}
                 </ul>

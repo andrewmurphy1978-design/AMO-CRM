@@ -85,7 +85,16 @@ export default function CalendarEventsCard({
   return (
     <Card
       color="calendarEvents"
-      title={title}
+      title={
+        <>
+          {title}
+          {events.length > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">
+              {events.length}
+            </span>
+          )}
+        </>
+      }
       compact
       actions={
         newEventLinks && (
