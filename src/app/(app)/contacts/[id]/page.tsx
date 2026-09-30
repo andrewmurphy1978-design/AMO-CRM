@@ -1357,6 +1357,7 @@ export default async function ContactDetailPage({
               subject: i.subject,
               notes: i.notes,
               occurredAt: i.occurredAt.toISOString(),
+              durationMinutes: i.durationMinutes,
               createdAt: i.createdAt.toISOString(),
               updatedAt: i.updatedAt.toISOString(),
               createdBy: i.loggedBy?.name ?? null,

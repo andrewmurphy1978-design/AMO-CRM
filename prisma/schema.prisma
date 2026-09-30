@@ -1448,7 +1448,9 @@ model Interaction {
   subject String?
   notes   String          @db.Text
 
-  occurredAt DateTime @default(now())
+  occurredAt      DateTime @default(now())
+  // Length of the call/meeting in minutes (null = not recorded).
+  durationMinutes Int?
 
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)

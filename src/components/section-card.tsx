@@ -51,8 +51,9 @@ export default function Card({
   actions?: ReactNode;
   children: ReactNode;
   compact?: boolean;
-  // No padding between the header bar and the first thing in the body (for
-  // lists whose rows already carry their own spacing).
+  // A small, fixed gap between the header bar and the first thing in the
+  // body instead of the full card padding (for lists whose rows already
+  // carry their own spacing).
   flushTop?: boolean;
 }) {
   return (
@@ -64,7 +65,7 @@ export default function Card({
         {actions}
       </div>
       <div
-        className={`${compact ? "space-y-2 p-2 sm:space-y-4 sm:p-4" : "space-y-4 p-4"}${flushTop ? " pt-0!" : ""}`}
+        className={`${compact ? "space-y-2 p-2 sm:space-y-4 sm:p-4" : "space-y-4 p-4"}${flushTop ? " pt-2!" : ""}`}
       >
         {children}
       </div>

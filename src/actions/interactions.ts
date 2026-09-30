@@ -62,6 +62,7 @@ const ContactInteractionSchema = z.object({
   subject: z.string().trim().optional(),
   notes: z.string().trim(),
   occurredAt: z.date(),
+  durationMinutes: z.number().int().min(0).max(100000).nullable(),
   projectId: z.string().optional(),
 });
 
@@ -88,6 +89,7 @@ export async function saveContactInteraction(
       subject: String(formData.get("subject") ?? "").trim() || undefined,
       notes: String(formData.get("notes") ?? "").trim(),
       occurredAt: isNaN(occurred.getTime()) ? new Date() : occurred,
+      durationMinutes: String(formData.get("durationMinutes") ?? "").trim() === "" ? null : Math.round(Number(formData.get("durationMinutes"))),
       projectId: String(formData.get("projectId") ?? "").trim() || undefined,
     });
   } catch (error) {
@@ -117,6 +119,7 @@ export async function saveContactInteraction(
             subject: data.subject ?? null,
             notes: data.notes,
             occurredAt: data.occurredAt,
+            durationMinutes: data.durationMinutes,
             projectId: data.projectId ?? null,
             updatedById: session.user.id,
           },
@@ -131,6 +134,7 @@ export async function saveContactInteraction(
           subject: data.subject,
           notes: data.notes,
           occurredAt: data.occurredAt,
+          durationMinutes: data.durationMinutes,
           contactId,
           projectId: data.projectId,
           loggedById: session.user.id,

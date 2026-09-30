@@ -26,6 +26,7 @@ export default function SectionDialog({
   extraWide,
   maxWide,
   headerColorClassName,
+  headerExtra,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -50,6 +51,9 @@ export default function SectionDialog({
   // of a separate footer. Every other dialog omits this and keeps the
   // original plain title + bottom button row.
   headerColorClassName?: string;
+  // Extra controls (e.g. a Delete button) placed in the colored header
+  // before Cancel/Save. Only shown with headerColorClassName.
+  headerExtra?: ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const formRef = useRef<HTMLFormElement>(null);
@@ -110,6 +114,7 @@ export default function SectionDialog({
             <div className={`flex shrink-0 items-center justify-between gap-3 px-3 py-2.5 text-white sm:px-4 sm:py-3 ${headerColorClassName}`}>
               <h3 className="truncate font-display text-base font-semibold sm:text-lg">{title}</h3>
               <div className="flex shrink-0 items-center gap-1.5">
+                {headerExtra}
                 <button
                   type="button"
                   onClick={() => onOpenChange(false)}

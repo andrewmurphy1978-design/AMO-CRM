@@ -19,6 +19,7 @@ export interface CallsSmsEntry {
   subject: string | null;
   notes: string;
   occurredAt: string; // ISO
+  durationMinutes: number | null;
   createdAt: string; // ISO
   updatedAt: string; // ISO
   createdBy: string | null;
@@ -144,6 +145,12 @@ export default function CallsSmsCard({
                   </div>
                   <span className="shrink-0 whitespace-nowrap text-right text-xs text-soft" suppressHydrationWarning>
                     {formatWhen(entry.occurredAt, lang)}
+                    {entry.durationMinutes != null && (
+                      <>
+                        <br />
+                        {entry.durationMinutes} {t.callsSms.minutesShort}
+                      </>
+                    )}
                   </span>
                 </div>
               </button>
@@ -208,10 +215,12 @@ function CallsSmsDialog({
   );
 
   const typeOptions = ["CALL", "MEETING", "SMS", "NOTE", ...(entry?.type === "EMAIL" ? ["EMAIL"] : [])];
-  const groups: { label: string; kind: "contact" | "user"; people: NamedOption[] }[] = [
-    { label: t.callsSms.participantContact, kind: "contact", people: [contact] },
-    ...(relatedContacts.length > 0 ? [{ label: t.callsSms.participantRelated, kind: "contact" as const, people: relatedContacts }] : []),
-    ...(teamMembers.length > 0 ? [{ label: t.callsSms.participantTeam, kind: "user" as const, people: teamMembers }] : []),
+  const groups: { label: string; kind: "contact" | "user"; people: NamedOption[]; className: string }[] = [
+    { label: t.callsSms.participantContact, kind: "contact", people: [contact], className: "" },
+    // Team members sit beside the contact (right-aligned) on desktop, and
+    // ahead of the related contacts on mobile.
+    ...(teamMembers.length > 0 ? [{ label: t.callsSms.participantTeam, kind: "user" as const, people: teamMembers, className: "sm:text-right" }] : []),
+    ...(relatedContacts.length > 0 ? [{ label: t.callsSms.participantRelated, kind: "contact" as const, people: relatedContacts, className: "sm:col-span-2" }] : []),
   ];
 
   return (
@@ -220,13 +229,32 @@ function CallsSmsDialog({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title={entry ? t.callsSms.editTitle : t.callsSms.addTitle}
+      title={t.callsSms.dialogTitle}
+      headerExtra={
+        entry ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              if (!window.confirm(t.callsSms.deleteConfirm)) return;
+              startTransition(async () => {
+                await deleteInteraction(entry.id, contactId, entry.projectId);
+                router.refresh();
+                onClose();
+              });
+            }}
+            className="flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-1.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+          >
+            {t.callsSms.delete}
+          </button>
+        ) : undefined
+      }
       action={saveContactInteraction.bind(null, contactId, entry?.id ?? null)}
       labels={t.phaseDialog}
       wide
       headerColorClassName={CARD_COLORS.interactions}
     >
-      <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
+      <div className={`grid gap-3 sm:grid-cols-2 ${projects.length > 0 ? "lg:grid-cols-[9rem_minmax(0,1.3fr)_7rem_minmax(0,1fr)]" : "lg:grid-cols-[9rem_minmax(0,1.3fr)_7rem]"}`}>
         <div>
           <label className={LABEL_CLASS}>{t.callsSms.type}</label>
           <select name="type" defaultValue={entry?.type ?? "CALL"} className={FIELD_CLASS}>
@@ -244,6 +272,23 @@ function CallsSmsDialog({
               typed wall-clock time means, so it's converted here. */}
           <input type="hidden" name="occurredAt" value={when ? new Date(when).toISOString() : ""} readOnly />
         </div>
+        <div>
+          <label className={LABEL_CLASS}>{t.callsSms.duration}</label>
+          <input type="number" name="durationMinutes" min={0} step={1} defaultValue={entry?.durationMinutes ?? ""} className={FIELD_CLASS} />
+        </div>
+        {projects.length > 0 && (
+          <div>
+            <label className={LABEL_CLASS}>{t.callsSms.project}</label>
+            <select name="projectId" defaultValue={entry?.projectId ?? ""} className={FIELD_CLASS}>
+              <option value="">{t.callsSms.noProject}</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div>
@@ -253,11 +298,11 @@ function CallsSmsDialog({
 
       <div>
         <p className={LABEL_CLASS}>{t.callsSms.participants}</p>
-        <div className="mt-1 space-y-2 rounded-md border border-card-border bg-field-bg p-3">
+        <div className="mt-1 grid gap-3 rounded-md border border-card-border bg-field-bg p-3 sm:grid-cols-2">
           {groups.map((group) => (
-            <div key={group.label}>
+            <div key={group.label} className={group.className}>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-soft">{group.label}</p>
-              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              <div className={`mt-1 flex flex-wrap gap-x-4 gap-y-1 ${group.className.includes("text-right") ? "sm:justify-end" : ""}`}>
                 {group.people.map((person) => {
                   const value = `${group.kind}:${person.id}`;
                   return (
@@ -279,20 +324,6 @@ function CallsSmsDialog({
         </div>
       </div>
 
-      {projects.length > 0 && (
-        <div>
-          <label className={LABEL_CLASS}>{t.callsSms.project}</label>
-          <select name="projectId" defaultValue={entry?.projectId ?? ""} className={FIELD_CLASS}>
-            <option value="">{t.callsSms.noProject}</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
       <div>
         <label className={LABEL_CLASS}>{t.callsSms.discussed}</label>
         <textarea name="notes" rows={9} defaultValue={entry?.notes ?? ""} className={FIELD_CLASS} />
@@ -310,21 +341,6 @@ function CallsSmsDialog({
               {entry.updatedBy && ` ${t.callsSms.by} ${entry.updatedBy}`}
             </p>
           </div>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              if (!window.confirm(t.callsSms.deleteConfirm)) return;
-              startTransition(async () => {
-                await deleteInteraction(entry.id, contactId, entry.projectId);
-                router.refresh();
-                onClose();
-              });
-            }}
-            className="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
-          >
-            {t.callsSms.delete}
-          </button>
         </div>
       )}
     </SectionDialog>

@@ -617,8 +617,11 @@ export const dictionaries = {
       delete: "Delete",
     },
     callsSms: {
+      dialogTitle: "Call & SMS",
       addTitle: "Add a call, meeting, SMS or note",
       editTitle: "Edit entry",
+      duration: "Duration (min)",
+      minutesShort: "min",
       empty: "No calls, meetings, SMS or notes logged yet.",
       type: "Type",
       typeCall: "Call",
@@ -2077,8 +2080,11 @@ export const dictionaries = {
       delete: "Supprimer",
     },
     callsSms: {
+      dialogTitle: "Appel et SMS",
       addTitle: "Ajouter un appel, une réunion, un SMS ou une note",
       editTitle: "Modifier l'entrée",
+      duration: "Durée (min)",
+      minutesShort: "min",
       empty: "Aucun appel, réunion, SMS ou note pour le moment.",
       type: "Type",
       typeCall: "Appel",
