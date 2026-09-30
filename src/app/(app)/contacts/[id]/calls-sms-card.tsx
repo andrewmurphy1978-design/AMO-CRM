@@ -68,6 +68,26 @@ function formatPhone(e164: string): string {
   return m ? `(${m[1]}) ${m[2]}-${m[3]}` : e164;
 }
 
+// Twilio's delivery statuses in plain words; anything unrecognized is shown
+// as Twilio sent it.
+function smsStatusText(t: ReturnType<typeof getDict>, status: string | null, sendingNow: boolean): { text: string; bad: boolean } {
+  const c = t.callsSms;
+  if (!status) return { text: sendingNow ? c.statusReady : c.statusNone, bad: false };
+  const known: Record<string, string> = {
+    received: c.statusReceived,
+    queued: c.statusQueued,
+    accepted: c.statusQueued,
+    scheduled: c.statusQueued,
+    sending: c.statusSending,
+    sent: c.statusSent,
+    delivered: c.statusDelivered,
+    undelivered: c.statusUndelivered,
+    failed: c.statusFailed,
+    canceled: c.statusFailed,
+  };
+  return { text: known[status] ?? status, bad: ["undelivered", "failed", "canceled"].includes(status) };
+}
+
 function formatWhen(iso: string, lang: Lang): string {
   return new Intl.DateTimeFormat(lang === "fr" ? "fr-CA" : "en-CA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 }
@@ -262,9 +282,12 @@ function CallsSmsDialog({
   // received, so its type and message can't be edited afterwards.
   const locked = Boolean(entry?.direction);
   const isSms = type === "SMS";
+  // The time of a text is when it was sent/received, not something to edit.
+  const dateLocked = locked || (isSms && sendAsText && !entry);
   const sendNumbers = replyTo && !sending.numbers.some((n) => n.value === replyTo) ? [{ value: replyTo, label: formatPhone(replyTo) }, ...sending.numbers] : sending.numbers;
   const canSend = !entry && type === "SMS" && sending.ready && sendNumbers.length > 0;
   const sendingNow = canSend && sendAsText;
+  const smsStatus = smsStatusText(t, entry?.deliveryStatus ?? null, sendingNow);
   const [when, setWhen] = useState(() => toLocalInput(entry?.occurredAt ?? new Date().toISOString()));
 
   // A new entry starts with the contact and the person logging it; an
@@ -341,16 +364,35 @@ function CallsSmsDialog({
           {locked && <input type="hidden" name="type" value={type} />}
         </div>
         <div>
-          <label className={LABEL_CLASS}>{t.callsSms.dateTime}</label>
-          <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className={FIELD_CLASS} />
+          <label className={LABEL_CLASS}>
+            {isSms ? (entry?.direction === "INBOUND" ? t.callsSms.receivedAt : t.callsSms.sentAt) : t.callsSms.dateTime}
+          </label>
+          <input
+            type="datetime-local"
+            value={when}
+            readOnly={dateLocked}
+            onChange={(e) => setWhen(e.target.value)}
+            className={`${FIELD_CLASS} ${dateLocked ? "cursor-not-allowed bg-black/[0.04] text-soft" : ""}`}
+          />
           {/* The browser's own timezone is the only one that knows what the
               typed wall-clock time means, so it's converted here. */}
           <input type="hidden" name="occurredAt" value={when ? new Date(when).toISOString() : ""} readOnly />
         </div>
-        <div>
-          <label className={LABEL_CLASS}>{t.callsSms.duration}</label>
-          <input type="number" name="durationMinutes" min={0} step={1} defaultValue={entry?.durationMinutes ?? ""} className={FIELD_CLASS} />
-        </div>
+        {isSms ? (
+          <div>
+            <label className={LABEL_CLASS}>{t.callsSms.status}</label>
+            <input
+              readOnly
+              value={smsStatus.text}
+              className={`${FIELD_CLASS} cursor-not-allowed bg-black/[0.04] ${smsStatus.bad ? "font-semibold text-red-600" : "text-soft"}`}
+            />
+          </div>
+        ) : (
+          <div>
+            <label className={LABEL_CLASS}>{t.callsSms.duration}</label>
+            <input type="number" name="durationMinutes" min={0} step={1} defaultValue={entry?.durationMinutes ?? ""} className={FIELD_CLASS} />
+          </div>
+        )}
         {projects.length > 0 && (
           <div>
             <label className={LABEL_CLASS}>{t.callsSms.project}</label>

@@ -130,7 +130,7 @@ export async function saveContactInteraction(
     if (interactionId) {
       // A text that went through Twilio is a record of what was sent or
       // received: its type and message stay as they are whatever is posted.
-      const current = await db.interaction.findUnique({ where: { id: interactionId }, select: { direction: true, type: true, notes: true } });
+      const current = await db.interaction.findUnique({ where: { id: interactionId }, select: { direction: true, type: true, notes: true, occurredAt: true } });
       const locked = Boolean(current?.direction);
       const isSms = (locked ? current?.type : data.type) === "SMS";
       await db.$transaction([
@@ -140,8 +140,8 @@ export async function saveContactInteraction(
             type: locked && current ? current.type : data.type,
             subject: isSms ? null : (data.subject ?? null),
             notes: locked && current ? current.notes : data.notes,
-            occurredAt: data.occurredAt,
-            durationMinutes: data.durationMinutes,
+            occurredAt: locked && current ? current.occurredAt : data.occurredAt,
+            durationMinutes: isSms ? null : data.durationMinutes,
             projectId: data.projectId ?? null,
             updatedById: session.user.id,
           },
@@ -156,8 +156,9 @@ export async function saveContactInteraction(
           type: data.type,
           subject: data.type === "SMS" ? undefined : data.subject,
           notes: data.notes,
-          occurredAt: data.occurredAt,
-          durationMinutes: data.durationMinutes,
+          // A text sent from here goes out now; SMS has no duration.
+          occurredAt: twilio ? new Date() : data.occurredAt,
+          durationMinutes: data.type === "SMS" ? null : data.durationMinutes,
           contactId,
           projectId: data.projectId,
           loggedById: session.user.id,
