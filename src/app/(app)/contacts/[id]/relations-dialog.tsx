@@ -124,7 +124,7 @@ function RelationRow({
                 value={row.search}
                 onChange={(e) => onChange({ search: e.target.value })}
                 placeholder={t.linkPicker.searchPlaceholder}
-                className={`${FIELD_CLASS} mt-0`}
+                className={`${FIELD_CLASS} mt-0!`}
               />
               {query && (
                 <div className="mt-1 max-h-40 overflow-y-auto rounded-md border border-card-border">
@@ -151,7 +151,7 @@ function RelationRow({
           value={row.category}
           onChange={(e) => onChange({ category: e.target.value as RelationCategory })}
           aria-label={t.contactForm.relationCategoryLabel}
-          className={`${FIELD_CLASS} mt-0`}
+          className={`${FIELD_CLASS} mt-0!`}
         >
           <option value="personal">{t.contactForm.relationCategoryPersonal}</option>
           <option value="professional">{t.contactForm.relationCategoryProfessional}</option>
@@ -159,7 +159,7 @@ function RelationRow({
         <Combobox
           label={t.contactForm.relationTypePlaceholder}
           labelClassName="sr-only"
-          inputClassName={`${FIELD_CLASS} mt-0`}
+          inputClassName={`${FIELD_CLASS} mt-0!`}
           name="relationType"
           defaultValue={row.relationType}
           options={row.category === "professional" ? PROFESSIONAL_RELATION_OPTIONS : FAMILY_RELATION_OPTIONS}
@@ -168,7 +168,7 @@ function RelationRow({
         <button
           type="button"
           onClick={onRemove}
-          className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+          className="h-[38px] shrink-0 rounded-md border border-card-border px-2 text-xs text-soft hover:text-ink"
           aria-label={t.contactForm.removeEntry}
         >
           ✕

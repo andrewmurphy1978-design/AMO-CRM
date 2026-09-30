@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { getGoogleConnection } from "@/lib/google";
+import { getGoogleConnection, diagnoseGoogleConnection } from "@/lib/google";
 import { getIonosMailbox } from "@/lib/mail/ionos";
 import { disconnectGoogleAccount } from "@/actions/integrations";
 import GoogleContactsImportForm from "./google-contacts-import-form";
@@ -85,6 +85,7 @@ export default async function SettingsPage({
     bufferSettings,
     socialLinksSetting,
     googleConnection,
+    googleProblem,
     ionosMailbox,
     users,
     watchedPeople,
@@ -141,6 +142,7 @@ export default async function SettingsPage({
         where: { provider: "social_links" },
       });
       const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
+      const googleProblem = session && googleConnection ? await diagnoseGoogleConnection(session.user.id, db) : null;
       const ionosMailbox = session ? await getIonosMailbox(session.user.id, db) : null;
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
       const watchedPeople = showPersonalCard ? await getWatchedPeople(db) : [];
@@ -165,6 +167,7 @@ export default async function SettingsPage({
         bufferSettings,
         socialLinksSetting,
         googleConnection,
+        googleProblem,
         ionosMailbox,
         users,
         watchedPeople,
@@ -349,6 +352,9 @@ export default async function SettingsPage({
                 </button>
               </form>
             </div>
+            {googleProblem && (
+              <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">{googleProblem}</p>
+            )}
             <p className="mt-2 text-xs text-soft">{t.settings.googleReconnectForSend}</p>
           </div>
         ) : (

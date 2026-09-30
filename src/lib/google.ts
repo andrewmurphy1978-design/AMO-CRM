@@ -67,6 +67,49 @@ export async function getGoogleConnection(userId: string, db: PrismaClient): Pro
   return { email: row.email };
 }
 
+// Settings only checks that a GoogleAccount row exists, while every
+// dashboard card needs a working token — and getValidAccessToken returns
+// null for each way that can break (wrong/missing ENCRYPTION_KEY, missing
+// Google client credentials, Google rejecting the refresh) without saying
+// which. This returns a human-readable reason instead (null = all fine),
+// so Settings can show why a "connected" account still reads as not
+// connected elsewhere.
+export async function diagnoseGoogleConnection(userId: string, db: PrismaClient): Promise<string | null> {
+  const row = await db.googleAccount.findUnique({ where: { userId } });
+  if (!row) return null;
+
+  let tokens: GoogleTokens;
+  try {
+    tokens = JSON.parse(await decryptSecret(row.tokensEncrypted)) as GoogleTokens;
+  } catch (e) {
+    return `Stored Google tokens can't be decrypted (${e instanceof Error ? e.message : "unknown error"}) — ENCRYPTION_KEY is missing or differs from the one used when Google was connected.`;
+  }
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return `${!clientId ? "GOOGLE_CLIENT_ID" : "GOOGLE_CLIENT_SECRET"} is not set on the server.`;
+  }
+
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: tokens.refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    if (res.ok) return null;
+    const body = (await res.json().catch(() => null)) as { error?: string; error_description?: string } | null;
+    return `Google rejected the token refresh (${res.status}${body?.error ? `: ${body.error}` : ""}${body?.error_description ? ` — ${body.error_description}` : ""}). Disconnect and reconnect.`;
+  } catch (e) {
+    return `Couldn't reach Google to refresh the token (${e instanceof Error ? e.message : "unknown error"}).`;
+  }
+}
+
 // Returns a valid access token for this user, refreshing it first if it's
 // expired (or expiring within a minute). Returns null when this user
 // hasn't connected Google, or the refresh itself fails (e.g. the grant

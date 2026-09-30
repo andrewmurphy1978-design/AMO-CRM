@@ -13,7 +13,7 @@ import Combobox from "@/components/combobox";
 // tech-stack-dialog.tsx). Managed By and Notes get the most extra room
 // (the dialog itself is `maxWide` so growing them doesn't come at the
 // expense of any other column).
-const GRID_COLS = "lg:grid-cols-[2fr_1.4fr_1.4fr_0.9fr_0.8fr_1.8fr_1.6fr_2.25rem]";
+const GRID_COLS = "lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,1.8fr)_minmax(0,1.6fr)_2.25rem]";
 
 // Suggestions for the Registrar/DNS Provider comboboxes (see Combobox) —
 // still free text underneath, since a client's actual registrar/DNS host
