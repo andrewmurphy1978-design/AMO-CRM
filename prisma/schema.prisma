@@ -124,6 +124,7 @@ model User {
   activityEntries           ActivityLogEntry[]
   interactions              Interaction[]            @relation("InteractionLoggedBy")
   interactionsUpdated       Interaction[]            @relation("InteractionUpdatedBy")
+  googleTaskLinks           GoogleTaskLink[]
   interactionParticipations InteractionParticipant[]
   googleAccount             GoogleAccount?
   ionosMailbox              IonosMailboxAccount?
@@ -142,6 +143,9 @@ model GoogleAccount {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   email           String?
   tokensEncrypted String   @db.Text
+  // The "AMO CRM" list in this user's Google Tasks — set only when they
+  // turn task sync on (null = off).
+  tasksListId     String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1092,12 +1096,32 @@ model Task {
 
   emailLinks         EmailLink[]
   calendarEventLinks CalendarEventLink[]
+  googleTaskLink     GoogleTaskLink?
 
   @@index([projectId])
   @@index([status])
   @@index([phaseId])
   @@index([supervisorId])
   @@map("tasks")
+}
+
+// One CRM task mirrored as one task in its assignee's Google Tasks. Sync is
+// per user: only tasks assigned to someone who turned sync on are mirrored,
+// into that user's own Google account.
+model GoogleTaskLink {
+  id            String   @id @default(cuid())
+  taskId        String   @unique
+  task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleTaskId  String
+  // The task was deleted on the Google side; the CRM task stays and is not
+  // pushed there again.
+  googleDeleted Boolean  @default(false)
+  lastSyncedAt  DateTime @default(now())
+
+  @@index([userId])
+  @@map("google_task_links")
 }
 
 // Lightweight activity trail shown on contact/project detail pages.

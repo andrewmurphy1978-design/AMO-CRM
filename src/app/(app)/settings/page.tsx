@@ -9,6 +9,7 @@ import IonosMailboxForm from "./ionos-mailbox-form";
 import SystemeIoForm from "./systeme-io-form";
 import AnthropicKeyForm from "./anthropic-key-form";
 import TwilioForm from "./twilio-form";
+import GoogleTasksControls from "./google-tasks-controls";
 import { getTwilioConfig, publicBaseUrl } from "@/lib/twilio";
 import MakeForm from "./make-form";
 import ShortIoForm from "./shortio-form";
@@ -89,6 +90,7 @@ export default async function SettingsPage({
     socialLinksSetting,
     googleConnection,
     googleProblem,
+    googleTasksOn,
     ionosMailbox,
     users,
     watchedPeople,
@@ -147,6 +149,9 @@ export default async function SettingsPage({
       });
       const googleConnection = session ? await getGoogleConnection(session.user.id, db) : null;
       const googleProblem = session && googleConnection ? await diagnoseGoogleConnection(session.user.id, db) : null;
+      const googleTasksOn = session && googleConnection
+        ? Boolean((await db.googleAccount.findUnique({ where: { userId: session.user.id }, select: { tasksListId: true } }))?.tasksListId)
+        : false;
       const ionosMailbox = session ? await getIonosMailbox(session.user.id, db) : null;
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
       const watchedPeople = showPersonalCard ? await getWatchedPeople(db) : [];
@@ -173,6 +178,7 @@ export default async function SettingsPage({
         socialLinksSetting,
         googleConnection,
         googleProblem,
+        googleTasksOn,
         ionosMailbox,
         users,
         watchedPeople,
@@ -361,6 +367,7 @@ export default async function SettingsPage({
               <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">{googleProblem}</p>
             )}
             <p className="mt-2 text-xs text-soft">{t.settings.googleReconnectForSend}</p>
+            <GoogleTasksControls enabled={googleTasksOn} />
           </div>
         ) : (
           <a

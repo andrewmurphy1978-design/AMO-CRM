@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/contacts",
+    // Google Tasks sync (Settings > Google integration): read/write tasks.
+    "https://www.googleapis.com/auth/tasks",
   ].join(" ");
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");

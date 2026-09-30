@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { syncGoogleTasksForTask, removeTaskFromGoogle } from "@/lib/google-tasks";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
@@ -86,6 +87,7 @@ export async function createTaskViaDialog(
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/tasks");
+  await syncGoogleTasksForTask(task.id);
   return { id: task.id };
 }
 
@@ -107,7 +109,7 @@ export async function createTask(
     throw error;
   }
 
-  await withScopedPrismaClient((db) =>
+  const created = await withScopedPrismaClient((db) =>
     db.task.create({
       data: {
         title: data.title,
@@ -127,6 +129,7 @@ export async function createTask(
 
   revalidatePath(`/projects/${data.projectId}`);
   revalidatePath("/tasks");
+  await syncGoogleTasksForTask(created.id);
   return {};
 }
 
@@ -171,6 +174,7 @@ export async function createTaskAndRedirect(
 
   revalidatePath(`/projects/${data.projectId}`);
   revalidatePath("/tasks");
+  await syncGoogleTasksForTask(task.id);
   redirect(`/tasks/${task.id}`);
 }
 
@@ -226,6 +230,7 @@ export async function updateTask(
   }
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
+  await syncGoogleTasksForTask(taskId);
   return { success: t.actions.taskUpdated };
 }
 
@@ -246,12 +251,14 @@ export async function toggleTaskStatus(taskId: string, projectId: string, done: 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
+  await syncGoogleTasksForTask(taskId);
 }
 
 export async function deleteTask(taskId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
+  await removeTaskFromGoogle(taskId);
   await withScopedPrismaClient((db) => db.task.delete({ where: { id: taskId } }));
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/tasks");

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getValidAccessToken } from "@/lib/google";
 import { refreshEmailInboxCache } from "@/lib/email-inbox";
+import { syncAllGoogleTasks } from "@/lib/google-tasks";
 
 // Keeps every user's Email page cache warm between page opens — without
 // this, new IONOS mail (and new Gmail mail) only shows up once someone
@@ -43,6 +44,10 @@ export async function GET(request: Request) {
     }
     return outcomes;
   });
+
+  // Same 15-minute tick also picks up tasks changed in Google Tasks (on a
+  // phone, say) for everyone who has task sync turned on.
+  await syncAllGoogleTasks().catch(() => undefined);
 
   return NextResponse.json({ ok: true, polled: results.length, results });
 }
