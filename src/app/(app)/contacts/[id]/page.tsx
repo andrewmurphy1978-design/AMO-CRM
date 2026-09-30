@@ -1383,6 +1383,8 @@ export default async function ContactDetailPage({
               direction: i.direction,
               deliveryStatus: i.deliveryStatus,
               externalNumber: i.externalNumber,
+              errorCode: i.errorCode,
+              seenAt: i.seenAt ? i.seenAt.toISOString() : null,
               participants: i.participants.map((p) =>
                 p.contact
                   ? { kind: "contact" as const, id: p.contact.id, name: [p.contact.firstName, p.contact.lastName].filter(Boolean).join(" ") || p.contact.company || "—" }

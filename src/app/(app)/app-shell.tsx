@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "./sidebar";
 
@@ -13,7 +13,7 @@ export default function AppShell({
   signOutAction,
   children,
 }: {
-  navItems: { href: string; label: string }[];
+  navItems: { href: string; label: string; badge?: number }[];
   userName?: string | null;
   userEmail?: string | null;
   signOutLabel: string;
@@ -21,6 +21,28 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+
+  // Unread-SMS count for the sidebar badge — fetched here, once, after the
+  // page has rendered (see /api/sms/unread), on every navigation and once a
+  // minute so a text that arrives while the page is open shows up.
+  const [unreadSms, setUnreadSms] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      fetch("/api/sms/unread", { cache: "no-store" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: { count?: number } | null) => {
+          if (!cancelled && data && typeof data.count === "number") setUnreadSms(data.count);
+        })
+        .catch(() => {});
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [pathname]);
+  const itemsWithBadges = navItems.map((item) => (item.href === "/sms" ? { ...item, badge: unreadSms } : item));
   // The Dashboard's 3-column layout, and the Calendar page's own grid
   // views, both want the horizontal space back, so the sidebar starts
   // collapsed on either — but stays a manual toggle everywhere it's
@@ -54,7 +76,7 @@ export default function AppShell({
     // into, on every page at once, not anything specific to Calendar.
     <div className="flex min-h-dvh" style={shellStyle}>
       <Sidebar
-        navItems={navItems}
+        navItems={itemsWithBadges}
         userName={userName}
         userEmail={userEmail}
         signOutLabel={signOutLabel}

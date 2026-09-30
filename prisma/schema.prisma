@@ -1461,8 +1461,15 @@ model Interaction {
   externalNumber String?
   deliveryStatus String?
 
-  contactId String
-  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  // Null only for an incoming text from a number that matches no contact
+  // yet — it waits on the SMS page until it's linked to one.
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  // When an incoming text was first looked at (null = still new).
+  seenAt    DateTime?
+  // Twilio's error code when a sent text fails or can't be delivered.
+  errorCode String?
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)

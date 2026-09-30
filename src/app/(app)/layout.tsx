@@ -27,6 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const NAV_ITEMS = [
     { href: "/", label: t.nav.dashboard },
     { href: "/email", label: t.nav.email },
+    { href: "/sms", label: t.nav.sms },
     // Points at the CRM's own native calendar (linkable to clients/
     // projects/tasks/bookings) — the previous embedded Google Calendar
     // view is kept, unlinked, at /calendar as a fallback to revert to.

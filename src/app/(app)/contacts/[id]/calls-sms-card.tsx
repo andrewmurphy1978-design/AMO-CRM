@@ -3,6 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteInteraction, saveContactInteraction } from "@/actions/interactions";
+import { markSmsSeen } from "@/actions/sms";
+import { explainTwilioError } from "@/lib/twilio-errors";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import Card, { CARD_COLORS } from "@/components/section-card";
 import SectionDialog from "./section-dialog";
@@ -29,6 +31,8 @@ export interface CallsSmsEntry {
   direction: string | null; // "INBOUND" | "OUTBOUND" for Twilio texts
   deliveryStatus: string | null;
   externalNumber: string | null; // the other party's E.164 number for Twilio texts
+  errorCode: string | null; // Twilio's error code when a sent text failed
+  seenAt: string | null; // null on an incoming text nobody has opened yet
 }
 
 // What the dialog needs to offer "send as a text": Twilio connected, and the
@@ -86,6 +90,13 @@ function smsStatusText(t: ReturnType<typeof getDict>, status: string | null, sen
     canceled: c.statusFailed,
   };
   return { text: known[status] ?? status, bad: ["undelivered", "failed", "canceled"].includes(status) };
+}
+
+// Why a text failed, in words — Twilio's code explained, or a plain note when
+// Twilio gave no code.
+function failureReason(t: ReturnType<typeof getDict>, lang: Lang, entry: { deliveryStatus: string | null; errorCode: string | null }): string | null {
+  if (!entry.deliveryStatus || !["failed", "undelivered", "canceled"].includes(entry.deliveryStatus)) return null;
+  return explainTwilioError(entry.errorCode, lang) ?? t.callsSms.failedNoReason;
 }
 
 function formatWhen(iso: string, lang: Lang): string {
@@ -196,6 +207,9 @@ export default function CallsSmsCard({
                           {entry.direction === "OUTBOUND" && entry.deliveryStatus && ` · ${entry.deliveryStatus}`}
                         </span>
                       )}
+                      {entry.direction === "INBOUND" && !entry.seenAt && (
+                        <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">{t.callsSms.newBadge}</span>
+                      )}
                       {entry.type !== "SMS" && entry.subject && <span className="text-sm font-medium text-ink">{entry.subject}</span>}
                     </div>
                     {(entry.participants.length > 0 || entry.externalNumber) && (
@@ -204,6 +218,7 @@ export default function CallsSmsCard({
                       </p>
                     )}
                     {entry.notes && <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-sm text-ink">{entry.notes}</p>}
+                    {failureReason(t, lang, entry) && <p className="mt-1 text-xs text-red-600">{failureReason(t, lang, entry)}</p>}
                   </div>
                   <span className="shrink-0 whitespace-nowrap text-right text-xs text-soft" suppressHydrationWarning>
                     {formatWhen(entry.occurredAt, lang)}
@@ -276,6 +291,12 @@ function CallsSmsDialog({
   const t = getDict(lang);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // Opening a received text counts as seeing it.
+  const unseen = entry?.direction === "INBOUND" && !entry.seenAt;
+  const entryId = entry?.id;
+  useEffect(() => {
+    if (unseen && entryId) void markSmsSeen([entryId]);
+  }, [unseen, entryId]);
   const [type, setType] = useState(replyTo ? "SMS" : (entry?.type ?? "CALL"));
   const [sendAsText, setSendAsText] = useState(Boolean(replyTo));
   // A text that went through Twilio is a record of what was actually sent or
@@ -443,6 +464,12 @@ function CallsSmsDialog({
           ))}
         </div>
       </div>
+      )}
+
+      {entry && failureReason(t, lang, entry) && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <span className="font-semibold">{t.callsSms.whyFailed}</span> {failureReason(t, lang, entry)}
+        </p>
       )}
 
       {canSend && (

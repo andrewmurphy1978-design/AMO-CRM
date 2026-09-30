@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     await db.interaction.update({
       where: { id: entry.id },
       // Delivery updates are Twilio's, not an edit — keep "last modified" as is.
-      data: { deliveryStatus: status, updatedAt: entry.updatedAt },
+      data: { deliveryStatus: status, errorCode: params.get("ErrorCode") || null, updatedAt: entry.updatedAt },
     });
     return entry.contactId;
   });

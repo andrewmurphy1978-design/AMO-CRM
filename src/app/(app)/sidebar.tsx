@@ -27,7 +27,7 @@ export default function Sidebar({
   onToggle,
   hideLogo = false,
 }: {
-  navItems: { href: string; label: string }[];
+  navItems: { href: string; label: string; badge?: number }[];
   userName?: string | null;
   userEmail?: string | null;
   signOutLabel: string;
@@ -65,9 +65,9 @@ export default function Sidebar({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={AMO_BADGE_URL} alt="Andrew Murphy Online" className="h-7 w-7 object-contain" />
       </div>
-      <nav className="flex-1 space-y-0.5 overflow-y-auto px-1.5 py-3">
+      <nav className="flex-1 space-y-0 overflow-y-auto px-1.5 py-3">
         {navItems.map((item) => (
-          <NavLink key={item.href} href={item.href} label={item.label} collapsed />
+          <NavLink key={item.href} href={item.href} label={item.label} badge={item.badge} collapsed />
         ))}
       </nav>
       <form action={signOutAction} className="shrink-0 border-t border-white/10 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
@@ -110,9 +110,9 @@ export default function Sidebar({
               </svg>
             </button>
           </div>
-          <nav className="flex-1 space-y-0.5 px-2 py-3">
+          <nav className="flex-1 space-y-0 px-2 py-3">
             {navItems.map((item) => (
-              <NavLink key={item.href} href={item.href} label={item.label} collapsed />
+              <NavLink key={item.href} href={item.href} label={item.label} badge={item.badge} collapsed />
             ))}
           </nav>
           {/* The expanded aside below shows name/email + a "Sign out" text
@@ -160,9 +160,9 @@ export default function Sidebar({
           </svg>
         </button>
       </div>
-      <nav className="flex-1 space-y-0.5 px-3 py-3">
+      <nav className="flex-1 space-y-0 px-3 py-3">
         {navItems.map((item) => (
-          <NavLink key={item.href} href={item.href} label={item.label} />
+          <NavLink key={item.href} href={item.href} label={item.label} badge={item.badge} />
         ))}
       </nav>
       <div className="border-t border-white/10 p-3">

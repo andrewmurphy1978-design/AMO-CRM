@@ -71,7 +71,7 @@ export async function sendTwilioSms(
   to: string,
   body: string,
   statusCallback: string | null
-): Promise<{ sid: string; status: string } | { error: string }> {
+): Promise<{ sid: string; status: string } | { error: string; code?: string }> {
   try {
     const form = new URLSearchParams({ To: to, From: config.fromNumber, Body: body });
     if (statusCallback) form.set("StatusCallback", statusCallback);

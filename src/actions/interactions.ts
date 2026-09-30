@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getTwilioConfig, publicBaseUrl, sendTwilioSms } from "@/lib/twilio";
+import { explainTwilioError } from "@/lib/twilio-errors";
 
 const InteractionSchema = z.object({
   type: z.enum(["CALL", "EMAIL", "MEETING", "NOTE"]),
@@ -123,7 +124,7 @@ export async function saveContactInteraction(
       if (!config) return "Twilio isn't connected — add it in Settings first.";
       const base = publicBaseUrl();
       const result = await sendTwilioSms(config, sendTo, data.notes, base ? `${base}/api/twilio/status` : null);
-      if ("error" in result) return result.error;
+      if ("error" in result) return explainTwilioError(result.code, session.user.language === "FR" ? "fr" : "en", result.error);
       twilio = result;
     }
 

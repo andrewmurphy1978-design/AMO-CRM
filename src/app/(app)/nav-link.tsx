@@ -7,6 +7,7 @@ import clsx from "@/lib/clsx";
 import CalendarIcon from "./calendar-icon";
 import ContactsIcon from "./contacts-icon";
 import EmailIcon from "./email-icon";
+import SmsIcon from "./sms-icon";
 import ProjectsIcon from "./projects-icon";
 import DashboardIcon from "./dashboard-icon";
 import TasksIcon from "./tasks-icon";
@@ -27,6 +28,7 @@ const NAV_PILL_ICONS: Record<
 > = {
   "/": DashboardIcon,
   "/email": EmailIcon,
+  "/sms": SmsIcon,
   "/calendar-app": CalendarIcon,
   "/tasks": TasksIcon,
   "/contacts": ContactsIcon,
@@ -43,10 +45,14 @@ export default function NavLink({
   href,
   label,
   collapsed = false,
+  badge = 0,
 }: {
   href: string;
   label: string;
   collapsed?: boolean;
+  // Unread count shown as a small red circle (a dot on the icon when the
+  // sidebar is collapsed).
+  badge?: number;
 }) {
   const pathname = usePathname();
   const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -72,14 +78,20 @@ export default function NavLink({
       aria-label={collapsed ? label : undefined}
       className={clsx(
         "flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-150",
-        collapsed ? "justify-center px-0 py-1" : "px-3 py-1.5",
+        collapsed ? "justify-center px-0 py-0.5" : "px-3 py-0.5",
         active
           ? "bg-gradient-to-r from-amo-lime/20 to-amo-teal/10 text-amo-white shadow-[inset_2px_0_0_0_var(--amo-lime)]"
           : "text-amo-muted hover:bg-white/5 hover:text-amo-white"
       )}
     >
-      {PillIcon && <PillIcon size="h-7 w-7" iconSize="h-4 w-4" />}
-      {!collapsed && <span>{label}</span>}
+      <span className="relative shrink-0">
+        {PillIcon && <PillIcon size="h-7 w-7" iconSize="h-4 w-4" />}
+        {collapsed && badge > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-amo-green" />}
+      </span>
+      {!collapsed && <span className="flex-1">{label}</span>}
+      {!collapsed && badge > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">{badge > 99 ? "99+" : badge}</span>
+      )}
     </Link>
   );
 }

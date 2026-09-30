@@ -7,7 +7,7 @@ import { findContactIdByPhone, getTwilioConfig, publicBaseUrl, verifyTwilioSigna
 // purpose (Twilio has no session) — every request is authenticated by
 // Twilio's HMAC signature instead. Each text becomes a Calls & SMS entry on
 // the contact whose phone number it came from; a number that matches nobody
-// gets a new contact so the message isn't lost.
+// stays unlinked on the SMS page until someone links it.
 const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 const xml = (status = 200) => new NextResponse(EMPTY_TWIML, { status, headers: { "Content-Type": "text/xml" } });
 
@@ -30,14 +30,9 @@ export async function POST(request: NextRequest) {
     const existing = await db.interaction.findUnique({ where: { externalId: sid }, select: { id: true } });
     if (existing) return { status: 200 as const };
 
-    let contactId = await findContactIdByPhone(db, from);
-    if (!contactId) {
-      const created = await db.contact.create({
-        data: { firstName: "Unknown", lastName: from, phone: from, source: "Twilio SMS" },
-        select: { id: true },
-      });
-      contactId = created.id;
-    }
+    // No match is fine: the text is kept unlinked and waits on the SMS page
+    // until it's linked to a contact (or a new one is created from it).
+    const contactId = await findContactIdByPhone(db, from);
 
     const mediaCount = Number(params.get("NumMedia") ?? "0");
     const body = [params.get("Body") ?? "", mediaCount > 0 ? `[${mediaCount} attachment${mediaCount > 1 ? "s" : ""} — view in your Twilio console]` : ""]
@@ -53,7 +48,7 @@ export async function POST(request: NextRequest) {
         deliveryStatus: "received",
         notes: body,
         contactId,
-        participants: { create: [{ contactId }] },
+        ...(contactId ? { participants: { create: [{ contactId }] } } : {}),
       },
     });
     return { status: 200 as const, contactId };
