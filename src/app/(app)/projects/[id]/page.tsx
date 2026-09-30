@@ -23,6 +23,8 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader, { HeaderBreadcrumb } from "../../page-header";
 import Card from "@/components/section-card";
+import ContactInfoPopover from "./contact-info-popover";
+import { AvatarThumb, ContactInfoCard, TechStackCard, DomainsCard } from "../../contacts/[id]/contact-cards";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -73,7 +75,7 @@ export default async function ProjectDetailPage({
     const project = await db.project.findUnique({
       where: { id },
       include: {
-        contact: true,
+        contact: { include: { messagingAccounts: { orderBy: { order: "asc" } }, techStackItems: { orderBy: { order: "asc" } }, domains: { orderBy: { order: "asc" } } } },
         owner: true,
         supervisor: true,
         teamMembers: { include: { user: true } },
@@ -242,9 +244,21 @@ export default async function ProjectDetailPage({
     <div className="space-y-6">
       <PageHeader
         title={
-          <HeaderBreadcrumb
-            parts={[{ label: clientName, href: `/contacts/${project.contact.id}` }, { label: project.name }]}
-          />
+          <span className="flex min-w-0 items-center gap-2">
+            <AvatarThumb
+              url={project.contact.avatarUrl}
+              firstName={project.contact.firstName}
+              lastName={project.contact.lastName}
+              size="h-10 w-10"
+              textSize="text-xs"
+            />
+            <HeaderBreadcrumb
+              parts={[{ label: clientName, href: `/contacts/${project.contact.id}` }, { label: project.name }]}
+            />
+            <ContactInfoPopover title={t.contactForm.cardContactInfo}>
+              <ContactInfoCard contact={project.contact} lang={lang} defaultComposeSource={defaultComposeSource} hour12={hour12} />
+            </ContactInfoPopover>
+          </span>
         }
         hour12={hour12}
         lang={lang}
@@ -337,6 +351,10 @@ export default async function ProjectDetailPage({
             phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
             lang={lang}
           />
+
+          <TechStackCard contact={project.contact} lang={lang} />
+
+          <DomainsCard contact={project.contact} lang={lang} />
         </div>
 
         <div className="space-y-6">

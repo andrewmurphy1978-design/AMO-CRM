@@ -567,4 +567,6 @@ export async function updateContactOtherInfo(
 function revalidatePaths(contactId: string) {
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${contactId}`);
+  // The Project page shows the client's Contact Info / Tech Stack / Domains cards too.
+  revalidatePath("/projects", "layout");
 }
