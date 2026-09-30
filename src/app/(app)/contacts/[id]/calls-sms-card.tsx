@@ -28,6 +28,7 @@ export interface CallsSmsEntry {
   participants: CallsSmsParticipant[];
   direction: string | null; // "INBOUND" | "OUTBOUND" for Twilio texts
   deliveryStatus: string | null;
+  externalNumber: string | null; // the other party's E.164 number for Twilio texts
 }
 
 // What the dialog needs to offer "send as a text": Twilio connected, and the
@@ -61,6 +62,12 @@ function toLocalInput(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// +15149536985 -> (514) 953-6985 (NANP); anything else is shown as stored.
+function formatPhone(e164: string): string {
+  const m = e164.match(/^\+1(\d{3})(\d{3})(\d{4})$/);
+  return m ? `(${m[1]}) ${m[2]}-${m[3]}` : e164;
+}
+
 function formatWhen(iso: string, lang: Lang): string {
   return new Intl.DateTimeFormat(lang === "fr" ? "fr-CA" : "en-CA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 }
@@ -91,7 +98,7 @@ export default function CallsSmsCard({
   title: string;
 }) {
   const t = getDict(lang);
-  const [dialog, setDialog] = useState<{ entry: CallsSmsEntry | null; key: number } | null>(null);
+  const [dialog, setDialog] = useState<{ entry: CallsSmsEntry | null; key: number; replyTo?: string } | null>(null);
   const [counter, setCounter] = useState(0);
   const router = useRouter();
 
@@ -118,9 +125,9 @@ export default function CallsSmsCard({
     EMAIL: t.callsSms.typeEmail,
   };
 
-  function open(entry: CallsSmsEntry | null) {
+  function open(entry: CallsSmsEntry | null, replyTo?: string) {
     setCounter((c) => c + 1);
-    setDialog({ entry, key: counter + 1 });
+    setDialog({ entry, key: counter + 1, replyTo });
   }
 
   return (
@@ -169,10 +176,12 @@ export default function CallsSmsCard({
                           {entry.direction === "OUTBOUND" && entry.deliveryStatus && ` · ${entry.deliveryStatus}`}
                         </span>
                       )}
-                      {entry.subject && <span className="text-sm font-medium text-ink">{entry.subject}</span>}
+                      {entry.type !== "SMS" && entry.subject && <span className="text-sm font-medium text-ink">{entry.subject}</span>}
                     </div>
-                    {entry.participants.length > 0 && (
-                      <p className="mt-1 truncate text-xs text-soft">{entry.participants.map((p) => p.name).join(", ")}</p>
+                    {(entry.participants.length > 0 || entry.externalNumber) && (
+                      <p className="mt-1 truncate text-xs text-soft">
+                        {[...entry.participants.map((p) => p.name), ...(entry.externalNumber ? [formatPhone(entry.externalNumber)] : [])].join(" · ")}
+                      </p>
                     )}
                     {entry.notes && <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-sm text-ink">{entry.notes}</p>}
                   </div>
@@ -196,6 +205,8 @@ export default function CallsSmsCard({
         <CallsSmsDialog
           key={dialog.key}
           entry={dialog.entry}
+          replyTo={dialog.replyTo}
+          onReply={(to) => open(null, to)}
           contactId={contactId}
           contact={contact}
           relatedContacts={relatedContacts}
@@ -214,6 +225,8 @@ export default function CallsSmsCard({
 
 function CallsSmsDialog({
   entry,
+  replyTo,
+  onReply,
   contactId,
   contact,
   relatedContacts,
@@ -226,6 +239,9 @@ function CallsSmsDialog({
   onClose,
 }: {
   entry: CallsSmsEntry | null;
+  // Set when opened from a received text's Reply: a new SMS, ready to send.
+  replyTo?: string;
+  onReply: (to: string) => void;
   contactId: string;
   contact: NamedOption;
   relatedContacts: NamedOption[];
@@ -240,9 +256,14 @@ function CallsSmsDialog({
   const t = getDict(lang);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [type, setType] = useState(entry?.type ?? "CALL");
-  const [sendAsText, setSendAsText] = useState(false);
-  const canSend = !entry && type === "SMS" && sending.ready && sending.numbers.length > 0;
+  const [type, setType] = useState(replyTo ? "SMS" : (entry?.type ?? "CALL"));
+  const [sendAsText, setSendAsText] = useState(Boolean(replyTo));
+  // A text that went through Twilio is a record of what was actually sent or
+  // received, so its type and message can't be edited afterwards.
+  const locked = Boolean(entry?.direction);
+  const isSms = type === "SMS";
+  const sendNumbers = replyTo && !sending.numbers.some((n) => n.value === replyTo) ? [{ value: replyTo, label: formatPhone(replyTo) }, ...sending.numbers] : sending.numbers;
+  const canSend = !entry && type === "SMS" && sending.ready && sendNumbers.length > 0;
   const sendingNow = canSend && sendAsText;
   const [when, setWhen] = useState(() => toLocalInput(entry?.occurredAt ?? new Date().toISOString()));
 
@@ -272,6 +293,16 @@ function CallsSmsDialog({
       title={t.callsSms.dialogTitle}
       headerExtra={
         entry ? (
+          <>
+            {entry.direction === "INBOUND" && entry.externalNumber && sending.ready && (
+              <button
+                type="button"
+                onClick={() => onReply(entry.externalNumber as string)}
+                className="flex items-center gap-1.5 rounded-md bg-white/20 px-2 py-1.5 text-sm font-semibold hover:bg-white/30"
+              >
+                ↩ {t.callsSms.reply}
+              </button>
+            )}
           <button
             type="button"
             disabled={pending}
@@ -287,23 +318,27 @@ function CallsSmsDialog({
           >
             {t.callsSms.delete}
           </button>
+          </>
         ) : undefined
       }
       action={saveContactInteraction.bind(null, contactId, entry?.id ?? null)}
       labels={t.phaseDialog}
       wide
       headerColorClassName={CARD_COLORS.interactions}
+      submitLabels={sendingNow ? { idle: t.callsSms.send, pending: t.callsSms.sendingNow } : undefined}
+      submitIcon={sendingNow ? <SendIcon /> : undefined}
     >
       <div className={`grid gap-3 sm:grid-cols-2 ${projects.length > 0 ? "lg:grid-cols-[9rem_minmax(0,1.3fr)_7rem_minmax(0,1fr)]" : "lg:grid-cols-[9rem_minmax(0,1.3fr)_7rem]"}`}>
         <div>
           <label className={LABEL_CLASS}>{t.callsSms.type}</label>
-          <select name="type" value={type} onChange={(e) => setType(e.target.value)} className={FIELD_CLASS}>
+          <select name={locked ? undefined : "type"} value={type} disabled={locked} onChange={(e) => setType(e.target.value)} className={FIELD_CLASS}>
             {typeOptions.map((type) => (
               <option key={type} value={type}>
                 {typeLabels[type]}
               </option>
             ))}
           </select>
+          {locked && <input type="hidden" name="type" value={type} />}
         </div>
         <div>
           <label className={LABEL_CLASS}>{t.callsSms.dateTime}</label>
@@ -331,11 +366,14 @@ function CallsSmsDialog({
         )}
       </div>
 
-      <div>
-        <label className={LABEL_CLASS}>{t.callsSms.subject}</label>
-        <input name="subject" defaultValue={entry?.subject ?? ""} className={FIELD_CLASS} />
-      </div>
+      {!isSms && (
+        <div>
+          <label className={LABEL_CLASS}>{t.callsSms.subject}</label>
+          <input name="subject" defaultValue={entry?.subject ?? ""} className={FIELD_CLASS} />
+        </div>
+      )}
 
+      {!isSms && (
       <div>
         <p className={LABEL_CLASS}>{t.callsSms.participants}</p>
         <div className="mt-1 grid gap-3 rounded-md border border-card-border bg-field-bg p-3 sm:grid-cols-2">
@@ -363,6 +401,7 @@ function CallsSmsDialog({
           ))}
         </div>
       </div>
+      )}
 
       {canSend && (
         <div className="space-y-2 rounded-md border border-card-border bg-field-bg p-3">
@@ -380,8 +419,8 @@ function CallsSmsDialog({
             <div className="grid gap-2 sm:grid-cols-[minmax(0,16rem)_1fr] sm:items-end">
               <div>
                 <label className={LABEL_CLASS}>{t.callsSms.sendTo}</label>
-                <select name="smsTo" defaultValue={sending.numbers[0].value} className={FIELD_CLASS}>
-                  {sending.numbers.map((n) => (
+                <select name="smsTo" defaultValue={replyTo ?? sendNumbers[0].value} className={FIELD_CLASS}>
+                  {sendNumbers.map((n) => (
                     <option key={n.value} value={n.value}>
                       {n.label}
                     </option>
@@ -395,13 +434,25 @@ function CallsSmsDialog({
       )}
 
       <div>
-        <label className={LABEL_CLASS}>{sendingNow ? t.callsSms.message : t.callsSms.discussed}</label>
-        <textarea name="notes" rows={sendingNow ? 5 : 9} defaultValue={entry?.notes ?? ""} className={FIELD_CLASS} />
+        <label className={LABEL_CLASS}>{isSms ? t.callsSms.message : t.callsSms.discussed}</label>
+        <textarea
+          name="notes"
+          rows={isSms ? 5 : 9}
+          defaultValue={entry?.notes ?? ""}
+          readOnly={locked}
+          className={`${FIELD_CLASS} ${locked ? "cursor-not-allowed bg-black/[0.04] text-soft" : ""}`}
+        />
       </div>
 
       {entry && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-card-border pt-3 text-xs text-soft">
           <div className="space-y-0.5" suppressHydrationWarning>
+            {entry.externalNumber && (
+              <p>
+                <span className="font-semibold uppercase tracking-wide text-ink">{entry.direction === "INBOUND" ? t.callsSms.phoneFrom : t.callsSms.phoneTo}:</span>{" "}
+                {formatPhone(entry.externalNumber)}
+              </p>
+            )}
             <p>
               <span className="font-semibold uppercase tracking-wide text-ink">{t.callsSms.created}:</span> {formatWhen(entry.createdAt, lang)}
               {entry.createdBy && ` ${t.callsSms.by} ${entry.createdBy}`}
@@ -414,5 +465,13 @@ function CallsSmsDialog({
         </div>
       )}
     </SectionDialog>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4 shrink-0">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.126A59.768 59.768 0 0 1 21.485 12 59.77 59.77 0 0 1 3.27 20.876L5.999 12Zm0 0h7.5" />
+    </svg>
   );
 }

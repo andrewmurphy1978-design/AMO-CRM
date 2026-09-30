@@ -27,6 +27,8 @@ export default function SectionDialog({
   maxWide,
   headerColorClassName,
   headerExtra,
+  submitLabels,
+  submitIcon,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -54,6 +56,10 @@ export default function SectionDialog({
   // Extra controls (e.g. a Delete button) placed in the colored header
   // before Cancel/Save. Only shown with headerColorClassName.
   headerExtra?: ReactNode;
+  // Replaces the Save button's text (and icon) — e.g. "Send" with a paper
+  // plane for an outgoing text message.
+  submitLabels?: { idle: string; pending: string };
+  submitIcon?: ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const formRef = useRef<HTMLFormElement>(null);
@@ -128,8 +134,8 @@ export default function SectionDialog({
                   disabled={pending}
                   className="btn-primary flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-semibold disabled:opacity-60"
                 >
-                  <SaveIcon />
-                  <span className="hidden sm:inline">{pending ? labels.saving : labels.save}</span>
+                  {submitIcon ?? <SaveIcon />}
+                  <span className="hidden sm:inline">{pending ? (submitLabels?.pending ?? labels.saving) : (submitLabels?.idle ?? labels.save)}</span>
                 </button>
               </div>
             </div>

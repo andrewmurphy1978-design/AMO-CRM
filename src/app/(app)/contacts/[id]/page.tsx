@@ -1382,6 +1382,7 @@ export default async function ContactDetailPage({
               projectId: i.projectId,
               direction: i.direction,
               deliveryStatus: i.deliveryStatus,
+              externalNumber: i.externalNumber,
               participants: i.participants.map((p) =>
                 p.contact
                   ? { kind: "contact" as const, id: p.contact.id, name: [p.contact.firstName, p.contact.lastName].filter(Boolean).join(" ") || p.contact.company || "—" }

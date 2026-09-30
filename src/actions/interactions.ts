@@ -128,27 +128,33 @@ export async function saveContactInteraction(
     }
 
     if (interactionId) {
+      // A text that went through Twilio is a record of what was sent or
+      // received: its type and message stay as they are whatever is posted.
+      const current = await db.interaction.findUnique({ where: { id: interactionId }, select: { direction: true, type: true, notes: true } });
+      const locked = Boolean(current?.direction);
+      const isSms = (locked ? current?.type : data.type) === "SMS";
       await db.$transaction([
         db.interaction.update({
           where: { id: interactionId },
           data: {
-            type: data.type,
-            subject: data.subject ?? null,
-            notes: data.notes,
+            type: locked && current ? current.type : data.type,
+            subject: isSms ? null : (data.subject ?? null),
+            notes: locked && current ? current.notes : data.notes,
             occurredAt: data.occurredAt,
             durationMinutes: data.durationMinutes,
             projectId: data.projectId ?? null,
             updatedById: session.user.id,
           },
         }),
-        db.interactionParticipant.deleteMany({ where: { interactionId } }),
-        ...(participants.length > 0 ? [db.interactionParticipant.createMany({ data: participants.map((p) => ({ interactionId, ...p })) })] : []),
+        // SMS entries have no participant picker, so an edit leaves theirs alone.
+        ...(isSms ? [] : [db.interactionParticipant.deleteMany({ where: { interactionId } })]),
+        ...(!isSms && participants.length > 0 ? [db.interactionParticipant.createMany({ data: participants.map((p) => ({ interactionId, ...p })) })] : []),
       ]);
     } else {
       await db.interaction.create({
         data: {
           type: data.type,
-          subject: data.subject,
+          subject: data.type === "SMS" ? undefined : data.subject,
           notes: data.notes,
           occurredAt: data.occurredAt,
           durationMinutes: data.durationMinutes,
@@ -156,7 +162,10 @@ export async function saveContactInteraction(
           projectId: data.projectId,
           loggedById: session.user.id,
           updatedById: session.user.id,
-          participants: { create: participants },
+          // SMS has no participant picker: it's the contact, plus you when you sent it.
+          participants: {
+            create: data.type === "SMS" ? [{ contactId }, ...(twilio ? [{ userId: session.user.id }] : [])] : participants,
+          },
           ...(twilio && sendTo
             ? { direction: "OUTBOUND", externalId: twilio.sid, externalNumber: sendTo, deliveryStatus: twilio.status }
             : {}),
