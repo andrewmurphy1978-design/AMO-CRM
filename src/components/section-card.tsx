@@ -19,6 +19,8 @@ export const CARD_COLORS = {
   relations: "bg-fuchsia-700",
   credentials: "bg-red-700",
   projects: "bg-rose-600",
+  phases: "bg-pink-700",
+  tasks: "bg-blue-700",
   calendarEvents: "bg-cyan-600",
   linkedEmails: "bg-fuchsia-600",
   purchases: "bg-lime-700",

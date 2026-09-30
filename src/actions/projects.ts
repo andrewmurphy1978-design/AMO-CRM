@@ -245,3 +245,74 @@ export async function deleteProject(projectId: string) {
   revalidatePath("/projects");
   redirect("/projects");
 }
+
+// The General Info dialog on the project page: everything about the project
+// itself except its notes/description (own dialog) and phases (own dialog).
+export async function updateProjectGeneral(
+  projectId: string,
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  let data;
+  try {
+    data = ProjectSchema.omit({ description: true }).parse({
+      name: String(formData.get("name") ?? "").trim(),
+      contactId: String(formData.get("contactId") ?? ""),
+      status: String(formData.get("status") ?? "PLANNING"),
+      type: String(formData.get("type") ?? "OTHER"),
+      ownerId: String(formData.get("ownerId") ?? "") || undefined,
+      supervisorId: String(formData.get("supervisorId") ?? "") || undefined,
+      startDate: String(formData.get("startDate") ?? "") || undefined,
+      dueDate: String(formData.get("dueDate") ?? "") || undefined,
+      teamMemberIds: [...new Set(formData.getAll("teamMemberIds").map(String).filter(Boolean))],
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? t.actions.invalidInput };
+    throw error;
+  }
+
+  await withScopedPrismaClient(async (db) => {
+    await db.project.update({
+      where: { id: projectId },
+      data: {
+        name: data.name,
+        contactId: data.contactId,
+        status: data.status,
+        type: data.type,
+        ownerId: data.ownerId || null,
+        supervisorId: data.supervisorId || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      },
+    });
+    await db.projectTeamMember.deleteMany({ where: { projectId } });
+    if (data.teamMemberIds.length > 0) {
+      await db.projectTeamMember.createMany({ data: data.teamMemberIds.map((userId) => ({ projectId, userId })) });
+    }
+  });
+
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+  return { success: t.actions.projectUpdated };
+}
+
+// The Notes card's dialog — the project's description text.
+export async function updateProjectNotes(
+  projectId: string,
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const description = String(formData.get("description") ?? "").trim();
+  await withScopedPrismaClient((db) => db.project.update({ where: { id: projectId }, data: { description: description || null } }));
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: t.actions.projectUpdated };
+}

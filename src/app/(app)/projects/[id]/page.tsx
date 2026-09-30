@@ -2,15 +2,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format, type Locale } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import TaskRow from "./task-row";
-import AddTaskButton from "./add-task-button";
 import DeleteProjectButton from "./delete-button";
-import QuickAddProposal from "./quick-add-proposal";
-import ProposalRow from "./proposal-row";
-import QuickAddInvoice from "./quick-add-invoice";
-import InvoiceRow from "./invoice-row";
-import InteractionLog from "../../interaction-log";
 import CalendarEventsCard from "../../calendar-events-card";
+import LinkedEmailsList from "../../linked-emails-list";
+import ProjectGeneralDialog from "./project-general-dialog";
+import ProjectNotesDialog from "./project-notes-dialog";
+import PhasesCard from "./phases-card";
+import TasksCard, { type TaskCardItem } from "./tasks-card";
+import NewInvoiceButton from "./new-invoice-button";
+import NewEmailButton from "../../contacts/[id]/new-email-button";
+import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
+import { updateProjectGeneral, updateProjectNotes } from "@/actions/projects";
+import { getTwilioConfig, contactPhoneOptions } from "@/lib/twilio";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken } from "@/lib/google";
 import { getLinkedCalendarEvents, getEventLinkTargets } from "@/lib/calendar-links";
@@ -61,6 +64,9 @@ export default async function ProjectDetailPage({
     calendarPhaseOptions,
     calendarBookingOptions,
     calendarProgramOptions,
+    addressColors,
+    defaultComposeSource,
+    twilioReady,
   } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
@@ -78,13 +84,17 @@ export default async function ProjectDetailPage({
         },
         interactions: {
           orderBy: { occurredAt: "desc" },
-          include: { loggedBy: true },
+          include: { loggedBy: true, updatedBy: true, participants: { include: { contact: true, user: true } } },
         },
+        emailLinks: { orderBy: { messageDate: "desc" } },
         proposals: { orderBy: { createdAt: "desc" } },
         invoices: { orderBy: { createdAt: "desc" } },
       },
     });
     const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+    const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
+    const composePrefs = session ? await db.user.findUnique({ where: { id: session.user.id }, select: { defaultComposeSource: true } }) : null;
+    const twilioReady = Boolean(await getTwilioConfig(db));
     const calendarEvents = project ? await getLinkedCalendarEvents(db, { projectId: project.id }, googleAccessToken) : [];
     const calendarEventLinks = calendarEvents.length > 0 ? await getEventLinkTargets(db, calendarEvents.map((e) => e.id)) : {};
 
@@ -133,6 +143,9 @@ export default async function ProjectDetailPage({
       calendarPhaseOptions: (project?.phases ?? []).map((ph) => ({ id: ph.id, label: ph.name, projectId: ph.projectId })),
       calendarBookingOptions: allBookings,
       calendarProgramOptions: allPrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails })),
+      addressColors,
+      defaultComposeSource: composePrefs?.defaultComposeSource ?? null,
+      twilioReady,
     };
   });
 
@@ -154,11 +167,50 @@ export default async function ProjectDetailPage({
     noResults: t.linkPicker.noResults,
   };
 
-  const openTasks = project.tasks.filter((t) => t.status !== "DONE");
-  const doneTasks = project.tasks.filter((t) => t.status === "DONE");
   const clientName =
     [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.email || "";
   const teamNames = project.teamMembers.map((tm) => tm.user.name);
+  const toDateInput = (value: Date | null) => (value ? value.toISOString().slice(0, 10) : "");
+
+  // The client picker in the General Info dialog: the shared list, plus this
+  // project's own client in case it fell outside the list's size cap.
+  const clientOptions = calendarContactOptions.map((c) => ({ id: c.id, label: c.label }));
+  if (!clientOptions.some((c) => c.id === project.contactId)) clientOptions.unshift({ id: project.contactId, label: clientName });
+
+  const taskItems: TaskCardItem[] = project.tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+    assignee: task.assignee ? { name: task.assignee.name } : null,
+    values: {
+      title: task.title,
+      phaseId: task.phaseId ?? "",
+      status: task.status,
+      priority: task.priority,
+      assigneeId: task.assigneeId ?? "",
+      supervisorId: task.supervisorId ?? "",
+      startDate: toDateInput(task.startDate),
+      dueDate: toDateInput(task.dueDate),
+      description: task.description ?? "",
+    },
+  }));
+
+  const phaseRows = project.phases.map((p) => ({
+    id: p.id,
+    name: p.name,
+    status: p.status,
+    phaseType: p.phaseType,
+    teamMemberIds: p.teamMemberIds,
+    supervisorId: p.supervisorId,
+    startDate: toDateInput(p.startDate),
+    dueDate: toDateInput(p.dueDate),
+    description: p.description,
+  }));
+
+  const clientEmail = project.contact.email ?? project.contact.email2 ?? project.contact.extraEmails[0] ?? null;
+  const namedContact = { id: project.contact.id, name: clientName || "—" };
 
   return (
     <div className="space-y-6">
@@ -171,22 +223,35 @@ export default async function ProjectDetailPage({
         hour12={hour12}
         lang={lang}
         location={t.dashboard.myLocation}
-        actions={
-          <>
-            <Link
-              href={`/projects/${project.id}/edit`}
-              className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
-            >
-              {t.projectDetail.edit}
-            </Link>
-            <DeleteProjectButton projectId={project.id} lang={lang} />
-          </>
-        }
+        actions={<DeleteProjectButton projectId={project.id} lang={lang} />}
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <Card color="general" title={t.contactForm.cardGeneralInfo}>
+          <Card
+            color="general"
+            title={t.contactForm.cardGeneralInfo}
+            compact
+            actions={
+              <ProjectGeneralDialog
+                action={updateProjectGeneral.bind(null, project.id)}
+                lang={lang}
+                contacts={clientOptions}
+                users={users}
+                values={{
+                  name: project.name,
+                  status: project.status,
+                  type: project.type,
+                  contactId: project.contactId,
+                  ownerId: project.ownerId ?? "",
+                  supervisorId: project.supervisorId ?? "",
+                  teamMemberIds: project.teamMembers.map((tm) => tm.userId),
+                  startDate: toDateInput(project.startDate),
+                  dueDate: toDateInput(project.dueDate),
+                }}
+              />
+            }
+          >
             <h1 className="font-display text-xl font-semibold text-ink">{project.name}</h1>
 
             <div className="grid gap-4 lg:grid-cols-3">
@@ -231,90 +296,21 @@ export default async function ProjectDetailPage({
             </div>
           </Card>
 
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <h2 className="font-display text-lg font-semibold text-ink">{t.projectForm.phasesTitle}</h2>
+          <PhasesCard
+            projectId={project.id}
+            phases={phaseRows}
+            users={users}
+            defaultTeamMemberIds={project.teamMembers.map((tm) => tm.userId)}
+            lang={lang}
+          />
 
-            {project.phases.length === 0 ? (
-              <p className="mt-3 text-sm text-soft">{t.projectForm.noPhasesYet}</p>
-            ) : (
-              <div className="mt-3 overflow-x-auto rounded-lg border border-card-border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-card-border bg-black/[0.02] text-left text-xs uppercase tracking-wide text-soft">
-                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.name}</th>
-                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.status}</th>
-                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.phaseType}</th>
-                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.team}</th>
-                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.supervisor}</th>
-                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.startDate}</th>
-                      <th className="px-3 py-2 font-semibold">{t.phaseDialog.dueDate}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-card-border">
-                    {project.phases.map((phase) => {
-                      const phaseTeamNames = phase.teamMemberIds
-                        .map((id) => users.find((u) => u.id === id)?.name)
-                        .filter(Boolean) as string[];
-                      const supervisorName = (phase.supervisorId && users.find((u) => u.id === phase.supervisorId)?.name) || "—";
-                      return (
-                        <tr key={phase.id} className="text-ink">
-                          <td className="px-3 py-2 font-medium">{phase.name}</td>
-                          <td className="px-3 py-2">
-                            <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-soft">
-                              {STATUS_LABELS[phase.status]}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-soft">{phase.phaseType || "—"}</td>
-                          <td className="px-3 py-2 text-soft">{phaseTeamNames.length > 0 ? phaseTeamNames.join(", ") : "—"}</td>
-                          <td className="px-3 py-2 text-soft">{supervisorName}</td>
-                          <td className="px-3 py-2 text-soft">{phase.startDate ? longDate(phase.startDate, lang, dateLocale) : "—"}</td>
-                          <td className="px-3 py-2 text-soft">{phase.dueDate ? longDate(phase.dueDate, lang, dateLocale) : "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-display text-lg font-semibold text-ink">{t.projectDetail.tasksTitle}</h2>
-              <AddTaskButton
-                projectId={project.id}
-                users={users}
-                phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
-                lang={lang}
-              />
-            </div>
-
-            {openTasks.length === 0 && doneTasks.length === 0 ? (
-              <p className="mt-4 text-sm text-soft">{t.projectDetail.noTasksYet}</p>
-            ) : (
-              <>
-                <ul className="mt-2 divide-y divide-card-border">
-                  {openTasks.map((task) => (
-                    <TaskRow key={task.id} task={task} projectId={project.id} lang={lang} />
-                  ))}
-                </ul>
-                {doneTasks.length > 0 && (
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-xs font-medium text-soft">
-                      {t.projectDetail.completed(doneTasks.length)}
-                    </summary>
-                    <ul className="mt-2 divide-y divide-card-border">
-                      {doneTasks.map((task) => (
-                        <TaskRow key={task.id} task={task} projectId={project.id} lang={lang} />
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </>
-            )}
-          </section>
+          <TasksCard
+            projectId={project.id}
+            tasks={taskItems}
+            users={users}
+            phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
+            lang={lang}
+          />
         </div>
 
         <div className="space-y-6">
@@ -335,55 +331,191 @@ export default async function ProjectDetailPage({
             eventDialogLabels={t.eventDialog}
             eventViewDialogLabels={t.eventViewDialog}
             linkPickerLabels={calendarLinkPickerLabels}
+            newEventLinks={{ contactId: project.contactId, projectId: project.id }}
+          />
+
+          <Card
+            color="linkedEmails"
+            title={
+              <>
+                {t.contactDetail.linkedEmailsTitle}
+                {project.emailLinks.length > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">
+                    {project.emailLinks.length}
+                  </span>
+                )}
+              </>
+            }
+            compact
+            actions={
+              <NewEmailButton
+                email={clientEmail}
+                defaultComposeSource={defaultComposeSource}
+                lang={lang}
+                intlLocale={intlLocale}
+                hour12={hour12}
+                emailComposeLabels={t.emailCompose}
+                title={t.emailCompose.newTitle}
+              />
+            }
+          >
+            <LinkedEmailsList
+              emailLinks={project.emailLinks.map((link) => ({
+                id: link.id,
+                gmailThreadId: link.gmailThreadId,
+                subject: link.subject,
+                fromLabel: link.fromLabel,
+                messageDate: link.messageDate ? link.messageDate.toISOString() : null,
+                gmailLink: link.gmailLink,
+                myAddress: link.myAddress,
+                contactId: link.contactId,
+                projectId: link.projectId,
+                phaseId: link.phaseId,
+                taskId: link.taskId,
+                affiliateProgramId: link.affiliateProgramId,
+              }))}
+              linkOptions={{
+                contacts: calendarContactOptions,
+                projects: calendarProjectOptions,
+                tasks: calendarTaskOptions,
+                phases: calendarPhaseOptions,
+                programs: calendarProgramOptions,
+                labels: {
+                  link: t.linkPicker.link,
+                  edit: t.linkPicker.edit,
+                  none: t.linkPicker.none,
+                  contact: t.linkPicker.contact,
+                  project: t.linkPicker.project,
+                  task: t.linkPicker.task,
+                  phase: t.linkPicker.phase,
+                  booking: t.linkPicker.booking,
+                  affiliateProgram: t.linkPicker.affiliateProgram,
+                  save: t.linkPicker.save,
+                  saving: t.linkPicker.saving,
+                  cancel: t.linkPicker.cancel,
+                  clear: t.linkPicker.clear,
+                  title: t.linkPicker.titleWithAffiliateProgram,
+                  searchPlaceholder: t.linkPicker.searchPlaceholder,
+                  noResults: t.linkPicker.noResults,
+                },
+              }}
+              addressColors={addressColors}
+              noLinkedEmailsLabel={t.contactDetail.noLinkedEmails}
+              lang={lang}
+              intlLocale={intlLocale}
+              hour12={hour12}
+              emailDialogLabels={t.emailDialog}
+              emailComposeLabels={t.emailCompose}
+            />
+          </Card>
+
+          <CallsSmsCard
+            title={t.contactDetail.callsEmails}
+            contactId={project.contactId}
+            contact={namedContact}
+            relatedContacts={[]}
+            teamMembers={users}
+            defaultProjectId={project.id}
+            linkData={{
+              projects: [{ id: project.id, name: project.name, contactId: project.contactId }],
+              phases: project.phases.map((ph) => ({ id: ph.id, name: ph.name, projectId: project.id })),
+              tasks: project.tasks.filter((tk) => tk.status !== "DONE").map((tk) => ({ id: tk.id, name: tk.title, projectId: project.id, phaseId: tk.phaseId })),
+            }}
+            currentUserId={session?.user.id ?? null}
+            sending={{ ready: twilioReady, numbers: contactPhoneOptions(project.contact) }}
+            lang={lang}
+            entries={project.interactions.map((i) => ({
+              id: i.id,
+              type: i.type,
+              subject: i.subject,
+              notes: i.notes,
+              occurredAt: i.occurredAt.toISOString(),
+              durationMinutes: i.durationMinutes,
+              createdAt: i.createdAt.toISOString(),
+              updatedAt: i.updatedAt.toISOString(),
+              createdBy: i.loggedBy?.name ?? null,
+              updatedBy: i.updatedBy?.name ?? null,
+              contactId: i.contactId,
+              projectId: i.projectId,
+              phaseId: i.phaseId,
+              taskId: i.taskId,
+              direction: i.direction,
+              deliveryStatus: i.deliveryStatus,
+              externalNumber: i.externalNumber,
+              errorCode: i.errorCode,
+              seenAt: i.seenAt ? i.seenAt.toISOString() : null,
+              participants: i.participants.map((p) =>
+                p.contact
+                  ? { kind: "contact" as const, id: p.contact.id, name: [p.contact.firstName, p.contact.lastName].filter(Boolean).join(" ") || p.contact.company || "—" }
+                  : { kind: "user" as const, id: p.user?.id ?? "", name: p.user?.name ?? "—" }
+              ),
+            }))}
           />
 
           <Card
             color="proposals"
             title={t.proposals.title}
+            compact
             actions={
-              <Link href={`/projects/${project.id}/proposals/new`} className="text-xs font-semibold text-white hover:underline">
-                {t.proposals.buildFull}
+              <Link
+                href={`/projects/${project.id}/proposals/new`}
+                title={t.contactDetail.newProposal}
+                aria-label={t.contactDetail.newProposal}
+                className="flex h-5 w-5 items-center justify-center rounded text-lg font-bold leading-none text-white hover:bg-white/20"
+              >
+                +
               </Link>
             }
           >
-            <QuickAddProposal projectId={project.id} lang={lang} />
-            {project.proposals.length > 0 && (
+            {project.proposals.length === 0 ? (
+              <p className="text-sm text-soft">{t.contactDetail.noProposalsYet}</p>
+            ) : (
               <ul className="divide-y divide-card-border">
                 {project.proposals.map((proposal) => (
-                  <ProposalRow key={proposal.id} proposal={proposal} projectId={project.id} lang={lang} />
+                  <li key={proposal.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                    <Link href={`/projects/${project.id}/proposals/${proposal.id}`} className="flex-1 font-medium text-ink hover:underline">
+                      {proposal.title}
+                    </Link>
+                    {proposal.amount != null && (
+                      <span className="text-soft">
+                        {proposal.amount} {proposal.currency}
+                      </span>
+                    )}
+                    <span className="text-xs text-soft">{t.proposals.statuses[proposal.status as keyof typeof t.proposals.statuses]}</span>
+                  </li>
                 ))}
               </ul>
             )}
           </Card>
 
-          <Card color="invoices" title={t.invoices.title}>
-            <QuickAddInvoice projectId={project.id} lang={lang} />
-            {project.invoices.length > 0 && (
+          <Card color="invoices" title={t.invoices.title} compact actions={<NewInvoiceButton projectId={project.id} lang={lang} />}>
+            {project.invoices.length === 0 ? (
+              <p className="text-sm text-soft">{t.contactDetail.noInvoicesYet}</p>
+            ) : (
               <ul className="divide-y divide-card-border">
                 {project.invoices.map((invoice) => (
-                  <InvoiceRow key={invoice.id} invoice={invoice} projectId={project.id} lang={lang} />
+                  <li key={invoice.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                    <Link href={`/projects/${project.id}/invoices/${invoice.id}`} className="flex-1 font-medium text-ink hover:underline">
+                      {invoice.number || t.invoices.title}
+                    </Link>
+                    {invoice.amount != null && (
+                      <span className="text-soft">
+                        {invoice.amount} {invoice.currency}
+                      </span>
+                    )}
+                    <span className="text-xs text-soft">{t.invoices.statuses[invoice.status as keyof typeof t.invoices.statuses]}</span>
+                  </li>
                 ))}
               </ul>
             )}
           </Card>
 
-          <Card color="interactions" title={t.projectDetail.callsEmails}>
-            <InteractionLog
-              lang={lang}
-              contactId={project.contactId}
-              projectId={project.id}
-              interactions={project.interactions.map((i) => ({
-                id: i.id,
-                type: i.type,
-                subject: i.subject,
-                notes: i.notes,
-                occurredAt: i.occurredAt.toISOString(),
-                loggedBy: i.loggedBy ? { name: i.loggedBy.name } : null,
-              }))}
-            />
-          </Card>
-
-          <Card color="notes" title={t.projectDetail.notesTitle}>
+          <Card
+            color="notes"
+            title={t.projectDetail.notesTitle}
+            compact
+            actions={<ProjectNotesDialog action={updateProjectNotes.bind(null, project.id)} description={project.description ?? ""} lang={lang} />}
+          >
             {project.description ? (
               <p className="whitespace-pre-wrap text-sm text-ink">{project.description}</p>
             ) : (

@@ -91,6 +91,50 @@ export async function createTaskViaDialog(
   return { id: task.id };
 }
 
+// Edits an existing task from the project page's Tasks card — same value
+// object and validation as createTaskViaDialog, applied to one task.
+export async function updateTaskViaDialog(
+  taskId: string,
+  projectId: string,
+  values: TaskDialogValues
+): Promise<{ error?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  let data;
+  try {
+    data = TaskSchema.parse({ ...values, projectId });
+  } catch (error) {
+    if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? "Invalid input" };
+    throw error;
+  }
+
+  await withScopedPrismaClient(async (db) => {
+    const existing = await db.task.findUnique({ where: { id: taskId }, select: { status: true } });
+    await db.task.update({
+      where: { id: taskId },
+      data: {
+        title: data.title,
+        phaseId: data.phaseId || null,
+        description: data.description,
+        status: data.status,
+        priority: data.priority,
+        assigneeId: data.assigneeId || null,
+        supervisorId: data.supervisorId || null,
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        completedAt: data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
+      },
+    });
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+  await syncGoogleTasksForTask(taskId);
+  return {};
+}
+
 export async function createTask(
   _prevState: { error?: string } | undefined,
   formData: FormData

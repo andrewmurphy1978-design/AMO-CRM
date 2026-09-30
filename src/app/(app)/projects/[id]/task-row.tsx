@@ -16,6 +16,7 @@ export default function TaskRow({
   task,
   projectId,
   lang,
+  onEdit,
 }: {
   task: {
     id: string;
@@ -27,6 +28,9 @@ export default function TaskRow({
   };
   projectId: string;
   lang: Lang;
+  // When given, clicking the title edits the task in a dialog instead of
+  // navigating to its edit page.
+  onEdit?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const t = getDict(lang);
@@ -41,14 +45,24 @@ export default function TaskRow({
         className="h-4 w-4 rounded border-card-border"
       />
       <div className="flex-1">
-        <Link
-          href={`/projects/${projectId}/tasks/${task.id}/edit`}
-          className={`text-sm font-medium hover:underline ${
-            task.status === "DONE" ? "text-soft line-through" : "text-ink"
-          }`}
-        >
-          {task.title}
-        </Link>
+        {onEdit ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className={`text-left text-sm font-medium hover:underline ${task.status === "DONE" ? "text-soft line-through" : "text-ink"}`}
+          >
+            {task.title}
+          </button>
+        ) : (
+          <Link
+            href={`/projects/${projectId}/tasks/${task.id}/edit`}
+            className={`text-sm font-medium hover:underline ${
+              task.status === "DONE" ? "text-soft line-through" : "text-ink"
+            }`}
+          >
+            {task.title}
+          </Link>
+        )}
         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-soft">
           <span className={`rounded-full px-2 py-0.5 font-medium ${PRIORITY_COLORS[task.priority]}`}>
             {t.priorities[task.priority as keyof typeof t.priorities]}

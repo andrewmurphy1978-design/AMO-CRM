@@ -38,6 +38,7 @@ export default function CallsSmsCard({
   sending,
   lang,
   title,
+  defaultProjectId,
 }: {
   contactId: string;
   contact: NamedOption;
@@ -49,6 +50,7 @@ export default function CallsSmsCard({
   sending: CallsSmsSending;
   lang: Lang;
   title: string;
+  defaultProjectId?: string;
 }) {
   const t = getDict(lang);
   const [dialog, setDialog] = useState<{ entry: CallsSmsEntry | null; key: number; replyTo?: string } | null>(null);
@@ -173,6 +175,7 @@ export default function CallsSmsCard({
           sending={sending}
           lang={lang}
           typeLabels={typeLabels}
+          defaultProjectId={defaultProjectId}
           onClose={() => setDialog(null)}
         />
       )}
