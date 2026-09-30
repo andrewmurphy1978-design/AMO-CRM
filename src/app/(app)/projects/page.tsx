@@ -9,6 +9,7 @@ import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
 import PageHeader from "../page-header";
 import ProjectsIcon from "../projects-icon";
+import StatusFilter from "./status-filter";
 
 const STATUS_COLORS: Record<string, string> = {
   PLANNING: "bg-black/5 text-soft",
@@ -102,26 +103,13 @@ export default async function ProjectsPage({
         }
       />
 
-      <form className="flex flex-wrap items-center gap-3" method="get">
-        {activeView === "table" && <input type="hidden" name="view" value="table" />}
-        <select
-          name="status"
-          defaultValue={status ?? ""}
-          className="rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-        >
-          <option value="">{t.projects.allStatuses}</option>
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <button
-          type="submit"
-          className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5"
-        >
-          {t.common.filter}
-        </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <StatusFilter
+          status={status ?? ""}
+          view={activeView}
+          allLabel={t.projects.allStatuses}
+          options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+        />
 
         <span className="ml-auto rounded-full bg-amo-lime/15 px-3 py-1.5 text-sm font-semibold text-emerald-800">
           {t.projects.shown(projects.length)}
@@ -141,7 +129,7 @@ export default async function ProjectsPage({
             {t.projects.viewTable}
           </Link>
         </div>
-      </form>
+      </div>
 
       {activeView === "cards" ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
