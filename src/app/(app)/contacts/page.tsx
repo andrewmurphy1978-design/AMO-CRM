@@ -323,10 +323,13 @@ export default async function ContactsPage({
                   multi-value field (email/phone/language) is shown here;
                   the full set is still on the Contact Info page. */}
               <div className="flex items-start justify-between gap-2">
-                <p className="flex min-w-0 flex-1 items-center gap-1.5 truncate font-medium text-ink">
-                  <ContactIcon avatarUrl={contact.avatarUrl} />
-                  <span className="truncate">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</span>
-                </p>
+                <div className="min-w-0 flex-1">
+                  <p className="flex min-w-0 items-center gap-1.5 truncate font-medium text-ink">
+                    <ContactIcon avatarUrl={contact.avatarUrl} />
+                    <span className="truncate">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</span>
+                  </p>
+                  {contact.company && <p className="truncate text-xs text-soft">{contact.company}</p>}
+                </div>
                 {contact.country && <CountryFlag country={contact.country} />}
               </div>
               <div className="mt-1 flex items-center justify-between gap-2">
@@ -412,7 +415,10 @@ export default async function ContactsPage({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={contact.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
                       )}
-                      <span className="truncate">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate">{[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "—"}</span>
+                        {contact.company && <span className="block truncate text-xs font-normal text-soft">{contact.company}</span>}
+                      </span>
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-ink/70">
