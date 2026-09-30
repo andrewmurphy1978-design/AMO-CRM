@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { getTwilioConfig, publicBaseUrl, sendTwilioSms } from "@/lib/twilio";
 
 const InteractionSchema = z.object({
   type: z.enum(["CALL", "EMAIL", "MEETING", "NOTE"]),
@@ -109,7 +110,23 @@ export async function saveContactInteraction(
     .filter((p): p is { kind: "contact" | "user"; id: string } => p !== null)
     .map((p) => (p.kind === "contact" ? { contactId: p.id } : { userId: p.id }));
 
-  await withScopedPrismaClient(async (db) => {
+  // "Send as text": a new SMS entry that is also actually sent through
+  // Twilio. The message goes out first, so a failed send never leaves a
+  // "sent" entry behind.
+  const sendTo = formData.get("sendViaTwilio") === "on" && !interactionId && data.type === "SMS" ? String(formData.get("smsTo") ?? "").trim() : null;
+
+  const sendError = await withScopedPrismaClient(async (db) => {
+    let twilio: { sid: string; status: string } | null = null;
+    if (sendTo) {
+      if (!data.notes) return "Type the message to send.";
+      const config = await getTwilioConfig(db);
+      if (!config) return "Twilio isn't connected — add it in Settings first.";
+      const base = publicBaseUrl();
+      const result = await sendTwilioSms(config, sendTo, data.notes, base ? `${base}/api/twilio/status` : null);
+      if ("error" in result) return result.error;
+      twilio = result;
+    }
+
     if (interactionId) {
       await db.$transaction([
         db.interaction.update({
@@ -140,14 +157,19 @@ export async function saveContactInteraction(
           loggedById: session.user.id,
           updatedById: session.user.id,
           participants: { create: participants },
+          ...(twilio && sendTo
+            ? { direction: "OUTBOUND", externalId: twilio.sid, externalNumber: sendTo, deliveryStatus: twilio.status }
+            : {}),
         },
       });
     }
+    return null;
   });
+  if (sendError) return { error: sendError };
 
   revalidatePath(`/contacts/${contactId}`);
   if (data.projectId) revalidatePath(`/projects/${data.projectId}`);
-  return { success: "Saved." };
+  return { success: sendTo ? "Text sent." : "Saved." };
 }
 
 export async function deleteInteraction(

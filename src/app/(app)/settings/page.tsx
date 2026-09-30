@@ -8,6 +8,8 @@ import ContactDataFixesForm from "./contact-data-fixes-form";
 import IonosMailboxForm from "./ionos-mailbox-form";
 import SystemeIoForm from "./systeme-io-form";
 import AnthropicKeyForm from "./anthropic-key-form";
+import TwilioForm from "./twilio-form";
+import { getTwilioConfig, publicBaseUrl } from "@/lib/twilio";
 import MakeForm from "./make-form";
 import ShortIoForm from "./shortio-form";
 import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buffer-form";
@@ -81,6 +83,7 @@ export default async function SettingsPage({
     integration,
     makeIntegration,
     anthropicIntegration,
+    twilioConfig,
     shortioIntegration,
     bufferSettings,
     socialLinksSetting,
@@ -132,6 +135,7 @@ export default async function SettingsPage({
       const anthropicIntegration = await db.integrationSetting.findUnique({
         where: { provider: "anthropic" },
       });
+      const twilioConfig = isAdmin ? await getTwilioConfig(db) : null;
       const shortioIntegration = await db.integrationSetting.findUnique({
         where: { provider: "shortio" },
       });
@@ -163,6 +167,7 @@ export default async function SettingsPage({
         integration,
         makeIntegration,
         anthropicIntegration,
+        twilioConfig,
         shortioIntegration,
         bufferSettings,
         socialLinksSetting,
@@ -491,6 +496,17 @@ export default async function SettingsPage({
       <SettingsCard title={t.anthropicKey.title} description={t.anthropicKey.description}>
         <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} lang={lang} />
       </SettingsCard>
+      {isAdmin && (
+        <SettingsCard title={t.twilioSettings.title} description={t.twilioSettings.description}>
+          <TwilioForm
+            connected={Boolean(twilioConfig)}
+            accountSid={twilioConfig?.accountSid ?? ""}
+            fromNumber={twilioConfig?.fromNumber ?? ""}
+            baseUrl={publicBaseUrl() ?? ""}
+            lang={lang}
+          />
+        </SettingsCard>
+      )}
       <SettingsCard title={t.apiVault.title} description={t.apiVault.description}>
         <ApiKeyVaultForm entries={vaultEntries} lang={lang} />
       </SettingsCard>

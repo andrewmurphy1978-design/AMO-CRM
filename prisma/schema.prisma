@@ -1452,6 +1452,15 @@ model Interaction {
   // Length of the call/meeting in minutes (null = not recorded).
   durationMinutes Int?
 
+  // Set for texts that came through / went out via Twilio: "INBOUND" or
+  // "OUTBOUND", Twilio's MessageSid (unique — makes webhook retries
+  // idempotent), the other party's E.164 number, and Twilio's delivery
+  // status (queued/sent/delivered/undelivered/failed, or "received").
+  direction      String?
+  externalId     String? @unique
+  externalNumber String?
+  deliveryStatus String?
+
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 

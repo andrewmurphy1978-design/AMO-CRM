@@ -7,6 +7,7 @@ import DeleteContactButton from "./delete-button";
 import CalendarEventsCard from "../../calendar-events-card";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken, fetchGmailThreadSnapshot } from "@/lib/google";
+import { getTwilioConfig, contactPhoneOptions } from "@/lib/twilio";
 import { getLinkedCalendarEvents, getEventLinkTargets } from "@/lib/calendar-links";
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -70,6 +71,19 @@ const DUPLICATE_FIELD_SLUGS = new Set(["companyname", "postcode", "streetnumber"
 // Services required / Project goal description now have their own dedicated
 // spot in the General info card (below Website) instead of showing generically
 // in "Other info" — excluded from that generic list so they don't show twice.
+// Due-date emphasis on the Project card: past due = bold red, due within
+// the next 3 days = red. Finished projects (completed/cancelled) are never
+// flagged — a past due date on those isn't overdue work — and fall back to
+// the card's normal muted text.
+function dueDateClass(dueDate: Date, status: string): string {
+  if (status === "COMPLETED" || status === "CANCELLED") return "text-soft";
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  if (dueDate.getTime() < startOfToday.getTime()) return "font-bold text-red-600";
+  if (dueDate.getTime() <= startOfToday.getTime() + 4 * 24 * 60 * 60 * 1000 - 1) return "text-red-600";
+  return "text-soft";
+}
+
 const PROJECT_STATUS_COLORS: Record<string, string> = {
   PLANNING: "bg-black/5 text-soft",
   ACTIVE: "bg-emerald-50 text-emerald-700",
@@ -349,6 +363,7 @@ export default async function ContactDetailPage({
     allTags,
     allContacts: allContactsForRelations,
     teamMembers,
+    twilioReady,
   } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
@@ -474,6 +489,7 @@ export default async function ContactDetailPage({
       allTags,
       allContacts,
       teamMembers,
+      twilioReady: Boolean(await getTwilioConfig(db)),
     };
   });
 
@@ -1236,8 +1252,8 @@ export default async function ContactDetailPage({
                             {t.projectStatuses[project.status]}
                           </span>
                           {project.dueDate && (
-                            <p className="text-xs text-soft">
-                              <span className="uppercase tracking-wide text-ink">{t.projectForm.dueDate}:</span>
+                            <p className={`text-xs ${dueDateClass(project.dueDate, project.status)}`}>
+                              <span className={`uppercase tracking-wide ${dueDateClass(project.dueDate, project.status) === "text-soft" ? "text-ink" : ""}`}>{t.projectForm.dueDate}:</span>
                               <br />
                               {format(project.dueDate, "PP", { locale: dateLocale })}
                             </p>
@@ -1350,6 +1366,7 @@ export default async function ContactDetailPage({
             teamMembers={teamMembers.map((u) => ({ id: u.id, name: u.name }))}
             projects={contact.projects.map((p) => ({ id: p.id, name: p.name }))}
             currentUserId={session?.user.id ?? null}
+            sending={{ ready: twilioReady, numbers: contactPhoneOptions(contact) }}
             lang={lang}
             entries={contact.interactions.map((i) => ({
               id: i.id,
@@ -1363,6 +1380,8 @@ export default async function ContactDetailPage({
               createdBy: i.loggedBy?.name ?? null,
               updatedBy: i.updatedBy?.name ?? null,
               projectId: i.projectId,
+              direction: i.direction,
+              deliveryStatus: i.deliveryStatus,
               participants: i.participants.map((p) =>
                 p.contact
                   ? { kind: "contact" as const, id: p.contact.id, name: [p.contact.firstName, p.contact.lastName].filter(Boolean).join(" ") || p.contact.company || "—" }

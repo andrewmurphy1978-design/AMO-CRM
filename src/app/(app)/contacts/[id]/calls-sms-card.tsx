@@ -26,6 +26,15 @@ export interface CallsSmsEntry {
   updatedBy: string | null;
   projectId: string | null;
   participants: CallsSmsParticipant[];
+  direction: string | null; // "INBOUND" | "OUTBOUND" for Twilio texts
+  deliveryStatus: string | null;
+}
+
+// What the dialog needs to offer "send as a text": Twilio connected, and the
+// contact's phone numbers (E.164) to send to.
+export interface CallsSmsSending {
+  ready: boolean;
+  numbers: { value: string; label: string }[];
 }
 
 interface NamedOption {
@@ -66,6 +75,7 @@ export default function CallsSmsCard({
   projects,
   currentUserId,
   entries,
+  sending,
   lang,
   title,
 }: {
@@ -76,6 +86,7 @@ export default function CallsSmsCard({
   projects: NamedOption[];
   currentUserId: string | null;
   entries: CallsSmsEntry[];
+  sending: CallsSmsSending;
   lang: Lang;
   title: string;
 }) {
@@ -136,6 +147,12 @@ export default function CallsSmsCard({
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${TYPE_BADGES[entry.type] ?? TYPE_BADGES.NOTE}`}>
                         {typeLabels[entry.type] ?? entry.type}
                       </span>
+                      {entry.direction && (
+                        <span className="text-xs font-medium text-soft">
+                          {entry.direction === "INBOUND" ? `↙ ${t.callsSms.received}` : `↗ ${t.callsSms.sent}`}
+                          {entry.direction === "OUTBOUND" && entry.deliveryStatus && ` · ${entry.deliveryStatus}`}
+                        </span>
+                      )}
                       {entry.subject && <span className="text-sm font-medium text-ink">{entry.subject}</span>}
                     </div>
                     {entry.participants.length > 0 && (
@@ -169,6 +186,7 @@ export default function CallsSmsCard({
           teamMembers={teamMembers}
           projects={projects}
           currentUserId={currentUserId}
+          sending={sending}
           lang={lang}
           typeLabels={typeLabels}
           onClose={() => setDialog(null)}
@@ -186,6 +204,7 @@ function CallsSmsDialog({
   teamMembers,
   projects,
   currentUserId,
+  sending,
   lang,
   typeLabels,
   onClose,
@@ -197,6 +216,7 @@ function CallsSmsDialog({
   teamMembers: NamedOption[];
   projects: NamedOption[];
   currentUserId: string | null;
+  sending: CallsSmsSending;
   lang: Lang;
   typeLabels: Record<string, string>;
   onClose: () => void;
@@ -204,6 +224,10 @@ function CallsSmsDialog({
   const t = getDict(lang);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [type, setType] = useState(entry?.type ?? "CALL");
+  const [sendAsText, setSendAsText] = useState(false);
+  const canSend = !entry && type === "SMS" && sending.ready && sending.numbers.length > 0;
+  const sendingNow = canSend && sendAsText;
   const [when, setWhen] = useState(() => toLocalInput(entry?.occurredAt ?? new Date().toISOString()));
 
   // A new entry starts with the contact and the person logging it; an
@@ -257,7 +281,7 @@ function CallsSmsDialog({
       <div className={`grid gap-3 sm:grid-cols-2 ${projects.length > 0 ? "lg:grid-cols-[9rem_minmax(0,1.3fr)_7rem_minmax(0,1fr)]" : "lg:grid-cols-[9rem_minmax(0,1.3fr)_7rem]"}`}>
         <div>
           <label className={LABEL_CLASS}>{t.callsSms.type}</label>
-          <select name="type" defaultValue={entry?.type ?? "CALL"} className={FIELD_CLASS}>
+          <select name="type" value={type} onChange={(e) => setType(e.target.value)} className={FIELD_CLASS}>
             {typeOptions.map((type) => (
               <option key={type} value={type}>
                 {typeLabels[type]}
@@ -324,9 +348,39 @@ function CallsSmsDialog({
         </div>
       </div>
 
+      {canSend && (
+        <div className="space-y-2 rounded-md border border-card-border bg-field-bg p-3">
+          <label className="flex items-center gap-2 text-sm font-medium text-ink">
+            <input
+              type="checkbox"
+              name="sendViaTwilio"
+              checked={sendAsText}
+              onChange={(e) => setSendAsText(e.target.checked)}
+              className="h-4 w-4 rounded border-card-border accent-amo-lime"
+            />
+            {t.callsSms.sendAsText}
+          </label>
+          {sendAsText && (
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,16rem)_1fr] sm:items-end">
+              <div>
+                <label className={LABEL_CLASS}>{t.callsSms.sendTo}</label>
+                <select name="smsTo" defaultValue={sending.numbers[0].value} className={FIELD_CLASS}>
+                  {sending.numbers.map((n) => (
+                    <option key={n.value} value={n.value}>
+                      {n.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-soft">{t.callsSms.sendButtonHint}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
-        <label className={LABEL_CLASS}>{t.callsSms.discussed}</label>
-        <textarea name="notes" rows={9} defaultValue={entry?.notes ?? ""} className={FIELD_CLASS} />
+        <label className={LABEL_CLASS}>{sendingNow ? t.callsSms.message : t.callsSms.discussed}</label>
+        <textarea name="notes" rows={sendingNow ? 5 : 9} defaultValue={entry?.notes ?? ""} className={FIELD_CLASS} />
       </div>
 
       {entry && (

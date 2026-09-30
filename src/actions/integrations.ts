@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
+import { getTwilioConfig, verifyTwilioCredentials } from "@/lib/twilio";
+import { toE164 } from "@/lib/phone-display";
 import { runSystemeIoSync } from "@/lib/sync";
 import { disconnectGoogle } from "@/lib/google";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -276,5 +278,46 @@ export async function disconnectIonosMailboxAction(): Promise<void> {
   const session = await auth();
   if (!session) throw new Error("Not signed in");
   await withScopedPrismaClient((db) => disconnectIonosMailbox(session.user.id, db));
+  revalidatePath("/settings");
+}
+
+// Twilio SMS credentials. The Auth Token field may be left blank when only
+// the number changes — the stored one is kept.
+export async function saveTwilioSettings(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  await requireAdmin();
+  const accountSid = String(formData.get("accountSid") ?? "").trim();
+  const authTokenInput = String(formData.get("authToken") ?? "").trim();
+  const fromRaw = String(formData.get("fromNumber") ?? "").trim();
+  const fromNumber = toE164(fromRaw, "CA");
+  if (!accountSid || !/^AC[0-9a-fA-F]{32}$/.test(accountSid)) return { error: "Enter your Twilio Account SID (it starts with AC)." };
+  if (!fromNumber || !fromNumber.startsWith("+")) return { error: "Enter your Twilio phone number, e.g. +18195551234." };
+
+  const existing = await withScopedPrismaClient((db) => getTwilioConfig(db));
+  const authToken = authTokenInput || existing?.authToken || "";
+  if (!authToken) return { error: "Enter your Twilio Auth Token." };
+
+  if (!(await verifyTwilioCredentials(accountSid, authToken))) {
+    return { error: "Twilio rejected that Account SID / Auth Token." };
+  }
+
+  const encrypted = await encryptSecret(JSON.stringify({ accountSid, authToken }));
+  await withScopedPrismaClient((db) =>
+    db.integrationSetting.upsert({
+      where: { provider: "twilio" },
+      update: { apiKeyEncrypted: encrypted, metadata: { fromNumber } },
+      create: { provider: "twilio", apiKeyEncrypted: encrypted, metadata: { fromNumber } },
+    })
+  );
+
+  revalidatePath("/settings");
+  return { success: "Twilio connected." };
+}
+
+export async function disconnectTwilio(): Promise<void> {
+  await requireAdmin();
+  await withScopedPrismaClient((db) => db.integrationSetting.deleteMany({ where: { provider: "twilio" } }));
   revalidatePath("/settings");
 }
