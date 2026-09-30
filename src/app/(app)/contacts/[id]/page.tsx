@@ -43,6 +43,7 @@ import DomainsDialog from "./domains-dialog";
 import RelationsDialog from "./relations-dialog";
 import OtherInfoDialog from "./other-info-dialog";
 import NotesDialog from "./notes-dialog";
+import NoteTimestamps from "./note-timestamps";
 import {
   updateContactGeneralInfo,
   updateContactInfo,
@@ -446,6 +447,7 @@ export default async function ContactDetailPage({
     url: c.url,
     username: c.username,
     hasPassword: Boolean(c.passwordEncrypted),
+    loginMethod: c.loginMethod,
     notes: c.notes,
   }));
 
@@ -638,8 +640,8 @@ export default async function ContactDetailPage({
               </div>
               <TagManager contactId={contact.id} tags={contact.tags.map((ct) => ct.tag)} allTags={allTags} lang={lang} />
 
-              {/* Row 4 — Services required / Project goal sit side by side
-                  below Website, to the left of the picture as requested. */}
+              {/* Row 4 — Services required sits below Website, Project goal
+                  below Nickname. */}
               <div className="space-y-2">
                 <InfoField
                   label={t.contactForm.website}
@@ -651,12 +653,12 @@ export default async function ContactDetailPage({
                     ) : undefined
                   }
                 />
-                <div className="grid grid-cols-2 gap-2">
-                  <InfoField label={t.contactDetail.servicesRequiredLabel} value={servicesRequiredValue} />
-                  <InfoField label={t.contactDetail.projectGoalLabel} value={projectGoalValue} />
-                </div>
+                <InfoField label={t.contactDetail.servicesRequiredLabel} value={servicesRequiredValue} />
               </div>
-              <InfoField label={t.contactForm.nickname} value={contact.nickname} />
+              <div className="space-y-2">
+                <InfoField label={t.contactForm.nickname} value={contact.nickname} />
+                <InfoField label={t.contactDetail.projectGoalLabel} value={projectGoalValue} />
+              </div>
               <InfoField label={t.contactForm.birthday} value={birthdayLine} />
               <div>
                 <p className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</p>
@@ -1006,6 +1008,8 @@ export default async function ContactDetailPage({
             )}
           </Card>
 
+          {isAdmin && <ContactCredentialsCard contactId={contact.id} entries={credentialEntries} lang={lang} />}
+
           {otherContactsForRelations.length > 0 && (
             <Card
               color="relations"
@@ -1097,7 +1101,7 @@ export default async function ContactDetailPage({
             actions={
               <NotesDialog
                 action={updateContactNotes.bind(null, contact.id)}
-                notes={contact.contactNotes.map((n) => n.text)}
+                notes={contact.contactNotes.map((n) => ({ id: n.id, text: n.text }))}
                 lang={lang}
               />
             }
@@ -1109,14 +1113,13 @@ export default async function ContactDetailPage({
                 {contact.contactNotes.map((note) => (
                   <li key={note.id} className="py-2 text-sm first:pt-0">
                     <p className="whitespace-pre-wrap break-words text-ink">{note.text}</p>
-                    <p className="mt-1 text-xs text-soft">{formatDistanceToNow(note.createdAt, { addSuffix: true, locale: dateLocale })}</p>
+                    <NoteTimestamps createdAt={note.createdAt.toISOString()} updatedAt={note.updatedAt.toISOString()} lang={lang} />
                   </li>
                 ))}
               </ul>
             )}
           </Card>
 
-          {isAdmin && <ContactCredentialsCard contactId={contact.id} entries={credentialEntries} lang={lang} />}
         </div>
 
         <div className="min-w-0 space-y-2 sm:space-y-6">

@@ -12,13 +12,13 @@ export default function NotesDialog({
   lang,
 }: {
   action: (prevState: { error?: string; success?: string } | undefined, formData: FormData) => Promise<{ error?: string; success?: string }>;
-  notes: string[];
+  notes: { id: string; text: string }[];
   lang: Lang;
 }) {
   const t = getDict(lang);
   const [open, setOpen] = useState(false);
-  const [notes, setNotes] = useState(() => (initialNotes.length > 0 ? initialNotes : [""]).map((text, id) => ({ id, text })));
-  const nextId = useRef(notes.length);
+  const [notes, setNotes] = useState(() => (initialNotes.length > 0 ? initialNotes : [{ id: "", text: "" }]).map((n, key) => ({ key, noteId: n.id, text: n.text })));
+  const nextKey = useRef(notes.length);
 
   return (
     <>
@@ -34,7 +34,8 @@ export default function NotesDialog({
     >
       <div className="space-y-2">
         {notes.map((row) => (
-          <div key={row.id} className="flex items-start gap-1.5">
+          <div key={row.key} className="flex items-start gap-1.5">
+            <input type="hidden" name="noteId" value={row.noteId} />
             <textarea
               name="noteText"
               rows={3}
@@ -43,7 +44,7 @@ export default function NotesDialog({
             />
             <button
               type="button"
-              onClick={() => setNotes((rows) => rows.filter((r) => r.id !== row.id))}
+              onClick={() => setNotes((rows) => rows.filter((r) => r.key !== row.key))}
               className="shrink-0 rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
               aria-label={t.contactForm.removeEntry}
             >
@@ -53,7 +54,7 @@ export default function NotesDialog({
         ))}
         <button
           type="button"
-          onClick={() => setNotes((rows) => [...rows, { id: nextId.current++, text: "" }])}
+          onClick={() => setNotes((rows) => [...rows, { key: nextKey.current++, noteId: "", text: "" }])}
           className="text-xs font-semibold text-amo-lime hover:underline"
         >
           + {t.contactForm.addNote}

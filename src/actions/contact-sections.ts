@@ -25,7 +25,7 @@ import {
   readDomainItems,
   readContactRelations,
   reciprocalRelationType,
-  readContactNotes,
+  readContactNoteRows,
   readAppSyncSettings,
   buildCustomFieldEditOps,
 } from "@/lib/contact-form-fields";
@@ -491,15 +491,28 @@ export async function updateContactNotes(
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   const result = await withScopedPrismaClient(async (db) => {
-    const notes = readContactNotes(formData);
+    const rows = readContactNoteRows(formData);
+    const existing = await db.contactNote.findMany({ where: { contactId } });
+    const existingById = new Map(existing.map((n) => [n.id, n]));
+    const keptIds = new Set(rows.map((r) => r.id).filter((id): id is string => Boolean(id && existingById.has(id))));
+
+    // Untouched notes are left alone (so createdAt and updatedAt stay put);
+    // only a note whose text actually changed gets updated — @updatedAt then
+    // bumps its modified date — and a new row gets a fresh created date.
     await db.$transaction([
-      db.contactNote.deleteMany({ where: { contactId } }),
-      ...(notes.length > 0 ? [db.contactNote.createMany({ data: notes.map((text) => ({ contactId, text })) })] : []),
-      // Kept in sync as a joined copy so Google Contacts sync (which reads/
-      // writes this single scalar field as the contact's "biography") keeps
-      // working without its own changes — see the schema comment on ContactNote.
-      db.contact.update({ where: { id: contactId }, data: { notes: notes.join("\n\n") || null } }),
+      db.contactNote.deleteMany({ where: { contactId, id: { notIn: [...keptIds] } } }),
+      ...rows.flatMap((row) => {
+        const current = row.id ? existingById.get(row.id) : undefined;
+        if (!current) return [db.contactNote.create({ data: { contactId, text: row.text } })];
+        if (current.text === row.text) return [];
+        return [db.contactNote.update({ where: { id: current.id }, data: { text: row.text } })];
+      }),
     ]);
+    // Kept in sync as a joined copy so Google Contacts sync (which reads/
+    // writes this single scalar field as the contact's "biography") keeps
+    // working without its own changes — see the schema comment on ContactNote.
+    const all = await db.contactNote.findMany({ where: { contactId }, orderBy: { createdAt: "desc" } });
+    await db.contact.update({ where: { id: contactId }, data: { notes: all.map((n) => n.text).join("\n\n") || null } });
     const updated = await db.contact.findUniqueOrThrow({ where: { id: contactId } });
     const appSyncRows = await currentAppSyncRows(db, contactId);
     const syncStatus = await applyContactExternalSyncs(db, session, updated, appSyncRows, t);

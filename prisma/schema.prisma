@@ -502,6 +502,10 @@ model ContactNote {
   contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   text      String   @db.Text
   createdAt DateTime @default(now())
+  // Only bumped when a note's text actually changes (updateContactNotes
+  // updates just those rows) — merely opening the dialog and saving with
+  // this note untouched leaves it as-is.
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([contactId])
   @@map("contact_notes")
@@ -521,6 +525,10 @@ model ContactCredential {
   url               String?
   username          String?
   passwordEncrypted String?  @db.Text
+  // How this account is signed into: null/"password" means the username +
+  // password above; otherwise a social/SSO provider key (google, microsoft,
+  // facebook, apple, ... — see CREDENTIAL_LOGIN_METHODS).
+  loginMethod       String?
   notes             String?  @db.Text
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

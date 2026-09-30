@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { CREDENTIAL_LOGIN_METHODS } from "@/lib/contact-form-fields";
 
 // Same admin-only, decrypt-on-demand pattern as the global API key vault
 // (see api-key-vault.ts) — these are login credentials for a client's own
@@ -30,6 +31,8 @@ export async function addContactCredential(
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const rawMethod = String(formData.get("loginMethod") ?? "");
+  const loginMethod = CREDENTIAL_LOGIN_METHODS.some((m) => m.value === rawMethod) ? rawMethod : null;
   if (!label) {
     return { error: t.contactCredentials.labelRequired };
   }
@@ -37,7 +40,7 @@ export async function addContactCredential(
   const passwordEncrypted = password ? await encryptSecret(password) : null;
   await withScopedPrismaClient((db) =>
     db.contactCredential.create({
-      data: { contactId, label, url: url || null, username: username || null, passwordEncrypted, notes: notes || null },
+      data: { contactId, label, url: url || null, username: username || null, passwordEncrypted, loginMethod, notes: notes || null },
     })
   );
 

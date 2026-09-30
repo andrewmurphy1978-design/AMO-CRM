@@ -451,6 +451,34 @@ export function readContactNotes(formData: FormData) {
     .filter((text) => text.length > 0);
 }
 
+// Parallel "noteId" (existing note's id, "" for a new row) + "noteText"
+// inputs, one pair per note row — lets updateContactNotes tell an untouched
+// note (keep its created/modified dates) from an edited or brand-new one.
+export function readContactNoteRows(formData: FormData) {
+  const ids = formData.getAll("noteId").map(String);
+  const texts = formData.getAll("noteText").map(String);
+  return texts
+    .map((text, i) => ({ id: ids[i] || null, text: text.trim() }))
+    .filter((row) => row.text.length > 0);
+}
+
+// How a stored login signs in, besides a plain username + password.
+// Stored as the `value` string (ContactCredential.loginMethod); "" / null
+// means username + password.
+export const CREDENTIAL_LOGIN_METHODS = [
+  { value: "google", label: "Google" },
+  { value: "microsoft", label: "Microsoft" },
+  { value: "facebook", label: "Facebook" },
+  { value: "apple", label: "Apple" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "github", label: "GitHub" },
+  { value: "x", label: "X (Twitter)" },
+  { value: "amazon", label: "Amazon" },
+  { value: "paypal", label: "PayPal" },
+  { value: "shopify", label: "Shopify" },
+  { value: "sso", label: "SSO / other" },
+] as const;
+
 // One enabled checkbox + one direction <select> per entry in
 // CONTACT_SYNC_APPS (see src/lib/contact-sync.ts) — always submitted for
 // every known app regardless of whether this contact has ever synced with
