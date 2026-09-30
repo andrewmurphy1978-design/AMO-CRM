@@ -3,6 +3,9 @@
 import { useRouter, usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import MultiSelect from "@/components/multi-select";
+import CountryFlag from "@/components/country-flag";
+import TagFilter from "./tag-filter";
+import type { TagLike } from "@/lib/tag-colors";
 
 // How long to wait after the last keystroke before re-querying — short
 // enough to feel live, long enough that a fast typist doesn't fire a
@@ -12,22 +15,35 @@ const SEARCH_DEBOUNCE_MS = 300;
 export default function ContactFilters({
   q,
   stageOptions,
-  tagOptions,
+  allTags,
+  countryOptions,
   selectedStages,
   selectedTags,
+  selectedCountries,
   searchPlaceholder,
   allStagesLabel,
   allTagsLabel,
+  allCountriesLabel,
+  tagDialogTitle,
+  clearLabel,
+  doneLabel,
   trailing,
 }: {
   q: string;
   stageOptions: { value: string; label: string }[];
-  tagOptions: { value: string; label: string }[];
+  allTags: ({ id: string } & TagLike)[];
+  // value = ISO country code, label = full country name
+  countryOptions: { value: string; label: string }[];
   selectedStages: string[];
   selectedTags: string[];
+  selectedCountries: string[];
   searchPlaceholder: string;
   allStagesLabel: string;
   allTagsLabel: string;
+  allCountriesLabel: string;
+  tagDialogTitle: string;
+  clearLabel: string;
+  doneLabel: string;
   // Rendered at the end of the same row as the filter controls on desktop
   // (the Previous/Next pager + shown-count pill) — on mobile the caller
   // renders this same content again, below the filter row instead, since
@@ -44,13 +60,15 @@ export default function ContactFilters({
   // the same stale prop and clobber the other's selection).
   const [stages, setStages] = useState(selectedStages);
   const [tags, setTags] = useState(selectedTags);
+  const [countries, setCountries] = useState(selectedCountries);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function push(nextStages: string[], nextTags: string[], nextQ: string) {
+  function push(nextStages: string[], nextTags: string[], nextQ: string, nextCountries: string[] = countries) {
     const params = new URLSearchParams();
     if (nextQ) params.set("q", nextQ);
     for (const s of nextStages) params.append("stage", s);
     for (const tg of nextTags) params.append("tag", tg);
+    for (const c of nextCountries) params.append("country", c);
     router.push(`${pathname}?${params.toString()}`);
   }
 
@@ -92,13 +110,31 @@ export default function ContactFilters({
           push(next, tags, text);
         }}
       />
-      <MultiSelect
-        options={tagOptions}
+      <TagFilter
+        tags={allTags}
         selected={tags}
         placeholder={allTagsLabel}
+        title={tagDialogTitle}
+        clearLabel={clearLabel}
+        doneLabel={doneLabel}
         onChange={(next) => {
           setTags(next);
           push(stages, next, text);
+        }}
+      />
+      <MultiSelect
+        options={countryOptions}
+        selected={countries}
+        placeholder={allCountriesLabel}
+        renderOption={(opt) => (
+          <span className="flex min-w-0 items-center gap-2">
+            <CountryFlag country={opt.value} />
+            <span className="truncate">{opt.label}</span>
+          </span>
+        )}
+        onChange={(next) => {
+          setCountries(next);
+          push(stages, tags, text, next);
         }}
       />
       {/* Desktop only: the pager + shown-count pill ride the end of this

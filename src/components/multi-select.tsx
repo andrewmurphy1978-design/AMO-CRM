@@ -1,17 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export default function MultiSelect({
   options,
   selected,
   placeholder,
   onChange,
+  renderOption,
 }: {
   options: { value: string; label: string }[];
   selected: string[];
   placeholder: string;
   onChange: (values: string[]) => void;
+  // Custom content for an option (e.g. a flag beside a country name), used
+  // in the dropdown and in the trigger when exactly one is selected.
+  renderOption?: (option: { value: string; label: string }) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -50,7 +54,11 @@ export default function MultiSelect({
         <span className={`truncate sm:hidden ${selected.length === 0 ? "text-soft" : ""}`}>
           {selected.length === 0 ? placeholder : selected.length}
         </span>
-        <span className={`hidden truncate sm:inline ${selected.length === 0 ? "text-soft" : ""}`}>{label}</span>
+        <span className={`hidden min-w-0 truncate sm:inline ${selected.length === 0 ? "text-soft" : ""}`}>
+          {renderOption && selected.length === 1 && options.find((o) => o.value === selected[0])
+            ? renderOption(options.find((o) => o.value === selected[0])!)
+            : label}
+        </span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-4 w-4 shrink-0 text-soft">
           <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
         </svg>
@@ -78,7 +86,7 @@ export default function MultiSelect({
                 onChange={() => toggle(opt.value)}
                 className="h-4 w-4 rounded border-card-border"
               />
-              {opt.label}
+              {renderOption ? renderOption(opt) : opt.label}
             </label>
           ))}
         </div>

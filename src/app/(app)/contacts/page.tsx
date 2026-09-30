@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getHour12 } from "@/lib/time-format";
 import PageHeader from "../page-header";
 import ContactsIcon from "../contacts-icon";
 import { sortTags, isLanguageTag, tagPillStyle } from "@/lib/tag-colors";
-import { countryFullName } from "@/lib/country-flag";
+import { countryFullName, countryToCode } from "@/lib/country-flag";
 import CountryFlag from "@/components/country-flag";
 import PhoneDisplay from "@/components/phone-display";
 import ContactFilters from "./filters";
@@ -128,15 +128,17 @@ export default async function ContactsPage({
     q?: string;
     stage?: string | string[];
     tag?: string | string[];
+    country?: string | string[];
     sort?: string;
     dir?: string;
     page?: string;
     deleted?: string;
   }>;
 }) {
-  const { q, stage, tag, sort, dir, page: pageParam, deleted } = await searchParams;
+  const { q, stage, tag, country, sort, dir, page: pageParam, deleted } = await searchParams;
   const stages = toArray(stage);
   const selectedTags = toArray(tag);
+  const selectedCountries = toArray(country);
   const sortField: SortField | null = SORT_FIELDS.includes(sort as SortField) ? (sort as SortField) : null;
   const sortDir: "asc" | "desc" = dir === "desc" ? "desc" : "asc";
   const requestedPage = Math.max(1, Math.floor(Number(pageParam)) || 1);
@@ -167,7 +169,30 @@ export default async function ContactsPage({
   // for why (each `prisma.x` property access on the raw proxy opens a
   // brand-new connection; several of those on this frequently-visited page
   // was a real contributor to Cloudflare's Error 1102).
-  const { contacts, total, page, tags, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { contacts, total, page, tags, hour12, countryRows } = await withScopedPrismaClient(async (db) => {
+    // Country is stored as free text ("Canada", "CA", "USA", ...), so each
+    // filter code expands to every stored spelling that resolves to it.
+    const countryRows = await db.contact.groupBy({ by: ["country"], where: { country: { not: null } } });
+    if (selectedCountries.length > 0) {
+      const spellings = countryRows.map((r) => r.country as string).filter((c) => selectedCountries.includes(countryToCode(c) ?? ""));
+      where.country = { in: spellings.length > 0 ? spellings : ["__no_matching_country__"] };
+    }
+    // A search that looks like a phone number matches on digits alone, so
+    // "819 555", "(819) 555-1234" and "+1 819-555-1234" all find the same
+    // contact whatever formatting it was saved with.
+    if (q && /^[\d\s()+.\-]+$/.test(q)) {
+      const digits = q.replace(/\D/g, "");
+      if (digits.length >= 3) {
+        const like = `%${digits}%`;
+        const rows = await db.$queryRaw<{ id: string }[]>(Prisma.sql`
+          SELECT id FROM contacts
+          WHERE regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') LIKE ${like}
+             OR regexp_replace(coalesce(phone2, ''), '[^0-9]', '', 'g') LIKE ${like}
+             OR EXISTS (SELECT 1 FROM unnest("extraPhones") p WHERE regexp_replace(p, '[^0-9]', '', 'g') LIKE ${like})
+        `);
+        where.OR = [...(where.OR ?? []), { id: { in: rows.map((r) => r.id) } }];
+      }
+    }
     const total = await db.contact.count({ where });
     // Clamped against the count before fetching, so a stale/out-of-range
     // page param (e.g. a bookmarked link from before a filter narrowed the
@@ -183,7 +208,7 @@ export default async function ContactsPage({
     });
     const tags = await db.tag.findMany({ orderBy: { name: "asc" } });
     const hour12 = await getHour12(session, db);
-    return { contacts, total, page, tags, hour12 };
+    return { contacts, total, page, tags, hour12, countryRows };
   });
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -191,12 +216,15 @@ export default async function ContactsPage({
   const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   const stageOptions = Object.entries(STAGE_LABELS).map(([value, label]) => ({ value, label }));
-  const tagOptions = tags.map((tg) => ({ value: tg.name, label: tg.name }));
+  // One option per country actually present on a contact, keyed by ISO code.
+  const countryCodes = [...new Set(countryRows.map((r) => countryToCode(r.country)).filter((c): c is string => Boolean(c)))];
+  const countryOptions = countryCodes.map((code) => ({ value: code, label: countryFullName(code) })).sort((a, b) => a.label.localeCompare(b.label));
 
   const baseParams = new URLSearchParams();
   if (q) baseParams.set("q", q);
   for (const s of stages) baseParams.append("stage", s);
   for (const tg of selectedTags) baseParams.append("tag", tg);
+  for (const c of selectedCountries) baseParams.append("country", c);
 
   function pageHref(targetPage: number): string {
     const params = new URLSearchParams(baseParams);
@@ -289,12 +317,18 @@ export default async function ContactsPage({
       <ContactFilters
         q={q ?? ""}
         stageOptions={stageOptions}
-        tagOptions={tagOptions}
+        allTags={tags}
+        countryOptions={countryOptions}
         selectedStages={stages}
         selectedTags={selectedTags}
+        selectedCountries={selectedCountries}
         searchPlaceholder={t.contacts.searchPlaceholder}
         allStagesLabel={t.contacts.allStages}
         allTagsLabel={t.contacts.allTags}
+        allCountriesLabel={t.contacts.allCountries}
+        tagDialogTitle={t.tagManager.allTagsTitle}
+        clearLabel={t.contacts.clearFilter}
+        doneLabel={t.tagManager.done}
         trailing={paginationInfo}
       />
 
@@ -408,9 +442,9 @@ export default async function ContactsPage({
                         for row navigation. */}
                     <Link
                       href={`/contacts/${contact.id}`}
-                      className="relative z-10 flex items-center gap-2 font-medium text-ink group-hover:underline"
+                      className="flex items-center gap-2 font-medium text-ink group-hover:underline"
                     >
-                      <span className="absolute inset-0 z-0 group-hover:bg-black/5" aria-hidden="true" />
+                      <span className="absolute inset-0 group-hover:bg-black/5" aria-hidden="true" />
                       {contact.avatarUrl && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={contact.avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
