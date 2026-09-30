@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { FIELD_CLASS, type ContactRelationRow, type RelatableContact } from "../contact-form";
 import { FAMILY_RELATION_OPTIONS, PROFESSIONAL_RELATION_OPTIONS } from "@/lib/contact-form-fields";
+import Combobox from "@/components/combobox";
 import SectionDialog, { EditCardButton } from "./section-dialog";
 import { CARD_COLORS } from "@/components/section-card";
 
@@ -65,16 +66,6 @@ export default function RelationsDialog({
             onRemove={() => setRelations((rows) => rows.filter((r) => r.id !== row.id))}
           />
         ))}
-        <datalist id="relationOptionsPersonal">
-          {FAMILY_RELATION_OPTIONS.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
-        <datalist id="relationOptionsProfessional">
-          {PROFESSIONAL_RELATION_OPTIONS.map((option) => (
-            <option key={option} value={option} />
-          ))}
-        </datalist>
         <button
           type="button"
           onClick={() =>
@@ -116,8 +107,8 @@ function RelationRow({
 
   return (
     <div className="rounded-lg border border-card-border p-2.5">
-      <div className="flex flex-wrap items-start gap-1.5">
-        <div className="w-full sm:w-56">
+      <div className="grid items-start gap-1.5 sm:grid-cols-[minmax(0,1.3fr)_9rem_minmax(0,1fr)_auto]">
+        <div className="min-w-0">
           <input type="hidden" name="relationContactId" value={row.relatedContactId} readOnly />
           {selected ? (
             <div className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink">
@@ -160,18 +151,19 @@ function RelationRow({
           value={row.category}
           onChange={(e) => onChange({ category: e.target.value as RelationCategory })}
           aria-label={t.contactForm.relationCategoryLabel}
-          className={`${FIELD_CLASS} mt-0 w-36`}
+          className={`${FIELD_CLASS} mt-0`}
         >
           <option value="personal">{t.contactForm.relationCategoryPersonal}</option>
           <option value="professional">{t.contactForm.relationCategoryProfessional}</option>
         </select>
-        <input
+        <Combobox
+          label={t.contactForm.relationTypePlaceholder}
+          labelClassName="sr-only"
+          inputClassName={`${FIELD_CLASS} mt-0`}
           name="relationType"
-          value={row.relationType}
-          onChange={(e) => onChange({ relationType: e.target.value })}
-          list={row.category === "professional" ? "relationOptionsProfessional" : "relationOptionsPersonal"}
+          defaultValue={row.relationType}
+          options={row.category === "professional" ? PROFESSIONAL_RELATION_OPTIONS : FAMILY_RELATION_OPTIONS}
           placeholder={t.contactForm.relationTypePlaceholder}
-          className={`${FIELD_CLASS} mt-0 flex-1`}
         />
         <button
           type="button"

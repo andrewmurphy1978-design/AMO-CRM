@@ -989,7 +989,7 @@ export default async function ContactDetailPage({
                       ).map(([label, value], i) => (
                         <span key={label}>
                           {i > 0 && " · "}
-                          <span className="font-bold uppercase tracking-wide text-ink">{label}:</span> {value}
+                          <span className="uppercase tracking-wide text-ink">{label}:</span> {value}
                         </span>
                       ))}
                       {d.autoRenew && (
