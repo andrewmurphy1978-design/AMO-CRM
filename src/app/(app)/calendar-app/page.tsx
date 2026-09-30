@@ -47,7 +47,7 @@ export default async function CalendarAppPage() {
   // scoped client just for the event-links lookup, which is the same
   // "two connections in one request" pattern that trips Cloudflare's
   // Error 1102, just sequential instead of concurrent.
-  const { googleAccessToken, hour12, contacts, projects, tasks, bookings, affiliatePrograms, events, eventLinks } = await withScopedPrismaClient(
+  const { googleAccessToken, hour12, contacts, projects, tasks, phases, bookings, affiliatePrograms, events, eventLinks } = await withScopedPrismaClient(
     async (db) => {
       const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
       const hour12 = await getHour12(session, db);
@@ -65,7 +65,12 @@ export default async function CalendarAppPage() {
         where: { status: { not: "DONE" } },
         orderBy: { title: "asc" },
         take: 300,
-        select: { id: true, title: true, projectId: true },
+        select: { id: true, title: true, projectId: true, phaseId: true },
+      });
+      const phases = await db.projectPhase.findMany({
+        orderBy: [{ projectId: "asc" }, { order: "asc" }],
+        take: 600,
+        select: { id: true, name: true, projectId: true },
       });
       const bookings = await db.booking.findMany({
         orderBy: { scheduledFor: "desc" },
@@ -90,7 +95,7 @@ export default async function CalendarAppPage() {
       const eventLinks =
         eventIds.length > 0 ? await db.calendarEventLink.findMany({ where: { googleEventId: { in: eventIds } } }) : [];
 
-      return { googleAccessToken, hour12, contacts, projects, tasks, bookings, affiliatePrograms, events, eventLinks };
+      return { googleAccessToken, hour12, contacts, projects, tasks, phases, bookings, affiliatePrograms, events, eventLinks };
     }
   );
   const initialLinks = Object.fromEntries(
@@ -102,7 +107,8 @@ export default async function CalendarAppPage() {
 
   const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email, extraEmails: c.extraEmails }));
   const projectOptions = projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId }));
-  const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId }));
+  const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId, phaseId: tk.phaseId }));
+  const phaseOptions = phases.map((ph) => ({ id: ph.id, label: ph.name, projectId: ph.projectId }));
   const bookingOptions = bookings.map((b) => ({
     id: b.id,
     label: `${b.eventName ?? t.linkPicker.booking} (${b.scheduledFor ? format(b.scheduledFor, "MMM d") : "?"})`,
@@ -160,6 +166,7 @@ export default async function CalendarAppPage() {
           contacts={contactOptions}
           projects={projectOptions}
           tasks={taskOptions}
+          phases={phaseOptions}
           bookings={bookingOptions}
           programs={programOptions}
           hour12={hour12}

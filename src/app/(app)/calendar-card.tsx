@@ -577,6 +577,7 @@ export default function CalendarCard({
   contactOptions,
   projectOptions,
   taskOptions,
+  phaseOptions,
   bookingOptions,
   programOptions,
   eventDialogLabels,
@@ -597,6 +598,7 @@ export default function CalendarCard({
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
+  phaseOptions?: LinkOption[];
   bookingOptions: LinkOption[];
   programOptions: LinkOption[];
   eventDialogLabels: EventDialogLabels;
@@ -814,6 +816,7 @@ export default function CalendarCard({
         contacts={contactOptions}
         projects={projectOptions}
         tasks={taskOptions}
+        phases={phaseOptions}
         bookings={bookingOptions}
         programs={programOptions}
         onClose={() => setViewTarget(null)}
@@ -868,6 +871,7 @@ export default function CalendarCard({
         contacts={contactOptions}
         projects={projectOptions}
         tasks={taskOptions}
+        phases={phaseOptions}
         bookings={bookingOptions}
         programs={programOptions}
         lang={lang}

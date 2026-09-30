@@ -103,6 +103,7 @@ export default function CalendarShell({
   contacts,
   projects,
   tasks,
+  phases,
   bookings,
   programs,
   hour12,
@@ -120,6 +121,7 @@ export default function CalendarShell({
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
+  phases: LinkOption[];
   bookings: LinkOption[];
   programs: LinkOption[];
   hour12: boolean;
@@ -504,6 +506,7 @@ export default function CalendarShell({
         contacts={contacts}
         projects={projects}
         tasks={tasks}
+        phases={phases}
         bookings={bookings}
         programs={programs}
         onClose={() => setViewTarget(null)}
@@ -558,6 +561,7 @@ export default function CalendarShell({
         contacts={contacts}
         projects={projects}
         tasks={tasks}
+        phases={phases}
         bookings={bookings}
         programs={programs}
         lang={lang}

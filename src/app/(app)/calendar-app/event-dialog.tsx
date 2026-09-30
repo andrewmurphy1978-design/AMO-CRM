@@ -156,6 +156,7 @@ interface FormState {
   attendeeEmails: string[];
   contactId: string;
   projectId: string;
+  phaseId: string;
   taskId: string;
   bookingId: string;
 }
@@ -181,6 +182,7 @@ function blankState(start: Date, allDay = false, links?: Partial<EventLinkTarget
     attendeeEmails: [],
     contactId: links?.contactId ?? "",
     projectId: links?.projectId ?? "",
+    phaseId: links?.phaseId ?? "",
     taskId: links?.taskId ?? "",
     bookingId: links?.bookingId ?? "",
   };
@@ -211,6 +213,7 @@ function stateFromDetail(detail: CalendarEventDetail, links: EventLinkTargets): 
     attendeeEmails: detail.attendees.map((a) => a.email).filter(Boolean),
     contactId: links.contactId,
     projectId: links.projectId,
+    phaseId: links.phaseId ?? "",
     taskId: links.taskId,
     bookingId: links.bookingId,
   };
@@ -525,6 +528,7 @@ export default function EventDialog({
   contacts,
   projects,
   tasks,
+  phases = [],
   bookings,
   programs,
   lang,
@@ -546,6 +550,7 @@ export default function EventDialog({
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
+  phases?: LinkOption[];
   bookings: LinkOption[];
   programs: LinkOption[];
   lang: Lang;
@@ -553,7 +558,7 @@ export default function EventDialog({
   dateLocale: Locale | undefined;
   intlLocale: string;
   labels: EventDialogLabels;
-  linkLabels: { contact: string; project: string; task: string; booking: string; none: string; clear: string; searchPlaceholder: string; noResults: string };
+  linkLabels: { contact: string; project: string; phase?: string; task: string; booking: string; none: string; clear: string; searchPlaceholder: string; noResults: string };
 }) {
   const t = getDict(lang);
   const isEdit = target !== null && "id" in target;
@@ -616,10 +621,10 @@ export default function EventDialog({
       // recurring instance; recurrence itself is dropped for the same
       // reason (a fresh single event, not a new occurrence of the series).
       if (duplicating) {
-        setForm({ ...stateFromDetail(result, initialLinks ?? { contactId: "", projectId: "", taskId: "", bookingId: "" }), repeat: "none" });
+        setForm({ ...stateFromDetail(result, initialLinks ?? { contactId: "", projectId: "", phaseId: "", taskId: "", bookingId: "" }), repeat: "none" });
       } else {
         setDetail(result);
-        setForm(stateFromDetail(result, initialLinks ?? { contactId: "", projectId: "", taskId: "", bookingId: "" }));
+        setForm(stateFromDetail(result, initialLinks ?? { contactId: "", projectId: "", phaseId: "", taskId: "", bookingId: "" }));
       }
       setLoading(false);
     });
@@ -666,7 +671,11 @@ export default function EventDialog({
     () => (form.contactId ? projects.filter((p) => p.contactId === form.contactId) : []),
     [projects, form.contactId]
   );
-  const availableTasks = useMemo(() => (form.projectId ? tasks.filter((tk) => tk.projectId === form.projectId) : []), [tasks, form.projectId]);
+  const availablePhases = useMemo(() => (form.projectId ? phases.filter((p) => p.projectId === form.projectId) : []), [phases, form.projectId]);
+  const availableTasks = useMemo(
+    () => (form.projectId ? tasks.filter((tk) => tk.projectId === form.projectId && (!form.phaseId || !tk.phaseId || tk.phaseId === form.phaseId)) : []),
+    [tasks, form.projectId, form.phaseId]
+  );
   const availableBookings = useMemo(
     () => (form.contactId ? bookings.filter((b) => b.contactId === form.contactId) : []),
     [bookings, form.contactId]
@@ -766,7 +775,7 @@ export default function EventDialog({
   }
 
   function links(): EventLinkTargets {
-    return { contactId: form.contactId, projectId: form.projectId, taskId: form.taskId, bookingId: form.bookingId };
+    return { contactId: form.contactId, projectId: form.projectId, phaseId: form.phaseId, taskId: form.taskId, bookingId: form.bookingId };
   }
 
   function save() {
@@ -1129,7 +1138,7 @@ export default function EventDialog({
                 {selectedContact ? (
                   <div className="flex items-center justify-between rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink">
                     <span className="truncate">{selectedContact.label}</span>
-                    <button type="button" onClick={() => setForm((f) => ({ ...f, contactId: "", projectId: "", taskId: "", bookingId: "" }))} className="ml-2 shrink-0 text-xs text-soft hover:underline">
+                    <button type="button" onClick={() => setForm((f) => ({ ...f, contactId: "", projectId: "", phaseId: "", taskId: "", bookingId: "" }))} className="ml-2 shrink-0 text-xs text-soft hover:underline">
                       {linkLabels.clear}
                     </button>
                   </div>
@@ -1156,7 +1165,7 @@ export default function EventDialog({
                               key={c.id}
                               type="button"
                               onClick={() => {
-                                setForm((f) => ({ ...f, contactId: c.id, projectId: "", taskId: "", bookingId: "" }));
+                                setForm((f) => ({ ...f, contactId: c.id, projectId: "", phaseId: "", taskId: "", bookingId: "" }));
                                 setContactSearch("");
                                 setContactFieldOpen(false);
                               }}
@@ -1174,9 +1183,25 @@ export default function EventDialog({
 
               <div>
                 <label className={LABEL_CLASS}>{linkLabels.project}</label>
-                <select value={form.projectId} onChange={(e) => update("projectId", e.target.value)} disabled={!form.contactId} className={`${FIELD_CLASS} disabled:opacity-50`}>
+                <select value={form.projectId} onChange={(e) => setForm((f) => ({ ...f, projectId: e.target.value, phaseId: "", taskId: "" }))} disabled={!form.contactId} className={`${FIELD_CLASS} disabled:opacity-50`}>
                   <option value="">{linkLabels.none}</option>
                   {availableProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>{linkLabels.phase ?? "Phase"}</label>
+                <select
+                  value={form.phaseId}
+                  onChange={(e) => setForm((f) => ({ ...f, phaseId: e.target.value, taskId: "" }))}
+                  disabled={!form.projectId}
+                  className={`${FIELD_CLASS} disabled:opacity-50`}
+                >
+                  <option value="">{linkLabels.none}</option>
+                  {availablePhases.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.label}
                     </option>

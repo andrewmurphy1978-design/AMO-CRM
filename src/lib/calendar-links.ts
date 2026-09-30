@@ -12,6 +12,8 @@ export interface ResolvedEventLink {
   contactName: string;
   projectId: string;
   projectName: string;
+  phaseId?: string;
+  phaseName?: string;
   taskId: string;
   taskName: string;
   // Not shown inline on the Dashboard card (no booking display there), but
@@ -30,7 +32,7 @@ export async function getResolvedEventLinks(db: PrismaClient, eventIds: string[]
   if (eventIds.length === 0) return {};
   const links = await db.calendarEventLink.findMany({
     where: { googleEventId: { in: eventIds } },
-    include: { contact: true, project: true, task: true },
+    include: { contact: true, project: true, phase: true, task: true },
   });
   const result: Record<string, ResolvedEventLink> = {};
   for (const link of links) {
@@ -39,6 +41,8 @@ export async function getResolvedEventLinks(db: PrismaClient, eventIds: string[]
       contactName: link.contact ? contactLabel(link.contact) : "",
       projectId: link.projectId ?? "",
       projectName: link.project?.name ?? "",
+      phaseId: link.phaseId ?? "",
+      phaseName: link.phase?.name ?? "",
       taskId: link.taskId ?? "",
       taskName: link.task?.title ?? "",
       bookingId: link.bookingId ?? "",
@@ -56,13 +60,14 @@ export async function getEventLinkTargets(db: PrismaClient, eventIds: string[]):
   if (eventIds.length === 0) return {};
   const links = await db.calendarEventLink.findMany({
     where: { googleEventId: { in: eventIds } },
-    select: { googleEventId: true, contactId: true, projectId: true, taskId: true, bookingId: true },
+    select: { googleEventId: true, contactId: true, projectId: true, phaseId: true, taskId: true, bookingId: true },
   });
   const result: Record<string, EventLinkTargets> = {};
   for (const link of links) {
     result[link.googleEventId] = {
       contactId: link.contactId ?? "",
       projectId: link.projectId ?? "",
+      phaseId: link.phaseId ?? "",
       taskId: link.taskId ?? "",
       bookingId: link.bookingId ?? "",
     };

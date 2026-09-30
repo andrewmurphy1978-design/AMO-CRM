@@ -19,6 +19,9 @@ export interface EventLinkTargets {
   projectId: string;
   taskId: string;
   bookingId: string;
+  // Optional so dialogs that don't know about phases don't have to send it;
+  // when absent, an existing phase is kept (see saveLinks).
+  phaseId?: string;
 }
 
 async function saveLinks(db: PrismaClient, googleEventId: string, links: EventLinkTargets) {
@@ -30,10 +33,21 @@ async function saveLinks(db: PrismaClient, googleEventId: string, links: EventLi
   if (!contactId && !projectId && !taskId && !bookingId) {
     await db.calendarEventLink.deleteMany({ where: { googleEventId } });
   } else {
+    // A phase belongs to the linked project: cleared with it, kept when an
+    // older dialog saves without saying anything about phases.
+    const existing = await db.calendarEventLink.findUnique({ where: { googleEventId }, select: { projectId: true, phaseId: true } });
+    const phaseId =
+      links.phaseId !== undefined
+        ? projectId
+          ? links.phaseId || null
+          : null
+        : existing && existing.projectId === projectId
+          ? existing.phaseId
+          : null;
     await db.calendarEventLink.upsert({
       where: { googleEventId },
-      update: { contactId, projectId, taskId, bookingId },
-      create: { googleEventId, contactId, projectId, taskId, bookingId },
+      update: { contactId, projectId, phaseId, taskId, bookingId },
+      create: { googleEventId, contactId, projectId, phaseId, taskId, bookingId },
     });
   }
 }

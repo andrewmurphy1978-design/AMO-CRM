@@ -1277,6 +1277,7 @@ export default async function ContactDetailPage({
             contacts={calendarContactOptions}
             projects={calendarProjectOptions}
             tasks={calendarTaskOptions}
+            phases={calendarPhaseOptions}
             bookings={calendarBookingLabelOptions}
             programs={calendarProgramOptions}
             noEventsLabel={t.calendarApp.noLinkedEvents}

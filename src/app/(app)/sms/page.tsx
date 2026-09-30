@@ -6,6 +6,7 @@ import { getHour12 } from "@/lib/time-format";
 import { getTwilioConfig } from "@/lib/twilio";
 import type { CallsSmsEntry } from "../contacts/[id]/calls-sms-dialog";
 import PageHeader from "../page-header";
+import SmsIcon from "../sms-icon";
 import SmsInbox, { type UnlinkedGroup, type NewText } from "./sms-inbox";
 
 // The SMS inbox: incoming texts nobody has looked at yet, plus texts from
@@ -88,7 +89,14 @@ export default async function SmsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t.nav.sms} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
+      <PageHeader
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <SmsIcon />
+            <span className="truncate">{t.nav.sms}</span>
+          </span>
+        }
+        hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
       <p className="text-sm text-soft">{t.smsPage.subtitle}</p>
       <SmsInbox
         unlinked={[...groups.values()]}

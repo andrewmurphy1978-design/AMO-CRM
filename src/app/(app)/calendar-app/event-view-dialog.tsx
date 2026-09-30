@@ -113,6 +113,7 @@ export default function EventViewDialog({
   contacts,
   projects,
   tasks,
+  phases = [],
   bookings,
   programs,
   onClose,
@@ -131,6 +132,7 @@ export default function EventViewDialog({
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
+  phases?: LinkOption[];
   bookings: LinkOption[];
   programs: LinkOption[];
   onClose: () => void;
@@ -260,12 +262,13 @@ export default function EventViewDialog({
                 </IconRow>
               )}
 
-              {links && (links.contactId || links.projectId || links.taskId || links.bookingId) && (
+              {links && (links.contactId || links.projectId || links.phaseId || links.taskId || links.bookingId) && (
                 <IconRow icon={<LinkIcon />}>
                   <p className="text-xs font-semibold uppercase tracking-wide text-soft">{labels.linkedTo}</p>
                   <div className="mt-0.5 space-y-0.5">
                     {links.contactId && <div className="truncate">{contacts.find((c) => c.id === links.contactId)?.label}</div>}
                     {links.projectId && <div className="truncate">{projects.find((p) => p.id === links.projectId)?.label}</div>}
+                    {links.phaseId && <div className="truncate">{phases.find((ph) => ph.id === links.phaseId)?.label}</div>}
                     {links.taskId && <div className="truncate">{tasks.find((tk) => tk.id === links.taskId)?.label}</div>}
                     {links.bookingId && <div className="truncate">{bookings.find((b) => b.id === links.bookingId)?.label}</div>}
                   </div>

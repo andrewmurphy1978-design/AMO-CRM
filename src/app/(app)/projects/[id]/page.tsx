@@ -58,6 +58,7 @@ export default async function ProjectDetailPage({
     calendarContactOptions,
     calendarProjectOptions,
     calendarTaskOptions,
+    calendarPhaseOptions,
     calendarBookingOptions,
     calendarProgramOptions,
   } = await withScopedPrismaClient(async (db) => {
@@ -102,7 +103,7 @@ export default async function ProjectDetailPage({
         where: { status: { not: "DONE" } },
         orderBy: { title: "asc" },
         take: 300,
-        select: { id: true, title: true, projectId: true },
+        select: { id: true, title: true, projectId: true, phaseId: true },
       }),
       db.booking.findMany({
         orderBy: { scheduledFor: "desc" },
@@ -128,7 +129,8 @@ export default async function ProjectDetailPage({
         extraEmails: c.extraEmails,
       })),
       calendarProjectOptions: allProjects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId })),
-      calendarTaskOptions: allTasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId })),
+      calendarTaskOptions: allTasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId, phaseId: tk.phaseId })),
+      calendarPhaseOptions: (project?.phases ?? []).map((ph) => ({ id: ph.id, label: ph.name, projectId: ph.projectId })),
       calendarBookingOptions: allBookings,
       calendarProgramOptions: allPrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails })),
     };
@@ -323,6 +325,7 @@ export default async function ProjectDetailPage({
             contacts={calendarContactOptions}
             projects={calendarProjectOptions}
             tasks={calendarTaskOptions}
+            phases={calendarPhaseOptions}
             bookings={calendarBookingLabelOptions}
             programs={calendarProgramOptions}
             noEventsLabel={t.calendarApp.noLinkedEvents}

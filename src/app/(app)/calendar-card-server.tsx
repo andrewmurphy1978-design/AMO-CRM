@@ -47,7 +47,7 @@ export default async function CalendarCardServer({
   // booking option lists the event dialog needs — see the comment on the
   // equivalent block in src/app/(app)/page.tsx for why these share a
   // connection instead of each opening its own.
-  const { links, contactOptions, projectOptions, taskOptions, bookingOptions, programOptions } = await withScopedPrismaClient(async (db) => {
+  const { links, contactOptions, projectOptions, taskOptions, phaseOptions, bookingOptions, programOptions } = await withScopedPrismaClient(async (db) => {
     const links = events && events.length > 0 ? await getResolvedEventLinks(db, events.map((e) => e.id)) : {};
     const contacts = await db.contact.findMany({
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -63,7 +63,12 @@ export default async function CalendarCardServer({
       where: { status: { not: "DONE" } },
       orderBy: { title: "asc" },
       take: 300,
-      select: { id: true, title: true, projectId: true },
+      select: { id: true, title: true, projectId: true, phaseId: true },
+    });
+    const phases = await db.projectPhase.findMany({
+      orderBy: [{ projectId: "asc" }, { order: "asc" }],
+      take: 600,
+      select: { id: true, name: true, projectId: true },
     });
     const bookings = await db.booking.findMany({
       orderBy: { scheduledFor: "desc" },
@@ -78,7 +83,8 @@ export default async function CalendarCardServer({
       links,
       contactOptions: contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email, extraEmails: c.extraEmails })),
       projectOptions: projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId })),
-      taskOptions: tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId })),
+      taskOptions: tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId, phaseId: tk.phaseId })),
+      phaseOptions: phases.map((ph) => ({ id: ph.id, label: ph.name, projectId: ph.projectId })),
       bookingOptions: bookings,
       programOptions: affiliatePrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails })),
     };
@@ -113,6 +119,7 @@ export default async function CalendarCardServer({
       contactOptions={contactOptions}
       projectOptions={projectOptions}
       taskOptions={taskOptions}
+      phaseOptions={phaseOptions}
       bookingOptions={bookingLabelOptions}
       programOptions={programOptions}
       eventDialogLabels={t.eventDialog}

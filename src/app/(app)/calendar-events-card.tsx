@@ -24,6 +24,7 @@ export default function CalendarEventsCard({
   contacts,
   projects,
   tasks,
+  phases,
   bookings,
   programs,
   noEventsLabel,
@@ -42,6 +43,7 @@ export default function CalendarEventsCard({
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
+  phases?: LinkOption[];
   bookings: LinkOption[];
   programs: LinkOption[];
   noEventsLabel: string;
@@ -133,6 +135,7 @@ export default function CalendarEventsCard({
         contacts={contacts}
         projects={projects}
         tasks={tasks}
+        phases={phases}
         bookings={bookings}
         programs={programs}
         onClose={() => setViewTarget(null)}
@@ -187,6 +190,7 @@ export default function CalendarEventsCard({
         contacts={contacts}
         projects={projects}
         tasks={tasks}
+        phases={phases}
         bookings={bookings}
         programs={programs}
         lang={lang}
