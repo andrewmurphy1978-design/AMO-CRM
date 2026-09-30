@@ -18,7 +18,29 @@ const GRID_COLS = "lg:grid-cols-[2fr_1.4fr_1.4fr_0.9fr_0.8fr_1.8fr_1.6fr_auto]";
 // Suggestions for the Registrar/DNS Provider comboboxes (see Combobox) —
 // still free text underneath, since a client's actual registrar/DNS host
 // is very often something not on any fixed list.
-const COMMON_REGISTRARS = ["GoDaddy", "IONOS", "Namecheap", "Cloudflare", "Porkbun", "Squarespace", "NameSilo", "Dynadot"];
+const COMMON_REGISTRARS = [
+  "GoDaddy",
+  "IONOS",
+  "Namecheap",
+  "Cloudflare",
+  "Porkbun",
+  "Squarespace",
+  "NameSilo",
+  "Dynadot",
+  "Amazon Route 53",
+  "Google Domains",
+  "Hover",
+  "Name.com",
+  "Network Solutions",
+  "Gandi",
+  "OVHcloud",
+  "Bluehost",
+  "HostGator",
+  "Hostinger",
+  "Wix",
+  "Domain.com",
+  "Register.com",
+];
 const COMMON_DNS_PROVIDERS = [
   "GoDaddy",
   "Cloudflare",
@@ -28,6 +50,20 @@ const COMMON_DNS_PROVIDERS = [
   "DNSimple",
   "NS1 (IBM)",
   "Dyn/Oracle Cloud",
+  "Azure DNS",
+  "Akamai",
+  "DigitalOcean",
+  "Vercel",
+  "Netlify",
+  "Namecheap",
+  "Squarespace",
+  "Wix",
+  "Hover",
+  "Name.com",
+  "Gandi",
+  "OVHcloud",
+  "Bluehost",
+  "Hostinger",
 ];
 
 export default function DomainsDialog({

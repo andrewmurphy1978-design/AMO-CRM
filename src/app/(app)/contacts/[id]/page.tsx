@@ -979,15 +979,25 @@ export default async function ContactDetailPage({
                   <li key={d.id} className="py-2 text-sm first:pt-0">
                     <p className="font-medium text-ink">{d.domain}</p>
                     <p className="text-xs text-soft">
-                      {[
-                        d.registrar ? `${t.contactForm.registrar}: ${d.registrar}` : null,
-                        d.dnsProvider ? `${t.contactForm.dnsProvider}: ${d.dnsProvider}` : null,
-                        d.expiryDate ? `${t.contactForm.expiryDate}: ${format(d.expiryDate, "PP", { locale: dateLocale })}` : null,
-                        d.autoRenew ? t.contactForm.autoRenew : null,
-                        d.managedBy ? `${t.contactForm.managedBy}: ${d.managedBy}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
+                      {(
+                        [
+                          d.registrar ? [t.contactForm.registrar, d.registrar] : null,
+                          d.dnsProvider ? [t.contactForm.dnsProvider, d.dnsProvider] : null,
+                          d.expiryDate ? [t.contactForm.expiryDate, format(d.expiryDate, "PP", { locale: dateLocale })] : null,
+                          d.managedBy ? [t.contactForm.managedBy, d.managedBy] : null,
+                        ].filter(Boolean) as [string, string][]
+                      ).map(([label, value], i) => (
+                        <span key={label}>
+                          {i > 0 && " · "}
+                          <span className="font-bold uppercase tracking-wide text-ink">{label}:</span> {value}
+                        </span>
+                      ))}
+                      {d.autoRenew && (
+                        <>
+                          {(d.registrar || d.dnsProvider || d.expiryDate || d.managedBy) && " · "}
+                          {t.contactForm.autoRenew}
+                        </>
+                      )}
                     </p>
                     {d.notes && <p className="text-xs text-soft">{d.notes}</p>}
                   </li>
