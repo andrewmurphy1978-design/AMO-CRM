@@ -821,6 +821,7 @@ model Project {
   id          String        @id @default(cuid())
   name        String
   description String?       @db.Text
+  notes       String?       @db.Text
   status      ProjectStatus @default(PLANNING)
   type        ProjectType   @default(OTHER)
 
@@ -891,6 +892,7 @@ model ProjectPhase {
   startDate     DateTime?
   dueDate       DateTime?
   description   String?       @db.Text
+  notes       String?       @db.Text
   createdAt     DateTime      @default(now())
 
   tasks Task[]

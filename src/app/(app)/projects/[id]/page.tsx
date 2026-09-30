@@ -12,7 +12,7 @@ import TasksCard, { type TaskCardItem } from "./tasks-card";
 import NewInvoiceButton from "./new-invoice-button";
 import NewEmailButton from "../../contacts/[id]/new-email-button";
 import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
-import { updateProjectGeneral, updateProjectNotes } from "@/actions/projects";
+import { updateProjectGeneral, updateProjectNotes, updatePhaseNotes } from "@/actions/projects";
 import { getTwilioConfig, contactPhoneOptions } from "@/lib/twilio";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken } from "@/lib/google";
@@ -304,6 +304,7 @@ export default async function ProjectDetailPage({
                   teamMemberIds: project.teamMembers.map((tm) => tm.userId),
                   startDate: toDateInput(project.startDate),
                   dueDate: toDateInput(project.dueDate),
+                  description: project.description ?? "",
                 }}
               />
             }
@@ -350,6 +351,13 @@ export default async function ProjectDetailPage({
                 <p className="mt-1 text-sm text-ink">{project.dueDate ? longDate(project.dueDate, lang, dateLocale) : "—"}</p>
               </div>
             </div>
+
+            {project.description && (
+              <div className="mt-4">
+                <p className={LABEL_CLASS}>{t.projectForm.description}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{project.description}</p>
+              </div>
+            )}
           </Card>
 
           <PhasesCard
@@ -360,6 +368,36 @@ export default async function ProjectDetailPage({
             selectedPhaseId={selectedPhaseId ?? null}
             lang={lang}
           />
+
+          <Card
+            color="notes"
+            title={
+              <>
+                {t.projectDetail.notesTitle}
+                {selectedPhase && <span className="truncate text-xs font-medium normal-case opacity-90">· {selectedPhase.name}</span>}
+              </>
+            }
+            compact
+            actions={
+              selectedPhase ? (
+                <ProjectNotesDialog
+                  key={selectedPhase.id}
+                  action={updatePhaseNotes.bind(null, project.id, selectedPhase.id)}
+                  notes={selectedPhase.notes ?? ""}
+                  title={`${t.projectDetail.notesTitle} · ${selectedPhase.name}`}
+                  lang={lang}
+                />
+              ) : (
+                <ProjectNotesDialog action={updateProjectNotes.bind(null, project.id)} notes={project.notes ?? ""} lang={lang} />
+              )
+            }
+          >
+            {(selectedPhase ? selectedPhase.notes : project.notes) ? (
+              <p className="whitespace-pre-wrap text-sm text-ink">{selectedPhase ? selectedPhase.notes : project.notes}</p>
+            ) : (
+              <p className="text-sm text-soft">{t.projectDetail.noNotesYet}</p>
+            )}
+          </Card>
 
           <TasksCard
             projectId={project.id}
@@ -547,19 +585,6 @@ export default async function ProjectDetailPage({
                   </li>
                 ))}
               </ul>
-            )}
-          </Card>
-
-          <Card
-            color="notes"
-            title={t.projectDetail.notesTitle}
-            compact
-            actions={<ProjectNotesDialog action={updateProjectNotes.bind(null, project.id)} description={project.description ?? ""} lang={lang} />}
-          >
-            {project.description ? (
-              <p className="whitespace-pre-wrap text-sm text-ink">{project.description}</p>
-            ) : (
-              <p className="text-sm text-soft">{t.projectDetail.noNotesYet}</p>
             )}
           </Card>
         </div>

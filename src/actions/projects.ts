@@ -247,7 +247,7 @@ export async function deleteProject(projectId: string) {
 }
 
 // The General Info dialog on the project page: everything about the project
-// itself except its notes/description (own dialog) and phases (own dialog).
+// itself except its notes (own dialog) and phases (own dialog).
 export async function updateProjectGeneral(
   projectId: string,
   _prevState: { error?: string; success?: string } | undefined,
@@ -259,8 +259,9 @@ export async function updateProjectGeneral(
 
   let data;
   try {
-    data = ProjectSchema.omit({ description: true }).parse({
+    data = ProjectSchema.parse({
       name: String(formData.get("name") ?? "").trim(),
+      description: String(formData.get("description") ?? "").trim() || undefined,
       contactId: String(formData.get("contactId") ?? ""),
       status: String(formData.get("status") ?? "PLANNING"),
       type: String(formData.get("type") ?? "OTHER"),
@@ -280,6 +281,7 @@ export async function updateProjectGeneral(
       where: { id: projectId },
       data: {
         name: data.name,
+        description: data.description || null,
         contactId: data.contactId,
         status: data.status,
         type: data.type,
@@ -310,8 +312,26 @@ export async function updateProjectNotes(
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
-  const description = String(formData.get("description") ?? "").trim();
-  await withScopedPrismaClient((db) => db.project.update({ where: { id: projectId }, data: { description: description || null } }));
+  const notes = String(formData.get("notes") ?? "").trim();
+  await withScopedPrismaClient((db) => db.project.update({ where: { id: projectId }, data: { notes: notes || null } }));
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: t.actions.projectUpdated };
+}
+
+// The same Notes card, when a phase is selected: that phase's own notes.
+export async function updatePhaseNotes(
+  projectId: string,
+  phaseId: string,
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const notes = String(formData.get("notes") ?? "").trim();
+  await withScopedPrismaClient((db) => db.projectPhase.updateMany({ where: { id: phaseId, projectId }, data: { notes: notes || null } }));
 
   revalidatePath(`/projects/${projectId}`);
   return { success: t.actions.projectUpdated };

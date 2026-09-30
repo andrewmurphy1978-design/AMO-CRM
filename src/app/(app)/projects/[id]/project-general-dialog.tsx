@@ -19,6 +19,7 @@ export interface ProjectGeneralValues {
   teamMemberIds: string[];
   startDate: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD
+  description: string;
 }
 
 // The project page's General Info card dialog: name, status, type, client,
@@ -142,6 +143,10 @@ export default function ProjectGeneralDialog({
             <label className={LABEL_CLASS}>{t.projectForm.dueDate}</label>
             <input type="date" name="dueDate" defaultValue={values.dueDate} className={FIELD_CLASS} />
           </div>
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>{t.projectForm.description}</label>
+          <textarea name="description" rows={4} defaultValue={values.description} className={FIELD_CLASS} />
         </div>
       </SectionDialog>
     </>
