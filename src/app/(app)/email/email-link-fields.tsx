@@ -32,6 +32,27 @@ export interface EmailLinkConfig {
   onSaved: (values: LinkValues) => void;
 }
 
+// Builds the "Linked to" chain (contact › project › phase › task › program)
+// for a set of chosen ids, from the option lists in a config.
+export function linkTargetFor(
+  config: Pick<EmailLinkConfig, "contacts" | "projects" | "tasks" | "phases" | "programs">,
+  values: LinkValues
+): EmailLinkTarget | null {
+  const nameOf = (list: LinkOption[] | undefined, id: string | undefined) => (id ? list?.find((o) => o.id === id)?.label : undefined);
+  const chain: { name: string; href: string }[] = [];
+  const contact = nameOf(config.contacts, values.contactId);
+  const project = nameOf(config.projects, values.projectId);
+  const phase = nameOf(config.phases, values.phaseId);
+  const task = nameOf(config.tasks, values.taskId);
+  const program = nameOf(config.programs, values.affiliateProgramId);
+  if (contact) chain.push({ name: contact, href: `/contacts/${values.contactId}` });
+  if (project) chain.push({ name: project, href: `/projects/${values.projectId}` });
+  if (phase) chain.push({ name: phase, href: `/projects/${values.projectId}` });
+  if (task) chain.push({ name: task, href: `/projects/${values.projectId}/tasks/${values.taskId}/edit` });
+  if (program) chain.push({ name: program, href: `/marketing#${values.affiliateProgramId}` });
+  return chain.length > 0 ? { ...chain[0], also: chain.slice(1) } : null;
+}
+
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
@@ -133,7 +154,9 @@ export function EmailLinkEditor({ config, onDone }: { config: EmailLinkConfig; o
   function save() {
     startTransition(async () => {
       const values: LinkValues = { contactId, projectId, phaseId, taskId, bookingId: "", affiliateProgramId: programId };
-      await saveEmailLink(
+      // A brand-new email has no thread yet (empty threadId): the choice is
+      // just handed back and saved once the message is sent.
+      if (config.threadId) await saveEmailLink(
         config.threadId,
         { contactId: values.contactId, projectId: values.projectId, phaseId: values.phaseId, taskId: values.taskId, affiliateProgramId: values.affiliateProgramId },
         { subject: config.subject, fromLabel: config.fromLabel, date: config.date, link: config.link, myAddress: config.myAddress }

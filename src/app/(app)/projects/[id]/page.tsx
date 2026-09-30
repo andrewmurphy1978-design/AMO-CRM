@@ -212,6 +212,32 @@ export default async function ProjectDetailPage({
   const clientEmail = project.contact.email ?? project.contact.email2 ?? project.contact.extraEmails[0] ?? null;
   const namedContact = { id: project.contact.id, name: clientName || "—" };
 
+  const emailLinkOptions = {
+    contacts: calendarContactOptions,
+    projects: calendarProjectOptions,
+    tasks: calendarTaskOptions,
+    phases: calendarPhaseOptions,
+    programs: calendarProgramOptions,
+    labels: {
+      link: t.linkPicker.link,
+      edit: t.linkPicker.edit,
+      none: t.linkPicker.none,
+      contact: t.linkPicker.contact,
+      project: t.linkPicker.project,
+      task: t.linkPicker.task,
+      phase: t.linkPicker.phase,
+      booking: t.linkPicker.booking,
+      affiliateProgram: t.linkPicker.affiliateProgram,
+      save: t.linkPicker.save,
+      saving: t.linkPicker.saving,
+      cancel: t.linkPicker.cancel,
+      clear: t.linkPicker.clear,
+      title: t.linkPicker.titleWithAffiliateProgram,
+      searchPlaceholder: t.linkPicker.searchPlaceholder,
+      noResults: t.linkPicker.noResults,
+    },
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -356,6 +382,8 @@ export default async function ProjectDetailPage({
                 hour12={hour12}
                 emailComposeLabels={t.emailCompose}
                 title={t.emailCompose.newTitle}
+                linkOptions={emailLinkOptions}
+                defaultLink={{ contactId: project.contactId, projectId: project.id }}
               />
             }
           >
@@ -374,31 +402,7 @@ export default async function ProjectDetailPage({
                 taskId: link.taskId,
                 affiliateProgramId: link.affiliateProgramId,
               }))}
-              linkOptions={{
-                contacts: calendarContactOptions,
-                projects: calendarProjectOptions,
-                tasks: calendarTaskOptions,
-                phases: calendarPhaseOptions,
-                programs: calendarProgramOptions,
-                labels: {
-                  link: t.linkPicker.link,
-                  edit: t.linkPicker.edit,
-                  none: t.linkPicker.none,
-                  contact: t.linkPicker.contact,
-                  project: t.linkPicker.project,
-                  task: t.linkPicker.task,
-                  phase: t.linkPicker.phase,
-                  booking: t.linkPicker.booking,
-                  affiliateProgram: t.linkPicker.affiliateProgram,
-                  save: t.linkPicker.save,
-                  saving: t.linkPicker.saving,
-                  cancel: t.linkPicker.cancel,
-                  clear: t.linkPicker.clear,
-                  title: t.linkPicker.titleWithAffiliateProgram,
-                  searchPlaceholder: t.linkPicker.searchPlaceholder,
-                  noResults: t.linkPicker.noResults,
-                },
-              }}
+              linkOptions={emailLinkOptions}
               addressColors={addressColors}
               noLinkedEmailsLabel={t.contactDetail.noLinkedEmails}
               lang={lang}

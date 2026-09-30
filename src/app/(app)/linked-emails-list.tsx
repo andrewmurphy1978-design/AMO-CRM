@@ -75,6 +75,8 @@ export default function LinkedEmailsList({
   // section (and can re-link the thread); without it that section is hidden.
   linkOptions?: LinkedEmailsLinkOptions;
 }) {
+  const noSubjectLabel = lang === "fr" ? "(Sans objet)" : "(No subject)";
+  const noSubjectHint = lang === "fr" ? "Cliquez pour charger les détails" : "Click to load details";
   const dateLocale = getDateLocale(lang);
   const router = useRouter();
   const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
@@ -154,10 +156,10 @@ export default function LinkedEmailsList({
                 className="flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left hover:brightness-95"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink">{link.subject || "—"}</p>
+                  <p className="truncate text-sm font-medium text-ink">{link.subject || noSubjectLabel}</p>
                   <p className="flex min-w-0 items-center gap-1.5 truncate text-xs text-soft">
                     {dotColor && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: dotColor }} title={link.myAddress ?? undefined} />}
-                    <span className="truncate">{link.fromLabel}</span>
+                    <span className="truncate">{link.fromLabel || (link.subject ? "" : noSubjectHint)}</span>
                   </p>
                 </div>
                 {date && (

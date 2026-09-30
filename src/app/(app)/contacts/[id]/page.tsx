@@ -641,6 +641,32 @@ export default async function ContactDetailPage({
   // columns desktop has room for.
   const jurisdictionMobile = [contact.jurisdictionRegion, contact.jurisdictionCountry].filter(Boolean).join(" ") || undefined;
 
+  const emailLinkOptions = {
+    contacts: calendarContactOptions,
+    projects: calendarProjectOptions,
+    tasks: calendarTaskOptions,
+    phases: calendarPhaseOptions,
+    programs: calendarProgramOptions,
+    labels: {
+      link: t.linkPicker.link,
+      edit: t.linkPicker.edit,
+      none: t.linkPicker.none,
+      contact: t.linkPicker.contact,
+      project: t.linkPicker.project,
+      task: t.linkPicker.task,
+      phase: t.linkPicker.phase,
+      booking: t.linkPicker.booking,
+      affiliateProgram: t.linkPicker.affiliateProgram,
+      save: t.linkPicker.save,
+      saving: t.linkPicker.saving,
+      cancel: t.linkPicker.cancel,
+      clear: t.linkPicker.clear,
+      title: t.linkPicker.titleWithAffiliateProgram,
+      searchPlaceholder: t.linkPicker.searchPlaceholder,
+      noResults: t.linkPicker.noResults,
+    },
+  };
+
   return (
     // Mobile: main's own p-4 (see app-shell.tsx) puts a 16px gap between
     // this page's cards and both the sidebar and the right edge of the
@@ -1312,6 +1338,8 @@ export default async function ContactDetailPage({
                 hour12={hour12}
                 emailComposeLabels={t.emailCompose}
                 title={t.emailCompose.newTitle}
+                linkOptions={emailLinkOptions}
+                defaultLink={{ contactId: contact.id }}
               />
             }
           >
@@ -1330,31 +1358,7 @@ export default async function ContactDetailPage({
                 taskId: link.taskId,
                 affiliateProgramId: link.affiliateProgramId,
               }))}
-              linkOptions={{
-                contacts: calendarContactOptions,
-                projects: calendarProjectOptions,
-                tasks: calendarTaskOptions,
-                phases: calendarPhaseOptions,
-                programs: calendarProgramOptions,
-                labels: {
-                  link: t.linkPicker.link,
-                  edit: t.linkPicker.edit,
-                  none: t.linkPicker.none,
-                  contact: t.linkPicker.contact,
-                  project: t.linkPicker.project,
-                  task: t.linkPicker.task,
-                  phase: t.linkPicker.phase,
-                  booking: t.linkPicker.booking,
-                  affiliateProgram: t.linkPicker.affiliateProgram,
-                  save: t.linkPicker.save,
-                  saving: t.linkPicker.saving,
-                  cancel: t.linkPicker.cancel,
-                  clear: t.linkPicker.clear,
-                  title: t.linkPicker.titleWithAffiliateProgram,
-                  searchPlaceholder: t.linkPicker.searchPlaceholder,
-                  noResults: t.linkPicker.noResults,
-                },
-              }}
+              linkOptions={emailLinkOptions}
               addressColors={addressColors}
               noLinkedEmailsLabel={t.contactDetail.noLinkedEmails}
               lang={lang}

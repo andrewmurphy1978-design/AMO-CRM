@@ -181,6 +181,19 @@ export async function fetchEmailDetail(id: string): Promise<EmailDetail | { erro
     if (!original) return { error: "not_found" };
 
     const { parsed, threadId, source } = original;
+    // Links saved before snapshots were kept have no subject/sender/date:
+    // opening the message is the moment we can fill them in.
+    await db.emailLink
+      .updateMany({
+        where: { gmailThreadId: threadId, subject: null },
+        data: {
+          subject: parsed.subject || "(No subject)",
+          fromLabel: parsed.from.name ? `${parsed.from.name} <${parsed.from.email}>` : parsed.from.email,
+          messageDate: parsed.date ? new Date(parsed.date) : undefined,
+          gmailLink: `https://mail.google.com/mail/u/0/#all/${threadId}`,
+        },
+      })
+      .catch(() => undefined);
     const replyIdentity = resolveReplyIdentity(
       { to: parsed.to.map((a) => a.email), cc: parsed.cc.map((a) => a.email), deliveredTo: parsed.deliveredTo },
       source,
@@ -229,7 +242,7 @@ export interface SendEmailInput {
 // message's own headers via resolveReplyIdentity, the same rule
 // fetchEmailDetail used to show it in the first place, so a stale or
 // tampered client value can't send from the wrong address.
-export async function sendEmailAction(input: SendEmailInput): Promise<{ error: string } | { success: true }> {
+export async function sendEmailAction(input: SendEmailInput): Promise<{ error: string } | { success: true; threadId?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -307,7 +320,7 @@ export async function sendEmailAction(input: SendEmailInput): Promise<{ error: s
 
     const result = await sendGmailMessage(accessToken, raw, input.threadId ?? undefined);
     if ("error" in result) return { error: result.error };
-    return { success: true };
+    return { success: true, threadId: result.threadId };
   });
 }
 

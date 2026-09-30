@@ -5,6 +5,7 @@ import clsx from "@/lib/clsx";
 import { format, type Locale } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
 import RichTextarea from "@/components/rich-textarea";
+import { saveEmailLink } from "@/actions/links";
 import { sendEmailAction } from "@/actions/email-messages";
 import type { EmailDetail } from "@/actions/email-messages";
 import { sendDraftAction, discardDraftAction, createDraftAction, type DraftSource } from "@/actions/email-drafts";
@@ -12,8 +13,8 @@ import { resolveComposeSignatureAction, type ComposeSignatureMode } from "@/acti
 import { buildQuotedReply } from "@/lib/mail/mime-build";
 import type { MailIdentity, MailSource } from "@/lib/mail/identity";
 import { NO_ADDRESS_COLOR, contrastTextColor } from "@/lib/email-address-match";
-import { EmailLinkSummary, EmailLinkEditor, type EmailLinkConfig } from "./email-link-fields";
-import { buildAddressBook, type AddressBookEntry, type LinkOption } from "../link-dialog";
+import { EmailLinkSummary, EmailLinkEditor, linkTargetFor, type EmailLinkConfig } from "./email-link-fields";
+import { buildAddressBook, type AddressBookEntry, type LinkOption, type LinkValues } from "../link-dialog";
 
 export type ComposeMode = "reply" | "replyAll" | "forward" | "draft" | "new";
 
@@ -307,11 +308,15 @@ export default function EmailComposeDialog({
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const [linkExpanded, setLinkExpanded] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  // For a brand-new email (no thread yet) the Linked-to choice is held here
+  // until the message is sent, then saved against the thread Gmail returns.
+  const [deferredLink, setDeferredLink] = useState<LinkValues | null>(null);
 
   useEffect(() => {
     if (!target) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLinkExpanded(false);
+    setDeferredLink(null);
     setShowBcc(false);
     setBcc("");
     setHtml("");
@@ -455,6 +460,21 @@ export default function EmailComposeDialog({
       }
       return;
     }
+    const chosen = deferredLink ?? (target.mode === "new" && target.linkConfig && !target.linkConfig.threadId ? target.linkConfig.initial : null);
+    const sentThreadId = "threadId" in result && typeof result.threadId === "string" ? result.threadId : null;
+    if (chosen && sentThreadId && (chosen.contactId || chosen.projectId || chosen.taskId || chosen.affiliateProgramId)) {
+      await saveEmailLink(
+        sentThreadId,
+        { contactId: chosen.contactId, projectId: chosen.projectId, phaseId: chosen.phaseId, taskId: chosen.taskId, affiliateProgramId: chosen.affiliateProgramId },
+        {
+          subject,
+          fromLabel: toList.join(", "),
+          date: new Date().toISOString(),
+          link: `https://mail.google.com/mail/u/0/#all/${sentThreadId}`,
+          myAddress: fromIdentity?.accountAddress ?? null,
+        }
+      ).catch(() => undefined);
+    }
     onSent();
   }
 
@@ -492,6 +512,15 @@ export default function EmailComposeDialog({
     (onDiscarded ?? onSent)();
   }
 
+  const linkConfig: EmailLinkConfig | undefined =
+    target.linkConfig && !target.linkConfig.threadId
+      ? {
+          ...target.linkConfig,
+          initial: deferredLink ?? target.linkConfig.initial,
+          current: linkTargetFor(target.linkConfig, deferredLink ?? target.linkConfig.initial),
+          onSaved: (values) => setDeferredLink(values),
+        }
+      : target.linkConfig;
   const color = target.dotColor || NO_ADDRESS_COLOR;
   const fg = contrastTextColor(color);
   // fg is only ever black or white (contrastTextColor's whole job) — this
@@ -650,12 +679,12 @@ export default function EmailComposeDialog({
 
             <div className="flex items-start justify-between gap-3 border-t border-card-border pt-2">
               <div className="min-w-0 flex-1">
-                {target.linkConfig && (
+                {linkConfig && (
                   <EmailLinkSummary
-                    current={target.linkConfig.current}
-                    linkLabel={target.linkConfig.labels.link}
-                    noneLabel={target.linkConfig.labels.none}
-                    editLabel={target.linkConfig.labels.edit}
+                    current={linkConfig.current}
+                    linkLabel={linkConfig.labels.link}
+                    noneLabel={linkConfig.labels.none}
+                    editLabel={linkConfig.labels.edit}
                     onEdit={() => setLinkExpanded((v) => !v)}
                   />
                 )}
@@ -696,9 +725,9 @@ export default function EmailComposeDialog({
 
             {/* Opens in place, pushing the body down — same treatment as
                 the Read Email dialog's own link editor. */}
-            {linkExpanded && target.linkConfig && (
+            {linkExpanded && linkConfig && (
               <div className="border-t border-card-border pt-2">
-                <EmailLinkEditor config={target.linkConfig} onDone={() => setLinkExpanded(false)} />
+                <EmailLinkEditor config={linkConfig} onDone={() => setLinkExpanded(false)} />
               </div>
             )}
           </div>
