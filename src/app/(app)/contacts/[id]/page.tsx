@@ -26,6 +26,7 @@ import LocalTimeCard from "@/components/local-time-card";
 import LinkedEmailsList from "../../linked-emails-list";
 import ContactCredentialsCard from "./contact-credentials-card";
 import ContactEmailLinks from "./contact-email-links";
+import NewEmailButton from "./new-email-button";
 import { CONTACT_SYNC_APPS } from "@/lib/contact-sync";
 import { reciprocalRelationType } from "@/lib/contact-form-fields";
 import { telHref, messagingAppLink, voipAppLink } from "@/lib/app-deep-links";
@@ -1241,6 +1242,17 @@ export default async function ContactDetailPage({
               </>
             }
             compact
+            actions={
+              <NewEmailButton
+                email={contact.email ?? contact.email2 ?? contact.extraEmails[0] ?? null}
+                defaultComposeSource={defaultComposeSource}
+                lang={lang}
+                intlLocale={intlLocale}
+                hour12={hour12}
+                emailComposeLabels={t.emailCompose}
+                title={t.emailCompose.newTitle}
+              />
+            }
           >
             <LinkedEmailsList
               emailLinks={contact.emailLinks.map((link) => ({
@@ -1251,7 +1263,34 @@ export default async function ContactDetailPage({
                 messageDate: link.messageDate ? link.messageDate.toISOString() : null,
                 gmailLink: link.gmailLink,
                 myAddress: link.myAddress,
+                contactId: link.contactId,
+                projectId: link.projectId,
+                taskId: link.taskId,
+                affiliateProgramId: link.affiliateProgramId,
               }))}
+              linkOptions={{
+                contacts: calendarContactOptions,
+                projects: calendarProjectOptions,
+                tasks: calendarTaskOptions,
+                programs: calendarProgramOptions,
+                labels: {
+                  link: t.linkPicker.link,
+                  edit: t.linkPicker.edit,
+                  none: t.linkPicker.none,
+                  contact: t.linkPicker.contact,
+                  project: t.linkPicker.project,
+                  task: t.linkPicker.task,
+                  booking: t.linkPicker.booking,
+                  affiliateProgram: t.linkPicker.affiliateProgram,
+                  save: t.linkPicker.save,
+                  saving: t.linkPicker.saving,
+                  cancel: t.linkPicker.cancel,
+                  clear: t.linkPicker.clear,
+                  title: t.linkPicker.titleWithAffiliateProgram,
+                  searchPlaceholder: t.linkPicker.searchPlaceholder,
+                  noResults: t.linkPicker.noResults,
+                },
+              }}
               addressColors={addressColors}
               noLinkedEmailsLabel={t.contactDetail.noLinkedEmails}
               lang={lang}

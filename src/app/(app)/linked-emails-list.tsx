@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { formatClockTime } from "@/lib/calendar-time";
 import type { Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { EmailDetail } from "@/actions/email-messages";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email/email-dialog";
+import type { EmailLinkConfig } from "./email/email-link-fields";
+import type { LinkOption, LinkDialogLabels, LinkValues } from "./link-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email/email-compose-dialog";
 import { colorForAddress, resolveEmailAddressColor, type EmailAddressColorEntry } from "@/lib/email-address-match";
 
@@ -18,6 +21,20 @@ export interface LinkedEmailRow {
   messageDate: string | null; // ISO
   gmailLink: string | null;
   myAddress: string | null;
+  // Which CRM records the thread is linked to — lets the Email dialog show
+  // (and edit) its "Linked to" section.
+  contactId?: string | null;
+  projectId?: string | null;
+  taskId?: string | null;
+  affiliateProgramId?: string | null;
+}
+
+export interface LinkedEmailsLinkOptions {
+  contacts: LinkOption[];
+  projects: LinkOption[];
+  tasks: LinkOption[];
+  programs: LinkOption[];
+  labels: LinkDialogLabels;
 }
 
 // The "Linked emails" card's row list, shared by the Contact and Affiliate
@@ -38,6 +55,7 @@ export default function LinkedEmailsList({
   hour12,
   emailDialogLabels,
   emailComposeLabels,
+  linkOptions,
 }: {
   emailLinks: LinkedEmailRow[];
   addressColors: EmailAddressColorEntry[];
@@ -51,10 +69,59 @@ export default function LinkedEmailsList({
   hour12: boolean;
   emailDialogLabels: EmailDialogLabels;
   emailComposeLabels: EmailComposeLabels;
+  // When given, the Email dialog opened from a row gets its "Linked to"
+  // section (and can re-link the thread); without it that section is hidden.
+  linkOptions?: LinkedEmailsLinkOptions;
 }) {
   const dateLocale = getDateLocale(lang);
+  const router = useRouter();
   const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
   const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
+
+  function currentLinkFor(values: LinkValues): { name: string; href: string } | null {
+    if (!linkOptions) return null;
+    const nameOf = (list: LinkOption[], id: string) => list.find((o) => o.id === id)?.label;
+    if (values.contactId) return { name: nameOf(linkOptions.contacts, values.contactId) ?? "", href: `/contacts/${values.contactId}` };
+    if (values.projectId) return { name: nameOf(linkOptions.projects, values.projectId) ?? "", href: `/projects/${values.projectId}` };
+    if (values.affiliateProgramId) return { name: nameOf(linkOptions.programs, values.affiliateProgramId) ?? "", href: `/marketing#${values.affiliateProgramId}` };
+    if (values.taskId) return { name: nameOf(linkOptions.tasks, values.taskId) ?? "", href: `/projects/${values.projectId}/tasks/${values.taskId}/edit` };
+    return null;
+  }
+
+  function buildLinkConfig(link: LinkedEmailRow): EmailLinkConfig | undefined {
+    if (!linkOptions) return undefined;
+    const initial: LinkValues = {
+      contactId: link.contactId ?? "",
+      projectId: link.projectId ?? "",
+      taskId: link.taskId ?? "",
+      bookingId: "",
+      affiliateProgramId: link.affiliateProgramId ?? "",
+    };
+    return {
+      threadId: link.gmailThreadId,
+      subject: link.subject ?? "",
+      fromLabel: link.fromLabel ?? "",
+      date: link.messageDate ?? new Date().toISOString(),
+      link: link.gmailLink ?? "",
+      myAddress: link.myAddress,
+      contacts: linkOptions.contacts,
+      projects: linkOptions.projects,
+      tasks: linkOptions.tasks,
+      programs: linkOptions.programs,
+      initial,
+      current: currentLinkFor(initial),
+      labels: linkOptions.labels,
+      onSaved: (values) => {
+        const current = currentLinkFor(values);
+        setOpenMessage((prev) =>
+          prev && prev.linkConfig?.threadId === link.gmailThreadId ? { ...prev, linkConfig: { ...prev.linkConfig, current, initial: values } } : prev
+        );
+        // A row re-linked away from this page's record should drop out of
+        // the list — the server re-renders it.
+        router.refresh();
+      },
+    };
+  }
 
   if (emailLinks.length === 0) {
     return <p className="text-sm text-soft">{noLinkedEmailsLabel}</p>;
@@ -70,7 +137,7 @@ export default function LinkedEmailsList({
             <li key={link.id} style={{ backgroundColor: i % 2 === 0 ? "#fdf4ff" : "#fae8ff" }}>
               <button
                 type="button"
-                onClick={() => setOpenMessage({ id: link.gmailThreadId, link: link.gmailLink ?? "", dotColor })}
+                onClick={() => setOpenMessage({ id: link.gmailThreadId, link: link.gmailLink ?? "", dotColor, linkConfig: buildLinkConfig(link) })}
                 className="flex w-full min-w-0 items-start gap-3 px-3 py-2 text-left hover:brightness-95"
               >
                 <div className="min-w-0 flex-1">
@@ -97,12 +164,13 @@ export default function LinkedEmailsList({
         target={openMessage}
         onClose={() => setOpenMessage(null)}
         onReply={(detail: EmailDetail, mode: ComposeMode) => {
+          const replyLinkConfig = openMessage?.linkConfig;
           setOpenMessage(null);
           const dotColor = resolveEmailAddressColor(
             { deliveredTo: detail.deliveredTo, toRaw: [...detail.to, ...detail.cc].join(", ") },
             addressColors
           );
-          setComposeTarget({ message: detail, mode, dotColor });
+          setComposeTarget({ message: detail, mode, dotColor, linkConfig: replyLinkConfig });
         }}
         dateLocale={dateLocale}
         intlLocale={intlLocale}

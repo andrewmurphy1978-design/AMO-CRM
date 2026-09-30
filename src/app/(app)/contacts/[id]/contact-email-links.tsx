@@ -6,6 +6,40 @@ import { listMailIdentitiesAction } from "@/actions/email-messages";
 import type { MailSource } from "@/lib/mail/identity";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget } from "../../email/email-compose-dialog";
 
+// The blank "New email" compose target prefilled with one recipient — shared
+// by the address links above and the Linked emails card's + button. Best-
+// effort, same as the Email page's own openNewCompose: a failed identity
+// lookup just leaves the click a no-op.
+export async function buildNewComposeTarget(email: string, defaultComposeSource: string | null): Promise<EmailComposeTarget | null> {
+  try {
+    const identities = await listMailIdentitiesAction();
+    if (identities.length === 0) return null;
+    const identity = (defaultComposeSource && identities.find((id) => id.source === (defaultComposeSource as MailSource))) || identities[0];
+    return {
+      message: {
+        id: "",
+        threadId: "",
+        subject: "",
+        from: { name: identity.displayName ?? "", email: identity.accountAddress },
+        to: [email],
+        cc: [],
+        date: null,
+        html: null,
+        text: null,
+        attachments: [],
+        messageIdHeader: null,
+        references: [],
+        replyIdentity: identity,
+        deliveredTo: identity.accountAddress,
+        availableIdentities: identities,
+      },
+      mode: "new",
+    };
+  } catch {
+    return null;
+  }
+}
+
 // The Contact Info card's email addresses — a Client Component (unlike the
 // page itself) specifically so clicking one can open the same "New email"
 // compose flow the Email page's own openNewCompose() button uses, prefilled
@@ -30,34 +64,8 @@ export default function ContactEmailLinks({
   const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
 
   async function openCompose(email: string) {
-    try {
-      const identities = await listMailIdentitiesAction();
-      if (identities.length === 0) return;
-      const identity = (defaultComposeSource && identities.find((id) => id.source === (defaultComposeSource as MailSource))) || identities[0];
-      setComposeTarget({
-        message: {
-          id: "",
-          threadId: "",
-          subject: "",
-          from: { name: identity.displayName ?? "", email: identity.accountAddress },
-          to: [email],
-          cc: [],
-          date: null,
-          html: null,
-          text: null,
-          attachments: [],
-          messageIdHeader: null,
-          references: [],
-          replyIdentity: identity,
-          deliveredTo: identity.accountAddress,
-          availableIdentities: identities,
-        },
-        mode: "new",
-      });
-    } catch {
-      // Best-effort, same as the Email page's own openNewCompose — a failed
-      // identity lookup just leaves the click a no-op.
-    }
+    const target = await buildNewComposeTarget(email, defaultComposeSource);
+    if (target) setComposeTarget(target);
   }
 
   return (
