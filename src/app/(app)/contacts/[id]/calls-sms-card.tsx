@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteInteraction, saveContactInteraction } from "@/actions/interactions";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -93,6 +93,22 @@ export default function CallsSmsCard({
   const t = getDict(lang);
   const [dialog, setDialog] = useState<{ entry: CallsSmsEntry | null; key: number } | null>(null);
   const [counter, setCounter] = useState(0);
+  const router = useRouter();
+
+  // A text still on its way out (queued/sending/sent) gets its final status
+  // from Twilio a moment later — re-read the page every few seconds until
+  // that lands, for at most a minute, so it updates without a manual reload.
+  const inFlight = entries.some((e) => e.direction === "OUTBOUND" && ["queued", "accepted", "sending", "sent"].includes(e.deliveryStatus ?? ""));
+  useEffect(() => {
+    if (!inFlight) return;
+    let ticks = 0;
+    const timer = setInterval(() => {
+      ticks += 1;
+      router.refresh();
+      if (ticks >= 15) clearInterval(timer);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [inFlight, router]);
 
   const typeLabels: Record<string, string> = {
     CALL: t.callsSms.typeCall,
