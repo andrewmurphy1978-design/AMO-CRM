@@ -122,6 +122,7 @@ export function CallsSmsDialog({
   lang,
   typeLabels,
   defaultProjectId,
+  defaultPhaseId,
   onClose,
 }: {
   entry: CallsSmsEntry | null;
@@ -142,6 +143,7 @@ export function CallsSmsDialog({
   typeLabels: Record<string, string>;
   // Project a NEW entry starts linked to (the project page's Calls & SMS card).
   defaultProjectId?: string;
+  defaultPhaseId?: string;
   onClose: () => void;
 }) {
   const t = getDict(lang);
@@ -175,7 +177,7 @@ export function CallsSmsDialog({
   const [contactSearch, setContactSearch] = useState("");
   const effectiveContactId = baseContactId ?? (pickedContactId || null);
   const [projectId, setProjectId] = useState(entry?.projectId ?? defaultProjectId ?? "");
-  const [phaseId, setPhaseId] = useState(entry?.phaseId ?? "");
+  const [phaseId, setPhaseId] = useState(entry?.phaseId ?? defaultPhaseId ?? "");
   const [taskId, setTaskId] = useState(entry?.taskId ?? "");
   const projectChoices = linkData.projects.filter((p) => effectiveContactId && p.contactId === effectiveContactId);
   const phaseChoices = projectId ? linkData.phases.filter((p) => p.projectId === projectId) : [];

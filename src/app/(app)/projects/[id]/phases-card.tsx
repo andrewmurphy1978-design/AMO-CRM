@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import Card, { CARD_COLORS } from "@/components/section-card";
 import { EditCardButton } from "../../contacts/[id]/section-dialog";
@@ -22,19 +22,27 @@ export default function PhasesCard({
   phases,
   users,
   defaultTeamMemberIds,
+  selectedPhaseId,
   lang,
 }: {
   projectId: string;
   phases: PhaseRowData[];
   users: { id: string; name: string }[];
   defaultTeamMemberIds: string[];
+  selectedPhaseId: string | null;
   lang: Lang;
 }) {
   const t = getDict(lang);
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const fmt = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { dateStyle: "medium" }) : "—");
   const names = (ids: string[]) => ids.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean).join(", ") || "—";
+
+  // Click a phase to focus the page on it; click it again to see everything.
+  function selectPhase(id: string) {
+    router.push(id === selectedPhaseId ? pathname : `${pathname}?phase=${id}`, { scroll: false });
+  }
 
   function close() {
     setOpen(false);
@@ -55,6 +63,14 @@ export default function PhasesCard({
       compact
       actions={<EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />}
     >
+      {selectedPhaseId && (
+        <p className="mb-2 flex items-center gap-2 text-xs text-soft">
+          {lang === "fr" ? "Page filtrée sur la phase sélectionnée." : "Page filtered to the selected phase."}
+          <button type="button" onClick={() => selectPhase(selectedPhaseId)} className="font-semibold text-emerald-700 hover:underline">
+            {lang === "fr" ? "Tout afficher" : "Show all"}
+          </button>
+        </p>
+      )}
       {phases.length === 0 ? (
         <p className="text-sm text-soft">{t.projectForm.noPhasesYet}</p>
       ) : (
@@ -73,7 +89,12 @@ export default function PhasesCard({
             </thead>
             <tbody className="divide-y divide-card-border">
               {phases.map((phase) => (
-                <tr key={phase.id} className="text-ink">
+                <tr
+                  key={phase.id}
+                  onClick={() => selectPhase(phase.id)}
+                  title={lang === "fr" ? "Filtrer la page sur cette phase" : "Show only this phase on the page"}
+                  className={`cursor-pointer text-ink hover:bg-black/5 ${phase.id === selectedPhaseId ? "bg-amo-lime/15 outline outline-2 -outline-offset-2 outline-amo-lime" : ""}`}
+                >
                   <td className="px-3 py-2 font-medium">{phase.name}</td>
                   <td className="px-3 py-2">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[phase.status]}`}>{t.projectStatuses[phase.status]}</span>

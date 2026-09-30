@@ -82,7 +82,7 @@ export async function getEventLinkTargets(db: PrismaClient, eventIds: string[]):
 // instead of failing the whole page.
 export async function getLinkedCalendarEvents(
   db: PrismaClient,
-  where: { contactId: string } | { projectId: string },
+  where: { contactId: string } | { projectId: string; phaseId?: string },
   accessToken: string | null
 ): Promise<CalendarEventSummary[]> {
   if (!accessToken) return [];

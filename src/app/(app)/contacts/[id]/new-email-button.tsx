@@ -33,7 +33,7 @@ export default function NewEmailButton({
   // When given, the new-email dialog gets a "Linked to" section, starting
   // from defaultLink (the contact / project this card belongs to).
   linkOptions?: LinkedEmailsLinkOptions;
-  defaultLink?: { contactId?: string; projectId?: string };
+  defaultLink?: { contactId?: string; projectId?: string; phaseId?: string };
 }) {
   const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
   if (!email) return null;
@@ -52,7 +52,7 @@ export default function NewEmailButton({
               contactId: defaultLink?.contactId ?? "",
               projectId: defaultLink?.projectId ?? "",
               taskId: "",
-              phaseId: "",
+              phaseId: defaultLink?.phaseId ?? "",
               bookingId: "",
               affiliateProgramId: "",
             };

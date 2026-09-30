@@ -38,10 +38,13 @@ function longDate(date: Date, lang: "en" | "fr", dateLocale: Locale | undefined)
 
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ phase?: string }>;
 }) {
   const { id } = await params;
+  const { phase: phaseParam } = await searchParams;
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
@@ -97,7 +100,11 @@ export default async function ProjectDetailPage({
     const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
     const composePrefs = session ? await db.user.findUnique({ where: { id: session.user.id }, select: { defaultComposeSource: true } }) : null;
     const twilioReady = Boolean(await getTwilioConfig(db));
-    const calendarEvents = project ? await getLinkedCalendarEvents(db, { projectId: project.id }, googleAccessToken) : [];
+    const calendarEvents = project ? await getLinkedCalendarEvents(
+          db,
+          { projectId: project.id, ...(phaseParam && project.phases.some((ph) => ph.id === phaseParam) ? { phaseId: phaseParam } : {}) },
+          googleAccessToken
+        ) : [];
     const calendarEventLinks = calendarEvents.length > 0 ? await getEventLinkTargets(db, calendarEvents.map((e) => e.id)) : {};
 
     // The event edit dialog's own contact/project/task/booking pickers —
@@ -153,6 +160,15 @@ export default async function ProjectDetailPage({
 
   if (!project) notFound();
 
+  // A phase picked in the Phases card narrows the Tasks, Calendar, Emails and
+  // Calls & SMS cards to that phase (?phase=<id>).
+  const selectedPhase = project.phases.find((ph) => ph.id === phaseParam) ?? null;
+  const selectedPhaseId = selectedPhase?.id;
+  const inPhase = <T extends { phaseId: string | null }>(rows: T[]): T[] => (selectedPhaseId ? rows.filter((r) => r.phaseId === selectedPhaseId) : rows);
+  const visibleTasks = inPhase(project.tasks);
+  const visibleEmailLinks = inPhase(project.emailLinks);
+  const visibleInteractions = inPhase(project.interactions);
+
   const calendarBookingLabelOptions = calendarBookingOptions.map((b) => ({
     id: b.id,
     label: `${b.eventName ?? t.linkPicker.booking} (${b.scheduledFor ? format(b.scheduledFor, "MMM d") : "?"})`,
@@ -179,7 +195,7 @@ export default async function ProjectDetailPage({
   const clientOptions = calendarContactOptions.map((c) => ({ id: c.id, label: c.label }));
   if (!clientOptions.some((c) => c.id === project.contactId)) clientOptions.unshift({ id: project.contactId, label: clientName });
 
-  const taskItems: TaskCardItem[] = project.tasks.map((task) => ({
+  const taskItems: TaskCardItem[] = visibleTasks.map((task) => ({
     id: task.id,
     title: task.title,
     status: task.status,
@@ -341,6 +357,7 @@ export default async function ProjectDetailPage({
             phases={phaseRows}
             users={users}
             defaultTeamMemberIds={project.teamMembers.map((tm) => tm.userId)}
+            selectedPhaseId={selectedPhaseId ?? null}
             lang={lang}
           />
 
@@ -375,7 +392,7 @@ export default async function ProjectDetailPage({
             eventDialogLabels={t.eventDialog}
             eventViewDialogLabels={t.eventViewDialog}
             linkPickerLabels={calendarLinkPickerLabels}
-            newEventLinks={{ contactId: project.contactId, projectId: project.id }}
+            newEventLinks={{ contactId: project.contactId, projectId: project.id, ...(selectedPhaseId ? { phaseId: selectedPhaseId } : {}) }}
           />
 
           <Card
@@ -383,9 +400,9 @@ export default async function ProjectDetailPage({
             title={
               <>
                 {t.contactDetail.linkedEmailsTitle}
-                {project.emailLinks.length > 0 && (
+                {visibleEmailLinks.length > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">
-                    {project.emailLinks.length}
+                    {visibleEmailLinks.length}
                   </span>
                 )}
               </>
@@ -401,12 +418,12 @@ export default async function ProjectDetailPage({
                 emailComposeLabels={t.emailCompose}
                 title={t.emailCompose.newTitle}
                 linkOptions={emailLinkOptions}
-                defaultLink={{ contactId: project.contactId, projectId: project.id }}
+                defaultLink={{ contactId: project.contactId, projectId: project.id, phaseId: selectedPhaseId }}
               />
             }
           >
             <LinkedEmailsList
-              emailLinks={project.emailLinks.map((link) => ({
+              emailLinks={visibleEmailLinks.map((link) => ({
                 id: link.id,
                 gmailThreadId: link.gmailThreadId,
                 subject: link.subject,
@@ -438,6 +455,7 @@ export default async function ProjectDetailPage({
             relatedContacts={[]}
             teamMembers={users}
             defaultProjectId={project.id}
+            defaultPhaseId={selectedPhaseId}
             linkData={{
               projects: [{ id: project.id, name: project.name, contactId: project.contactId }],
               phases: project.phases.map((ph) => ({ id: ph.id, name: ph.name, projectId: project.id })),
@@ -446,7 +464,7 @@ export default async function ProjectDetailPage({
             currentUserId={session?.user.id ?? null}
             sending={{ ready: twilioReady, numbers: contactPhoneOptions(project.contact) }}
             lang={lang}
-            entries={project.interactions.map((i) => ({
+            entries={visibleInteractions.map((i) => ({
               id: i.id,
               type: i.type,
               subject: i.subject,
