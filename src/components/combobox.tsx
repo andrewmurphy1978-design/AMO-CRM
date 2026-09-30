@@ -31,6 +31,9 @@ export default function Combobox({
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [open, setOpen] = useState(false);
+  // Show the full list until the user actually types — otherwise a field
+  // already holding "IONOS" would only ever offer "IONOS".
+  const [typed, setTyped] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,7 +45,8 @@ export default function Combobox({
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const filtered = options.filter((opt) => opt.toLowerCase().includes(value.trim().toLowerCase()));
+  const query = typed ? value.trim().toLowerCase() : "";
+  const filtered = options.filter((opt) => opt.toLowerCase().includes(query));
 
   return (
     <div ref={rootRef} className="relative">
@@ -58,11 +62,30 @@ export default function Combobox({
         placeholder={placeholder}
         onChange={(e) => {
           setValue(e.target.value);
+          setTyped(true);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
-        className={inputClassName}
+        onFocus={() => {
+          setTyped(false);
+          setOpen(true);
+        }}
+        className={`${inputClassName} pr-8`}
       />
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={label}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => {
+          setTyped(false);
+          setOpen((o) => !o);
+        }}
+        className="absolute bottom-0 right-0 flex h-[38px] w-8 items-center justify-center text-soft hover:text-ink"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M2 4.5l4 4 4-4" />
+        </svg>
+      </button>
       {open && filtered.length > 0 && (
         <ul className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-card-border bg-card-bg shadow-lg">
           {filtered.map((opt) => (
@@ -71,6 +94,7 @@ export default function Combobox({
                 type="button"
                 onClick={() => {
                   setValue(opt);
+                  setTyped(false);
                   setOpen(false);
                 }}
                 className="block w-full truncate px-3 py-1.5 text-left text-sm text-ink hover:bg-amo-gold/10"
