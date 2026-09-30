@@ -11,7 +11,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 
 export async function saveEmailLink(
   gmailThreadId: string,
-  target: { contactId?: string; projectId?: string; taskId?: string; affiliateProgramId?: string },
+  target: { contactId?: string; projectId?: string; phaseId?: string; taskId?: string; affiliateProgramId?: string },
   // A snapshot taken at link time — Gmail threads aren't otherwise
   // queryable from a Contact/Project/Task page without knowing which team
   // member's account owns them (EmailLink has no userId), so this is what
@@ -37,10 +37,22 @@ export async function saveEmailLink(
         gmailLink: meta?.link,
         myAddress: meta?.myAddress ?? undefined,
       };
+      // The per-row link picker on the Email page doesn't know about phases:
+      // when it saves (phaseId not specified) an existing phase is kept, unless
+      // the project it belongs to was cleared or changed.
+      const existing = await db.emailLink.findUnique({ where: { gmailThreadId }, select: { projectId: true, phaseId: true } });
+      const phaseId =
+        target.phaseId !== undefined
+          ? projectId
+            ? target.phaseId || null
+            : null
+          : existing && existing.projectId === projectId
+            ? existing.phaseId
+            : null;
       await db.emailLink.upsert({
         where: { gmailThreadId },
-        update: { contactId, projectId, taskId, affiliateProgramId, ...snapshot },
-        create: { gmailThreadId, contactId, projectId, taskId, affiliateProgramId, ...snapshot },
+        update: { contactId, projectId, phaseId, taskId, affiliateProgramId, ...snapshot },
+        create: { gmailThreadId, contactId, projectId, phaseId, taskId, affiliateProgramId, ...snapshot },
       });
     }
   });

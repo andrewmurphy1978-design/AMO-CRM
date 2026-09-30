@@ -358,6 +358,7 @@ export default async function ContactDetailPage({
     calendarContactOptions,
     calendarProjectOptions,
     calendarTaskOptions,
+    calendarPhaseOptions,
     calendarBookingOptions,
     calendarProgramOptions,
     allTags,
@@ -456,8 +457,9 @@ export default async function ContactDetailPage({
       where: { status: { not: "DONE" } },
       orderBy: { title: "asc" },
       take: 300,
-      select: { id: true, title: true, projectId: true },
+      select: { id: true, title: true, projectId: true, phaseId: true },
     });
+    const allPhases = await db.projectPhase.findMany({ orderBy: [{ projectId: "asc" }, { order: "asc" }], take: 800, select: { id: true, name: true, projectId: true } });
     const allBookings = await db.booking.findMany({
       orderBy: { scheduledFor: "desc" },
       take: 100,
@@ -483,7 +485,8 @@ export default async function ContactDetailPage({
         extraEmails: c.extraEmails,
       })),
       calendarProjectOptions: allProjects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId })),
-      calendarTaskOptions: allTasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId })),
+      calendarTaskOptions: allTasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId, phaseId: tk.phaseId })),
+      calendarPhaseOptions: allPhases.map((ph) => ({ id: ph.id, label: ph.name, projectId: ph.projectId })),
       calendarBookingOptions: allBookings,
       calendarProgramOptions: allPrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails })),
       allTags,
@@ -1322,6 +1325,7 @@ export default async function ContactDetailPage({
                 myAddress: link.myAddress,
                 contactId: link.contactId,
                 projectId: link.projectId,
+                phaseId: link.phaseId,
                 taskId: link.taskId,
                 affiliateProgramId: link.affiliateProgramId,
               }))}
@@ -1329,6 +1333,7 @@ export default async function ContactDetailPage({
                 contacts: calendarContactOptions,
                 projects: calendarProjectOptions,
                 tasks: calendarTaskOptions,
+                phases: calendarPhaseOptions,
                 programs: calendarProgramOptions,
                 labels: {
                   link: t.linkPicker.link,
@@ -1337,6 +1342,7 @@ export default async function ContactDetailPage({
                   contact: t.linkPicker.contact,
                   project: t.linkPicker.project,
                   task: t.linkPicker.task,
+                  phase: t.linkPicker.phase,
                   booking: t.linkPicker.booking,
                   affiliateProgram: t.linkPicker.affiliateProgram,
                   save: t.linkPicker.save,
@@ -1364,7 +1370,11 @@ export default async function ContactDetailPage({
             contact={{ id: contact.id, name: [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.company || contact.email || "—" }}
             relatedContacts={relatedContactOptions}
             teamMembers={teamMembers.map((u) => ({ id: u.id, name: u.name }))}
-            projects={contact.projects.map((p) => ({ id: p.id, name: p.name }))}
+            linkData={{
+              projects: calendarProjectOptions.map((p) => ({ id: p.id, name: p.label, contactId: p.contactId ?? null })),
+              phases: calendarPhaseOptions.map((ph) => ({ id: ph.id, name: ph.label, projectId: ph.projectId ?? "" })),
+              tasks: calendarTaskOptions.map((tk) => ({ id: tk.id, name: tk.label, projectId: tk.projectId ?? "", phaseId: tk.phaseId ?? null })),
+            }}
             currentUserId={session?.user.id ?? null}
             sending={{ ready: twilioReady, numbers: contactPhoneOptions(contact) }}
             lang={lang}
@@ -1379,7 +1389,10 @@ export default async function ContactDetailPage({
               updatedAt: i.updatedAt.toISOString(),
               createdBy: i.loggedBy?.name ?? null,
               updatedBy: i.updatedBy?.name ?? null,
+              contactId: i.contactId,
               projectId: i.projectId,
+              phaseId: i.phaseId,
+              taskId: i.taskId,
               direction: i.direction,
               deliveryStatus: i.deliveryStatus,
               externalNumber: i.externalNumber,

@@ -159,8 +159,12 @@ export default async function ContactsPage({
     ];
   }
 
-  let orderBy: Prisma.ContactOrderByWithRelationInput | Prisma.ContactOrderByWithRelationInput[] = { createdAt: "desc" };
-  if (sortField === "name") orderBy = [{ lastName: sortDir }, { firstName: sortDir }];
+  // Default order: last name, then first name (contacts with no name at the end).
+  let orderBy: Prisma.ContactOrderByWithRelationInput | Prisma.ContactOrderByWithRelationInput[] = [
+    { lastName: { sort: "asc", nulls: "last" } },
+    { firstName: { sort: "asc", nulls: "last" } },
+  ];
+  if (sortField === "name") orderBy = [{ lastName: { sort: sortDir, nulls: "last" } }, { firstName: { sort: sortDir, nulls: "last" } }];
   else if (sortField === "country") orderBy = { country: sortDir };
   else if (sortField === "stage") orderBy = { stage: sortDir };
   else if (sortField === "source") orderBy = { source: sortDir };

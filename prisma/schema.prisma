@@ -895,6 +895,9 @@ model ProjectPhase {
 
   tasks Task[]
 
+  interactions Interaction[]
+  emailLinks   EmailLink[]
+
   @@index([projectId])
   @@index([supervisorId])
   @@map("project_phases")
@@ -1097,6 +1100,7 @@ model Task {
   emailLinks         EmailLink[]
   calendarEventLinks CalendarEventLink[]
   googleTaskLink     GoogleTaskLink?
+  interactions       Interaction[]
 
   @@index([projectId])
   @@index([status])
@@ -1162,6 +1166,9 @@ model EmailLink {
 
   taskId String?
   task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  phaseId String?
+  phase   ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
 
   affiliateProgramId String?
   affiliateProgram   AffiliateProgram? @relation(fields: [affiliateProgramId], references: [id], onDelete: Cascade)
@@ -1497,6 +1504,12 @@ model Interaction {
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Optional deeper links inside the project.
+  phaseId String?
+  phase   ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  taskId  String?
+  task    Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   // Created by (loggedBy, on createdAt) and last modified by (updatedBy, on
   // updatedAt) — both users are shown in the Calls & SMS dialog.

@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getTwilioConfig, publicBaseUrl, sendTwilioSms } from "@/lib/twilio";
 import { explainTwilioError } from "@/lib/twilio-errors";
+import { attachSmsNumberToContact } from "@/lib/sms-link";
 
 const InteractionSchema = z.object({
   type: z.enum(["CALL", "EMAIL", "MEETING", "NOTE"]),
@@ -66,6 +67,8 @@ const ContactInteractionSchema = z.object({
   occurredAt: z.date(),
   durationMinutes: z.number().int().min(0).max(100000).nullable(),
   projectId: z.string().optional(),
+  phaseId: z.string().optional(),
+  taskId: z.string().optional(),
 });
 
 // The Calls & SMS card's Add/Edit dialog. `interactionId` null = a new
@@ -93,6 +96,8 @@ export async function saveContactInteraction(
       occurredAt: isNaN(occurred.getTime()) ? new Date() : occurred,
       durationMinutes: String(formData.get("durationMinutes") ?? "").trim() === "" ? null : Math.round(Number(formData.get("durationMinutes"))),
       projectId: String(formData.get("projectId") ?? "").trim() || undefined,
+      phaseId: String(formData.get("phaseId") ?? "").trim() || undefined,
+      taskId: String(formData.get("taskId") ?? "").trim() || undefined,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -100,6 +105,8 @@ export async function saveContactInteraction(
     }
     throw error;
   }
+  // Only meaningful for an incoming text that has no contact yet.
+  const linkContactId = String(formData.get("linkContactId") ?? "").trim();
 
   const participants = formData
     .getAll("participant")
@@ -131,7 +138,14 @@ export async function saveContactInteraction(
     if (interactionId) {
       // A text that went through Twilio is a record of what was sent or
       // received: its type and message stay as they are whatever is posted.
-      const current = await db.interaction.findUnique({ where: { id: interactionId }, select: { direction: true, type: true, notes: true, occurredAt: true } });
+      const current = await db.interaction.findUnique({ where: { id: interactionId }, select: { direction: true, type: true, notes: true, occurredAt: true, contactId: true, externalNumber: true } });
+      // A text from a number matching no contact gets its contact here; that
+      // also links its siblings from the same number.
+      let linked = Boolean(current?.contactId);
+      if (current && !current.contactId && linkContactId && current.externalNumber) {
+        await attachSmsNumberToContact(db, current.externalNumber, linkContactId);
+        linked = true;
+      }
       const locked = Boolean(current?.direction);
       const isSms = (locked ? current?.type : data.type) === "SMS";
       await db.$transaction([
@@ -143,7 +157,10 @@ export async function saveContactInteraction(
             notes: locked && current ? current.notes : data.notes,
             occurredAt: locked && current ? current.occurredAt : data.occurredAt,
             durationMinutes: isSms ? null : data.durationMinutes,
-            projectId: data.projectId ?? null,
+            // Projects, phases and tasks belong to a contact: none until linked.
+            projectId: linked ? (data.projectId ?? null) : null,
+            phaseId: linked ? (data.phaseId ?? null) : null,
+            taskId: linked ? (data.taskId ?? null) : null,
             updatedById: session.user.id,
           },
         }),
@@ -162,6 +179,8 @@ export async function saveContactInteraction(
           durationMinutes: data.type === "SMS" ? null : data.durationMinutes,
           contactId,
           projectId: data.projectId,
+          phaseId: data.phaseId,
+          taskId: data.taskId,
           loggedById: session.user.id,
           updatedById: session.user.id,
           // SMS has no participant picker: it's the contact, plus you when you sent it.
@@ -178,7 +197,9 @@ export async function saveContactInteraction(
   });
   if (sendError) return { error: sendError };
 
-  revalidatePath(`/contacts/${contactId}`);
+  if (contactId) revalidatePath(`/contacts/${contactId}`);
+  if (linkContactId) revalidatePath(`/contacts/${linkContactId}`);
+  revalidatePath("/sms");
   if (data.projectId) revalidatePath(`/projects/${data.projectId}`);
   return { success: sendTo ? "Text sent." : "Saved." };
 }

@@ -5,6 +5,12 @@ import Link from "next/link";
 import { saveEmailLink } from "@/actions/links";
 import type { LinkOption, LinkDialogLabels, LinkValues } from "../link-dialog";
 
+export interface EmailLinkTarget {
+  name: string;
+  href: string;
+  also?: { name: string; href: string }[];
+}
+
 export interface EmailLinkConfig {
   threadId: string;
   subject: string;
@@ -15,9 +21,13 @@ export interface EmailLinkConfig {
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
+  // Phases of the linked project (optional so older callers still work).
+  phases?: LinkOption[];
   programs: LinkOption[];
   initial: LinkValues;
-  current: { name: string; href: string } | null;
+  // The primary link, plus anything else it's linked to (project, phase,
+  // task, ...) shown after it.
+  current: EmailLinkTarget | null;
   labels: LinkDialogLabels;
   onSaved: (values: LinkValues) => void;
 }
@@ -45,7 +55,7 @@ export function EmailLinkSummary({
   editLabel,
   onEdit,
 }: {
-  current: { name: string; href: string } | null;
+  current: EmailLinkTarget | null;
   linkLabel: string;
   noneLabel: string;
   editLabel: string;
@@ -56,9 +66,19 @@ export function EmailLinkSummary({
       <p className={LABEL_CLASS}>{linkLabel}</p>
       <div className="mt-1 flex items-center gap-2">
         {current ? (
-          <Link href={current.href} className="min-w-0 truncate text-sm font-medium text-emerald-700 hover:underline">
-            {current.name}
-          </Link>
+          <span className="min-w-0 truncate text-sm font-medium">
+            <Link href={current.href} className="text-emerald-700 hover:underline">
+              {current.name}
+            </Link>
+            {current.also?.map((item) => (
+              <span key={item.href + item.name}>
+                <span className="mx-1 text-soft">›</span>
+                <Link href={item.href} className="text-emerald-700 hover:underline">
+                  {item.name}
+                </Link>
+              </span>
+            ))}
+          </span>
         ) : (
           <span className="truncate text-sm text-soft">{noneLabel}</span>
         )}
@@ -82,6 +102,7 @@ export function EmailLinkEditor({ config, onDone }: { config: EmailLinkConfig; o
   const [search, setSearch] = useState("");
   const [contactId, setContactId] = useState(config.initial.contactId);
   const [projectId, setProjectId] = useState(config.initial.projectId);
+  const [phaseId, setPhaseId] = useState(config.initial.phaseId ?? "");
   const [taskId, setTaskId] = useState(config.initial.taskId);
   const [programId, setProgramId] = useState(config.initial.affiliateProgramId);
   const [pending, startTransition] = useTransition();
@@ -95,21 +116,26 @@ export function EmailLinkEditor({ config, onDone }: { config: EmailLinkConfig; o
     () => (contactId ? config.projects.filter((p) => p.contactId === contactId) : []),
     [config.projects, contactId]
   );
-  const availableTasks = useMemo(() => (projectId ? config.tasks.filter((t) => t.projectId === projectId) : []), [config.tasks, projectId]);
+  const availablePhases = useMemo(() => (projectId ? (config.phases ?? []).filter((p) => p.projectId === projectId) : []), [config.phases, projectId]);
+  const availableTasks = useMemo(
+    () => (projectId ? config.tasks.filter((t) => t.projectId === projectId && (!phaseId || !t.phaseId || t.phaseId === phaseId)) : []),
+    [config.tasks, projectId, phaseId]
+  );
   const selectedContact = config.contacts.find((c) => c.id === contactId) ?? null;
 
   function clearContact() {
     setContactId("");
     setProjectId("");
+    setPhaseId("");
     setTaskId("");
   }
 
   function save() {
     startTransition(async () => {
-      const values: LinkValues = { contactId, projectId, taskId, bookingId: "", affiliateProgramId: programId };
+      const values: LinkValues = { contactId, projectId, phaseId, taskId, bookingId: "", affiliateProgramId: programId };
       await saveEmailLink(
         config.threadId,
-        { contactId: values.contactId, projectId: values.projectId, taskId: values.taskId, affiliateProgramId: values.affiliateProgramId },
+        { contactId: values.contactId, projectId: values.projectId, phaseId: values.phaseId, taskId: values.taskId, affiliateProgramId: values.affiliateProgramId },
         { subject: config.subject, fromLabel: config.fromLabel, date: config.date, link: config.link, myAddress: config.myAddress }
       );
       config.onSaved(values);
@@ -148,6 +174,7 @@ export function EmailLinkEditor({ config, onDone }: { config: EmailLinkConfig; o
                     onClick={() => {
                       setContactId(c.id);
                       setProjectId("");
+                      setPhaseId("");
                       setTaskId("");
                       setSearch("");
                     }}
@@ -168,6 +195,7 @@ export function EmailLinkEditor({ config, onDone }: { config: EmailLinkConfig; o
           value={projectId}
           onChange={(e) => {
             setProjectId(e.target.value);
+            setPhaseId("");
             setTaskId("");
           }}
           disabled={!contactId}
@@ -175,6 +203,26 @@ export function EmailLinkEditor({ config, onDone }: { config: EmailLinkConfig; o
         >
           <option value="">{labels.none}</option>
           {availableProjects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className={LABEL_CLASS}>{labels.phase ?? "Phase"}</label>
+        <select
+          value={phaseId}
+          onChange={(e) => {
+            setPhaseId(e.target.value);
+            setTaskId("");
+          }}
+          disabled={!projectId}
+          className={`${FIELD_CLASS} disabled:opacity-50`}
+        >
+          <option value="">{labels.none}</option>
+          {availablePhases.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
             </option>

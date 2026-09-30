@@ -19,7 +19,7 @@ import EmailTime from "./email-time";
 import EmailQuickActions, { type EmailQuickActionMode } from "../email-quick-actions";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email-compose-dialog";
-import type { EmailLinkConfig } from "./email-link-fields";
+import type { EmailLinkConfig, EmailLinkTarget } from "./email-link-fields";
 import { fetchEmailDetail, listMailIdentitiesAction, type EmailDetail } from "@/actions/email-messages";
 import { fetchDraftsAction, fetchDraftDetailAction, type DraftRow } from "@/actions/email-drafts";
 import type { MailSource } from "@/lib/mail/identity";
@@ -361,6 +361,7 @@ export default function EmailScreeningView({
   contactOptions,
   projectOptions,
   taskOptions,
+  phaseOptions,
   programOptions,
   addressColors,
   hour12,
@@ -377,6 +378,7 @@ export default function EmailScreeningView({
   contactOptions: LinkOption[];
   projectOptions: LinkOption[];
   taskOptions: LinkOption[];
+  phaseOptions: LinkOption[];
   programOptions: LinkOption[];
   addressColors: EmailAddressColorEntry[];
   hour12: boolean;
@@ -588,11 +590,14 @@ export default function EmailScreeningView({
     const contact = contactOptions.find((c) => c.id === values.contactId);
     const project = projectOptions.find((p) => p.id === values.projectId);
     const task = taskOptions.find((tk) => tk.id === values.taskId);
+    const phase = phaseOptions.find((ph) => ph.id === values.phaseId);
     const program = programOptions.find((p) => p.id === values.affiliateProgramId);
     return {
       contactId: values.contactId,
       projectId: values.projectId,
       taskId: values.taskId,
+      phaseId: values.phaseId ?? "",
+      phaseName: phase?.label ?? "",
       affiliateProgramId: values.affiliateProgramId,
       contactName: contact?.label ?? "",
       projectName: project?.label ?? "",
@@ -695,6 +700,7 @@ export default function EmailScreeningView({
     contact: t.linkPicker.contact,
     project: t.linkPicker.project,
     task: t.linkPicker.task,
+    phase: t.linkPicker.phase,
     booking: t.linkPicker.booking,
     affiliateProgram: t.linkPicker.affiliateProgram,
     save: t.linkPicker.save,
@@ -721,13 +727,18 @@ export default function EmailScreeningView({
     return name ? t.linkPicker.linkedTo(name) : null;
   }
 
-  function linkedTo(link: EmailLinkInfo | undefined): { name: string; href: string } | null {
+  function linkedTo(link: EmailLinkInfo | undefined): EmailLinkTarget | null {
     if (!link) return null;
-    if (link.contactName) return { name: link.contactName, href: `/contacts/${link.contactId}` };
-    if (link.projectName) return { name: link.projectName, href: `/projects/${link.projectId}` };
-    if (link.affiliateProgramName) return { name: link.affiliateProgramName, href: `/marketing#${link.affiliateProgramId}` };
-    if (link.taskName) return { name: link.taskName, href: `/projects/${link.projectId}/tasks/${link.taskId}/edit` };
-    return null;
+    // Everything the thread is linked to, in order; the first is the main
+    // link and the rest are shown after it (contact › project › phase › task).
+    const chain: { name: string; href: string }[] = [];
+    if (link.contactName) chain.push({ name: link.contactName, href: `/contacts/${link.contactId}` });
+    if (link.projectName) chain.push({ name: link.projectName, href: `/projects/${link.projectId}` });
+    if (link.phaseName) chain.push({ name: link.phaseName, href: `/projects/${link.projectId}` });
+    if (link.taskName) chain.push({ name: link.taskName, href: `/projects/${link.projectId}/tasks/${link.taskId}/edit` });
+    if (link.affiliateProgramName) chain.push({ name: link.affiliateProgramName, href: `/marketing#${link.affiliateProgramId}` });
+    if (chain.length === 0) return null;
+    return { ...chain[0], also: chain.slice(1) };
   }
 
   // The Email/Compose dialogs' "Linked to" config — same contact/project/
@@ -746,11 +757,13 @@ export default function EmailScreeningView({
       contacts: contactOptions,
       projects: projectOptions,
       tasks: taskOptions,
+      phases: phaseOptions,
       programs: programOptions,
       initial: {
         contactId: info?.contactId ?? "",
         projectId: info?.projectId ?? "",
         taskId: info?.taskId ?? "",
+        phaseId: info?.phaseId ?? "",
         bookingId: "",
         affiliateProgramId: info?.affiliateProgramId ?? "",
       },

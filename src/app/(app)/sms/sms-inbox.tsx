@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContactFromSms, linkSmsToContact, markSmsSeen } from "@/actions/sms";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { CallsSmsDialog, type CallsSmsEntry, type CallsSmsLinkData } from "../contacts/[id]/calls-sms-dialog";
 
 export interface UnlinkedGroup {
   number: string;
-  texts: { id: string; text: string; receivedAt: string }[];
+  texts: { id: string; text: string; receivedAt: string; entry: CallsSmsEntry }[];
 }
 
 export interface NewText {
@@ -17,6 +18,7 @@ export interface NewText {
   contactName: string;
   text: string;
   receivedAt: string;
+  entry: CallsSmsEntry;
 }
 
 const FIELD_CLASS =
@@ -45,11 +47,17 @@ export default function SmsInbox({
   unlinked,
   newTexts,
   contacts,
+  linkData,
+  twilioReady,
+  currentUserId,
   lang,
 }: {
   unlinked: UnlinkedGroup[];
   newTexts: NewText[];
   contacts: { id: string; label: string }[];
+  linkData: CallsSmsLinkData;
+  twilioReady: boolean;
+  currentUserId: string | null;
   lang: Lang;
 }) {
   const t = getDict(lang);
@@ -60,6 +68,23 @@ export default function SmsInbox({
   const [search, setSearch] = useState("");
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
+
+  // The SMS dialog (the same one the contact's Calls & SMS card opens). An
+  // unlinked text opens it with the contact picker; Reply opens a fresh one.
+  const [dialog, setDialog] = useState<{ entry: CallsSmsEntry | null; key: number; replyTo?: string; contact: { id: string; name: string } | null } | null>(null);
+  const [dialogCount, setDialogCount] = useState(0);
+  function openDialog(entry: CallsSmsEntry | null, contact: { id: string; name: string } | null, replyTo?: string) {
+    setDialogCount((c) => c + 1);
+    setDialog({ entry, key: dialogCount + 1, replyTo, contact });
+  }
+  const typeLabels: Record<string, string> = {
+    CALL: t.callsSms.typeCall,
+    MEETING: t.callsSms.typeMeeting,
+    SMS: t.callsSms.typeSms,
+    NOTE: t.callsSms.typeNote,
+    EMAIL: t.callsSms.typeEmail,
+  };
+  const contactOptions = useMemo(() => contacts.map((c) => ({ id: c.id, name: c.label })), [contacts]);
 
   const fmt = useMemo(() => new Intl.DateTimeFormat(lang === "fr" ? "fr-CA" : "en-CA", { dateStyle: "medium", timeStyle: "short" }), [lang]);
   const matches = useMemo(() => {
@@ -78,12 +103,17 @@ export default function SmsInbox({
               <li key={group.number} className="space-y-2 py-3 first:pt-0">
                 <p className="text-sm font-semibold text-ink">{formatPhone(group.number)}</p>
                 {group.texts.map((text) => (
-                  <div key={text.id} className="rounded-md bg-black/[0.03] px-3 py-2">
-                    <p className="whitespace-pre-wrap break-words text-sm text-ink">{text.text}</p>
-                    <p className="mt-1 text-xs text-soft" suppressHydrationWarning>
+                  <button
+                    key={text.id}
+                    type="button"
+                    onClick={() => openDialog(text.entry, null)}
+                    className="block w-full rounded-md bg-black/[0.03] px-3 py-2 text-left hover:bg-black/[0.06]"
+                  >
+                    <span className="block whitespace-pre-wrap break-words text-sm text-ink">{text.text}</span>
+                    <span className="mt-1 block text-xs text-soft" suppressHydrationWarning>
                       {t.smsPage.receivedAt} {fmt.format(new Date(text.receivedAt))}
-                    </p>
-                  </div>
+                    </span>
+                  </button>
                 ))}
 
                 {picking === group.number ? (
@@ -198,7 +228,7 @@ export default function SmsInbox({
             <ul className="divide-y divide-card-border">
               {newTexts.map((n) => (
                 <li key={n.id} className="flex items-start justify-between gap-3 py-3 first:pt-0">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <Link
                       href={`/contacts/${n.contactId}`}
                       onClick={() => void markSmsSeen([n.id])}
@@ -206,10 +236,16 @@ export default function SmsInbox({
                     >
                       {n.contactName}
                     </Link>
-                    <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-ink">{n.text}</p>
-                    <p className="mt-1 text-xs text-soft" suppressHydrationWarning>
-                      {t.smsPage.receivedAt} {fmt.format(new Date(n.receivedAt))}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => openDialog(n.entry, { id: n.contactId, name: n.contactName })}
+                      className="mt-0.5 block w-full rounded-md text-left hover:bg-black/[0.04]"
+                    >
+                      <span className="block whitespace-pre-wrap break-words text-sm text-ink">{n.text}</span>
+                      <span className="mt-1 block text-xs text-soft" suppressHydrationWarning>
+                        {t.smsPage.receivedAt} {fmt.format(new Date(n.receivedAt))}
+                      </span>
+                    </button>
                   </div>
                   <button
                     type="button"
@@ -230,6 +266,29 @@ export default function SmsInbox({
           </>
         )}
       </Section>
+
+      {dialog && (
+        <CallsSmsDialog
+          key={dialog.key}
+          entry={dialog.entry}
+          replyTo={dialog.replyTo}
+          onReply={(to) => openDialog(null, dialog.contact, to)}
+          contactId={dialog.contact?.id ?? null}
+          contact={dialog.contact}
+          contacts={contactOptions}
+          relatedContacts={[]}
+          teamMembers={[]}
+          linkData={linkData}
+          currentUserId={currentUserId}
+          sending={{ ready: twilioReady, numbers: [] }}
+          lang={lang}
+          typeLabels={typeLabels}
+          onClose={() => {
+            setDialog(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

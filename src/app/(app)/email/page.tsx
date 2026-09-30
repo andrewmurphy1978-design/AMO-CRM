@@ -24,7 +24,7 @@ export default async function EmailPage() {
   // page load; only the client-side Refresh button (or a first-ever visit
   // with no cache row yet) spends a live Gmail/Claude call, via
   // /api/email/inbox.
-  const { connected, hour12, contacts, projects, tasks, affiliatePrograms, addressColors, initialData, composePrefs } = await withScopedPrismaClient(
+  const { connected, hour12, contacts, projects, tasks, phases, affiliatePrograms, addressColors, initialData, composePrefs } = await withScopedPrismaClient(
     async (db) => {
       const accessToken = session ? await getValidAccessToken(session.user.id, db) : null;
       const hour12 = await getHour12(session, db);
@@ -48,7 +48,12 @@ export default async function EmailPage() {
         where: { status: { not: "DONE" } },
         orderBy: { title: "asc" },
         take: 300,
-        select: { id: true, title: true, projectId: true },
+        select: { id: true, title: true, projectId: true, phaseId: true },
+      });
+      const phases = await db.projectPhase.findMany({
+        orderBy: [{ projectId: "asc" }, { order: "asc" }],
+        take: 600,
+        select: { id: true, name: true, projectId: true },
       });
       const affiliatePrograms = await db.affiliateProgram.findMany({
         orderBy: { name: "asc" },
@@ -65,13 +70,14 @@ export default async function EmailPage() {
         }
       }
 
-      return { connected: accessToken !== null, hour12, contacts, projects, tasks, affiliatePrograms, addressColors, initialData, composePrefs };
+      return { connected: accessToken !== null, hour12, contacts, projects, tasks, phases, affiliatePrograms, addressColors, initialData, composePrefs };
     }
   );
 
   const contactOptions = contacts.map((c) => ({ id: c.id, label: contactLabel(c), email: c.email, extraEmails: c.extraEmails }));
   const projectOptions = projects.map((p) => ({ id: p.id, label: p.name, contactId: p.contactId }));
-  const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId }));
+  const taskOptions = tasks.map((tk) => ({ id: tk.id, label: tk.title, projectId: tk.projectId, phaseId: tk.phaseId }));
+  const phaseOptions = phases.map((ph) => ({ id: ph.id, label: ph.name, projectId: ph.projectId }));
   const programOptions = affiliatePrograms.map((p) => ({ id: p.id, label: p.name, email: p.email, extraEmails: p.extraEmails }));
 
   return (
@@ -81,6 +87,7 @@ export default async function EmailPage() {
       contactOptions={contactOptions}
       projectOptions={projectOptions}
       taskOptions={taskOptions}
+      phaseOptions={phaseOptions}
       programOptions={programOptions}
       addressColors={addressColors}
       hour12={hour12}

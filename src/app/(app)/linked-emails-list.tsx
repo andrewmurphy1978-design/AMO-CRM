@@ -8,7 +8,7 @@ import type { Lang } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import type { EmailDetail } from "@/actions/email-messages";
 import EmailDialog, { type EmailDialogLabels, type EmailDialogTarget } from "./email/email-dialog";
-import type { EmailLinkConfig } from "./email/email-link-fields";
+import type { EmailLinkConfig, EmailLinkTarget } from "./email/email-link-fields";
 import type { LinkOption, LinkDialogLabels, LinkValues } from "./link-dialog";
 import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget, type ComposeMode } from "./email/email-compose-dialog";
 import { colorForAddress, resolveEmailAddressColor, type EmailAddressColorEntry } from "@/lib/email-address-match";
@@ -25,6 +25,7 @@ export interface LinkedEmailRow {
   // (and edit) its "Linked to" section.
   contactId?: string | null;
   projectId?: string | null;
+  phaseId?: string | null;
   taskId?: string | null;
   affiliateProgramId?: string | null;
 }
@@ -33,6 +34,7 @@ export interface LinkedEmailsLinkOptions {
   contacts: LinkOption[];
   projects: LinkOption[];
   tasks: LinkOption[];
+  phases?: LinkOption[];
   programs: LinkOption[];
   labels: LinkDialogLabels;
 }
@@ -78,14 +80,23 @@ export default function LinkedEmailsList({
   const [openMessage, setOpenMessage] = useState<EmailDialogTarget | null>(null);
   const [composeTarget, setComposeTarget] = useState<EmailComposeTarget | null>(null);
 
-  function currentLinkFor(values: LinkValues): { name: string; href: string } | null {
+  function currentLinkFor(values: LinkValues): EmailLinkTarget | null {
     if (!linkOptions) return null;
-    const nameOf = (list: LinkOption[], id: string) => list.find((o) => o.id === id)?.label;
-    if (values.contactId) return { name: nameOf(linkOptions.contacts, values.contactId) ?? "", href: `/contacts/${values.contactId}` };
-    if (values.projectId) return { name: nameOf(linkOptions.projects, values.projectId) ?? "", href: `/projects/${values.projectId}` };
-    if (values.affiliateProgramId) return { name: nameOf(linkOptions.programs, values.affiliateProgramId) ?? "", href: `/marketing#${values.affiliateProgramId}` };
-    if (values.taskId) return { name: nameOf(linkOptions.tasks, values.taskId) ?? "", href: `/projects/${values.projectId}/tasks/${values.taskId}/edit` };
-    return null;
+    const nameOf = (list: LinkOption[] | undefined, id: string | undefined) => (id ? list?.find((o) => o.id === id)?.label : undefined);
+    // Everything it's linked to, in order (contact › project › phase › task ›
+    // program): the first is the main link, the rest are shown after it.
+    const chain: { name: string; href: string }[] = [];
+    const contact = nameOf(linkOptions.contacts, values.contactId);
+    const project = nameOf(linkOptions.projects, values.projectId);
+    const phase = nameOf(linkOptions.phases, values.phaseId);
+    const task = nameOf(linkOptions.tasks, values.taskId);
+    const program = nameOf(linkOptions.programs, values.affiliateProgramId);
+    if (contact) chain.push({ name: contact, href: `/contacts/${values.contactId}` });
+    if (project) chain.push({ name: project, href: `/projects/${values.projectId}` });
+    if (phase) chain.push({ name: phase, href: `/projects/${values.projectId}` });
+    if (task) chain.push({ name: task, href: `/projects/${values.projectId}/tasks/${values.taskId}/edit` });
+    if (program) chain.push({ name: program, href: `/marketing#${values.affiliateProgramId}` });
+    return chain.length > 0 ? { ...chain[0], also: chain.slice(1) } : null;
   }
 
   function buildLinkConfig(link: LinkedEmailRow): EmailLinkConfig | undefined {
@@ -94,6 +105,7 @@ export default function LinkedEmailsList({
       contactId: link.contactId ?? "",
       projectId: link.projectId ?? "",
       taskId: link.taskId ?? "",
+      phaseId: link.phaseId ?? "",
       bookingId: "",
       affiliateProgramId: link.affiliateProgramId ?? "",
     };
@@ -107,6 +119,7 @@ export default function LinkedEmailsList({
       contacts: linkOptions.contacts,
       projects: linkOptions.projects,
       tasks: linkOptions.tasks,
+      phases: linkOptions.phases,
       programs: linkOptions.programs,
       initial,
       current: currentLinkFor(initial),

@@ -6,7 +6,8 @@ export interface LinkOption {
   id: string;
   label: string;
   contactId?: string | null; // set on projects and bookings — which client they belong to
-  projectId?: string | null; // set on tasks — which project they belong to
+  projectId?: string | null; // set on tasks and phases — which project they belong to
+  phaseId?: string | null; // set on tasks — which phase (if any) they belong to
   email?: string | null; // set on contacts/programs — for the Calendar guest search and the Email compose address book
   extraEmails?: string[] | null; // set on contacts/programs — additional addresses for the Email compose address book
 }
@@ -20,6 +21,7 @@ export interface LinkDialogLabels {
   contact: string;
   project: string;
   task: string;
+  phase?: string;
   booking: string;
   affiliateProgram: string;
   none: string;
@@ -35,6 +37,8 @@ export interface LinkValues {
   taskId: string;
   bookingId: string;
   affiliateProgramId: string;
+  // Emails can also be linked to a phase of the linked project.
+  phaseId?: string;
 }
 
 export interface AddressBookEntry {

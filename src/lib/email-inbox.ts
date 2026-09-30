@@ -271,6 +271,8 @@ export interface EmailLinkInfo {
   projectName: string;
   taskName: string;
   affiliateProgramName: string;
+  phaseId?: string;
+  phaseName?: string;
   // When this link was last saved (EmailLink.updatedAt — bumped on every
   // save, not just the first) — the Email page's "Recently linked" section
   // uses this for its own 7-day window, the same way EmailReadState.readAt
@@ -287,7 +289,7 @@ export async function getEmailLinksByThread(db: PrismaClient, threadIds: string[
   if (threadIds.length === 0) return {};
   const links = await db.emailLink.findMany({
     where: { gmailThreadId: { in: threadIds } },
-    include: { contact: true, project: true, task: true, affiliateProgram: true },
+    include: { contact: true, project: true, task: true, phase: true, affiliateProgram: true },
   });
   const result: Record<string, EmailLinkInfo> = {};
   for (const link of links) {
@@ -295,6 +297,8 @@ export async function getEmailLinksByThread(db: PrismaClient, threadIds: string[
       contactId: link.contactId ?? "",
       projectId: link.projectId ?? "",
       taskId: link.taskId ?? "",
+      phaseId: link.phaseId ?? "",
+      phaseName: link.phase?.name ?? "",
       affiliateProgramId: link.affiliateProgramId ?? "",
       contactName: link.contact ? contactLabel(link.contact) : "",
       projectName: link.project?.name ?? "",

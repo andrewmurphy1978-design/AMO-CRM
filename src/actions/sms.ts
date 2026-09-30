@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { toE164 } from "@/lib/phone-display";
+import { attachSmsNumberToContact } from "@/lib/sms-link";
 
 async function requireSession() {
   const session = await auth();
@@ -33,24 +33,7 @@ export async function markSmsSeen(ids: string[]): Promise<void> {
 // from it is matched automatically.
 export async function linkSmsToContact(number: string, contactId: string): Promise<void> {
   await requireSession();
-  await withScopedPrismaClient(async (db) => {
-    const contact = await db.contact.findUniqueOrThrow({
-      where: { id: contactId },
-      select: { phone: true, phone2: true, extraPhones: true },
-    });
-    const known = [contact.phone, contact.phone2, ...contact.extraPhones].map((p) => (p ? toE164(p, "CA") : null));
-    if (!known.includes(number)) {
-      await db.contact.update({
-        where: { id: contactId },
-        data: !contact.phone ? { phone: number } : !contact.phone2 ? { phone2: number } : { extraPhones: { push: number } },
-      });
-    }
-    const texts = await db.interaction.findMany({ where: { contactId: null, externalNumber: number }, select: { id: true } });
-    for (const text of texts) {
-      await db.interaction.update({ where: { id: text.id }, data: { contactId }, select: { id: true } });
-      await db.interactionParticipant.create({ data: { interactionId: text.id, contactId } });
-    }
-  });
+  await withScopedPrismaClient((db) => attachSmsNumberToContact(db, number, contactId));
   refresh(contactId);
 }
 
@@ -64,11 +47,7 @@ export async function createContactFromSms(number: string, firstName: string, la
       data: { firstName: first || null, lastName: last || (first ? null : number), phone: number, source: "Twilio SMS" },
       select: { id: true },
     });
-    const texts = await db.interaction.findMany({ where: { contactId: null, externalNumber: number }, select: { id: true } });
-    for (const text of texts) {
-      await db.interaction.update({ where: { id: text.id }, data: { contactId: contact.id }, select: { id: true } });
-      await db.interactionParticipant.create({ data: { interactionId: text.id, contactId: contact.id } });
-    }
+    await attachSmsNumberToContact(db, number, contact.id);
     return contact.id;
   });
   refresh(id);
