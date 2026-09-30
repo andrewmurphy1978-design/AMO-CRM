@@ -640,32 +640,26 @@ export default async function ContactDetailPage({
               </div>
               <TagManager contactId={contact.id} tags={contact.tags.map((ct) => ct.tag)} allTags={allTags} lang={lang} />
 
-              {/* Row 4 — Services required sits below Website, Project goal
-                  below Nickname. */}
-              <div className="space-y-2">
-                <InfoField
-                  label={t.contactForm.website}
-                  value={
-                    contact.website ? (
-                      <a href={contact.website} target="_blank" rel="noreferrer" className="break-words text-sky-700 hover:underline">
-                        {contact.website}
-                      </a>
-                    ) : undefined
-                  }
-                />
-                <InfoField label={t.contactDetail.servicesRequiredLabel} value={servicesRequiredValue} />
-              </div>
-              <div className="space-y-2">
-                <InfoField label={t.contactForm.nickname} value={contact.nickname} />
-                <InfoField label={t.contactDetail.projectGoalLabel} value={projectGoalValue} />
-              </div>
+              {/* Row 4 — Website / Nickname / Birthday / picture (spans this row
+                  and the next). Row 5 — Services required (left) and Project
+                  goal (right) share one grid row so their labels line up. */}
+              <InfoField
+                label={t.contactForm.website}
+                value={
+                  contact.website ? (
+                    <a href={contact.website} target="_blank" rel="noreferrer" className="break-words text-sky-700 hover:underline">
+                      {contact.website}
+                    </a>
+                  ) : undefined
+                }
+              />
+              <InfoField label={t.contactForm.nickname} value={contact.nickname} />
               <InfoField label={t.contactForm.birthday} value={birthdayLine} />
-              <div>
-                <p className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</p>
-                <div className="mt-1">
-                  <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} size="h-28 w-28" textSize="text-2xl" />
-                </div>
+              <div className="row-span-2">
+                <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} size="h-28 w-28" textSize="text-2xl" />
               </div>
+              <InfoField label={t.contactDetail.servicesRequiredLabel} value={servicesRequiredValue} />
+              <InfoField label={t.contactDetail.projectGoalLabel} value={projectGoalValue} />
             </div>
 
             {/* Mobile: separate 7(+2)-row layout — a merged Jurisdiction field
@@ -713,10 +707,7 @@ export default async function ContactDetailPage({
 
               <InfoField label={t.contactForm.birthday} value={birthdayLine} />
               <div>
-                <p className={LABEL_CLASS}>{t.contactDetail.fieldPhotoLabel}</p>
-                <div className="mt-1">
-                  <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} size="h-28 w-28" textSize="text-2xl" />
-                </div>
+                <AvatarThumb url={contact.avatarUrl} firstName={contact.firstName} lastName={contact.lastName} size="h-28 w-28" textSize="text-2xl" />
               </div>
 
               <div className="col-span-2">
@@ -1060,10 +1051,22 @@ export default async function ContactDetailPage({
                       : undefined
                 }
               />
-              <InfoField
-                label={t.contactDetail.lastSyncedPrefix}
-                value={contact.lastSyncedAt ? formatDistanceToNow(contact.lastSyncedAt, { addSuffix: true, locale: dateLocale }) : undefined}
-              />
+              {CONTACT_SYNC_APPS.map((def) => {
+                const row = appSyncByApp.get(def.app);
+                const enabled = row ? row.enabled : def.app === "google_contacts" || Boolean(contact.systemeIoId && def.app === "systeme_io");
+                if (!enabled) return null;
+                const appLabel = t.contactForm.syncAppLabels[def.labelKey as keyof typeof t.contactForm.syncAppLabels] ?? def.app;
+                // The contact's own lastSyncedAt column predates per-app
+                // rows and is what the systeme.io sync has always written.
+                const syncedAt = row?.lastSyncedAt ?? (def.app === "systeme_io" ? contact.lastSyncedAt : null);
+                return (
+                  <InfoField
+                    key={def.app}
+                    label={`${t.contactDetail.lastSyncedPrefix} · ${appLabel}`}
+                    value={syncedAt ? formatDistanceToNow(syncedAt, { addSuffix: true, locale: dateLocale }) : undefined}
+                  />
+                );
+              })}
             </div>
             {otherFields.length > 0 && (
               <div className="grid gap-2 sm:gap-4 sm:grid-cols-2">
@@ -1129,8 +1132,13 @@ export default async function ContactDetailPage({
               title={t.contactDetail.projectsTitle}
               compact
               actions={
-                <Link href={`/projects/new?contactId=${contact.id}`} className="text-xs font-semibold text-white hover:underline">
-                  + {t.contactDetail.newProject}
+                <Link
+                  href={`/projects/new?contactId=${contact.id}`}
+                  title={t.contactDetail.newProject}
+                  aria-label={t.contactDetail.newProject}
+                  className="flex h-5 w-5 items-center justify-center rounded text-lg font-bold leading-none text-white hover:bg-white/20"
+                >
+                  +
                 </Link>
               }
             >
@@ -1139,7 +1147,7 @@ export default async function ContactDetailPage({
               ) : (
                 <ul className="divide-y divide-card-border">
                   {contact.projects.map((project) => (
-                    <li key={project.id} className="py-2">
+                    <li key={project.id} className="py-2 first:pt-0">
                       <Link href={`/projects/${project.id}`} className="font-medium text-ink hover:underline">
                         {project.name}
                       </Link>
@@ -1167,6 +1175,7 @@ export default async function ContactDetailPage({
             eventDialogLabels={t.eventDialog}
             eventViewDialogLabels={t.eventViewDialog}
             linkPickerLabels={calendarLinkPickerLabels}
+            newEventLinks={{ contactId: contact.id }}
           />
 
           <Card

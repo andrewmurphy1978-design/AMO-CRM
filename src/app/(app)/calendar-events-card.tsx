@@ -34,6 +34,7 @@ export default function CalendarEventsCard({
   eventDialogLabels,
   eventViewDialogLabels,
   linkPickerLabels,
+  newEventLinks,
 }: {
   title: string;
   events: CalendarEventSummary[];
@@ -50,6 +51,9 @@ export default function CalendarEventsCard({
   lang: Lang;
   eventDialogLabels: EventDialogLabels;
   eventViewDialogLabels: EventViewDialogLabels;
+  // When set, the header gets a + button that starts a new event already
+  // linked to these targets (e.g. the contact whose page this card is on).
+  newEventLinks?: Partial<EventLinkTargets>;
   linkPickerLabels: { contact: string; project: string; task: string; booking: string; none: string; clear: string; searchPlaceholder: string; noResults: string };
 }) {
   // Resolved here (client-side) from `lang` rather than taken as a raw
@@ -79,13 +83,37 @@ export default function CalendarEventsCard({
   }
 
   return (
-    <Card color="calendarEvents" title={title}>
+    <Card
+      color="calendarEvents"
+      title={title}
+      compact
+      actions={
+        newEventLinks && (
+          <button
+            type="button"
+            title={eventDialogLabels.createTitle}
+            aria-label={eventDialogLabels.createTitle}
+            onClick={() => {
+              // Next half hour, so the new event doesn't start in the past.
+              const start = new Date();
+              start.setSeconds(0, 0);
+              start.setMinutes(start.getMinutes() < 30 ? 30 : 60);
+              setDialogTarget({ start, links: newEventLinks });
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded text-lg font-bold leading-none text-white hover:bg-white/20"
+          >
+            +
+          </button>
+        )
+      }
+    >
       <EventPillList
         events={events}
         dateLocale={dateLocale}
         hour12={hour12}
         intlLocale={intlLocale}
         emptyLabel={notConnectedLabel ?? noEventsLabel}
+        flush
         onSelect={setViewTarget}
       />
 

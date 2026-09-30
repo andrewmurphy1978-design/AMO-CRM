@@ -178,8 +178,8 @@ export default function GeneralInfoDialog({
           </div>
         </div>
 
-        {/* Row 4: Website (+ Tags below it) / Nickname (+ Project goal below) /
-            Birthday (+ Services required below) / Image */}
+        {/* Row 4: Website (+ Tags below it) / Nickname (+ Services required below) /
+            Birthday (+ Project goal below) / Image */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-3">
             <Field label={t.contactForm.website} name="website" type="url" defaultValue={values.website} placeholder="https://…" />
@@ -188,17 +188,17 @@ export default function GeneralInfoDialog({
           <div className="space-y-3">
             <Field label={t.contactForm.nickname} name="nickname" defaultValue={values.nickname} />
             <div>
-              <label className={LABEL_CLASS}>{t.contactDetail.projectGoalLabel}</label>
-              <input type="hidden" name="projectGoalDescriptionSlug" value={projectGoal?.fieldSlug ?? PROJECT_GOAL_DEFAULT_SLUG} />
-              <textarea name="projectGoalDescription" rows={3} defaultValue={projectGoal?.value ?? ""} className={FIELD_CLASS} />
+              <label className={LABEL_CLASS}>{t.contactDetail.servicesRequiredLabel}</label>
+              <input type="hidden" name="servicesRequiredSlug" value={servicesRequired?.fieldSlug ?? SERVICES_REQUIRED_DEFAULT_SLUG} />
+              <textarea name="servicesRequired" rows={3} defaultValue={servicesRequired?.value ?? ""} className={FIELD_CLASS} />
             </div>
           </div>
           <div className="space-y-3">
             <Field label={t.contactForm.birthday} name="birthday" type="date" defaultValue={values.birthday} placeholder="YYYY-MM-DD" />
             <div>
-              <label className={LABEL_CLASS}>{t.contactDetail.servicesRequiredLabel}</label>
-              <input type="hidden" name="servicesRequiredSlug" value={servicesRequired?.fieldSlug ?? SERVICES_REQUIRED_DEFAULT_SLUG} />
-              <textarea name="servicesRequired" rows={3} defaultValue={servicesRequired?.value ?? ""} className={FIELD_CLASS} />
+              <label className={LABEL_CLASS}>{t.contactDetail.projectGoalLabel}</label>
+              <input type="hidden" name="projectGoalDescriptionSlug" value={projectGoal?.fieldSlug ?? PROJECT_GOAL_DEFAULT_SLUG} />
+              <textarea name="projectGoalDescription" rows={3} defaultValue={projectGoal?.value ?? ""} className={FIELD_CLASS} />
             </div>
           </div>
           <div>

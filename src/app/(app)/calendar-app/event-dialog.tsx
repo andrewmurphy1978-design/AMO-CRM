@@ -19,7 +19,7 @@ import {
 } from "@/actions/calendar";
 import { buildAddressBook, type LinkOption } from "../link-dialog";
 
-export type EventDialogTarget = { id: string } | { start: Date; allDay?: boolean } | { duplicateOf: string };
+export type EventDialogTarget = { id: string } | { start: Date; allDay?: boolean; links?: Partial<EventLinkTargets> } | { duplicateOf: string };
 
 type RepeatPreset = "none" | "daily" | "weekly" | "monthly" | "yearly";
 
@@ -160,7 +160,7 @@ interface FormState {
   bookingId: string;
 }
 
-function blankState(start: Date, allDay = false): FormState {
+function blankState(start: Date, allDay = false, links?: Partial<EventLinkTargets>): FormState {
   const end = new Date(start.getTime() + 30 * 60 * 1000);
   return {
     title: "",
@@ -179,10 +179,10 @@ function blankState(start: Date, allDay = false): FormState {
     transparency: "opaque",
     visibility: "default",
     attendeeEmails: [],
-    contactId: "",
-    projectId: "",
-    taskId: "",
-    bookingId: "",
+    contactId: links?.contactId ?? "",
+    projectId: links?.projectId ?? "",
+    taskId: links?.taskId ?? "",
+    bookingId: links?.bookingId ?? "",
   };
 }
 
@@ -564,7 +564,7 @@ export default function EventDialog({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<CalendarEventDetail | null>(null);
   const [defaultReminders, setDefaultReminders] = useState<number[]>([]);
-  const [form, setForm] = useState<FormState>(() => (target && "start" in target ? blankState(target.start, target.allDay) : blankState(new Date())));
+  const [form, setForm] = useState<FormState>(() => (target && "start" in target ? blankState(target.start, target.allDay, target.links) : blankState(new Date())));
   const [contactSearch, setContactSearch] = useState("");
   const [contactFieldOpen, setContactFieldOpen] = useState(false);
   const contactFieldRef = useRef<HTMLDivElement>(null);

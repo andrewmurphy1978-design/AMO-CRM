@@ -17,6 +17,7 @@ export default function EventPillList({
   intlLocale,
   emptyLabel,
   onSelect,
+  flush,
 }: {
   events: CalendarEventSummary[];
   dateLocale: Locale | undefined;
@@ -24,13 +25,16 @@ export default function EventPillList({
   intlLocale: string;
   emptyLabel: string;
   onSelect: (eventId: string) => void;
+  // Drops the top margin when the list is the first thing in its card
+  // (nothing above it to space from).
+  flush?: boolean;
 }) {
   if (events.length === 0) {
-    return <p className="mt-3 text-sm text-soft">{emptyLabel}</p>;
+    return <p className={`${flush ? "" : "mt-3 "}text-sm text-soft`}>{emptyLabel}</p>;
   }
 
   return (
-    <ul className="mt-3 space-y-1.5">
+    <ul className={`${flush ? "" : "mt-3 "}space-y-1.5`}>
       {events.map((event) => {
         const color = eventColor(event.colorId);
         const eventDate = event.start ?? event.end;
