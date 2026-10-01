@@ -36,6 +36,7 @@ import SocialDialog from "./social-dialog";
 import VoipDialog from "./voip-dialog";
 import AddressesDialog from "./addresses-dialog";
 import InvoiceDialog from "./invoice-dialog";
+import AiExportMenu from "./ai-export-menu";
 import AiDetailsDialog from "./ai-details-dialog";
 import { saveContactAiDetails } from "@/actions/contact-brand";
 import { BrandCard } from "./brand-card";
@@ -537,7 +538,12 @@ export default async function ContactDetailPage({
         hour12={hour12}
         lang={lang}
         location={t.dashboard.myLocation}
-        actions={<DeleteContactButton lang={lang} contactId={contact.id} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <AiExportMenu contactId={contact.id} lang={lang} />
+            <DeleteContactButton lang={lang} contactId={contact.id} />
+          </div>
+        }
       />
 
       <div className="grid gap-2 sm:gap-6 lg:grid-cols-3">

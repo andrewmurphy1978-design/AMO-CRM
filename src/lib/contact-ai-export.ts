@@ -1,0 +1,244 @@
+import type { PrismaClient } from "@/lib/prisma";
+import { BRAND_CATEGORIES, isDataUri } from "@/lib/brand";
+import { displayValue, defaultTemplate, type FieldValues } from "@/lib/project-templates";
+import { getProjectTemplate } from "@/lib/project-template-store";
+
+// Builds the Markdown files describing one contact, to hand to an AI
+// assistant. Login credentials are never included.
+
+const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : "");
+const clean = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
+
+function kv(rows: [string, unknown][]): string {
+  const lines = rows.filter(([, v]) => clean(v) !== "").map(([k, v]) => `- **${k}:** ${clean(v).replace(/\n/g, "\n  ")}`);
+  return lines.length ? lines.join("\n") + "\n" : "_Nothing recorded._\n";
+}
+
+function section(title: string, body: string): string {
+  return `## ${title}\n\n${body.trimEnd()}\n\n`;
+}
+
+function address(parts: unknown[]): string {
+  return parts.map(clean).filter(Boolean).join(", ");
+}
+
+export async function buildContactMarkdownFiles(db: PrismaClient, contactId: string): Promise<{ contactName: string; files: { name: string; content: string }[] } | null> {
+  const c = await db.contact.findUnique({
+    where: { id: contactId },
+    include: {
+      owner: { select: { name: true } },
+      tags: { include: { tag: true } },
+      fieldValues: { include: { definition: true } },
+      socialLinks: true,
+      extraAddresses: { orderBy: { order: "asc" } },
+      messagingAccounts: { orderBy: { order: "asc" } },
+      voipAccounts: { orderBy: { order: "asc" } },
+      techStackItems: { orderBy: { order: "asc" } },
+      domains: { orderBy: { order: "asc" } },
+      brandItems: { orderBy: [{ category: "asc" }, { order: "asc" }] },
+      contactNotes: { orderBy: { createdAt: "desc" } },
+      relationsFrom: { include: { relatedContact: { select: { firstName: true, lastName: true, company: true, email: true } } } },
+      projects: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          owner: { select: { name: true } },
+          supervisor: { select: { name: true } },
+          phases: { orderBy: { order: "asc" }, include: { tasks: { orderBy: { createdAt: "asc" }, include: { assignee: { select: { name: true } } } } } },
+          tasks: { where: { phaseId: null }, include: { assignee: { select: { name: true } } } },
+        },
+      },
+      interactions: { orderBy: { occurredAt: "desc" }, take: 60 },
+      emailLinks: { orderBy: { messageDate: "desc" }, take: 40 },
+    },
+  });
+  if (!c) return null;
+
+  const fullName = [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || "Contact";
+  const nameOf = (x: { firstName: string | null; lastName: string | null; company: string | null; email: string | null }) =>
+    [x.firstName, x.lastName].filter(Boolean).join(" ") || x.company || x.email || "—";
+
+  // ---- 01 profile
+  let profile = `# ${fullName} — Profile\n\n`;
+  profile += section(
+    "General",
+    kv([
+      ["Name", fullName],
+      ["Nickname", c.nickname],
+      ["Company", c.company],
+      ["Job title", c.jobTitle],
+      ["Company type", c.companyType],
+      ["Industry", c.industry],
+      ["Website", c.website],
+      ["Stage", c.stage],
+      ["Birthday", c.birthday],
+      ["Language / locale", c.locale],
+      ["Time zone", c.timeZone],
+      ["Jurisdiction", address([c.jurisdictionRegion, c.jurisdictionCountry])],
+      ["Account owner", c.owner?.name],
+      ["Source", c.source],
+      ["Tags", c.tags.map((t) => t.tag.name).join(", ")],
+      ["Added", day(c.createdAt)],
+    ])
+  );
+  profile += section(
+    "Contact info",
+    kv([
+      ["Emails", [c.email, c.email2, ...c.extraEmails].filter(Boolean).join(", ")],
+      ["Phones", [c.phone, c.phone2, ...c.extraPhones].filter(Boolean).join(", ")],
+      ["Messaging apps", c.messagingAccounts.map((m) => `${m.app}: ${m.handle}`).join("; ")],
+      ["VoIP apps", c.voipAccounts.map((m) => `${m.app}: ${m.handle}`).join("; ")],
+      ["Social media", c.socialLinks.map((s) => `${s.platform}: ${s.url}`).join("; ")],
+    ])
+  );
+  profile += section("Main address", kv([["Address", address([c.address, c.city, c.state, c.zip, c.country])]]));
+  if (c.extraAddresses.length > 0) {
+    profile += section("Other addresses", c.extraAddresses.map((a) => `- **${clean(a.description) || "Address"}:** ${address([a.address, a.city, a.state, a.zip, a.country])}`).join("\n"));
+  }
+  profile += section(
+    "Billing",
+    kv([
+      ["Billing contact", c.billingContactName],
+      ["Billing email", c.billingEmail],
+      ["Billing phone", c.billingPhone],
+      ["Billing address", address([c.billingAddress, c.billingCity, c.billingState, c.billingZip, c.billingCountry])],
+      ["Preferred currency", c.preferredCurrency],
+      ["Payment terms", c.paymentTerms],
+      ["Payment schedule", c.paymentSchedule],
+      ["Default discount", c.defaultDiscount != null ? `${c.defaultDiscount}%` : ""],
+      ["Automatic invoice reminders", c.autoSendInvoiceReminders ? "Yes" : ""],
+    ])
+  );
+  if (c.relationsFrom.length > 0) {
+    profile += section("Related contacts", c.relationsFrom.map((r) => `- ${nameOf(r.relatedContact)} — ${r.relationType}${r.notes ? ` (${r.notes})` : ""}`).join("\n"));
+  }
+  const customFields = c.fieldValues.filter((f) => clean(f.value));
+  if (customFields.length > 0) {
+    profile += section("Other fields", kv(customFields.map((f) => [f.definition?.label ?? f.fieldSlug, f.value] as [string, unknown])));
+  }
+
+  // ---- 02 AI context
+  let context = `# ${fullName} — Context for AI\n\n`;
+  context += section("Written for AI", clean(c.aiDetails) || "_Nothing written yet (the “Contact details for AI” card is empty)._");
+  if (clean(c.notes)) context += section("General note", clean(c.notes));
+  context += section(
+    "Notes",
+    c.contactNotes.length > 0 ? c.contactNotes.map((n) => `### ${day(n.createdAt)}\n\n${clean(n.text)}`).join("\n\n") : "_No notes._"
+  );
+
+  // ---- 03 brand
+  let brand = `# ${fullName} — Brand\n\n`;
+  if (c.brandItems.length === 0) brand += "_No brand assets recorded yet._\n";
+  for (const cat of BRAND_CATEGORIES) {
+    const items = c.brandItems.filter((b) => b.category === cat.key);
+    if (items.length === 0) continue;
+    const lines = items.map((b) => {
+      const value = clean(b.value);
+      const shown = isDataUri(value) ? "(file uploaded in the CRM — not included in this export)" : value;
+      return `- **${b.label}**${shown ? `: ${shown}` : ""}${b.note ? ` — ${b.note}` : ""}`;
+    });
+    brand += section(cat.en, lines.join("\n"));
+  }
+
+  // ---- 04 tech + domains
+  let tech = `# ${fullName} — Tech stack & domains\n\n`;
+  const stack: [string, string | null, string | null, string | null][] = [
+    ["Website", c.websiteDomain, c.websiteHostingProvider, c.websiteDesignApp],
+    ["Funnels", c.funnelsDomain, c.funnelsHostingProvider, c.funnelsDesignApp],
+    ["Email", c.emailDomain, c.emailHostingProvider, c.emailMarketingApp],
+    ["Store", c.storeDomain, c.storeHostingProvider, c.storeDesignApp],
+    ...c.techStackItems.map((i) => [i.label, i.domain, i.hostingProvider, i.app] as [string, string | null, string | null, string | null]),
+  ];
+  const stackLines = stack
+    .filter(([, d, h, a]) => d || h || a)
+    .map(([label, d, h, a]) => `- **${label}:** ${[d && `domain ${d}`, h && `hosting ${h}`, a && `app ${a}`].filter(Boolean).join(" · ")}`);
+  tech += section("Tech stack", stackLines.length ? stackLines.join("\n") : "_Nothing recorded._");
+  tech += section(
+    "Domains",
+    c.domains.length
+      ? c.domains
+          .map(
+            (d) =>
+              `- **${d.domain}** — ${[d.registrar && `registrar ${d.registrar}`, d.dnsProvider && `DNS ${d.dnsProvider}`, d.expiryDate && `expires ${day(d.expiryDate)}`, d.autoRenew && "auto-renew", d.managedBy && `managed by ${d.managedBy}`]
+                .filter(Boolean)
+                .join(" · ")}${d.notes ? `\n  - ${clean(d.notes)}` : ""}`
+          )
+          .join("\n")
+      : "_No domains recorded._"
+  );
+
+  // ---- 05 projects
+  let projects = `# ${fullName} — Projects\n\n`;
+  if (c.projects.length === 0) projects += "_No projects yet._\n";
+  for (const p of c.projects) {
+    const template = await getProjectTemplate(db, p.type).catch(() => defaultTemplate(p.type));
+    const answers = (p.customFields ?? {}) as FieldValues;
+    projects += `## ${p.name}\n\n`;
+    projects += kv([
+      ["Type", p.type],
+      ["Status", p.status],
+      ["Owner", p.owner?.name],
+      ["Supervisor", p.supervisor?.name],
+      ["Start", day(p.startDate)],
+      ["Due", day(p.dueDate)],
+      ["Description", p.description],
+      ["Notes", p.notes],
+      ...template.fields.map((f) => [f.label, displayValue(answers[f.key])] as [string, unknown]),
+    ]);
+    if (p.phases.length > 0) {
+      projects += "\n**Phases & tasks**\n\n";
+      for (const ph of p.phases) {
+        projects += `- **${ph.name}** (${ph.status})${ph.notes ? ` — ${clean(ph.notes)}` : ""}\n`;
+        for (const tk of ph.tasks) projects += `  - [${tk.status === "DONE" ? "x" : " "}] ${tk.title}${tk.assignee ? ` — ${tk.assignee.name}` : ""}${tk.dueDate ? ` (due ${day(tk.dueDate)})` : ""}\n`;
+      }
+    }
+    if (p.tasks.length > 0) {
+      projects += "\n**Tasks without a phase**\n\n";
+      for (const tk of p.tasks) projects += `- [${tk.status === "DONE" ? "x" : " "}] ${tk.title}${tk.assignee ? ` — ${tk.assignee.name}` : ""}\n`;
+    }
+    projects += "\n";
+  }
+
+  // ---- 06 communications
+  let comms = `# ${fullName} — Calls, texts & emails\n\n`;
+  comms += section(
+    "Calls, texts, meetings & notes (most recent 60)",
+    c.interactions.length
+      ? c.interactions
+          .map((i) => `- **${day(i.occurredAt)} · ${i.type}${i.direction ? ` (${i.direction.toLowerCase()})` : ""}${i.subject ? ` · ${i.subject}` : ""}:** ${clean(i.notes).replace(/\n/g, " ")}`)
+          .join("\n")
+      : "_None recorded._"
+  );
+  comms += section(
+    "Linked emails (subjects, most recent 40)",
+    c.emailLinks.length ? c.emailLinks.map((e) => `- ${day(e.messageDate)} · ${clean(e.subject) || "(no subject)"}${e.fromLabel ? ` — ${e.fromLabel}` : ""}`).join("\n") : "_None linked._"
+  );
+
+  const readme = `# ${fullName} — AI briefing pack
+
+Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM. Give an AI assistant these files so it understands who this contact is and what we're doing for them.
+
+| File | What it holds |
+|---|---|
+| 01-profile.md | Identity, company, contact info, addresses, billing, relations |
+| 02-ai-context.md | Background written for AI, plus notes |
+| 03-brand.md | Logos, colours, fonts, voice, photos, components, icons, graphics, charts |
+| 04-tech-stack-and-domains.md | Websites, hosting, apps, domains |
+| 05-projects.md | Projects with custom answers, phases and tasks |
+| 06-communications.md | Recent calls, texts, meetings and linked email subjects |
+
+Login credentials are never exported. Uploaded image files are listed by name only.
+`;
+
+  return {
+    contactName: fullName,
+    files: [
+      { name: "00-README.md", content: readme },
+      { name: "01-profile.md", content: profile },
+      { name: "02-ai-context.md", content: context },
+      { name: "03-brand.md", content: brand },
+      { name: "04-tech-stack-and-domains.md", content: tech },
+      { name: "05-projects.md", content: projects },
+      { name: "06-communications.md", content: comms },
+    ],
+  };
+}
