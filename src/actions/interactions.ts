@@ -1,5 +1,6 @@
 "use server";
 
+import { promoteContact } from "@/lib/project-progress";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
@@ -39,8 +40,8 @@ export async function logInteraction(
     throw error;
   }
 
-  await withScopedPrismaClient((db) =>
-    db.interaction.create({
+  await withScopedPrismaClient(async (db) => {
+    await db.interaction.create({
       data: {
         type: data.type,
         subject: data.subject,
@@ -49,8 +50,10 @@ export async function logInteraction(
         projectId: data.projectId,
         loggedById: session.user.id,
       },
-    })
-  );
+    });
+    // A logged call, meeting or text: a Lead is now a Prospect.
+    if (["CALL", "MEETING", "SMS"].includes(data.type)) await promoteContact(db, data.contactId, "PROSPECT");
+  });
 
   revalidatePath(`/contacts/${data.contactId}`);
   if (data.projectId) {
@@ -192,6 +195,8 @@ export async function saveContactInteraction(
             : {}),
         },
       });
+      // A logged call, meeting or text: a Lead is now a Prospect.
+      if (["CALL", "MEETING", "SMS"].includes(data.type)) await promoteContact(db, contactId, "PROSPECT");
     }
     return null;
   });

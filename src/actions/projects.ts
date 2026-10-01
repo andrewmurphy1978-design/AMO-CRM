@@ -15,7 +15,7 @@ const ProjectSchema = z.object({
   name: z.string().trim().min(1, "Project name is required"),
   contactId: z.string().min(1, "Client is required"),
   description: z.string().trim().optional(),
-  status: z.enum(["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"]),
+  status: z.enum(["PROPOSAL", "PLANNING", "ACTIVE", "FINAL", "ON_HOLD", "COMPLETED", "CANCELLED"]),
   type: z.enum(["WEBSITE", "FUNNEL", "APP", "SOCIAL_MEDIA", "CONSULTING", "OTHER", "BLOG", "NEWSLETTER", "POST_AUTOMATION", "STORE", "CRM_CUSTOMIZATION", "AUTOMATION", "EMAIL_MARKETING", "SMS_MARKETING", "TRAINING", "AFFILIATE_MARKETING"]),
   ownerId: z.string().optional(),
   supervisorId: z.string().optional(),
@@ -29,7 +29,7 @@ function readProjectForm(formData: FormData) {
     name: String(formData.get("name") ?? "").trim(),
     contactId: String(formData.get("contactId") ?? ""),
     description: String(formData.get("description") ?? "").trim() || undefined,
-    status: String(formData.get("status") ?? "PLANNING"),
+    status: String(formData.get("status") ?? "PROPOSAL"),
     type: String(formData.get("type") ?? "OTHER"),
     ownerId: String(formData.get("ownerId") ?? "") || undefined,
     supervisorId: String(formData.get("supervisorId") ?? "") || undefined,
@@ -42,7 +42,7 @@ function readProjectForm(formData: FormData) {
 
 export interface PhaseValues {
   name: string;
-  status: "PLANNING" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+  status: "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
   phaseType: string;
   teamMemberIds: string[];
   supervisorId: string;
@@ -53,7 +53,7 @@ export interface PhaseValues {
 
 const PhaseSchema = z.object({
   name: z.string().trim().min(1, "Phase name is required"),
-  status: z.enum(["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"]),
+  status: z.enum(["PROPOSAL", "PLANNING", "ACTIVE", "FINAL", "ON_HOLD", "COMPLETED", "CANCELLED"]),
   phaseType: z.string().trim().optional(),
   teamMemberIds: z.array(z.string()),
   supervisorId: z.string().optional(),
@@ -142,7 +142,7 @@ interface NewProjectInput {
   type: string;
   description?: string;
   contactId: string;
-  status: "PLANNING" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+  status: "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
   ownerId: string;
   supervisorId: string | null;
   teamMemberIds: string[];
@@ -170,6 +170,7 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
       startDate: input.startDate,
       dueDate: input.dueDate,
       customFields: Object.keys(values).length > 0 ? (values as never) : undefined,
+      lifecycleManaged: input.template.progressive !== false,
     },
   });
 
@@ -192,7 +193,7 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
     }
   }
   if (progressive && phases.length > 1) {
-    await db.project.update({ where: { id: project.id }, data: { pendingPhases: phases.slice(1) as never } });
+    await db.project.update({ where: { id: project.id }, data: { pendingPhases: phases.slice(1).map((p) => ({ name: p.name, tasks: p.tasks, stage: p.stage })) as never } });
   }
 
   await db.activityLogEntry.create({
@@ -340,7 +341,7 @@ export async function updateProjectGeneral(
       name: String(formData.get("name") ?? "").trim(),
       description: String(formData.get("description") ?? "").trim() || undefined,
       contactId: String(formData.get("contactId") ?? ""),
-      status: String(formData.get("status") ?? "PLANNING"),
+      status: String(formData.get("status") ?? "PROPOSAL"),
       type: String(formData.get("type") ?? "OTHER"),
       ownerId: String(formData.get("ownerId") ?? "") || undefined,
       supervisorId: String(formData.get("supervisorId") ?? "") || undefined,

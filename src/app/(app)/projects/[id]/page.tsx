@@ -10,6 +10,7 @@ import ProjectDetailsDialog from "./project-details-dialog";
 import ProjectNotesDialog from "./project-notes-dialog";
 import PhasesCard from "./phases-card";
 import TasksCard, { type TaskCardItem } from "./tasks-card";
+import InstalmentsCard, { type InstalmentRow } from "./instalments-card";
 import NewInvoiceButton from "./new-invoice-button";
 import NewEmailButton from "../../contacts/[id]/new-email-button";
 import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
@@ -96,7 +97,7 @@ export default async function ProjectDetailPage({
           include: { loggedBy: true, updatedBy: true, participants: { include: { contact: true, user: true } } },
         },
         emailLinks: { orderBy: { messageDate: "desc" } },
-        proposals: { orderBy: { createdAt: "desc" } },
+        proposals: { orderBy: { createdAt: "desc" }, include: { paymentSchedule: { orderBy: { order: "asc" } } } },
         invoices: { orderBy: { createdAt: "desc" } },
       },
     });
@@ -231,6 +232,19 @@ export default async function ProjectDetailPage({
     dueDate: toDateInput(p.dueDate),
     description: p.description,
   }));
+
+  // The accepted proposal's payment schedule (instalments), if any.
+  const acceptedProposal = project.proposals.find((p) => p.status === "ACCEPTED" && p.paymentSchedule.length > 0);
+  const instalmentRows: InstalmentRow[] = (acceptedProposal?.paymentSchedule ?? []).map((row) => {
+    const amount = row.amount ?? (row.percentage != null && acceptedProposal ? (row.percentage / 100) * acceptedProposal.totalAmount : null);
+    return {
+      id: row.id,
+      label: row.label,
+      amountText: [row.percentage != null ? `${row.percentage}%` : "", amount != null && acceptedProposal ? `${amount.toFixed(2)} ${acceptedProposal.currency}` : ""].filter(Boolean).join(" · "),
+      dueText: row.dueDate ? longDate(row.dueDate, lang, dateLocale) : "",
+      paid: row.paid,
+    };
+  });
 
   const clientEmail = project.contact.email ?? project.contact.email2 ?? project.contact.extraEmails[0] ?? null;
   const namedContact = { id: project.contact.id, name: clientName || "—" };
@@ -566,6 +580,8 @@ export default async function ProjectDetailPage({
               ),
             }))}
           />
+
+          {instalmentRows.length > 0 && <InstalmentsCard projectId={project.id} rows={instalmentRows} lang={lang} />}
 
           <Card
             color="proposals"

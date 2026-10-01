@@ -85,8 +85,10 @@ export default function ProjectForm({
   }, [toast, defaultValues?.id, router]);
 
   const STATUSES = [
+    { value: "PROPOSAL", label: t.projectStatuses.PROPOSAL },
     { value: "PLANNING", label: t.projectStatuses.PLANNING },
     { value: "ACTIVE", label: t.projectStatuses.ACTIVE },
+    { value: "FINAL", label: t.projectStatuses.FINAL },
     { value: "ON_HOLD", label: t.projectStatuses.ON_HOLD },
     { value: "COMPLETED", label: t.projectStatuses.COMPLETED },
     { value: "CANCELLED", label: t.projectStatuses.CANCELLED },
@@ -153,7 +155,7 @@ export default function ProjectForm({
           <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.status}</label>
           <select
             name="status"
-            defaultValue={defaultValues?.status ?? "PLANNING"}
+            defaultValue={defaultValues?.status ?? "PROPOSAL"}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
             {STATUSES.map((s) => (

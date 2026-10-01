@@ -43,8 +43,10 @@ export default function PhaseDialog({
   if (!open) return null;
 
   const STATUSES = [
+    { value: "PROPOSAL", label: t.projectStatuses.PROPOSAL },
     { value: "PLANNING", label: t.projectStatuses.PLANNING },
     { value: "ACTIVE", label: t.projectStatuses.ACTIVE },
+    { value: "FINAL", label: t.projectStatuses.FINAL },
     { value: "ON_HOLD", label: t.projectStatuses.ON_HOLD },
     { value: "COMPLETED", label: t.projectStatuses.COMPLETED },
     { value: "CANCELLED", label: t.projectStatuses.CANCELLED },

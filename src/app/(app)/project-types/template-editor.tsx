@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveProjectTemplate, resetProjectTemplate } from "@/actions/project-types";
-import { TEMPLATE_TYPES, isMulti, type Cond, type FieldTpl, type FieldType, type PhaseTpl, type TaskTpl, type TemplateConfig } from "@/lib/project-templates";
+import { TEMPLATE_TYPES, PHASE_STAGES, isMulti, type PhaseStage, type Cond, type FieldTpl, type FieldType, type PhaseTpl, type TaskTpl, type TemplateConfig } from "@/lib/project-templates";
 
 const INPUT = "w-full min-w-0 rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL = "block text-[11px] font-semibold uppercase tracking-wide text-soft";
@@ -18,6 +18,13 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "multiselect", label: "Choose several" },
   { value: "languages", label: "Languages" },
 ];
+
+const STAGE_LABELS: Record<PhaseStage, string> = {
+  PROPOSAL: "Proposal (until the 1st instalment)",
+  PLANNING: "Planning (research, mock-up)",
+  ACTIVE: "Active (building … deploying)",
+  FINAL: "Final (awaiting the last instalment)",
+};
 
 const OPS: { value: Cond["op"]; label: string }[] = [
   { value: "yes", label: "is Yes" },
@@ -176,8 +183,10 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
         <span>
           <span className="font-semibold">Create phases one at a time</span>
           <span className="block text-xs text-soft">
-            A new project only gets its first phase (normally Planning) and that phase&apos;s tasks. When a phase is completed — all its tasks done, or the phase marked Completed
-            — the next phase and its tasks are added. For the Planning phase, accepting the proposal completes it. Untick to create every phase at once.
+            A new project only gets its first phase (Proposal) and that phase&apos;s tasks. The project then moves through its statuses: the proposal accepted + the 1st
+            instalment paid → Planning (the contact becomes a Client); Planning finished (mock-up accepted) → Active (2nd instalment due); Deploying finished → Final; the
+            last instalment paid → Completed. Within a status, each phase and its tasks are created only when the previous phase is completed. Each phase&apos;s &quot;Project status&quot;
+            decides where it belongs. Untick to create every phase at once.
           </span>
         </span>
       </label>
@@ -274,6 +283,16 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
                 <div className="min-w-[200px] flex-1">
                   <label className={LABEL}>Phase {pi + 1}</label>
                   <input value={p.name} onChange={(e) => updatePhase(pi, { name: e.target.value })} className={INPUT} />
+                </div>
+                <div>
+                  <label className={LABEL}>Project status</label>
+                  <select value={p.stage ?? "ACTIVE"} onChange={(e) => updatePhase(pi, { stage: e.target.value as PhaseStage })} className={INPUT}>
+                    {PHASE_STAGES.map((st) => (
+                      <option key={st} value={st}>
+                        {STAGE_LABELS[st]}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <button type="button" className={SMALL_BTN} onClick={() => setPhases(move(phases, pi, -1))} disabled={pi === 0}>
                   ↑

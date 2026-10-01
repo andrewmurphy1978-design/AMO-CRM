@@ -8,8 +8,10 @@ import { EditCardButton } from "../../contacts/[id]/section-dialog";
 import PhaseList, { type PhaseRowData } from "../phase-list";
 
 const STATUS_COLORS: Record<string, string> = {
+  PROPOSAL: "bg-violet-50 text-violet-700",
   PLANNING: "bg-black/5 text-soft",
   ACTIVE: "bg-emerald-50 text-emerald-700",
+  FINAL: "bg-orange-50 text-orange-700",
   ON_HOLD: "bg-amber-50 text-amber-700",
   COMPLETED: "bg-sky-50 text-sky-700",
   CANCELLED: "bg-red-50 text-red-600",

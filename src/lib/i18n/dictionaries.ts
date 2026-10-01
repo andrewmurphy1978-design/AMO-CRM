@@ -242,8 +242,10 @@ export const dictionaries = {
       PERSONAL: "Personal",
     },
     projectStatuses: {
+      PROPOSAL: "Proposal",
       PLANNING: "Planning",
       ACTIVE: "Active",
+      FINAL: "Final",
       ON_HOLD: "On hold",
       COMPLETED: "Completed",
       CANCELLED: "Cancelled",
@@ -1793,8 +1795,10 @@ export const dictionaries = {
       PERSONAL: "Personnel",
     },
     projectStatuses: {
+      PROPOSAL: "Proposition",
       PLANNING: "Planification",
       ACTIVE: "Actif",
+      FINAL: "Final",
       ON_HOLD: "En pause",
       COMPLETED: "Terminé",
       CANCELLED: "Annulé",

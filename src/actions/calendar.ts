@@ -1,5 +1,6 @@
 "use server";
 
+import { promoteContact } from "@/lib/project-progress";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
@@ -49,6 +50,9 @@ async function saveLinks(db: PrismaClient, googleEventId: string, links: EventLi
       update: { contactId, projectId, phaseId, taskId, bookingId },
       create: { googleEventId, contactId, projectId, phaseId, taskId, bookingId },
     });
+    // A Lead with an event scheduled (a discovery call, say) is now a Prospect.
+    const owner = contactId ?? (projectId ? (await db.project.findUnique({ where: { id: projectId }, select: { contactId: true } }))?.contactId : null);
+    await promoteContact(db, owner, "PROSPECT");
   }
 }
 

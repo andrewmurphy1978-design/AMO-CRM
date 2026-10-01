@@ -38,9 +38,17 @@ export interface TaskTpl {
   repeat?: string[];
 }
 
+// Which project status a phase belongs to: PROPOSAL (proposal until the 1st
+// instalment), PLANNING (research / mock-up), ACTIVE (building ... deploying),
+// FINAL (last instalment). Moving between stages is gated by approvals and
+// payments (see lib/project-progress.ts).
+export type PhaseStage = "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL";
+export const PHASE_STAGES: PhaseStage[] = ["PROPOSAL", "PLANNING", "ACTIVE", "FINAL"];
+
 export interface PhaseTpl {
   name: string;
   when?: Cond;
+  stage?: PhaseStage;
   tasks: TaskTpl[];
 }
 
@@ -178,17 +186,23 @@ function expandTitle(task: TaskTpl, values: FieldValues): string[] {
 }
 
 // Every project type starts with this phase: the proposal is prepared, sent,
-// and answered. Approval (proposal accepted, or the phase completed) is what
-// releases the next phase.
+// answered, and the 1st instalment received. Only then does the project move
+// on to Planning.
 export function planningPhase(): PhaseTpl {
   return {
-    name: "Planning",
-    tasks: [{ title: "Prepare the proposal" }, { title: "Present (send) the proposal" }, { title: "Await the answer to the proposal" }],
+    name: "Proposal",
+    stage: "PROPOSAL",
+    tasks: [
+      { title: "Prepare the proposal" },
+      { title: "Present (send) the proposal" },
+      { title: "Await the answer to the proposal" },
+      { title: "Receive the 1st instalment" },
+    ],
   };
 }
 
 export interface ProjectPlan {
-  phases: { name: string; tasks: string[] }[];
+  phases: { name: string; tasks: string[]; stage: PhaseStage }[];
   spawns: { type: string; name: string }[];
 }
 
@@ -205,7 +219,7 @@ export function buildPlan(config: TemplateConfig, rawValues: FieldValues, projec
       if (!evalCond(task.when, values)) continue;
       for (const title of expandTitle(task, values)) if (title && !titles.includes(title)) titles.push(title);
     }
-    phases.push({ name: tidy(phase.name), tasks: titles });
+    phases.push({ name: tidy(phase.name), tasks: titles, stage: phase.stage ?? "ACTIVE" });
   }
   const spawns: ProjectPlan["spawns"] = [];
   for (const field of config.fields) {
@@ -259,7 +273,12 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
         ...(Array.isArray(tk?.repeat) && tk.repeat.length ? { repeat: tk.repeat.map(str).filter(Boolean) } : {}),
       });
     }
-    phases.push({ name, ...(cond(p?.when) ? { when: cond(p?.when) } : {}), tasks });
+    phases.push({
+      name,
+      ...(cond(p?.when) ? { when: cond(p?.when) } : {}),
+      ...(PHASE_STAGES.includes(p?.stage as PhaseStage) ? { stage: p.stage as PhaseStage } : {}),
+      tasks,
+    });
   }
   return { fields, phases, ...(obj.progressive === false ? { progressive: false } : {}) };
 }
@@ -699,8 +718,36 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
   },
 };
 
-// Planning comes first in every built-in template.
-for (const template of Object.values(DEFAULT_TEMPLATES)) template.phases.unshift(planningPhase());
+// Lifecycle for the built-in templates: Proposal first; research / mock-up
+// style phases belong to Planning; everything else to Active (with Presenting
+// and Deploying added if missing); Final Payment last.
+const PLANNING_STAGE_NAMES = /^(research|mock-?up|model|design|discovery|scoping|catalog planning|preparation)$/i;
+
+function applyLifecycle(template: TemplateConfig): void {
+  for (const phase of template.phases) phase.stage = PLANNING_STAGE_NAMES.test(phase.name) ? "PLANNING" : "ACTIVE";
+  const names = template.phases.map((p) => p.name.toLowerCase());
+  if (!names.some((n) => /present/.test(n))) {
+    template.phases.push({ name: "Presenting", stage: "ACTIVE", tasks: [{ title: "Present the work to the client" }, { title: "Collect feedback and approval" }] });
+  }
+  if (!names.some((n) => /deploy|launch|release|handover|delivery|wrap-up/.test(n))) {
+    template.phases.push({ name: "Deploying", stage: "ACTIVE", tasks: [{ title: "Make the final adjustments" }, { title: "Deploy / go live" }] });
+  }
+  template.phases.push({
+    name: "Final Payment",
+    stage: "FINAL",
+    tasks: [{ title: "Send the final invoice" }, { title: "Receive the final instalment" }],
+  });
+  template.phases.unshift(planningPhase());
+}
+
+// Model -> Mock-up, Design -> Mock-up (what the client reviews and accepts).
+for (const template of Object.values(DEFAULT_TEMPLATES)) {
+  for (const phase of template.phases) {
+    if (phase.name === "Model" || phase.name === "Design") phase.name = "Mock-up";
+    if (phase.name === "Planning") phase.name = "Catalog Planning";
+  }
+  applyLifecycle(template);
+}
 
 export function defaultTemplate(type: string): TemplateConfig {
   return DEFAULT_TEMPLATES[type] ?? { fields: [], phases: [] };

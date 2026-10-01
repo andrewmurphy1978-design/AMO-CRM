@@ -1,5 +1,6 @@
 "use server";
 
+import { syncProjectLifecycle } from "@/lib/project-progress";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -71,6 +72,7 @@ export async function createInvoice(
         paidAt: data.status === "PAID" ? new Date() : null,
       },
     });
+    if (data.status === "PAID") await syncProjectLifecycle(db, data.projectId);
     return contactIdForProject(db, data.projectId);
   });
 
@@ -91,6 +93,7 @@ export async function updateInvoiceStatus(invoiceId: string, projectId: string, 
         ...(status === "PAID" ? { paidAt: new Date() } : {}),
       },
     });
+    if (status === "PAID") await syncProjectLifecycle(db, projectId);
     return contactIdForProject(db, projectId);
   });
 

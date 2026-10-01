@@ -1,3 +1,4 @@
+import { promoteContact } from "@/lib/project-progress";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { withScopedPrismaClient } from "@/lib/prisma";
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
         ...(contactId ? { participants: { create: [{ contactId }] } } : {}),
       },
     });
+    if (contactId) await promoteContact(db, contactId, "PROSPECT");
     return { status: 200 as const, contactId };
   });
 

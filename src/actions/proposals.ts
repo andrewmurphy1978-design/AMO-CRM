@@ -98,6 +98,21 @@ export async function updateProposalStatus(proposalId: string, projectId: string
   revalidateBoth(projectId, contactId);
 }
 
+// Ticks (or unticks) an instalment of the accepted proposal's payment schedule.
+// Paying the 1st / last instalment is what moves the project through its
+// lifecycle (see lib/project-progress.ts).
+export async function setInstalmentPaid(rowId: string, projectId: string, paid: boolean) {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposalPaymentScheduleItem.update({ where: { id: rowId }, data: { paid, paidAt: paid ? new Date() : null } });
+    if (paid) await onProposalAccepted(db, projectId);
+    return contactIdForProject(db, projectId);
+  });
+  revalidateBoth(projectId, contactId);
+}
+
 export async function deleteProposal(proposalId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
