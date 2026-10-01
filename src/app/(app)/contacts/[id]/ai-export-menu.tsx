@@ -1,24 +1,47 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CONTACT_AI_FILES } from "@/lib/contact-ai-files";
+import { createPortal } from "react-dom";
 
-// Header button on the Contact page: downloads the contact's info as Markdown
-// files for an AI assistant (a .zip of all files, one combined .md, or any
-// single file), or copies the combined text to the clipboard.
-export default function AiExportMenu({ contactId, lang, isAdmin }: { contactId: string; lang: "en" | "fr"; isAdmin: boolean }) {
+// "Export for AI" button: downloads Markdown files for an AI assistant (a .zip
+// of everything, one combined .md, or any single file), or copies the combined
+// text. Used on the Contact page (header) and the Project page (General Info
+// card). The drop-down is portalled and fixed-positioned so a card's
+// overflow-hidden can't clip it.
+export default function AiExportMenu({
+  base,
+  files,
+  lang,
+  isAdmin,
+}: {
+  base: string; // e.g. /api/contacts/<id>/ai-export
+  files: readonly { name: string; label: string }[];
+  lang: "en" | "fr";
+  isAdmin: boolean;
+}) {
   const fr = lang === "fr";
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [apiKeys, setApiKeys] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const base = `/api/contacts/${contactId}/ai-export`;
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const q = apiKeys ? "&apikeys=1" : "";
+
+  function toggle() {
+    if (!open && buttonRef.current) {
+      const r = buttonRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+    }
+    setOpen((v) => !v);
+  }
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (panelRef.current?.contains(t) || buttonRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -34,46 +57,52 @@ export default function AiExportMenu({ contactId, lang, isAdmin }: { contactId: 
   const item = "block w-full px-3 py-2 text-left text-sm text-ink hover:bg-black/5";
 
   return (
-    <div ref={rootRef} className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-lg border border-white/40 px-3 py-2 text-sm font-medium text-amo-white hover:bg-white/10"
+        onClick={toggle}
+        className="rounded-lg border border-white/40 px-3 py-1.5 text-sm font-medium text-amo-white hover:bg-white/10"
       >
         {fr ? "Exporter pour l'IA" : "Export for AI"} ▾
       </button>
-      {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-72 overflow-hidden rounded-xl border border-card-border bg-card-bg py-1 shadow-xl">
-          <a href={`${base}?format=zip${q}`} className={`${item} font-semibold`}>
-            {fr ? "Tout télécharger (.zip)" : "Download all (.zip)"}
-          </a>
-          <a href={`${base}?format=md${q}`} className={item}>
-            {fr ? "Un seul fichier (.md)" : "Single combined file (.md)"}
-          </a>
-          <button type="button" onClick={copyAll} className={item}>
-            {copied ? (fr ? "Copié ✓" : "Copied ✓") : fr ? "Copier tout le texte" : "Copy all text"}
-          </button>
-          {isAdmin && (
-            <label className="flex cursor-pointer items-start gap-2 border-t border-card-border px-3 py-2 text-xs text-ink">
-              <input type="checkbox" checked={apiKeys} onChange={(e) => setApiKeys(e.target.checked)} className="mt-0.5" />
-              <span>
-                <span className="font-semibold">{fr ? "Inclure les clés API partagées" : "Include shared API keys"}</span>
-                <span className="block text-soft">
-                  {fr
-                    ? "Seulement celles marquées « Partager avec l'IA ». Utilisez des clés restreintes."
-                    : "Only keys marked “Share with AI”. Use restricted keys."}
-                </span>
-              </span>
-            </label>
-          )}
-          <div className="my-1 border-t border-card-border" />
-          {CONTACT_AI_FILES.map((f) => (
-            <a key={f.name} href={`${base}?file=${f.name}${q}`} className={`${item} text-xs`}>
-              {f.name} <span className="text-soft">— {f.label}</span>
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            style={{ top: pos.top, right: pos.right }}
+            className="fixed z-[70] max-h-[80vh] w-80 overflow-y-auto rounded-xl border border-card-border bg-card-bg py-1 text-left font-normal normal-case tracking-normal shadow-xl"
+          >
+            <a href={`${base}?format=zip${q}`} className={`${item} font-semibold`}>
+              {fr ? "Tout télécharger (.zip)" : "Download all (.zip)"}
             </a>
-          ))}
-        </div>
-      )}
-    </div>
+            <a href={`${base}?format=md${q}`} className={item}>
+              {fr ? "Un seul fichier (.md)" : "Single combined file (.md)"}
+            </a>
+            <button type="button" onClick={copyAll} className={item}>
+              {copied ? (fr ? "Copié ✓" : "Copied ✓") : fr ? "Copier tout le texte" : "Copy all text"}
+            </button>
+            {isAdmin && (
+              <label className="flex cursor-pointer items-start gap-2 border-t border-card-border px-3 py-2 text-xs text-ink">
+                <input type="checkbox" checked={apiKeys} onChange={(e) => setApiKeys(e.target.checked)} className="mt-0.5" />
+                <span>
+                  <span className="font-semibold">{fr ? "Inclure les clés API partagées" : "Include shared API keys"}</span>
+                  <span className="block text-soft">
+                    {fr ? "Seulement celles marquées « Partager avec l'IA ». Utilisez des clés restreintes." : "Only keys marked “Share with AI”. Use restricted keys."}
+                  </span>
+                </span>
+              </label>
+            )}
+            <div className="my-1 border-t border-card-border" />
+            {files.map((f) => (
+              <a key={f.name} href={`${base}?file=${f.name}${q}`} className={`${item} text-xs`}>
+                {f.name} <span className="text-soft">— {f.label}</span>
+              </a>
+            ))}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }

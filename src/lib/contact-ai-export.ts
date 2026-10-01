@@ -46,12 +46,20 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
       projects: {
         orderBy: { createdAt: "desc" },
         include: {
+          proposals: { orderBy: { createdAt: "desc" }, select: { title: true, status: true, totalAmount: true, currency: true, sentAt: true, respondedAt: true } },
+          invoices: { orderBy: { createdAt: "desc" }, select: { number: true, status: true, totalAmount: true, currency: true, dueDate: true, paidAt: true } },
           owner: { select: { name: true } },
           supervisor: { select: { name: true } },
           phases: { orderBy: { order: "asc" }, include: { tasks: { orderBy: { createdAt: "asc" }, include: { assignee: { select: { name: true } } } } } },
           tasks: { where: { phaseId: null }, include: { assignee: { select: { name: true } } } },
         },
       },
+      subscriptions: { orderBy: { startedAt: "desc" } },
+      courseEnrollments: { orderBy: { enrolledAt: "desc" } },
+      communityMemberships: { orderBy: { joinedAt: "desc" } },
+      bookings: { orderBy: { scheduledFor: "desc" } },
+      appSyncSettings: true,
+      activity: { orderBy: { createdAt: "desc" }, take: 100, include: { user: { select: { name: true } } } },
       interactions: { orderBy: { occurredAt: "desc" }, take: 60 },
       emailLinks: { orderBy: { messageDate: "desc" }, take: 40 },
     },
@@ -271,6 +279,53 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
     c.emailLinks.length ? c.emailLinks.map((e) => `- ${day(e.messageDate)} · ${clean(e.subject) || "(no subject)"}${e.fromLabel ? ` — ${e.fromLabel}` : ""}`).join("\n") : "_None linked._"
   );
 
+  // ---- 07 purchases, sync, billing documents and activity
+  let extra = `# ${fullName} — Purchases, sync & activity\n\n`;
+  extra += section(
+    "Subscriptions (systeme.io)",
+    c.subscriptions.length ? c.subscriptions.map((x) => `- **${clean(x.planName) || "Subscription"}** — ${[x.status, x.amount != null ? `${x.amount} ${clean(x.currency)}` : "", x.startedAt && `started ${day(x.startedAt)}`, x.canceledAt && `canceled ${day(x.canceledAt)}`].filter(Boolean).join(" · ")}`).join("\n") : "_None._"
+  );
+  extra += section(
+    "Course enrollments",
+    c.courseEnrollments.length ? c.courseEnrollments.map((x) => `- **${clean(x.courseName) || "Course"}** — ${[x.status, x.enrolledAt && `enrolled ${day(x.enrolledAt)}`].filter(Boolean).join(" · ")}`).join("\n") : "_None._"
+  );
+  extra += section(
+    "Community memberships",
+    c.communityMemberships.length ? c.communityMemberships.map((x) => `- **${clean(x.communityName) || "Community"}** — ${[x.status, x.joinedAt && `joined ${day(x.joinedAt)}`].filter(Boolean).join(" · ")}`).join("\n") : "_None._"
+  );
+  extra += section(
+    "Bookings",
+    c.bookings.length ? c.bookings.map((x) => `- **${clean(x.eventName) || "Booking"}** — ${[x.status, x.paymentStatus && `payment ${x.paymentStatus}`, x.scheduledFor && `scheduled ${day(x.scheduledFor)}`].filter(Boolean).join(" · ")}`).join("\n") : "_None._"
+  );
+  extra += section(
+    "Proposals & invoices on this contact's projects",
+    c.projects.length
+      ? c.projects
+          .map((p) => {
+            const lines = [
+              ...p.proposals.map((x) => `  - Proposal “${x.title}” — ${x.status}, ${x.totalAmount.toFixed(2)} ${x.currency}${x.sentAt ? `, sent ${day(x.sentAt)}` : ""}${x.respondedAt ? `, answered ${day(x.respondedAt)}` : ""}`),
+              ...p.invoices.map((x) => `  - Invoice ${clean(x.number) || "(no number)"} — ${x.status}, ${x.totalAmount.toFixed(2)} ${x.currency}${x.dueDate ? `, due ${day(x.dueDate)}` : ""}${x.paidAt ? `, paid ${day(x.paidAt)}` : ""}`),
+            ];
+            return `- **${p.name}**${lines.length ? "\n" + lines.join("\n") : " — none"}`;
+          })
+          .join("\n")
+      : "_No projects._"
+  );
+  extra += section(
+    "Sync with other apps",
+    kv([
+      ["systeme.io contact id", c.systemeIoId],
+      ["systeme.io registered", day(c.systemeIoRegisteredAt)],
+      ["Google Contacts id", c.googleContactId],
+      ["Last synced", day(c.lastSyncedAt)],
+      ...c.appSyncSettings.map((a) => [`${a.app} sync`, `${a.enabled ? "on" : "off"}, direction ${a.direction}${a.lastSyncedAt ? `, last ${day(a.lastSyncedAt)}` : ""}${a.lastSyncStatus ? ` (${a.lastSyncStatus})` : ""}`] as [string, unknown]),
+    ])
+  );
+  extra += section(
+    "System activity (most recent 100)",
+    c.activity.length ? c.activity.map((a) => `- ${a.createdAt.toISOString().slice(0, 16).replace("T", " ")}${a.user ? ` · ${a.user.name}` : ""} — ${clean(a.message)}`).join("\n") : "_None._"
+  );
+
   const readme = `# ${fullName} — AI briefing pack
 
 Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM. Give an AI assistant these files so it understands who this contact is and what we're doing for them.
@@ -289,7 +344,7 @@ Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM. Give an AI 
 | 03-brand.md | Logos, colours, fonts, voice, photos, components, icons, graphics, charts |
 | 04-tech-stack-and-domains.md | Websites, hosting, apps, domains, and the apps/accounts used (no logins) |
 | 05-projects.md | Projects with custom answers, phases and tasks |
-| 06-communications.md | Recent calls, texts, meetings and linked email subjects |
+| 06-communications.md | Recent calls, texts, meetings and linked email subjects |\n| 07-purchases-sync-and-activity.md | Subscriptions, courses, bookings, proposals/invoices, sync status, system activity |
 
 User IDs and passwords are never exported (the apps themselves are listed in 04). API keys appear only if they were explicitly flagged for sharing and requested at export time. Uploaded brand files are included in the .zip under brand-files/ (the path is shown next to each item in 03-brand.md) and also given as download links (valid for 7 days, no login needed — anyone holding a link can fetch that file, so only share this pack with an AI you trust). Links to files hosted elsewhere are included as they are.
 `;
@@ -305,6 +360,7 @@ User IDs and passwords are never exported (the apps themselves are listed in 04)
       { name: "04-tech-stack-and-domains.md", content: tech },
       { name: "05-projects.md", content: projects },
       { name: "06-communications.md", content: comms },
+      { name: "07-purchases-sync-and-activity.md", content: extra },
     ],
   };
 }

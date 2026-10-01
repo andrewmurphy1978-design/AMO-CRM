@@ -27,6 +27,8 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader, { HeaderBreadcrumb } from "../../page-header";
 import Card from "@/components/section-card";
+import AiExportMenu from "../../contacts/[id]/ai-export-menu";
+import { PROJECT_AI_FILES } from "@/lib/contact-ai-files";
 import ContactInfoPopover from "./contact-info-popover";
 import { AvatarThumb, ContactInfoCard, TechStackCard, DomainsCard } from "../../contacts/[id]/contact-cards";
 
@@ -308,6 +310,8 @@ export default async function ProjectDetailPage({
             title={t.contactForm.cardGeneralInfo}
             compact
             actions={
+              <div className="flex items-center gap-2">
+                <AiExportMenu base={`/api/projects/${project.id}/ai-export`} files={PROJECT_AI_FILES} lang={lang} isAdmin={session?.user.role === "ADMIN"} />
               <ProjectGeneralDialog
                 action={updateProjectGeneral.bind(null, project.id)}
                 lang={lang}
@@ -326,6 +330,7 @@ export default async function ProjectDetailPage({
                   description: project.description ?? "",
                 }}
               />
+              </div>
             }
           >
             <h1 className="font-display text-xl font-semibold text-ink">{project.name}</h1>
