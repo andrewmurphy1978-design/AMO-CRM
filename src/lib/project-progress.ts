@@ -89,6 +89,62 @@ async function release(db: PrismaClient, pr: Loaded, pending: PendingPhase[], ex
   await db.project.update({ where: { id: pr.id }, data: { pendingPhases: rest.length > 0 ? (rest as never) : (null as never) } });
 }
 
+// Issues (as a DRAFT, awaiting approval) the invoice for one instalment of the
+// accepted proposal. Idempotent: an instalment already invoiced is skipped.
+// `which`: a 1-based row number, "middle" (every instalment between the first
+// and the last) or "last".
+export async function ensureInstalmentInvoices(db: PrismaClient, projectId: string, which: number | "middle" | "last"): Promise<void> {
+  const proposal = await db.proposal.findFirst({
+    where: { projectId, status: "ACCEPTED", paymentSchedule: { some: {} } },
+    orderBy: { respondedAt: "desc" },
+    include: { paymentSchedule: { orderBy: { order: "asc" } }, invoices: { select: { instalmentId: true } } },
+  });
+  if (!proposal) return;
+  const rows = proposal.paymentSchedule;
+  const grand = proposal.subtotal + proposal.taxAmount;
+  const wanted = rows.filter((_, i) =>
+    which === "last" ? i === rows.length - 1 : which === "middle" ? i > 0 && i < rows.length - 1 : i === which - 1
+  );
+  const round = (n: number) => Math.round(n * 100) / 100;
+  for (const row of wanted) {
+    if (proposal.invoices.some((inv) => inv.instalmentId === row.id)) continue;
+    const share = row.percentage != null ? row.percentage / 100 : grand > 0 && row.amount != null ? row.amount / grand : 0;
+    if (share <= 0) continue;
+    const subtotal = round(proposal.subtotal * share);
+    const tax = {
+      gst: round(proposal.gstAmount * share),
+      qst: round(proposal.qstAmount * share),
+      hst: round(proposal.hstAmount * share),
+    };
+    const taxTotal = round(tax.gst + tax.qst + tax.hst);
+    const due = row.dueDate ?? new Date(Date.now() + 15 * 86400000);
+    const index = rows.findIndex((r) => r.id === row.id) + 1;
+    const invoice = await db.invoice.create({
+      data: {
+        projectId,
+        proposalId: proposal.id,
+        instalmentId: row.id,
+        status: "DRAFT",
+        currency: proposal.currency,
+        subtotal,
+        gstAmount: tax.gst,
+        qstAmount: tax.qst,
+        hstAmount: tax.hst,
+        taxAmount: taxTotal,
+        totalAmount: round(subtotal + taxTotal),
+        amount: round(subtotal + taxTotal),
+        dueDate: due,
+        // The 1st instalment's invoice is also the one the client is waiting on.
+        notes: `${proposal.title} — instalment ${index} of ${rows.length}`,
+      },
+    });
+    await db.invoice.update({ where: { id: invoice.id }, data: { number: `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${invoice.id.slice(-4).toUpperCase()}` } });
+    await db.invoiceLineItem.create({
+      data: { invoiceId: invoice.id, description: `${proposal.title} — ${row.label}${row.percentage != null ? ` (${row.percentage}%)` : ""}`, quantity: 1, unitPrice: subtotal, order: 0 },
+    });
+  }
+}
+
 async function setStatus(db: PrismaClient, projectId: string, status: "PLANNING" | "ACTIVE" | "FINAL" | "COMPLETED") {
   await db.project.update({ where: { id: projectId }, data: { status } });
 }
@@ -104,6 +160,8 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
 
   switch (pr.status) {
     case "PROPOSAL": {
+      // Accepted: the 1st instalment is now due — issue its invoice.
+      if (money.accepted) await ensureInstalmentInvoices(db, pr.id, 1);
       if (!(money.accepted && money.paid >= 1)) return false;
       await closeLatestPhase(db, pr);
       await promoteContact(db, pr.contactId, "CLIENT");
@@ -113,6 +171,7 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
       } else {
         // Nothing to research or mock up: straight to Active.
         await setStatus(db, pr.id, "ACTIVE");
+        await ensureInstalmentInvoices(db, pr.id, "middle");
         if (pending.length > 0) await release(db, pr, pending, stageOf(pending[0]) === "ACTIVE" ? secondInstalmentTask : undefined);
       }
       return true;
@@ -125,6 +184,7 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
         // Mock-up (or research) accepted/finished: the project goes Active and the
         // 2nd instalment falls due.
         await setStatus(db, pr.id, "ACTIVE");
+        await ensureInstalmentInvoices(db, pr.id, "middle");
         if (pending.length > 0) await release(db, pr, pending, stageOf(pending[0]) === "ACTIVE" ? secondInstalmentTask : undefined);
       }
       return true;
@@ -136,6 +196,7 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
       } else {
         // Deployed: waiting on the final instalment.
         await setStatus(db, pr.id, "FINAL");
+        await ensureInstalmentInvoices(db, pr.id, "last");
         if (pending.length > 0) await release(db, pr, pending);
       }
       return true;

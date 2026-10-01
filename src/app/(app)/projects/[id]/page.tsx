@@ -10,8 +10,9 @@ import ProjectDetailsDialog from "./project-details-dialog";
 import ProjectNotesDialog from "./project-notes-dialog";
 import PhasesCard from "./phases-card";
 import TasksCard, { type TaskCardItem } from "./tasks-card";
+import { ProposalsCard, InvoicesCard, type ProposalRowData, type InvoiceRowData } from "./documents-cards";
+import { contactTaxLocation } from "@/lib/billing-totals";
 import InstalmentsCard, { type InstalmentRow } from "./instalments-card";
-import NewInvoiceButton from "./new-invoice-button";
 import NewEmailButton from "../../contacts/[id]/new-email-button";
 import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
 import { updateProjectGeneral, updateProjectNotes, updatePhaseNotes, updateProjectCustomFields } from "@/actions/projects";
@@ -79,6 +80,8 @@ export default async function ProjectDetailPage({
     defaultComposeSource,
     twilioReady,
     template,
+    catalog,
+    billingChargeTax,
   } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
@@ -99,14 +102,16 @@ export default async function ProjectDetailPage({
           include: { loggedBy: true, updatedBy: true, participants: { include: { contact: true, user: true } } },
         },
         emailLinks: { orderBy: { messageDate: "desc" } },
-        proposals: { orderBy: { createdAt: "desc" }, include: { paymentSchedule: { orderBy: { order: "asc" } } } },
-        invoices: { orderBy: { createdAt: "desc" } },
+        proposals: { orderBy: { createdAt: "desc" }, include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { orderBy: { order: "asc" } } } },
+        invoices: { orderBy: { createdAt: "desc" }, include: { lineItems: { orderBy: { order: "asc" } }, instalment: { include: { proposal: { select: { paymentSchedule: { select: { id: true }, orderBy: { order: "asc" } } } } } } } },
       },
     });
     const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
     const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
     const composePrefs = session ? await db.user.findUnique({ where: { id: session.user.id }, select: { defaultComposeSource: true } }) : null;
     const twilioReady = Boolean(await getTwilioConfig(db));
+    const catalog = await db.servicePriceListItem.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+    const billingChargeTax = (await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } })).chargeCanadianTax;
     const calendarEvents = project ? await getLinkedCalendarEvents(
           db,
           { projectId: project.id, ...(phaseParam && project.phases.some((ph) => ph.id === phaseParam) ? { phaseId: phaseParam } : {}) },
@@ -162,6 +167,8 @@ export default async function ProjectDetailPage({
       addressColors,
       defaultComposeSource: composePrefs?.defaultComposeSource ?? null,
       twilioReady,
+      catalog,
+      billingChargeTax,
       template: project ? await getProjectTemplate(db, project.type) : null,
     };
   });
@@ -256,6 +263,54 @@ export default async function ProjectDetailPage({
       paid: row.paid,
     };
   });
+
+  const iso = (d: Date | null) => (d ? d.toISOString() : null);
+  const proposalRows: ProposalRowData[] = project.proposals.map((p) => ({
+    id: p.id,
+    title: p.title,
+    status: p.status,
+    currency: p.currency,
+    totalAmount: p.totalAmount,
+    approvedAt: iso(p.approvedAt),
+    sentAt: iso(p.sentAt),
+    coverLetter: p.coverLetter,
+    notes: p.notes,
+    lineItems: p.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unitPrice })),
+    paymentSchedule: p.paymentSchedule.map((r) => ({ label: r.label, percentage: r.percentage, amount: r.amount, dueDate: iso(r.dueDate) })),
+  }));
+  const invoiceRows: InvoiceRowData[] = project.invoices.map((inv) => {
+    const ids = inv.instalment?.proposal.paymentSchedule.map((r) => r.id) ?? [];
+    return {
+      id: inv.id,
+      number: inv.number,
+      status: inv.status,
+      currency: inv.currency,
+      totalAmount: inv.totalAmount || inv.amount,
+      dueDate: iso(inv.dueDate),
+      approvedAt: iso(inv.approvedAt),
+      notes: inv.notes,
+      instalmentLabel: inv.instalment ? `${lang === "fr" ? "Versement" : "Instalment"} ${ids.indexOf(inv.instalment.id) + 1}/${ids.length} · ${inv.instalment.label}` : null,
+      lineItems: inv.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unitPrice })),
+    };
+  });
+  // A new proposal starts with the usual 50 / 40 / 10 instalments.
+  const proposalDefaults = {
+    title: `${lang === "fr" ? "Proposition" : "Proposal"} — ${project.name}`,
+    currency: "CAD",
+    paymentSchedule:
+      lang === "fr"
+        ? [
+            { label: "Dépôt — à l'acceptation", percentage: 50, amount: null, dueDate: null },
+            { label: "À l'approbation de la maquette", percentage: 40, amount: null, dueDate: null },
+            { label: "Au lancement", percentage: 10, amount: null, dueDate: null },
+          ]
+        : [
+            { label: "Deposit — on acceptance", percentage: 50, amount: null, dueDate: null },
+            { label: "On mock-up approval", percentage: 40, amount: null, dueDate: null },
+            { label: "At launch", percentage: 10, amount: null, dueDate: null },
+          ],
+  };
+  const emailing = { defaultComposeSource, intlLocale, hour12, emailComposeLabels: t.emailCompose };
 
   const clientEmail = project.contact.email ?? project.contact.email2 ?? project.contact.extraEmails[0] ?? null;
   const namedContact = { id: project.contact.id, name: clientName || "—" };
@@ -661,63 +716,30 @@ export default async function ProjectDetailPage({
 
           {instalmentRows.length > 0 && <InstalmentsCard projectId={project.id} rows={instalmentRows} lang={lang} />}
 
-          <Card
-            color="proposals"
+          <ProposalsCard
+            projectId={project.id}
+            proposals={proposalRows}
+            catalog={catalog}
+            taxLocation={contactTaxLocation(project.contact)}
+            chargeCanadianTax={billingChargeTax}
+            newDefaults={proposalDefaults}
             title={t.proposals.title}
-            compact
-            actions={
-              <Link
-                href={`/projects/${project.id}/proposals/new`}
-                title={t.contactDetail.newProposal}
-                aria-label={t.contactDetail.newProposal}
-                className="flex h-5 w-5 items-center justify-center rounded text-lg font-bold leading-none text-white hover:bg-white/20"
-              >
-                +
-              </Link>
-            }
-          >
-            {project.proposals.length === 0 ? (
-              <p className="text-sm text-soft">{t.contactDetail.noProposalsYet}</p>
-            ) : (
-              <ul className="divide-y divide-card-border">
-                {project.proposals.map((proposal) => (
-                  <li key={proposal.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
-                    <Link href={`/projects/${project.id}/proposals/${proposal.id}`} className="flex-1 font-medium text-ink hover:underline">
-                      {proposal.title}
-                    </Link>
-                    {proposal.amount != null && (
-                      <span className="text-soft">
-                        {proposal.amount} {proposal.currency}
-                      </span>
-                    )}
-                    <span className="text-xs text-soft">{t.proposals.statuses[proposal.status as keyof typeof t.proposals.statuses]}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+            statusLabels={t.proposals.statuses}
+            lang={lang}
+            emailing={emailing}
+          />
 
-          <Card color="invoices" title={t.invoices.title} compact actions={<NewInvoiceButton projectId={project.id} lang={lang} />}>
-            {project.invoices.length === 0 ? (
-              <p className="text-sm text-soft">{t.contactDetail.noInvoicesYet}</p>
-            ) : (
-              <ul className="divide-y divide-card-border">
-                {project.invoices.map((invoice) => (
-                  <li key={invoice.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
-                    <Link href={`/projects/${project.id}/invoices/${invoice.id}`} className="flex-1 font-medium text-ink hover:underline">
-                      {invoice.number || t.invoices.title}
-                    </Link>
-                    {invoice.amount != null && (
-                      <span className="text-soft">
-                        {invoice.amount} {invoice.currency}
-                      </span>
-                    )}
-                    <span className="text-xs text-soft">{t.invoices.statuses[invoice.status as keyof typeof t.invoices.statuses]}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+          <InvoicesCard
+            projectId={project.id}
+            invoices={invoiceRows}
+            catalog={catalog}
+            taxLocation={contactTaxLocation(project.contact)}
+            chargeCanadianTax={billingChargeTax}
+            title={t.invoices.title}
+            statusLabels={t.invoices.statuses}
+            lang={lang}
+            emailing={emailing}
+          />
         </div>
       </div>
     </div>

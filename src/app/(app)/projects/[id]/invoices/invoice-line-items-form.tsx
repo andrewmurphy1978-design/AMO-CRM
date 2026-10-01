@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
@@ -34,6 +34,7 @@ export default function InvoiceLineItemsForm({
   taxLocation,
   chargeCanadianTax,
   lang,
+  onSuccess,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -44,8 +45,13 @@ export default function InvoiceLineItemsForm({
   taxLocation: { country: string | null; province: string | null };
   chargeCanadianTax: boolean;
   lang: Lang;
+  onSuccess?: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  useEffect(() => {
+    if (state?.success) onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
   const t = getDict(lang);
 
   const [lineItems, setLineItems] = useState<LineItemRow[]>(() =>

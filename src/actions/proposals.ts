@@ -8,6 +8,8 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { computeBillingTotals, contactTaxLocation, type LineItemInput } from "@/lib/billing-totals";
+import { publicBaseUrl } from "@/lib/twilio";
+import { signedDocumentUrl } from "@/lib/document-data";
 import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
 
 const ProposalSchema = z.object({
@@ -107,6 +109,11 @@ export async function setInstalmentPaid(rowId: string, projectId: string, paid: 
 
   const contactId = await withScopedPrismaClient(async (db) => {
     await db.proposalPaymentScheduleItem.update({ where: { id: rowId }, data: { paid, paidAt: paid ? new Date() : null } });
+    // An invoice issued for this instalment follows it.
+    await db.invoice.updateMany({
+      where: { instalmentId: rowId, ...(paid ? { NOT: { status: "PAID" } } : { status: "PAID" }) },
+      data: paid ? { status: "PAID", paidAt: new Date() } : { status: "SENT", paidAt: null },
+    });
     if (paid) await onProposalAccepted(db, projectId);
     return contactIdForProject(db, projectId);
   });
@@ -254,6 +261,8 @@ export async function createFullProposal(
     return proposal;
   });
 
+  // The project page's dialog stays where it is (no redirect).
+  if (formData.get("inline") === "1") return { success: t.actions.proposalCreated, proposalId: proposal.id };
   redirect(`/projects/${data.projectId}/proposals/${proposal.id}`);
 }
 
@@ -360,4 +369,61 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
       brief,
     });
   });
+}
+
+// ---- internal approval, then send
+
+// Sign-off before anything goes to the client.
+export async function approveProposal(proposalId: string, projectId: string) {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposal.update({ where: { id: proposalId }, data: { approvedAt: new Date() } });
+    return contactIdForProject(db, projectId);
+  });
+  revalidateBoth(projectId, contactId);
+}
+
+export async function unapproveProposal(proposalId: string, projectId: string) {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposal.update({ where: { id: proposalId }, data: { approvedAt: null } });
+    return contactIdForProject(db, projectId);
+  });
+  revalidateBoth(projectId, contactId);
+}
+
+// What the "Send to client" email should say: subject, body (with a signed link
+// to the PDF) and the recipient. Refuses an unapproved proposal.
+export async function proposalSendInfo(proposalId: string, projectId: string): Promise<{ error?: string; subject?: string; html?: string; to?: string | null }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  return withScopedPrismaClient(async (db) => {
+    const proposal = await db.proposal.findUnique({ where: { id: proposalId }, include: { project: { include: { contact: true } } } });
+    if (!proposal || proposal.projectId !== projectId) return { error: "Proposal not found." };
+    if (!proposal.approvedAt) return { error: "Approve the proposal before sending it." };
+    const origin = publicBaseUrl();
+    if (!origin) return { error: "NEXTAUTH_URL isn't set, so a link to the PDF can't be made." };
+    const url = await signedDocumentUrl(origin, `/api/projects/${projectId}/proposals/${proposalId}/pdf`, 30);
+    const c = proposal.project.contact;
+    const fr = (c.locale ?? "").toLowerCase().startsWith("fr");
+    const first = c.firstName || "";
+    const subject = fr ? `Proposition — ${proposal.project.name}` : `Proposal — ${proposal.project.name}`;
+    const html = fr
+      ? `<p>Bonjour ${first},</p><p>Voici la proposition pour <strong>${proposal.project.name}</strong>. Vous pouvez la consulter et la télécharger en PDF ici : <a href="${url}">${proposal.title} (PDF)</a>. Le lien est valide 30 jours.</p><p>Dites-moi si vous avez des questions; je suis heureux d'en discuter.</p>`
+      : `<p>Hi ${first},</p><p>Here is the proposal for <strong>${proposal.project.name}</strong>. You can view and download the PDF here: <a href="${url}">${proposal.title} (PDF)</a>. The link is valid for 30 days.</p><p>Let me know if you have any questions — happy to talk it through.</p>`;
+    return { subject, html, to: c.billingEmail || c.email };
+  });
+}
+
+// After the email went out: the proposal is now with the client.
+export async function markProposalSent(proposalId: string, projectId: string) {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposal.update({ where: { id: proposalId }, data: { status: "SENT", sentAt: new Date() } });
+    return contactIdForProject(db, projectId);
+  });
+  revalidateBoth(projectId, contactId);
 }

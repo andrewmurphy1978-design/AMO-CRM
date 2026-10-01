@@ -1,0 +1,161 @@
+import type { PrismaClient } from "@/lib/prisma";
+import { getDict } from "@/lib/i18n/dictionaries";
+import { getProjectTemplate } from "@/lib/project-template-store";
+import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
+import type { InvoicePdfData, ProposalPdfData } from "@/lib/proposal-pdf";
+import { signPath } from "@/lib/signed-url";
+
+// Gathers what the Proposal / Invoice PDFs need from the database.
+
+const LOGO_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
+export const COMPANY = { name: "Andrew Murphy Online", website: "andrewmurphy.online", email: "andrew@andrewmurphy.online" };
+const INTERNAL_TASK = /instal|proposal|invoice|payment/i;
+
+async function fetchLogo(): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(LOGO_URL, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    return new Uint8Array(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+function clientBlock(c: {
+  firstName: string | null;
+  lastName: string | null;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  country: string | null;
+  billingAddress: string | null;
+  billingCity: string | null;
+  billingState: string | null;
+  billingZip: string | null;
+  billingCountry: string | null;
+  billingContactName: string | null;
+  billingEmail: string | null;
+}) {
+  const useBilling = Boolean(c.billingAddress || c.billingCity);
+  const addr = (useBilling ? [c.billingAddress, c.billingCity, c.billingState, c.billingZip, c.billingCountry] : [c.address, c.city, c.state, c.zip, c.country]).filter(Boolean).join(", ");
+  return {
+    name: c.billingContactName || [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || "",
+    company: c.company,
+    email: c.billingEmail || c.email,
+    phone: c.phone,
+    address: addr,
+  };
+}
+
+export async function loadProposalPdfData(db: PrismaClient, projectId: string, proposalId: string): Promise<{ data: ProposalPdfData; fileName: string } | null> {
+  const proposal = await db.proposal.findUnique({
+    where: { id: proposalId },
+    include: { lineItems: { orderBy: { order: "asc" } }, paymentSchedule: { orderBy: { order: "asc" } } },
+  });
+  if (!proposal || proposal.projectId !== projectId) return null;
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    include: { contact: true, phases: { orderBy: { order: "asc" }, include: { tasks: { orderBy: { createdAt: "asc" } } } } },
+  });
+  if (!project) return null;
+  const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
+  const lang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
+  const dict = getDict(lang);
+  const template = await getProjectTemplate(db, project.type);
+  const answers = (project.customFields ?? {}) as FieldValues;
+
+  // The plan to present: phases already created (apart from the Proposal phase
+  // itself) followed by the phases still to come.
+  const pending = Array.isArray(project.pendingPhases) ? (project.pendingPhases as { name: string; tasks: string[] }[]) : [];
+  const existing = project.phases
+    .filter((p) => !/^(proposal|proposition)$/i.test(p.name))
+    .map((p) => ({ name: p.name, tasks: p.tasks.map((tk) => tk.title).filter((x) => !INTERNAL_TASK.test(x)) }));
+  const plan = [...existing, ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: p.name, tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)) }))];
+
+  const grand = proposal.subtotal + proposal.taxAmount;
+  const instalments = proposal.paymentSchedule.map((r) => ({
+    label: r.label,
+    percentage: r.percentage,
+    amount: r.amount ?? (r.percentage != null ? Math.round(((r.percentage / 100) * grand) * 100) / 100 : 0),
+    dueDate: r.dueDate,
+  }));
+
+  const stamp = proposal.createdAt.toISOString().slice(0, 10).replace(/-/g, "");
+  const number = `PR-${stamp}-${proposal.id.slice(-4).toUpperCase()}`;
+  const data: ProposalPdfData = {
+    lang,
+    logoPng: await fetchLogo(),
+    number,
+    title: proposal.title,
+    date: proposal.sentAt ?? new Date(),
+    validDays: 30,
+    currency: proposal.currency,
+    company: { ...COMPANY, gstNumber: settings.gstNumber, qstNumber: settings.qstNumber },
+    client: clientBlock(project.contact),
+    project: {
+      name: project.name,
+      typeLabel: dict.projectTypes[project.type as keyof typeof dict.projectTypes] ?? project.type,
+      description: project.description,
+      startDate: project.startDate,
+      dueDate: project.dueDate,
+    },
+    details: template.fields
+      .filter((f) => isFieldVisible(f, answers))
+      .map((f) => ({ label: f.label, value: displayValue(answers[f.key]) }))
+      .filter((d) => d.value),
+    coverLetter: proposal.coverLetter,
+    plan,
+    lineItems: proposal.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unitPrice })),
+    totals: { subtotal: proposal.subtotal, gst: proposal.gstAmount, qst: proposal.qstAmount, hst: proposal.hstAmount, total: proposal.taxAmount },
+    instalments,
+    notes: proposal.notes,
+  };
+  return { data, fileName: `${number}-${project.name}`.replace(/[^\w.-]+/g, "-") };
+}
+
+export async function loadInvoicePdfData(db: PrismaClient, projectId: string, invoiceId: string): Promise<{ data: InvoicePdfData; fileName: string } | null> {
+  const invoice = await db.invoice.findUnique({
+    where: { id: invoiceId },
+    include: { lineItems: { orderBy: { order: "asc" } }, instalment: { include: { proposal: { include: { paymentSchedule: { orderBy: { order: "asc" } } } } } } },
+  });
+  if (!invoice || invoice.projectId !== projectId) return null;
+  const project = await db.project.findUnique({ where: { id: projectId }, include: { contact: true } });
+  if (!project) return null;
+  const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
+  const lang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
+
+  let instalmentLabel: string | null = null;
+  if (invoice.instalment) {
+    const rows = invoice.instalment.proposal.paymentSchedule;
+    const idx = rows.findIndex((r) => r.id === invoice.instalmentId);
+    instalmentLabel = `${lang === "fr" ? "Versement" : "Instalment"} ${idx + 1} ${lang === "fr" ? "de" : "of"} ${rows.length} — ${invoice.instalment.label}`;
+  }
+  const number = invoice.number || `INV-${invoice.createdAt.toISOString().slice(0, 10).replace(/-/g, "")}-${invoice.id.slice(-4).toUpperCase()}`;
+  const data: InvoicePdfData = {
+    lang,
+    logoPng: await fetchLogo(),
+    number,
+    date: invoice.sentAt ?? invoice.createdAt,
+    dueDate: invoice.dueDate,
+    paidAt: invoice.paidAt,
+    currency: invoice.currency,
+    company: { ...COMPANY, gstNumber: settings.gstNumber, qstNumber: settings.qstNumber },
+    client: clientBlock(project.contact),
+    projectName: project.name,
+    instalmentLabel,
+    lineItems: invoice.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unitPrice })),
+    totals: { subtotal: invoice.subtotal, gst: invoice.gstAmount, qst: invoice.qstAmount, hst: invoice.hstAmount, total: invoice.taxAmount },
+    notes: invoice.notes,
+  };
+  return { data, fileName: `${number}-${project.name}`.replace(/[^\w.-]+/g, "-") };
+}
+
+// A signed, expiring link to a PDF the client can open without logging in.
+export async function signedDocumentUrl(origin: string, path: string, days = 30): Promise<string> {
+  const { exp, sig } = await signPath(path, days * 86400);
+  return `${origin}${path}?exp=${exp}&sig=${sig}`;
+}

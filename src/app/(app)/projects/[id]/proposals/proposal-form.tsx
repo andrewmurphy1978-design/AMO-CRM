@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { draftProposalAI } from "@/actions/proposals";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -40,6 +40,8 @@ export default function ProposalForm({
   chargeCanadianTax,
   submitLabel,
   lang,
+  inline,
+  onSuccess,
 }: {
   action: (
     prevState: { error?: string; success?: string; proposalId?: string } | undefined,
@@ -52,8 +54,15 @@ export default function ProposalForm({
   chargeCanadianTax: boolean;
   submitLabel: string;
   lang: Lang;
+  // In a dialog: stay on the page and report back when saved.
+  inline?: boolean;
+  onSuccess?: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  useEffect(() => {
+    if (state?.success) onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
   const t = getDict(lang);
 
   const [lineItems, setLineItems] = useState<LineItemRow[]>(() =>
@@ -118,6 +127,7 @@ export default function ProposalForm({
   return (
     <form action={formAction} className="space-y-6">
       <input type="hidden" name="projectId" value={projectId} />
+      {inline && <input type="hidden" name="inline" value="1" />}
       <input type="hidden" name="coverLetter" value={coverLetter} />
 
       <div className="grid gap-4 sm:grid-cols-3">

@@ -25,6 +25,8 @@ export interface EmailComposeTarget {
   // EmailDialogTarget's own dotColor/linkConfig (see that file's comment).
   dotColor?: string | null;
   linkConfig?: EmailLinkConfig;
+  // For mode "new": body placed above the signature (e.g. a prepared message).
+  initialHtml?: string;
   // Set only for mode "draft" — which Drafts-folder row this came from, so
   // Send/Discard know where to remove it from afterward (see
   // sendDraftAction/discardDraftAction — a draft's own account is never in
@@ -361,7 +363,8 @@ export default function EmailComposeDialog({
       .then((signatureHtml) => {
         if (cancelled) return;
         if (mode === "new") {
-          setHtml(signatureHtml ? `<p><br></p><p><br></p>${signatureHtml}` : "");
+          const lead = target.initialHtml ?? "";
+          setHtml(signatureHtml ? `${lead}<p><br></p><p><br></p>${signatureHtml}` : lead);
           return;
         }
         const dateValue = message.date

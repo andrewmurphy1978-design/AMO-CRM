@@ -1008,6 +1008,8 @@ model Proposal {
   taxAmount   Float @default(0) // gstAmount + qstAmount + hstAmount
   totalAmount Float @default(0) // subtotal + taxAmount
 
+  // Internal sign-off before the document is sent to the client.
+  approvedAt  DateTime?
   sentAt      DateTime?
   respondedAt DateTime?
 
@@ -1054,6 +1056,8 @@ model ProposalPaymentScheduleItem {
   paidAt     DateTime?
   order      Int       @default(0)
 
+  invoices Invoice[]
+
   @@index([proposalId])
   @@map("proposal_payment_schedule_items")
 }
@@ -1070,18 +1074,21 @@ enum InvoiceStatus {
 // optionally generated from an already-accepted Proposal (copying its line
 // items/tax breakdown as a starting point), but can also stand alone.
 model Invoice {
-  id         String        @id @default(cuid())
-  projectId  String
-  project    Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  proposalId String?
-  proposal   Proposal?     @relation(fields: [proposalId], references: [id], onDelete: SetNull)
-  number     String?
-  status     InvoiceStatus @default(DRAFT)
+  id           String                       @id @default(cuid())
+  projectId    String
+  project      Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  proposalId   String?
+  proposal     Proposal?                    @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  number       String?
+  // The proposal instalment this invoice bills (auto-issued as each falls due).
+  instalmentId String?
+  instalment   ProposalPaymentScheduleItem? @relation(fields: [instalmentId], references: [id], onDelete: SetNull)
+  status       InvoiceStatus                @default(DRAFT)
   // Legacy flat total — see the comment on Proposal.amount above; same
   // fallback relationship with subtotal/taxAmount/totalAmount below.
-  amount     Float
-  currency   String        @default("CAD")
-  notes      String?       @db.Text
+  amount       Float
+  currency     String                       @default("CAD")
+  notes        String?                      @db.Text
 
   subtotal    Float @default(0)
   gstAmount   Float @default(0)
@@ -1090,9 +1097,11 @@ model Invoice {
   taxAmount   Float @default(0)
   totalAmount Float @default(0)
 
-  dueDate DateTime?
-  sentAt  DateTime?
-  paidAt  DateTime?
+  dueDate    DateTime?
+  // Internal sign-off before the invoice is sent to the client.
+  approvedAt DateTime?
+  sentAt     DateTime?
+  paidAt     DateTime?
 
   // Reminder tracking for the sent->paid lifecycle. Andrew's Gmail isn't
   // wired for sending mail from the CRM (only reading it), so a "reminder"
@@ -1109,6 +1118,7 @@ model Invoice {
   lineItems InvoiceLineItem[]
 
   @@index([projectId])
+  @@index([instalmentId])
   @@index([proposalId])
   @@map("invoices")
 }
