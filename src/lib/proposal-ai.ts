@@ -3,7 +3,9 @@ import { decryptSecret } from "@/lib/crypto";
 
 // A quote is client-facing business content, not bulk triage — worth a
 // stronger model than the Haiku one email-classifier.ts uses.
-const CLAUDE_MODEL = "claude-opus-5-5";
+// Sonnet: quick enough for an interactive "Generate" click while still writing
+// client-facing copy well.
+const CLAUDE_MODEL = "claude-sonnet-5-5";
 
 export interface AIProposalDraft {
   coverLetter: string;
@@ -59,6 +61,44 @@ Respond with ONLY a JSON object, no markdown fences, no other text, in exactly t
 {"coverLetter": "...", "lineItems": [{"description": "...", "details": "...", "quantity": 1, "unitPrice": 0}], "subscriptions": [{"name": "...", "amount": 0, "period": "month", "note": ""}]}`;
 }
 
+// The model sometimes wraps JSON in code fences or adds a sentence around it,
+// and can leave raw line breaks inside a string (invalid JSON). Take the
+// outermost {...} and escape line breaks that sit inside strings.
+function parseLooseJson(text: string): unknown {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) throw new Error("no JSON object in the reply");
+  const body = text.slice(start, end + 1);
+  try {
+    return JSON.parse(body);
+  } catch {
+    let out = "";
+    let inString = false;
+    let escaped = false;
+    for (const ch of body) {
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          out += ch;
+        } else if (ch === "\\") {
+          escaped = true;
+          out += ch;
+        } else if (ch === '"') {
+          inString = false;
+          out += ch;
+        } else if (ch === "\n") out += "\\n";
+        else if (ch === "\r") out += "";
+        else if (ch === "\t") out += "\\t";
+        else out += ch;
+      } else {
+        if (ch === '"') inString = true;
+        out += ch;
+      }
+    }
+    return JSON.parse(out);
+  }
+}
+
 // Never persists anything — returns a draft for the Proposal form to
 // pre-fill, which the consultant reviews and edits before saving.
 export async function draftProposalWithAI(
@@ -85,7 +125,7 @@ export async function draftProposalWithAI(
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 2048,
+        max_tokens: 6000,
         messages: [{ role: "user", content: buildPrompt(input) }],
       }),
     });
@@ -95,13 +135,13 @@ export async function draftProposalWithAI(
       return { error: "The AI request failed — check the Anthropic API key in Settings and try again." };
     }
 
-    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+    const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
     const rawText = data.content?.find((c) => c.type === "text")?.text ?? "";
-    // Same fence-stripping tolerance as email-classifier.ts — the model
-    // occasionally wraps JSON in ```json fences despite being told not to.
-    const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-
-    const parsed = JSON.parse(cleaned) as {
+    if (data.stop_reason === "max_tokens") {
+      console.error("proposal-ai: reply was cut off (max_tokens)");
+      return { error: "The AI's reply was cut off — try again, or write a short brief to keep it concise." };
+    }
+    const parsed = parseLooseJson(rawText) as {
       coverLetter?: string;
       lineItems?: { description?: string; details?: string; quantity?: number; unitPrice?: number }[];
       subscriptions?: { name?: string; amount?: number; period?: string; note?: string }[];
@@ -127,6 +167,6 @@ export async function draftProposalWithAI(
     return { coverLetter: parsed.coverLetter?.trim() ?? "", lineItems, subscriptions };
   } catch (error) {
     console.error("proposal-ai: failed to draft proposal", error);
-    return { error: "Something went wrong drafting the proposal — try again." };
+    return { error: `Something went wrong drafting the proposal — try again. (${error instanceof Error ? error.message.slice(0, 120) : "unknown error"})` };
   }
 }
