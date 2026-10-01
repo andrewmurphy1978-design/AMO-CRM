@@ -46,7 +46,7 @@ export default function PhasesCard({
 
   // Click a phase to focus the page on it; click it again to see everything.
   function selectPhase(id: string) {
-    router.push(id === selectedPhaseId ? pathname : `${pathname}?phase=${id}`, { scroll: false });
+    router.push(id === selectedPhaseId ? `${pathname}?phase=all` : `${pathname}?phase=${id}`, { scroll: false });
   }
 
   function close() {

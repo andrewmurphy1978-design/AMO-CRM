@@ -170,7 +170,16 @@ export default async function ProjectDetailPage({
 
   // A phase picked in the Phases card narrows the Tasks, Calendar, Emails and
   // Calls & SMS cards to that phase (?phase=<id>).
-  const selectedPhase = project.phases.find((ph) => ph.id === phaseParam) ?? null;
+  // The active phase = the first one not yet finished (else the last). With no
+  // ?phase in the address it is selected automatically; ?phase=all shows
+  // everything.
+  const phaseDone = (ph: (typeof project.phases)[number]) => {
+    const own = project.tasks.filter((tk) => tk.phaseId === ph.id);
+    return ph.status === "COMPLETED" || (own.length > 0 && own.every((tk) => tk.status === "DONE"));
+  };
+  const activePhase = project.phases.find((ph) => !phaseDone(ph)) ?? project.phases[project.phases.length - 1] ?? null;
+  const selectedPhase =
+    phaseParam === "all" ? null : (project.phases.find((ph) => ph.id === phaseParam) ?? (phaseParam ? null : activePhase));
   const selectedPhaseId = selectedPhase?.id;
   const inPhase = <T extends { phaseId: string | null }>(rows: T[]): T[] => (selectedPhaseId ? rows.filter((r) => r.phaseId === selectedPhaseId) : rows);
   const visibleTasks = inPhase(project.tasks);
@@ -302,6 +311,70 @@ export default async function ProjectDetailPage({
         location={t.dashboard.myLocation}
         actions={<DeleteProjectButton projectId={project.id} lang={lang} />}
       />
+
+      {activePhase && (
+        <Card
+          color="phases"
+          title={
+            <>
+              {lang === "fr" ? "Phase active" : "Active phase"}
+              <span className="truncate text-xs font-medium normal-case opacity-90">· {activePhase.name}</span>
+            </>
+          }
+          compact
+          actions={
+            selectedPhase?.id === activePhase.id ? (
+              <Link href={`/projects/${project.id}?phase=all`} className="rounded border border-white/40 px-2 py-0.5 text-xs font-medium normal-case text-white hover:bg-white/15">
+                {lang === "fr" ? "Tout afficher" : "Show all phases"}
+              </Link>
+            ) : (
+              <Link href={`/projects/${project.id}`} className="rounded border border-white/40 px-2 py-0.5 text-xs font-medium normal-case text-white hover:bg-white/15">
+                {lang === "fr" ? "Revenir à la phase active" : "Back to active phase"}
+              </Link>
+            )
+          }
+        >
+          {(() => {
+            const own = project.tasks.filter((tk) => tk.phaseId === activePhase.id);
+            const done = own.filter((tk) => tk.status === "DONE").length;
+            const open = own.filter((tk) => tk.status !== "DONE").slice(0, 4);
+            const pct = own.length > 0 ? Math.round((done / own.length) * 100) : 0;
+            const nextUp = Array.isArray(project.pendingPhases) ? String(((project.pendingPhases as { name?: string }[])[0]?.name ?? "")) : "";
+            return (
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{STATUS_LABELS[project.status]}</span>
+                    <span className="text-soft">
+                      {done}/{own.length} {lang === "fr" ? "tâches terminées" : "tasks done"}
+                    </span>
+                    {activePhase.dueDate && (
+                      <span className="text-soft">
+                        {t.projects.colDue}: {longDate(activePhase.dueDate, lang, dateLocale)}
+                      </span>
+                    )}
+                    {nextUp && (
+                      <span className="text-soft">
+                        {lang === "fr" ? "Ensuite" : "Next"}: <span className="text-ink">{nextUp}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-black/5">
+                    <div className="h-full rounded-full amo-card-accent" style={{ width: `${pct}%` }} />
+                  </div>
+                  {open.length > 0 && (
+                    <ul className="mt-2 space-y-0.5 text-sm text-ink">
+                      {open.map((tk) => (
+                        <li key={tk.id}>• {tk.title}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
