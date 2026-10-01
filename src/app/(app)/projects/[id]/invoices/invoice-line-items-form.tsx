@@ -36,6 +36,9 @@ export default function InvoiceLineItemsForm({
   chargeCanadianTax,
   lang,
   onSuccess,
+  formId,
+  hideSubmit,
+  onPendingChange,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -47,8 +50,15 @@ export default function InvoiceLineItemsForm({
   chargeCanadianTax: boolean;
   lang: Lang;
   onSuccess?: () => void;
+  formId?: string;
+  hideSubmit?: boolean;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  useEffect(() => {
+    onPendingChange?.(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
   useEffect(() => {
     if (state?.success) onSuccess?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -78,7 +88,7 @@ export default function InvoiceLineItemsForm({
   }
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form id={formId} action={formAction} className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
           <label className={LABEL_CLASS}>{t.invoices.number}</label>
@@ -228,13 +238,15 @@ export default function InvoiceLineItemsForm({
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
       {state?.success && <p className="text-sm text-emerald-700">{state.success}</p>}
 
+      {!hideSubmit && (
       <button
         type="submit"
         disabled={pending}
         className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
         {pending ? t.common.saving : t.invoices.saveChanges}
-      </button>
+        </button>
+      )}
     </form>
   );
 }

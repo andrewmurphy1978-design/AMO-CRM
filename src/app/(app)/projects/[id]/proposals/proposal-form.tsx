@@ -46,6 +46,9 @@ export default function ProposalForm({
   inline,
   onSuccess,
   projectType,
+  formId,
+  hideSubmit,
+  onPendingChange,
 }: {
   action: (
     prevState: { error?: string; success?: string; proposalId?: string } | undefined,
@@ -63,8 +66,16 @@ export default function ProposalForm({
   onSuccess?: () => void;
   // Services of this project type are listed first in the price-list picker.
   projectType?: string;
+  // Dialog mode: the save button lives in the dialog header (it submits this form by id).
+  formId?: string;
+  hideSubmit?: boolean;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  useEffect(() => {
+    onPendingChange?.(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
   useEffect(() => {
     if (state?.success) onSuccess?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,7 +148,7 @@ export default function ProposalForm({
   ];
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form id={formId} action={formAction} className="space-y-6">
       <input type="hidden" name="projectId" value={projectId} />
       {inline && <input type="hidden" name="inline" value="1" />}
       <input type="hidden" name="coverLetter" value={coverLetter} />
@@ -487,13 +498,15 @@ export default function ProposalForm({
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
       {state?.success && <p className="text-sm text-emerald-700">{state.success}</p>}
 
+      {!hideSubmit && (
       <button
         type="submit"
         disabled={pending}
         className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
       >
         {pending ? t.common.saving : submitLabel}
-      </button>
+        </button>
+      )}
     </form>
   );
 }

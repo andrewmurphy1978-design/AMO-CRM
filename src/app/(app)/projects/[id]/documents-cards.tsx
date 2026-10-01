@@ -96,6 +96,14 @@ function Modal({ title, color, onClose, headerExtra, children }: { title: string
   );
 }
 
+function HeaderSave({ form, saving, label, savingLabel }: { form: string; saving: boolean; label: string; savingLabel: string }) {
+  return (
+    <button type="submit" form={form} disabled={saving} className="rounded-md bg-white/25 px-3 py-1.5 text-sm font-semibold text-white hover:bg-white/35 disabled:opacity-60">
+      {saving ? savingLabel : label}
+    </button>
+  );
+}
+
 const money = (n: number, cur: string) => `${n.toFixed(2)} ${cur}`;
 
 // ------------------------------------------------------------------ proposals
@@ -128,6 +136,7 @@ export function ProposalsCard({
   const fr = lang === "fr";
   const router = useRouter();
   const [dialog, setDialog] = useState<{ id: string | null; key: number } | null>(null);
+  const [saving, setSaving] = useState(false);
   const [pending, startTransition] = useTransition();
   const run = (fn: () => Promise<unknown>) =>
     startTransition(async () => {
@@ -222,7 +231,14 @@ export function ProposalsCard({
           color={CARD_COLORS.proposals}
           onClose={() => setDialog(null)}
           headerExtra={
-            editing ? (
+            <>
+              <HeaderSave
+                form="proposal-form"
+                saving={saving}
+                label={editing ? (fr ? "Enregistrer" : "Save changes") : fr ? "Créer la proposition" : "Create proposal"}
+                savingLabel={fr ? "Enregistrement…" : "Saving…"}
+              />
+              {editing && (
               <button
                 type="button"
                 onClick={() => {
@@ -236,10 +252,14 @@ export function ProposalsCard({
               >
                 {fr ? "Supprimer" : "Delete"}
               </button>
-            ) : undefined
+              )}
+            </>
           }
         >
           <ProposalForm
+            formId="proposal-form"
+            hideSubmit
+            onPendingChange={setSaving}
             action={editing ? updateFullProposal.bind(null, editing.id) : createFullProposal}
             projectId={projectId}
             defaultValues={
@@ -300,6 +320,7 @@ export function InvoicesCard({
   const fr = lang === "fr";
   const router = useRouter();
   const [editId, setEditId] = useState<{ id: string; key: number } | null>(null);
+  const [savingInvoice, setSavingInvoice] = useState(false);
   const [pending, startTransition] = useTransition();
   const run = (fn: () => Promise<unknown>) =>
     startTransition(async () => {
@@ -379,6 +400,8 @@ export function InvoicesCard({
           color={CARD_COLORS.invoices}
           onClose={() => setEditId(null)}
           headerExtra={
+            <>
+            <HeaderSave form="invoice-form" saving={savingInvoice} label={fr ? "Enregistrer" : "Save changes"} savingLabel={fr ? "Enregistrement…" : "Saving…"} />
             <button
               type="button"
               onClick={() => {
@@ -392,9 +415,13 @@ export function InvoicesCard({
             >
               {fr ? "Supprimer" : "Delete"}
             </button>
+            </>
           }
         >
           <InvoiceLineItemsForm
+            formId="invoice-form"
+            hideSubmit
+            onPendingChange={setSavingInvoice}
             action={updateInvoiceLineItems.bind(null, editing.id)}
             defaultValues={{ number: editing.number, currency: editing.currency, dueDate: editing.dueDate, notes: editing.notes, lineItems: editing.lineItems }}
             catalog={catalog}
