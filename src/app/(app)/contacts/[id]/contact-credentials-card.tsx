@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { addContactCredential, deleteContactCredential, revealContactCredential } from "@/actions/contact-credentials";
+import { addContactCredential, deleteContactCredential, revealContactCredential, setApiKeyShareWithAi } from "@/actions/contact-credentials";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import Card, { CARD_COLORS } from "@/components/section-card";
 import { EditCardButton } from "./section-dialog";
@@ -13,6 +13,9 @@ export interface ContactCredentialRow {
   url: string | null;
   username: string | null;
   hasPassword: boolean;
+  hasApiKey: boolean;
+  apiKeyLast4: string | null;
+  shareApiKeyWithAi: boolean;
   loginMethod: string | null;
   notes: string | null;
 }
@@ -103,7 +106,10 @@ function CopyIconButton({ label, copiedLabel, getValue }: { label: string; copie
 
 // The link / sign-in method / username / password lines of one entry, shared
 // by the card view and the edit dialog's rows.
-function CredentialDetails({ entry, t }: { entry: ContactCredentialRow; t: ReturnType<typeof getDict> }) {
+function CredentialDetails({ entry, t, contactId, lang }: { entry: ContactCredentialRow; t: ReturnType<typeof getDict>; contactId: string; lang: Lang }) {
+  const fr = lang === "fr";
+  const [share, setShare] = useState(entry.shareApiKeyWithAi);
+  const [, startShare] = useTransition();
   const href = entry.url ? safeHref(entry.url) : null;
   const method = CREDENTIAL_LOGIN_METHODS.find((m) => m.value === entry.loginMethod);
 
@@ -144,11 +150,35 @@ function CredentialDetails({ entry, t }: { entry: ContactCredentialRow; t: Retur
           />
         </p>
       )}
+      {entry.hasApiKey && (
+        <>
+          <p className="flex items-center gap-1 text-xs text-soft">
+            <span>{fr ? "Clé API" : "API key"}</span>
+            <span className="font-mono">…{entry.apiKeyLast4}</span>
+            <CopyIconButton
+              label={fr ? "Copier la clé API" : "Copy API key"}
+              copiedLabel={t.contactCredentials.copied}
+              getValue={async () => (await revealContactCredential(entry.id, "apiKey")).value ?? null}
+            />
+          </p>
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-soft">
+            <input
+              type="checkbox"
+              checked={share}
+              onChange={(e) => {
+                setShare(e.target.checked);
+                startShare(() => setApiKeyShareWithAi(contactId, entry.id, e.target.checked));
+              }}
+            />
+            {fr ? "Partager avec l'IA (export)" : "Share with AI (export)"}
+          </label>
+        </>
+      )}
     </>
   );
 }
 
-function CredentialRow({ entry, contactId, t }: { entry: ContactCredentialRow; contactId: string; t: ReturnType<typeof getDict> }) {
+function CredentialRow({ entry, contactId, t, lang }: { entry: ContactCredentialRow; contactId: string; t: ReturnType<typeof getDict>; lang: Lang }) {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -182,7 +212,7 @@ function CredentialRow({ entry, contactId, t }: { entry: ContactCredentialRow; c
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-ink">{entry.label}</p>
-          <CredentialDetails entry={entry} t={t} />
+          <CredentialDetails entry={entry} t={t} contactId={contactId} lang={lang} />
           {entry.notes && <p className="truncate text-xs text-soft">{entry.notes}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -230,12 +260,14 @@ function CredentialsDialog({
   contactId,
   entries,
   t,
+  lang,
 }: {
   open: boolean;
   onClose: () => void;
   contactId: string;
   entries: ContactCredentialRow[];
   t: ReturnType<typeof getDict>;
+  lang: Lang;
 }) {
   const boundAction = addContactCredential.bind(null, contactId);
   const [state, action, pending] = useActionState(boundAction, undefined);
@@ -270,7 +302,7 @@ function CredentialsDialog({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-3 sm:p-5">
           <ul className="space-y-2">
             {entries.map((entry) => (
-              <CredentialRow key={entry.id} entry={entry} contactId={contactId} t={t} />
+              <CredentialRow key={entry.id} entry={entry} contactId={contactId} t={t} lang={lang} />
             ))}
             {entries.length === 0 && <li className="text-sm text-soft">{t.apiVault.empty}</li>}
           </ul>
@@ -290,6 +322,15 @@ function CredentialsDialog({
               <input type="text" name="username" placeholder={t.contactCredentials.usernamePlaceholder} className={CREDENTIAL_FIELD_CLASS} />
               <input type="password" name="password" placeholder={t.contactCredentials.passwordPlaceholder} className={CREDENTIAL_FIELD_CLASS} />
             </div>
+            <input type="password" name="apiKey" autoComplete="off" placeholder={lang === "fr" ? "Clé API / jeton (facultatif)" : "API key / token (optional)"} className={CREDENTIAL_FIELD_CLASS} />
+            <label className="flex items-start gap-2 text-xs text-soft">
+              <input type="checkbox" name="shareApiKeyWithAi" className="mt-0.5" />
+              <span>
+                {lang === "fr"
+                  ? "Permettre l'inclusion de cette clé dans un export pour l'IA (désactivé par défaut — utilisez une clé restreinte)."
+                  : "Allow this key to be included in an Export for AI (off by default — use a restricted key)."}
+              </span>
+            </label>
             <input type="text" name="notes" placeholder={t.contactCredentials.notesPlaceholder} className={CREDENTIAL_FIELD_CLASS} />
             <button
               type="submit"
@@ -328,13 +369,13 @@ export default function ContactCredentialsCard({
           {entries.map((entry) => (
             <li key={entry.id} className="py-2 text-sm first:pt-0">
               <p className="font-medium text-ink">{entry.label}</p>
-              <CredentialDetails entry={entry} t={t} />
+              <CredentialDetails entry={entry} t={t} contactId={contactId} lang={lang} />
               {entry.notes && <p className="text-xs text-soft">{entry.notes}</p>}
             </li>
           ))}
         </ul>
       )}
-      <CredentialsDialog open={open} onClose={() => setOpen(false)} contactId={contactId} entries={entries} t={t} />
+      <CredentialsDialog open={open} onClose={() => setOpen(false)} contactId={contactId} entries={entries} t={t} lang={lang} />
     </Card>
   );
 }

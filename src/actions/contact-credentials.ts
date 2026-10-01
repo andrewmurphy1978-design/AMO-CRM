@@ -31,6 +31,8 @@ export async function addContactCredential(
   const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const apiKey = String(formData.get("apiKey") ?? "").trim();
+  const shareApiKeyWithAi = formData.get("shareApiKeyWithAi") === "on";
   const rawMethod = String(formData.get("loginMethod") ?? "");
   const loginMethod = CREDENTIAL_LOGIN_METHODS.some((m) => m.value === rawMethod) ? rawMethod : null;
   if (!label) {
@@ -38,9 +40,21 @@ export async function addContactCredential(
   }
 
   const passwordEncrypted = password ? await encryptSecret(password) : null;
+  const apiKeyEncrypted = apiKey ? await encryptSecret(apiKey) : null;
   await withScopedPrismaClient((db) =>
     db.contactCredential.create({
-      data: { contactId, label, url: url || null, username: username || null, passwordEncrypted, loginMethod, notes: notes || null },
+      data: {
+        contactId,
+        label,
+        url: url || null,
+        username: username || null,
+        passwordEncrypted,
+        apiKeyEncrypted,
+        apiKeyLast4: apiKey ? apiKey.slice(-4) : null,
+        shareApiKeyWithAi: Boolean(apiKey) && shareApiKeyWithAi,
+        loginMethod,
+        notes: notes || null,
+      },
     })
   );
 
@@ -57,11 +71,20 @@ export async function deleteContactCredential(contactId: string, id: string): Pr
 // Decrypts on demand rather than shipping every entry's plaintext to the
 // client on page load — the password only ever leaves the server when the
 // admin explicitly clicks "Reveal" for that one entry.
-export async function revealContactCredential(id: string): Promise<{ value?: string; error?: string }> {
+export async function revealContactCredential(id: string, field: "password" | "apiKey" = "password"): Promise<{ value?: string; error?: string }> {
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const entry = await withScopedPrismaClient((db) => db.contactCredential.findUnique({ where: { id } }));
-  if (!entry?.passwordEncrypted) return { error: t.contactCredentials.notFound };
-  const value = await decryptSecret(entry.passwordEncrypted);
+  const encrypted = field === "apiKey" ? entry?.apiKeyEncrypted : entry?.passwordEncrypted;
+  if (!encrypted) return { error: t.contactCredentials.notFound };
+  const value = await decryptSecret(encrypted);
   return { value };
+}
+
+// The per-entry "Share with AI" switch: whether this API key may be included
+// in an Export for AI (the exporter still has to opt in each time).
+export async function setApiKeyShareWithAi(contactId: string, id: string, share: boolean): Promise<void> {
+  await requireAdmin();
+  await withScopedPrismaClient((db) => db.contactCredential.update({ where: { id }, data: { shareApiKeyWithAi: share } }));
+  revalidatePath(`/contacts/${contactId}`);
 }

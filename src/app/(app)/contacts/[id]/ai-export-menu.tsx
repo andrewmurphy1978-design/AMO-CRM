@@ -6,12 +6,14 @@ import { CONTACT_AI_FILES } from "@/lib/contact-ai-files";
 // Header button on the Contact page: downloads the contact's info as Markdown
 // files for an AI assistant (a .zip of all files, one combined .md, or any
 // single file), or copies the combined text to the clipboard.
-export default function AiExportMenu({ contactId, lang }: { contactId: string; lang: "en" | "fr" }) {
+export default function AiExportMenu({ contactId, lang, isAdmin }: { contactId: string; lang: "en" | "fr"; isAdmin: boolean }) {
   const fr = lang === "fr";
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [apiKeys, setApiKeys] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const base = `/api/contacts/${contactId}/ai-export`;
+  const q = apiKeys ? "&apikeys=1" : "";
 
   useEffect(() => {
     if (!open) return;
@@ -23,7 +25,7 @@ export default function AiExportMenu({ contactId, lang }: { contactId: string; l
   }, [open]);
 
   async function copyAll() {
-    const res = await fetch(`${base}?format=md&inline=1`);
+    const res = await fetch(`${base}?format=md&inline=1${q}`);
     await navigator.clipboard.writeText(await res.text());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -42,18 +44,31 @@ export default function AiExportMenu({ contactId, lang }: { contactId: string; l
       </button>
       {open && (
         <div className="absolute right-0 top-full z-40 mt-2 w-72 overflow-hidden rounded-xl border border-card-border bg-card-bg py-1 shadow-xl">
-          <a href={`${base}?format=zip`} className={`${item} font-semibold`}>
+          <a href={`${base}?format=zip${q}`} className={`${item} font-semibold`}>
             {fr ? "Tout télécharger (.zip)" : "Download all (.zip)"}
           </a>
-          <a href={`${base}?format=md`} className={item}>
+          <a href={`${base}?format=md${q}`} className={item}>
             {fr ? "Un seul fichier (.md)" : "Single combined file (.md)"}
           </a>
           <button type="button" onClick={copyAll} className={item}>
             {copied ? (fr ? "Copié ✓" : "Copied ✓") : fr ? "Copier tout le texte" : "Copy all text"}
           </button>
+          {isAdmin && (
+            <label className="flex cursor-pointer items-start gap-2 border-t border-card-border px-3 py-2 text-xs text-ink">
+              <input type="checkbox" checked={apiKeys} onChange={(e) => setApiKeys(e.target.checked)} className="mt-0.5" />
+              <span>
+                <span className="font-semibold">{fr ? "Inclure les clés API partagées" : "Include shared API keys"}</span>
+                <span className="block text-soft">
+                  {fr
+                    ? "Seulement celles marquées « Partager avec l'IA ». Utilisez des clés restreintes."
+                    : "Only keys marked “Share with AI”. Use restricted keys."}
+                </span>
+              </span>
+            </label>
+          )}
           <div className="my-1 border-t border-card-border" />
           {CONTACT_AI_FILES.map((f) => (
-            <a key={f.name} href={`${base}?file=${f.name}`} className={`${item} text-xs`}>
+            <a key={f.name} href={`${base}?file=${f.name}${q}`} className={`${item} text-xs`}>
               {f.name} <span className="text-soft">— {f.label}</span>
             </a>
           ))}

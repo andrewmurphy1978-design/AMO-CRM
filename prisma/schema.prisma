@@ -556,6 +556,12 @@ model ContactCredential {
   url               String?
   username          String?
   passwordEncrypted String?  @db.Text
+  // An API key / token for the app, encrypted like the password. The last four
+  // characters are kept in clear so it can be recognised without decrypting.
+  apiKeyEncrypted   String?  @db.Text
+  apiKeyLast4       String?
+  // Off by default: only keys flagged here can ever go into an "Export for AI".
+  shareApiKeyWithAi Boolean  @default(false)
   // How this account is signed into: null/"password" means the username +
   // password above; otherwise a social/SSO provider key (google, microsoft,
   // facebook, apple, ... — see CREDENTIAL_LOGIN_METHODS).

@@ -375,6 +375,9 @@ export default async function ContactDetailPage({
     url: c.url,
     username: c.username,
     hasPassword: Boolean(c.passwordEncrypted),
+    hasApiKey: Boolean(c.apiKeyEncrypted),
+    apiKeyLast4: c.apiKeyLast4,
+    shareApiKeyWithAi: c.shareApiKeyWithAi,
     loginMethod: c.loginMethod,
     notes: c.notes,
   }));
@@ -540,7 +543,7 @@ export default async function ContactDetailPage({
         location={t.dashboard.myLocation}
         actions={
           <div className="flex items-center gap-2">
-            <AiExportMenu contactId={contact.id} lang={lang} />
+            <AiExportMenu contactId={contact.id} lang={lang} isAdmin={isAdmin} />
             <DeleteContactButton lang={lang} contactId={contact.id} />
           </div>
         }

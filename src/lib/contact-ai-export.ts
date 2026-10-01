@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { BRAND_CATEGORIES, isDataUri } from "@/lib/brand";
+import { decryptSecret } from "@/lib/crypto";
 import { CREDENTIAL_LOGIN_METHODS } from "@/lib/contact-form-fields";
 import { displayValue, defaultTemplate, type FieldValues } from "@/lib/project-templates";
 import { getProjectTemplate } from "@/lib/project-template-store";
@@ -23,7 +24,7 @@ function address(parts: unknown[]): string {
   return parts.map(clean).filter(Boolean).join(", ");
 }
 
-export async function buildContactMarkdownFiles(db: PrismaClient, contactId: string): Promise<{ contactName: string; files: { name: string; content: string }[] } | null> {
+export async function buildContactMarkdownFiles(db: PrismaClient, contactId: string, options: { isAdmin?: boolean; includeSharedApiKeys?: boolean } = {}): Promise<{ contactName: string; files: { name: string; content: string }[] } | null> {
   const c = await db.contact.findUnique({
     where: { id: contactId },
     include: {
@@ -36,7 +37,7 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
       voipAccounts: { orderBy: { order: "asc" } },
       techStackItems: { orderBy: { order: "asc" } },
       domains: { orderBy: { order: "asc" } },
-      credentials: { orderBy: { createdAt: "asc" }, select: { label: true, url: true, loginMethod: true } },
+      credentials: { orderBy: { createdAt: "asc" }, select: { label: true, url: true, loginMethod: true, apiKeyEncrypted: true, apiKeyLast4: true, shareApiKeyWithAi: true } },
       brandItems: { orderBy: [{ category: "asc" }, { order: "asc" }] },
       contactNotes: { orderBy: { createdAt: "desc" } },
       relationsFrom: { include: { relatedContact: { select: { firstName: true, lastName: true, company: true, email: true } } } },
@@ -170,17 +171,28 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
 
   // The apps/sites the contact has accounts with — names, addresses and how
   // they sign in only. User IDs, passwords and notes are never exported.
-  tech += section(
-    "Apps & accounts used (no user IDs or passwords)",
-    c.credentials.length
-      ? c.credentials
-          .map((a) => {
-            const method = a.loginMethod && a.loginMethod !== "password" ? CREDENTIAL_LOGIN_METHODS.find((m) => m.value === a.loginMethod)?.label ?? a.loginMethod : null;
-            return `- **${a.label}**${a.url ? ` — ${a.url}` : ""}${method ? ` (signs in with ${method})` : ""}`;
-          })
-          .join("\n")
-      : "_None recorded._"
-  );
+  // API keys: never exported unless an admin asks for shared keys AND this
+  // entry is flagged "Share with AI". Otherwise only a hint is shown.
+  const appLines: string[] = [];
+  for (const a of c.credentials) {
+    const method = a.loginMethod && a.loginMethod !== "password" ? CREDENTIAL_LOGIN_METHODS.find((m) => m.value === a.loginMethod)?.label ?? a.loginMethod : null;
+    let key = "";
+    if (a.apiKeyEncrypted) {
+      if (options.isAdmin && options.includeSharedApiKeys && a.shareApiKeyWithAi) {
+        try {
+          key = ` · API key: \`${await decryptSecret(a.apiKeyEncrypted)}\``;
+        } catch {
+          key = " · API key on file (could not be decrypted)";
+        }
+      } else if (options.isAdmin && a.apiKeyLast4) {
+        key = ` · API key on file (ends …${a.apiKeyLast4}, not shared)`;
+      } else {
+        key = " · API key on file (not shared)";
+      }
+    }
+    appLines.push(`- **${a.label}**${a.url ? ` — ${a.url}` : ""}${method ? ` (signs in with ${method})` : ""}${key}`);
+  }
+  tech += section("Apps & accounts used (no user IDs or passwords)", appLines.length ? appLines.join("\n") : "_None recorded._");
 
   // ---- 05 projects
   let projects = `# ${fullName} — Projects\n\n`;
@@ -242,7 +254,7 @@ Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM. Give an AI 
 | 05-projects.md | Projects with custom answers, phases and tasks |
 | 06-communications.md | Recent calls, texts, meetings and linked email subjects |
 
-User IDs and passwords are never exported (the apps themselves are listed in 04). Uploaded image files are listed by name only.
+User IDs and passwords are never exported (the apps themselves are listed in 04). API keys appear only if they were explicitly flagged for sharing and requested at export time. Uploaded image files are listed by name only.
 `;
 
   return {

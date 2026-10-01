@@ -7,13 +7,20 @@ import { createZip } from "@/lib/zip";
 //   ?format=zip            all the Markdown files in one .zip
 //   ?format=md             every file joined into a single .md
 //   ?file=01-profile.md    one file
+//   &apikeys=1             (admins) include API keys flagged "Share with AI"
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return new Response("Unauthorized", { status: 401 });
   const { id } = await params;
   const url = new URL(request.url);
 
-  const built = await withScopedPrismaClient((db) => buildContactMarkdownFiles(db, id));
+  // API keys flagged "Share with AI" are included only on an explicit
+  // ?apikeys=1 from an admin (the people who can see the credentials card).
+  const isAdmin = session.user.role === "ADMIN";
+  const wantKeys = url.searchParams.get("apikeys") === "1";
+  if (wantKeys && !isAdmin) return new Response("Forbidden", { status: 403 });
+
+  const built = await withScopedPrismaClient((db) => buildContactMarkdownFiles(db, id, { isAdmin, includeSharedApiKeys: wantKeys }));
   if (!built) return new Response("Not found", { status: 404 });
 
   const slug = built.contactName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "contact";
