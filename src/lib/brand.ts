@@ -38,9 +38,30 @@ export function safeBrandUrl(raw: string | null | undefined): string | null {
   const url = (raw ?? "").trim();
   if (!url) return null;
   if (/^https?:\/\//i.test(url)) return url;
+  if (isDataUri(url)) return url;
   if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return null;
   return /^[\w-]+(\.[\w-]+)+(\/|$)/.test(url) ? `https://${url}` : null;
 }
+
+// A file picked from the computer is stored inline as a data: URI.
+export const MAX_BRAND_FILE_BYTES = 600_000;
+
+export function isDataUri(v: string | null | undefined): boolean {
+  return /^data:[\w.+-]+\/[\w.+-]+;base64,/i.test((v ?? "").trim());
+}
+
+export function dataUriIsImage(v: string): boolean {
+  return /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/i.test(v.trim());
+}
+
+export const BRAND_FONTS = [
+  "Inter", "Roboto", "Open Sans", "Lato", "Montserrat", "Poppins", "Oswald", "Raleway", "Nunito", "Nunito Sans", "Source Sans 3", "Ubuntu",
+  "Work Sans", "Rubik", "Mulish", "Quicksand", "Barlow", "DM Sans", "Manrope", "Josefin Sans", "Karla", "Fira Sans", "Cabin", "Archivo",
+  "Playfair Display", "Merriweather", "Lora", "PT Serif", "Libre Baskerville", "Cormorant Garamond", "EB Garamond", "Crimson Text", "Bitter", "Noto Serif",
+  "Bebas Neue", "Anton", "Abril Fatface", "Lobster", "Pacifico", "Dancing Script", "Great Vibes", "Caveat", "Satisfy", "Permanent Marker",
+  "Roboto Mono", "Source Code Pro", "Fira Code", "JetBrains Mono", "Space Mono",
+  "Arial", "Helvetica", "Helvetica Neue", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Times New Roman", "Garamond", "Courier New", "Calibri", "Cambria", "Segoe UI", "Futura", "Gotham", "Avenir", "Proxima Nova", "Gill Sans", "Didot", "Baskerville",
+];
 
 export function safeHexColor(raw: string | null | undefined): string | null {
   const v = (raw ?? "").trim();

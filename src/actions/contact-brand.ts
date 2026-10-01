@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { BRAND_CATEGORIES, type BrandItemInput } from "@/lib/brand";
+import { BRAND_CATEGORIES, MAX_BRAND_FILE_BYTES, type BrandItemInput } from "@/lib/brand";
 
 export async function saveContactBrand(
   contactId: string,
@@ -29,6 +29,10 @@ export async function saveContactBrand(
       }));
   } catch {
     return { error: t.actions.invalidInput };
+  }
+
+  if (items.some((i) => i.value.length > Math.ceil(MAX_BRAND_FILE_BYTES * 1.4))) {
+    return { error: session.user.language === "FR" ? "Un fichier est trop volumineux (600 Ko maximum)." : "A file is too large (600 KB maximum)." };
   }
 
   await withScopedPrismaClient(async (db) => {

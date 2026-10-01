@@ -1,6 +1,6 @@
 import Card from "@/components/section-card";
 import type { Lang } from "@/lib/i18n/dictionaries";
-import { BRAND_CATEGORIES, safeBrandUrl, safeHexColor, type BrandItemInput } from "@/lib/brand";
+import { BRAND_CATEGORIES, dataUriIsImage, isDataUri, safeBrandUrl, safeHexColor, type BrandItemInput } from "@/lib/brand";
 import { saveContactBrand } from "@/actions/contact-brand";
 import BrandDialog from "./brand-dialog";
 
@@ -84,17 +84,24 @@ export function BrandCard({ contactId, items, lang }: { contactId: string; items
                     // image-like: a thumbnail that links to the file; if the
                     // link isn't an image the thumbnail stays blank and the
                     // label is still a link.
+                    const inline = isDataUri(item.value);
+                    const isImg = url ? (inline ? dataUriIsImage(url) : true) : false;
+                    const thumb = isImg ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- user-supplied image links / uploaded data URIs
+                      <img src={url as string} alt={item.label} loading="lazy" className="h-16 w-24 rounded-md border border-card-border bg-black/5 object-contain" />
+                    ) : (
+                      <span className="flex h-16 w-24 items-center justify-center rounded-md border border-card-border bg-black/5 text-lg text-soft">{url ? "📎" : "—"}</span>
+                    );
                     return (
                       <div key={item.id} className="w-24" title={item.note || undefined}>
                         {url ? (
-                          <a href={url} target="_blank" rel="noreferrer" className="block">
-                            {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary user-supplied image links */}
-                            <img src={url} alt={item.label} loading="lazy" className="h-16 w-24 rounded-md border border-card-border bg-black/5 object-contain" />
+                          <a href={url} {...(inline ? { download: item.label || "file" } : { target: "_blank", rel: "noreferrer" })} className="block">
+                            {thumb}
                             <span className="mt-0.5 block truncate text-xs text-emerald-700 hover:underline">{item.label}</span>
                           </a>
                         ) : (
                           <>
-                            <span className="flex h-16 w-24 items-center justify-center rounded-md border border-card-border bg-black/5 text-[10px] text-soft">—</span>
+                            {thumb}
                             <span className="mt-0.5 block truncate text-xs text-ink">{item.label}</span>
                           </>
                         )}
