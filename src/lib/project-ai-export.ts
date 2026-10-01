@@ -4,6 +4,7 @@ import { getProjectTemplate } from "@/lib/project-template-store";
 import { publicBaseUrl } from "@/lib/twilio";
 import { buildContactMarkdownFiles } from "@/lib/contact-ai-export";
 import type { CalendarEventSummary } from "@/lib/google";
+import { signPath } from "@/lib/signed-url";
 
 // The "Export for AI" pack for one project: everything on the Project page,
 // plus every file of the client's Contact pack (prefixed "contact-").
@@ -41,6 +42,7 @@ export async function buildProjectMarkdownFiles(
       tasks: { where: { phaseId: null }, orderBy: { createdAt: "asc" }, include: { assignee: { select: { name: true } } } },
       proposals: { orderBy: { createdAt: "desc" }, include: { lineItems: { orderBy: { order: "asc" } }, paymentSchedule: { orderBy: { order: "asc" } } } },
       invoices: { orderBy: { createdAt: "desc" }, include: { lineItems: { orderBy: { order: "asc" } } } },
+      supplierInvoices: { orderBy: { createdAt: "asc" }, include: { billedInvoice: { select: { number: true } } } },
       interactions: { orderBy: { occurredAt: "desc" }, include: { participants: { include: { contact: { select: { firstName: true, lastName: true } }, user: { select: { name: true } } } } } },
       emailLinks: { orderBy: { messageDate: "desc" } },
       calendarEventLinks: true,
@@ -136,7 +138,7 @@ export async function buildProjectMarkdownFiles(
       ["Notes", pr.notes],
       ["Cover letter", pr.coverLetter],
     ]);
-    if (pr.lineItems.length > 0) fin += "\n**Line items**\n\n" + pr.lineItems.map((li) => `- ${li.description} — ${li.quantity} × ${money(li.unitPrice, pr.currency)}`).join("\n") + "\n";
+    if (pr.lineItems.length > 0) fin += "\n**Line items**\n\n" + pr.lineItems.map((li) => `- ${li.description} — ${li.quantity} × ${money(li.unitPrice, pr.currency)}${li.details ? `\n  - ${clean(li.details).replace(/\n/g, " ")}` : ""}`).join("\n") + "\n";
     if (pr.paymentSchedule.length > 0) {
       fin +=
         "\n**Payment schedule (instalments)**\n\n" +
@@ -146,6 +148,13 @@ export async function buildProjectMarkdownFiles(
             return `${i + 1}. ${r.label}${r.percentage != null ? ` — ${r.percentage}%` : ""}${amount != null ? ` (${money(amount, pr.currency)})` : ""}${r.dueDate ? `, due ${day(r.dueDate)}` : ""} — ${r.paid ? `PAID${r.paidAt ? ` ${day(r.paidAt)}` : ""}` : "not paid"}`;
           })
           .join("\n") +
+        "\n";
+    }
+    const subs = (Array.isArray(pr.subscriptions) ? pr.subscriptions : []) as { name: string; amount: number; period: string; note: string }[];
+    if (subs.length > 0) {
+      fin +=
+        "\n**Apps & subscriptions (paid by the client directly to the providers, not in the total)**\n\n" +
+        subs.map((x) => `- ${x.name} — ${x.amount > 0 ? money(x.amount, pr.currency) : "amount to confirm"} ${x.period === "year" ? "per year" : x.period === "once" ? "one-time" : "per month"}${x.note ? ` (${x.note})` : ""}`).join("\n") +
         "\n";
     }
     fin += "\n";
@@ -163,9 +172,33 @@ export async function buildProjectMarkdownFiles(
       ["Reminders sent", inv.reminderCount || ""],
       ["Notes", inv.notes],
     ]);
-    if (inv.lineItems.length > 0) fin += "\n" + inv.lineItems.map((li) => `- ${li.description} — ${li.quantity} × ${money(li.unitPrice, inv.currency)}`).join("\n") + "\n";
+    if (inv.lineItems.length > 0) fin += "\n" + inv.lineItems.map((li) => `- ${li.description} — ${li.quantity} × ${money(li.unitPrice, inv.currency)}${li.details ? `\n  - ${clean(li.details).replace(/\n/g, " ")}` : ""}`).join("\n") + "\n";
     fin += "\n";
   }
+
+
+  // Supplier invoices paid on the client's behalf (files go in the zip, and are linked).
+  const binaryFiles: { name: string; data: Uint8Array }[] = [...(contactPack?.binaryFiles ?? [])];
+  fin += "## Supplier invoices paid on the client's behalf\n\n";
+  if (p.supplierInvoices.length === 0) fin += "_None._\n\n";
+  for (const c of p.supplierInvoices) {
+    let fileLine = "";
+    if (c.fileData && c.fileName) {
+      const path = `/api/projects/${p.id}/supplier-invoices/${c.id}/file`;
+      const ext = (c.fileName.split(".").pop() ?? "bin").toLowerCase();
+      const zipName = `supplier-invoices/${(c.supplier + (c.reference ? `-${c.reference}` : "")).replace(/[^\w.-]+/g, "-")}.${ext}`;
+      binaryFiles.push({ name: zipName, data: c.fileData as unknown as Uint8Array });
+      let link = "";
+      if (base) {
+        const { exp, sig } = await signPath(path, 7 * 86400);
+        link = ` · download: ${base}${path}?exp=${exp}&sig=${sig} (valid 7 days)`;
+      }
+      fileLine = `in the .zip at \`${zipName}\`${link}`;
+    }
+    fin += `- **${c.supplier}${c.reference ? ` #${c.reference}` : ""}** — ${money(c.totalAmount, c.currency)} (before tax ${money(c.subtotal, c.currency)}; GST ${c.gstAmount.toFixed(2)}, QST ${c.qstAmount.toFixed(2)}, HST ${c.hstAmount.toFixed(2)})\n`;
+    fin += `  - paid ${day(c.paidDate) || "(date not set)"}${c.paymentMethod ? ` by ${c.paymentMethod}` : ""} · ${c.reimbursable ? `re-billable to the client — ${c.reimbursementStatus}${c.billedInvoice ? ` (on invoice ${clean(c.billedInvoice.number) || "—"})` : ""}` : "our cost (not re-billed)"}${c.description ? ` · ${clean(c.description)}` : ""}${fileLine ? ` · file: ${fileLine}` : ""}\n`;
+  }
+  fin += "\n";
 
   // ---- 03 communications & calendar
   let comms = `# ${p.name} — Calls, texts, emails & calendar\n\n`;
@@ -216,7 +249,7 @@ Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM.
 | File | What it holds |
 |---|---|
 | 01-project.md | Everything on the Project page: details, custom answers, notes, phases, tasks, upcoming phases, activity |
-| 02-project-proposals-and-invoices.md | Proposals (line items, taxes, instalments paid / unpaid) and invoices |
+| 02-project-proposals-and-invoices.md | Proposals (line items with details, taxes, subscriptions, instalments paid / unpaid), invoices and the supplier invoices paid on the client's behalf |
 | 03-project-communications.md | Calls, texts, emails and calendar events linked to the project |
 | contact-00-README.md … contact-07-*.md | The client's full Contact pack (profile, AI context & notes, brand, tech & domains, all projects, communications, purchases/sync/activity) |
 
@@ -226,7 +259,7 @@ User IDs and passwords are never exported. API keys only if flagged for sharing 
   const contactFiles = (contactPack?.files ?? []).map((f) => ({ name: `contact-${f.name}`, content: f.content }));
   return {
     projectName: p.name,
-    binaryFiles: contactPack?.binaryFiles ?? [],
+    binaryFiles,
     files: [
       { name: "00-README.md", content: readme },
       { name: "01-project.md", content: proj },
