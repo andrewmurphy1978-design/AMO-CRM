@@ -381,18 +381,16 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   // ---- cover band
   lo.page.drawRectangle({ x: 0, y: H - 190, width: W, height: 190, color: GREEN });
   lo.page.drawRectangle({ x: 0, y: H - 194, width: W, height: 4, color: GOLD });
-  // Logo with the business details beside it.
-  const logoH = 58;
-  let textX = MX;
+  // Full horizontal logo (wordmark + tagline) on the dark band; contact line under it.
   if (logo) {
-    const w = Math.min((logo.width / logo.height) * logoH, 120);
-    lo.page.drawImage(logo, { x: MX, y: H - 36 - logoH, width: w, height: (w / logo.width) * logo.height });
-    textX = MX + w + 14;
+    const w = 270;
+    const h = (w / logo.width) * logo.height;
+    lo.page.drawImage(logo, { x: MX - 6, y: H - 30 - h, width: w, height: h });
+    lo.text([data.company.website, data.company.email].filter(Boolean).join("  ·  "), MX, H - 30 - h - 14, { size: 9, color: MIST, maxWidth: 270 });
+  } else {
+    lo.text(data.company.name, MX, H - 52, { size: 17, font: bold, color: MIST, maxWidth: 250 });
+    lo.text(data.company.website, MX, H - 82, { size: 9, color: MIST, maxWidth: 250 });
   }
-  lo.text(data.company.name, textX, H - 52, { size: 17, font: bold, color: MIST, maxWidth: 250 });
-  lo.text(t.tagline, textX, H - 67, { size: 8.5, font: bold, color: GOLD, maxWidth: 250 });
-  lo.text(data.company.website, textX, H - 82, { size: 9, color: MIST, maxWidth: 250 });
-  if (data.company.email) lo.text(data.company.email, textX, H - 94, { size: 9, color: MIST, maxWidth: 250 });
   lo.text(t.proposal, W - MX - bold.widthOfTextAtSize(t.proposal, 30), H - 70, { size: 30, font: bold, color: MIST });
   lo.text(`${t.number} ${data.number}`, W - MX - bold.widthOfTextAtSize(`${t.number} ${data.number}`, 10), H - 90, { size: 10, font: bold, color: GOLD });
   lo.text(fmtDate(data.date, data.lang), W - MX - regular.widthOfTextAtSize(safe(fmtDate(data.date, data.lang)), 10), H - 106, { size: 10, color: MIST });
@@ -668,16 +666,15 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
 
   lo.page.drawRectangle({ x: 0, y: H - 150, width: W, height: 150, color: GREEN });
   lo.page.drawRectangle({ x: 0, y: H - 154, width: W, height: 4, color: GOLD });
-  const logoH = 52;
-  let textX = MX;
   if (logo) {
-    const w = Math.min((logo.width / logo.height) * logoH, 110);
-    lo.page.drawImage(logo, { x: MX, y: H - 34 - logoH, width: w, height: (w / logo.width) * logo.height });
-    textX = MX + w + 14;
+    const w = 250;
+    const h = (w / logo.width) * logo.height;
+    lo.page.drawImage(logo, { x: MX - 6, y: H - 28 - h, width: w, height: h });
+    lo.text([data.company.website, data.company.email].filter(Boolean).join("  ·  "), MX, H - 28 - h - 13, { size: 9, color: MIST, maxWidth: 250 });
+  } else {
+    lo.text(data.company.name, MX, H - 52, { size: 16, font: bold, color: MIST, maxWidth: 250 });
+    lo.text(data.company.website, MX, H - 68, { size: 9, color: MIST, maxWidth: 250 });
   }
-  lo.text(data.company.name, textX, H - 52, { size: 16, font: bold, color: MIST, maxWidth: 250 });
-  lo.text(data.company.website, textX, H - 68, { size: 9, color: MIST, maxWidth: 250 });
-  if (data.company.email) lo.text(data.company.email, textX, H - 80, { size: 9, color: MIST, maxWidth: 250 });
   lo.text(t.invoice, W - MX - bold.widthOfTextAtSize(t.invoice, 28), H - 66, { size: 28, font: bold, color: MIST });
   const num = `#${data.number}`;
   lo.text(num, W - MX - bold.widthOfTextAtSize(safe(num), 11), H - 86, { size: 11, font: bold, color: GOLD });

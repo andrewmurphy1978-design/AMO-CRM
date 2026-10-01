@@ -5,21 +5,19 @@ import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-te
 import type { InvoicePdfData, PdfAttachment, ProposalPdfData } from "@/lib/proposal-pdf";
 import { proposalSupplierCosts } from "@/lib/supplier-costs";
 import { signPath } from "@/lib/signed-url";
+import { LOGO_FULL_EN_B64, LOGO_FULL_FR_B64 } from "@/lib/logo-assets";
 
 // Gathers what the Proposal / Invoice PDFs need from the database.
 
-const LOGO_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596ef4e08523.10636812_AMOBadgeTransparentwithAMOonly.png";
 export const COMPANY = { name: "Andrew Murphy Online", website: "andrewmurphy.online", email: "andrew@andrewmurphy.online" };
 const INTERNAL_TASK = /instal|proposal|invoice|payment/i;
 
-async function fetchLogo(): Promise<Uint8Array | null> {
-  try {
-    const res = await fetch(LOGO_URL, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return null;
-    return new Uint8Array(await res.arrayBuffer());
-  } catch {
-    return null;
-  }
+// Full horizontal AMO logo (EN / FR variant), embedded so PDFs never depend on a download.
+function fullLogo(lang: "en" | "fr"): Uint8Array {
+  const bin = atob(lang === "fr" ? LOGO_FULL_FR_B64 : LOGO_FULL_EN_B64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
 }
 
 function clientBlock(c: {
@@ -95,7 +93,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const number = `PR-${stamp}-${proposal.id.slice(-4).toUpperCase()}`;
   const data: ProposalPdfData = {
     lang,
-    logoPng: await fetchLogo(),
+    logoPng: fullLogo(lang),
     number,
     title: proposal.title,
     date: proposal.sentAt ?? new Date(),
@@ -151,7 +149,7 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
   const number = invoice.number || `INV-${invoice.createdAt.toISOString().slice(0, 10).replace(/-/g, "")}-${invoice.id.slice(-4).toUpperCase()}`;
   const data: InvoicePdfData = {
     lang,
-    logoPng: await fetchLogo(),
+    logoPng: fullLogo(lang),
     number,
     date: invoice.sentAt ?? invoice.createdAt,
     dueDate: invoice.dueDate,
