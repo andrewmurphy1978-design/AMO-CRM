@@ -36,6 +36,8 @@ import SocialDialog from "./social-dialog";
 import VoipDialog from "./voip-dialog";
 import AddressesDialog from "./addresses-dialog";
 import InvoiceDialog from "./invoice-dialog";
+import AiDetailsDialog from "./ai-details-dialog";
+import { saveContactAiDetails } from "@/actions/contact-brand";
 import { BrandCard } from "./brand-card";
 import { AvatarThumb, AppIdChip, ContactInfoCard, TechStackCard, DomainsCard } from "./contact-cards";
 import RelationsDialog from "./relations-dialog";
@@ -899,6 +901,21 @@ export default async function ContactDetailPage({
                 })}
               </div>
             </div>
+          </Card>
+
+          <Card
+            color="aiDetails"
+            title={lang === "fr" ? "Détails du contact pour l'IA" : "Contact details for AI"}
+            compact
+            actions={<AiDetailsDialog action={saveContactAiDetails.bind(null, contact.id)} value={contact.aiDetails ?? ""} lang={lang} />}
+          >
+            {contact.aiDetails ? (
+              <p className="whitespace-pre-wrap break-words text-sm text-ink">{contact.aiDetails}</p>
+            ) : (
+              <p className="text-sm text-soft">
+                {lang === "fr" ? "Rien pour le moment — ajoutez du contexte pour aider une IA." : "Nothing yet — add context to help an AI."}
+              </p>
+            )}
           </Card>
 
           <Card

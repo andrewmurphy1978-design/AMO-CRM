@@ -204,6 +204,7 @@ export default function BrandDialog({
   const fr = lang === "fr";
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<BrandItemInput[]>(items);
+  const [active, setActive] = useState(BRAND_CATEGORIES[0].key);
 
   const update = (index: number, patch: Partial<BrandItemInput>) => setRows((r) => r.map((row, i) => (i === index ? { ...row, ...patch } : row)));
 
@@ -218,8 +219,26 @@ export default function BrandDialog({
       />
       <SectionDialog open={open} onOpenChange={setOpen} title="Brand" action={action} labels={t.phaseDialog} wide headerColorClassName={CARD_COLORS.brand}>
         <input type="hidden" name="brand" value={JSON.stringify(rows)} />
-        <div className="space-y-5">
-          {BRAND_CATEGORIES.map((cat) => {
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-5">
+          <nav className="flex shrink-0 gap-1 overflow-x-auto sm:w-40 sm:flex-col sm:overflow-visible" aria-label="Brand categories">
+            {BRAND_CATEGORIES.map((cat) => {
+              const count = rows.filter((r) => r.category === cat.key).length;
+              const on = cat.key === active;
+              return (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => setActive(cat.key)}
+                  className={`flex shrink-0 items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${on ? "bg-purple-700 text-white" : "text-ink hover:bg-black/5"}`}
+                >
+                  <span>{fr ? cat.fr : cat.en}</span>
+                  {count > 0 && <span className={`rounded-full px-1.5 text-xs ${on ? "bg-white/25" : "bg-black/10"}`}>{count}</span>}
+                </button>
+              );
+            })}
+          </nav>
+          <div className="min-w-0 flex-1 space-y-5">
+          {BRAND_CATEGORIES.filter((c) => c.key === active).map((cat) => {
             const catRows = rows.map((row, index) => ({ row, index })).filter((x) => x.row.category === cat.key);
             return (
               <section key={cat.key}>
@@ -279,6 +298,7 @@ export default function BrandDialog({
               </section>
             );
           })}
+          </div>
         </div>
       </SectionDialog>
     </>

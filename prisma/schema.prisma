@@ -320,10 +320,13 @@ model Contact {
   storeHostingProvider   String?
   storeDesignApp         String?
 
-  stage   ContactStage @default(LEAD)
-  notes   String?      @db.Text
-  ownerId String?
-  owner   User?        @relation("ContactOwner", fields: [ownerId], references: [id])
+  stage     ContactStage @default(LEAD)
+  // Free-text background on this contact written for AI assistants (who they
+  // are, their business, preferences, context) — the "Contact details for AI" card.
+  aiDetails String?      @db.Text
+  notes     String?      @db.Text
+  ownerId   String?
+  owner     User?        @relation("ContactOwner", fields: [ownerId], references: [id])
 
   source       String? // e.g. "systeme.io", "manual", "clickfunnels"
   lastSyncedAt DateTime?

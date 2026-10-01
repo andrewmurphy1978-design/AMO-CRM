@@ -57,3 +57,20 @@ export async function saveContactBrand(
   revalidatePath("/projects", "layout");
   return { success: t.actions.contactUpdated };
 }
+
+// The "Contact details for AI" card: free-text background on the contact.
+export async function saveContactAiDetails(
+  contactId: string,
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  const text = String(formData.get("aiDetails") ?? "").trim();
+  await withScopedPrismaClient((db) => db.contact.update({ where: { id: contactId }, data: { aiDetails: text || null } }));
+
+  revalidatePath(`/contacts/${contactId}`);
+  return { success: t.actions.contactUpdated };
+}
