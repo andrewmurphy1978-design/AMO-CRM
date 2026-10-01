@@ -350,6 +350,7 @@ model Contact {
   techStackItems            ContactTechStackItem[]
   domains                   ContactDomain[]
   credentials               ContactCredential[]
+  brandItems                ContactBrandItem[]
   appSyncSettings           ContactAppSync[]
   relationsFrom             ContactRelation[]         @relation("ContactRelationsFrom")
   relationsTo               ContactRelation[]         @relation("ContactRelationsTo")
@@ -524,6 +525,26 @@ model ContactNote {
 // src/lib/crypto.ts) and never shipped to the client on page load; it's
 // only decrypted on demand via revealContactCredential, same pattern as
 // ApiKeyVaultEntry/revealVaultEntry.
+// One entry in a contact's Brand card — a logo, colour, font, voice note,
+// photo, component, icon, graphic or chart. `category` is a plain string
+// (see BRAND_CATEGORIES in src/lib/brand.ts); `value` is a link, hex colour
+// or text depending on the category.
+model ContactBrandItem {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  category  String
+  label     String
+  value     String?  @db.Text
+  note      String?  @db.Text
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId, category])
+  @@map("contact_brand_items")
+}
+
 model ContactCredential {
   id                String   @id @default(cuid())
   contactId         String

@@ -36,6 +36,7 @@ import SocialDialog from "./social-dialog";
 import VoipDialog from "./voip-dialog";
 import AddressesDialog from "./addresses-dialog";
 import InvoiceDialog from "./invoice-dialog";
+import { BrandCard } from "./brand-card";
 import { AvatarThumb, AppIdChip, ContactInfoCard, TechStackCard, DomainsCard } from "./contact-cards";
 import RelationsDialog from "./relations-dialog";
 import OtherInfoDialog from "./other-info-dialog";
@@ -255,6 +256,7 @@ export default async function ContactDetailPage({
         voipAccounts: { orderBy: { order: "asc" } },
         techStackItems: { orderBy: { order: "asc" } },
         domains: { orderBy: { order: "asc" } },
+        brandItems: { orderBy: [{ category: "asc" }, { order: "asc" }] },
         credentials: { orderBy: { createdAt: "asc" } },
         appSyncSettings: true,
         relationsFrom: { include: { relatedContact: true }, orderBy: { createdAt: "asc" } },
@@ -794,6 +796,12 @@ export default async function ContactDetailPage({
           <TechStackCard contact={contact} lang={lang} />
 
           <DomainsCard contact={contact} lang={lang} />
+
+          <BrandCard
+            contactId={contact.id}
+            lang={lang}
+            items={contact.brandItems.map((b) => ({ id: b.id, category: b.category, label: b.label, value: b.value ?? "", note: b.note ?? "" }))}
+          />
 
           {isAdmin && <ContactCredentialsCard contactId={contact.id} entries={credentialEntries} lang={lang} />}
 
