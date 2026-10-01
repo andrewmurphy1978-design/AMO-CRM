@@ -26,7 +26,7 @@ function address(parts: unknown[]): string {
   return parts.map(clean).filter(Boolean).join(", ");
 }
 
-export async function buildContactMarkdownFiles(db: PrismaClient, contactId: string, options: { isAdmin?: boolean; includeSharedApiKeys?: boolean; origin?: string } = {}): Promise<{ contactName: string; files: { name: string; content: string }[] } | null> {
+export async function buildContactMarkdownFiles(db: PrismaClient, contactId: string, options: { isAdmin?: boolean; includeSharedApiKeys?: boolean; origin?: string } = {}): Promise<{ contactName: string; files: { name: string; content: string }[]; binaryFiles: { name: string; data: Uint8Array }[] } | null> {
   const c = await db.contact.findUnique({
     where: { id: contactId },
     include: {
@@ -136,13 +136,27 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
   const FILE_LINK_DAYS = 7;
   const base = publicBaseUrl(options.origin);
   const fileLinks = new Map<string, string>();
-  if (base) {
-    for (const b of c.brandItems) {
-      if (!isDataUri(b.value)) continue;
+  const binaryFiles: { name: string; data: Uint8Array }[] = [];
+  const usedNames = new Set<string>();
+  for (const b of c.brandItems) {
+    if (!isDataUri(b.value)) continue;
+    const parts: string[] = [];
+    // The same file inside the .zip, as a relative path.
+    const match = /^data:([\w.+-]+\/[\w.+-]+);base64,([\s\S]*)$/i.exec((b.value ?? "").trim());
+    if (match) {
+      const ext = (match[1].split("/")[1] ?? "bin").replace("svg+xml", "svg").replace("jpeg", "jpg");
+      let name = `brand-files/${b.category}/${(b.label || "file").replace(/[^\w.-]+/g, "-")}.${ext}`;
+      for (let n = 2; usedNames.has(name); n++) name = name.replace(/(-\d+)?\.(\w+)$/, `-${n}.$2`);
+      usedNames.add(name);
+      binaryFiles.push({ name, data: Uint8Array.from(atob(match[2]), (ch) => ch.charCodeAt(0)) });
+      parts.push(`in the .zip at \`${name}\``);
+    }
+    if (base) {
       const path = `/api/brand-files/${b.id}`;
       const { exp, sig } = await signPath(path, FILE_LINK_DAYS * 86400);
-      fileLinks.set(b.id, `${base}${path}?exp=${exp}&sig=${sig}`);
+      parts.push(`download: ${base}${path}?exp=${exp}&sig=${sig}`);
     }
+    fileLinks.set(b.id, parts.join(" · "));
   }
   let brand = `# ${fullName} — Brand\n\n`;
   if (c.brandItems.length === 0) brand += "_No brand assets recorded yet._\n";
@@ -277,11 +291,12 @@ Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM. Give an AI 
 | 05-projects.md | Projects with custom answers, phases and tasks |
 | 06-communications.md | Recent calls, texts, meetings and linked email subjects |
 
-User IDs and passwords are never exported (the apps themselves are listed in 04). API keys appear only if they were explicitly flagged for sharing and requested at export time. Uploaded brand files are given as download links (valid for 7 days, no login needed — anyone holding a link can fetch that file, so only share this pack with an AI you trust). Links to files hosted elsewhere are included as they are.
+User IDs and passwords are never exported (the apps themselves are listed in 04). API keys appear only if they were explicitly flagged for sharing and requested at export time. Uploaded brand files are included in the .zip under brand-files/ (the path is shown next to each item in 03-brand.md) and also given as download links (valid for 7 days, no login needed — anyone holding a link can fetch that file, so only share this pack with an AI you trust). Links to files hosted elsewhere are included as they are.
 `;
 
   return {
     contactName: fullName,
+    binaryFiles,
     files: [
       { name: "00-README.md", content: readme },
       { name: "01-profile.md", content: profile },

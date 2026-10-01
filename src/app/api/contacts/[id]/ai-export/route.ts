@@ -46,7 +46,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
   }
 
-  const zip = createZip(built.files);
+  const zip = createZip([...built.files, ...built.binaryFiles]);
   return new Response(zip as unknown as BodyInit, {
     headers: { "Content-Type": "application/zip", "Content-Disposition": `attachment; filename="${slug}-ai-briefing.zip"` },
   });
