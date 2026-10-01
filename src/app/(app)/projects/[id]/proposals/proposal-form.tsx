@@ -153,8 +153,8 @@ export default function ProposalForm({
       {inline && <input type="hidden" name="inline" value="1" />}
       <input type="hidden" name="coverLetter" value={coverLetter} />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="sm:col-span-2">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem_11rem]">
+        <div>
           <label className={LABEL_CLASS}>{t.proposals.titlePlaceholder}</label>
           <input name="title" required defaultValue={defaultValues?.title} className={FIELD_CLASS} />
         </div>
