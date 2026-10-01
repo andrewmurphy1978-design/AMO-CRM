@@ -51,7 +51,36 @@ export interface TemplateConfig {
 
 export type FieldValues = Record<string, string | string[]>;
 
-export const TEMPLATE_TYPES = ["WEBSITE", "FUNNEL", "SOCIAL_MEDIA", "BLOG", "NEWSLETTER", "POST_AUTOMATION", "APP", "CONSULTING", "OTHER"] as const;
+// The order project types are offered in (New Project form, edit dialogs and
+// the customization page).
+export const PROJECT_TYPE_ORDER = [
+  "WEBSITE",
+  "FUNNEL",
+  "BLOG",
+  "NEWSLETTER",
+  "APP",
+  "STORE",
+  "CRM_CUSTOMIZATION",
+  "SOCIAL_MEDIA",
+  "POST_AUTOMATION",
+  "AUTOMATION",
+  "EMAIL_MARKETING",
+  "SMS_MARKETING",
+  "TRAINING",
+  "AFFILIATE_MARKETING",
+] as const;
+
+// Older types kept so existing projects still show them; no longer offered
+// for new projects (they only appear in a dropdown when already selected).
+export const LEGACY_PROJECT_TYPES = ["CONSULTING", "OTHER"] as const;
+
+export const TEMPLATE_TYPES = PROJECT_TYPE_ORDER;
+
+export function projectTypeOptions(labels: Record<string, string>, current?: string | null): { value: string; label: string }[] {
+  const list: string[] = [...PROJECT_TYPE_ORDER];
+  if (current && (LEGACY_PROJECT_TYPES as readonly string[]).includes(current)) list.push(current);
+  return list.map((value) => ({ value, label: labels[value] ?? value }));
+}
 
 export const LANGUAGE_OPTIONS = ["English", "French", "Spanish", "German", "Italian", "Portuguese", "Dutch", "Arabic", "Mandarin"];
 
@@ -508,6 +537,150 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
       { name: "Planning", tasks: [{ title: "Define goals and scope" }, { title: "Break the work into tasks" }] },
       { name: "Delivery", tasks: [{ title: "Do the work" }, { title: "Deliver to the client" }] },
       { name: "Wrap-up", tasks: [{ title: "Collect feedback" }, { title: "Send final invoice" }] },
+    ],
+  },
+  STORE: {
+    fields: [
+      { key: "app", label: "Store platform", type: "select", options: ["Shopify", "WooCommerce", "Systeme.io", "ClickFunnels", "Squarespace", "Wix"], allowOther: true },
+      { key: "domainSetup", label: "Domain setup", type: "yesno" },
+      { key: "registrar", label: "Registrar", type: "text", showIf: yes("domainSetup") },
+      { key: "dnsProvider", label: "DNS Provider", type: "text", showIf: yes("domainSetup") },
+      { key: "products", label: "Number of products", type: "text" },
+      { key: "payments", label: "Payment gateways", type: "multiselect", options: ["Stripe", "PayPal", "Square"], allowOther: true },
+      { key: "shipping", label: "Shipping setup", type: "yesno" },
+      { key: "taxes", label: "Tax setup", type: "yesno" },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+    ],
+    phases: [
+      { name: "Planning", tasks: [{ title: "Define product catalog and categories" }, { title: "Collect product photos and descriptions" }] },
+      { name: "Domain Setup", when: yes("domainSetup"), tasks: [{ title: "Buy domain" }, { title: "Setup domain (DNS: {dnsProvider})" }] },
+      {
+        name: "Store Setup",
+        tasks: [
+          { title: "Create {app} store" },
+          { title: "Connect {payments}", repeat: ["payments"], when: filled("payments") },
+          { title: "Configure shipping", when: yes("shipping") },
+          { title: "Configure taxes", when: yes("taxes") },
+          { title: "Design store theme and pages" },
+        ],
+      },
+      { name: "Products", tasks: [{ title: "Add {products} products ({languages})", repeat: ["languages"] }] },
+      { name: "Testing", tasks: [{ title: "Place a test order" }, { title: "Test checkout and payment ({payments})", repeat: ["payments"] }, { title: "Test on mobile" }] },
+      { name: "Launch", tasks: [{ title: "Go live" }, { title: "Hand over to the client" }] },
+    ],
+  },
+  CRM_CUSTOMIZATION: {
+    fields: [
+      { key: "crm", label: "CRM", type: "select", options: ["AMO CRM", "Systeme.io", "GoHighLevel", "HubSpot", "Zoho", "Pipedrive", "ClickFunnels"], allowOther: true },
+      { key: "importContacts", label: "Import existing contacts", type: "yesno" },
+      { key: "customFields", label: "Custom fields", type: "yesno" },
+      { key: "pipelines", label: "Pipelines / stages", type: "yesno" },
+      { key: "automations", label: "Automations", type: "yesno" },
+      { key: "integrations", label: "Integrations", type: "multiselect", options: ["Email", "Calendar", "SMS", "Forms", "Payments", "Accounting"], allowOther: true },
+    ],
+    phases: [
+      { name: "Discovery", tasks: [{ title: "Map the client's current process" }, { title: "List what needs customizing in {crm}" }] },
+      { name: "Data", when: yes("importContacts"), tasks: [{ title: "Clean the contact list" }, { title: "Import contacts into {crm}" }, { title: "Check imported data" }] },
+      {
+        name: "Customization",
+        tasks: [
+          { title: "Create custom fields", when: yes("customFields") },
+          { title: "Build pipelines and stages", when: yes("pipelines") },
+          { title: "Set up tags and views" },
+        ],
+      },
+      { name: "Integrations", when: filled("integrations"), tasks: [{ title: "Connect {integrations}", repeat: ["integrations"] }] },
+      { name: "Automations", when: yes("automations"), tasks: [{ title: "Build CRM automations" }, { title: "Test automations" }] },
+      { name: "Training & Handover", tasks: [{ title: "Train the client's team" }, { title: "Document the setup" }] },
+    ],
+  },
+  AUTOMATION: {
+    fields: [
+      { key: "tool", label: "Automation tool", type: "select", options: ["Make", "Zapier", "n8n", "Systeme.io", "GoHighLevel"], allowOther: true },
+      { key: "complexity", label: "Complexity", type: "select", options: ["Simple", "Standard", "Advanced"] },
+      { key: "apps", label: "Apps to connect", type: "multiselect", options: [], allowOther: true },
+      { key: "workflows", label: "Workflows to build", type: "multiselect", options: [], allowOther: true },
+      { key: "documentation", label: "Documentation", type: "yesno" },
+    ],
+    phases: [
+      { name: "Scoping", tasks: [{ title: "Map each workflow step by step" }, { title: "Confirm triggers, actions and error handling" }] },
+      { name: "Connections", when: filled("apps"), tasks: [{ title: "Connect {apps} to {tool}", repeat: ["apps"] }] },
+      { name: "Build", tasks: [{ title: "Build workflow: {workflows}", repeat: ["workflows"] }] },
+      { name: "Testing", tasks: [{ title: "Test with real data" }, { title: "Test error cases" }] },
+      { name: "Documentation", when: yes("documentation"), tasks: [{ title: "Write workflow documentation" }] },
+      { name: "Handover", tasks: [{ title: "Walk the client through the automations" }, { title: "Turn automations on" }] },
+    ],
+  },
+  EMAIL_MARKETING: {
+    fields: [
+      { key: "esp", label: "Email platform", type: "select", options: ["GetResponse", "Systeme.io", "Mailchimp", "ClickFunnels", "GoHighLevel", "Brevo", "Kit"], allowOther: true },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+      { key: "domainAuth", label: "Sender domain authentication", type: "yesno" },
+      { key: "listImport", label: "Import an existing list", type: "yesno" },
+      { key: "sequences", label: "Email sequences", type: "multiselect", options: ["Welcome", "Nurture", "Abandoned cart", "Promotional", "Re-engagement"], allowOther: true },
+    ],
+    phases: [
+      {
+        name: "Setup",
+        tasks: [
+          { title: "Create {esp} account" },
+          { title: "Authenticate sender domain (SPF, DKIM, DMARC)", when: yes("domainAuth") },
+          { title: "Import and clean the list", when: yes("listImport") },
+          { title: "Create sign-up forms" },
+        ],
+      },
+      { name: "Email Design", tasks: [{ title: "Design email template" }, { title: "Get template approval" }] },
+      { name: "Sequences", when: filled("sequences"), tasks: [{ title: "Write {languages} {sequences} sequence", repeat: ["languages", "sequences"] }] },
+      { name: "Automation", tasks: [{ title: "Build sequence automations and tags" }] },
+      { name: "Testing & Launch", tasks: [{ title: "Send test emails" }, { title: "Check deliverability" }, { title: "Launch" }] },
+    ],
+  },
+  SMS_MARKETING: {
+    fields: [
+      { key: "provider", label: "SMS provider", type: "select", options: ["Twilio", "GoHighLevel", "SimpleTexting", "Textedly"], allowOther: true },
+      { key: "numberSetup", label: "Set up a sending number", type: "yesno" },
+      { key: "optIn", label: "Opt-in / consent collection", type: "yesno" },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+      { key: "campaigns", label: "Campaigns", type: "multiselect", options: ["Welcome", "Promotions", "Appointment reminders", "Follow-up"], allowOther: true },
+    ],
+    phases: [
+      { name: "Setup", tasks: [{ title: "Create {provider} account" }, { title: "Provision a sending number", when: yes("numberSetup") }] },
+      { name: "Compliance", when: yes("optIn"), tasks: [{ title: "Build opt-in form with consent wording (CASL / TCPA)" }, { title: "Add STOP / unsubscribe handling" }] },
+      { name: "Campaigns", when: filled("campaigns"), tasks: [{ title: "Write {languages} {campaigns} messages", repeat: ["languages", "campaigns"] }] },
+      { name: "Testing & Launch", tasks: [{ title: "Send test messages" }, { title: "Check delivery and replies" }, { title: "Launch" }] },
+    ],
+  },
+  TRAINING: {
+    fields: [
+      { key: "topics", label: "Topics", type: "multiselect", options: [], allowOther: true },
+      { key: "format", label: "Format", type: "select", options: ["One-on-one", "Group", "Workshop"], allowOther: true },
+      { key: "sessions", label: "Number of sessions", type: "text" },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+      { key: "materials", label: "Training materials needed", type: "yesno" },
+      { key: "recordings", label: "Record sessions", type: "yesno" },
+    ],
+    phases: [
+      { name: "Preparation", tasks: [{ title: "Define learning goals" }, { title: "Prepare training materials", when: yes("materials") }, { title: "Schedule {sessions} sessions ({format})" }] },
+      { name: "Sessions", tasks: [{ title: "Deliver session: {topics}", repeat: ["topics"] }] },
+      { name: "Follow-up", tasks: [{ title: "Send session recordings", when: yes("recordings") }, { title: "Send summary and next steps" }, { title: "Collect feedback" }] },
+    ],
+  },
+  AFFILIATE_MARKETING: {
+    fields: [
+      { key: "programs", label: "Affiliate programs", type: "multiselect", options: [], allowOther: true },
+      { key: "platforms", label: "Promotion platforms", type: "multiselect", options: ["Facebook", "Instagram", "LinkedIn", "TikTok", "X", "YouTube"], allowOther: true },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+      { key: "leadMagnet", label: "Lead magnet", type: "yesno" },
+      { key: "bridgePage", label: "Bridge / review page", type: "yesno" },
+      { key: "emailSequence", label: "Email follow-up sequence", type: "yesno" },
+      { key: "tracking", label: "Tracking links", type: "yesno" },
+    ],
+    phases: [
+      { name: "Research", tasks: [{ title: "Compare programs and commissions" }, { title: "Apply to {programs}", repeat: ["programs"], when: filled("programs") }] },
+      { name: "Funnel & Content", tasks: [{ title: "Create lead magnet", when: yes("leadMagnet") }, { title: "Build bridge page ({languages})", repeat: ["languages"], when: yes("bridgePage") }, { title: "Write follow-up email sequence ({languages})", repeat: ["languages"], when: yes("emailSequence") }] },
+      { name: "Tracking", when: yes("tracking"), tasks: [{ title: "Create tracking links for {programs}", repeat: ["programs"] }] },
+      { name: "Promotion", when: filled("platforms"), tasks: [{ title: "Publish promotion on {platforms} ({languages})", repeat: ["platforms", "languages"] }] },
+      { name: "Review", tasks: [{ title: "Review clicks and conversions" }] },
     ],
   },
 };

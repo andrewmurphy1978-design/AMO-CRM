@@ -15,7 +15,7 @@ const ProjectSchema = z.object({
   contactId: z.string().min(1, "Client is required"),
   description: z.string().trim().optional(),
   status: z.enum(["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"]),
-  type: z.enum(["WEBSITE", "FUNNEL", "APP", "SOCIAL_MEDIA", "CONSULTING", "OTHER", "BLOG", "NEWSLETTER", "POST_AUTOMATION"]),
+  type: z.enum(["WEBSITE", "FUNNEL", "APP", "SOCIAL_MEDIA", "CONSULTING", "OTHER", "BLOG", "NEWSLETTER", "POST_AUTOMATION", "STORE", "CRM_CUSTOMIZATION", "AUTOMATION", "EMAIL_MARKETING", "SMS_MARKETING", "TRAINING", "AFFILIATE_MARKETING"]),
   ownerId: z.string().optional(),
   supervisorId: z.string().optional(),
   startDate: z.string().optional(),

@@ -848,6 +848,13 @@ enum ProjectType {
   BLOG
   NEWSLETTER
   POST_AUTOMATION
+  STORE
+  CRM_CUSTOMIZATION
+  AUTOMATION
+  EMAIL_MARKETING
+  SMS_MARKETING
+  TRAINING
+  AFFILIATE_MARKETING
 }
 
 // The editable recipe for a project type: its custom fields and the phases/

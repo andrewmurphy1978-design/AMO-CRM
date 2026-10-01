@@ -9,7 +9,7 @@ import MultiSelect from "@/components/multi-select";
 import PhaseList, { type PhaseRowData } from "./phase-list";
 import PageHeader from "../page-header";
 import CustomFieldsInputs from "./custom-fields-inputs";
-import type { TemplateConfig } from "@/lib/project-templates";
+import { projectTypeOptions, type TemplateConfig } from "@/lib/project-templates";
 
 type ProjectFormValues = {
   id?: string;
@@ -57,7 +57,7 @@ export default function ProjectForm({
   const t = getDict(lang);
   const router = useRouter();
 
-  const [type, setType] = useState(defaultValues?.type ?? "OTHER");
+  const [type, setType] = useState(defaultValues?.type ?? "WEBSITE");
   const typeFields = !defaultValues?.id ? (templates?.[type]?.fields ?? []) : [];
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>(
     () => defaultValues?.teamMembers?.map((tm) => tm.userId) ?? []
@@ -92,17 +92,7 @@ export default function ProjectForm({
     { value: "CANCELLED", label: t.projectStatuses.CANCELLED },
   ];
 
-  const TYPES = [
-    { value: "WEBSITE", label: t.projectTypes.WEBSITE },
-    { value: "FUNNEL", label: t.projectTypes.FUNNEL },
-    { value: "APP", label: t.projectTypes.APP },
-    { value: "SOCIAL_MEDIA", label: t.projectTypes.SOCIAL_MEDIA },
-    { value: "CONSULTING", label: t.projectTypes.CONSULTING },
-    { value: "BLOG", label: t.projectTypes.BLOG },
-    { value: "NEWSLETTER", label: t.projectTypes.NEWSLETTER },
-    { value: "POST_AUTOMATION", label: t.projectTypes.POST_AUTOMATION },
-    { value: "OTHER", label: t.projectTypes.OTHER },
-  ];
+  const TYPES = projectTypeOptions(t.projectTypes, defaultValues?.type);
 
   return (
     <form action={formAction} className="space-y-6">

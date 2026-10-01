@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { CARD_COLORS } from "@/components/section-card";
+import { projectTypeOptions } from "@/lib/project-templates";
 import SectionDialog, { EditCardButton } from "../../contacts/[id]/section-dialog";
 
 const FIELD_CLASS =
@@ -72,7 +73,7 @@ export default function ProjectGeneralDialog({
           <div>
             <label className={LABEL_CLASS}>{t.projectForm.type}</label>
             <select name="type" defaultValue={values.type} className={FIELD_CLASS}>
-              {Object.entries(t.projectTypes).map(([value, label]) => (
+              {projectTypeOptions(t.projectTypes, values.type).map(({ value, label }) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
