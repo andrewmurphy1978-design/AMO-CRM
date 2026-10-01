@@ -256,7 +256,7 @@ function sharedPrepPhases(domainTask: string): PhaseTpl[] {
       tasks: [
         { title: "Build model" },
         { title: "Present model", when: yes("modelApproval") },
-        { title: "Get model approval from {modelApprovalBy}", when: yes("modelApproval") },
+        { title: "Get model approval ({modelApprovalBy})", when: yes("modelApproval") },
       ],
     },
     {
@@ -270,7 +270,7 @@ function sharedPrepPhases(domainTask: string): PhaseTpl[] {
       tasks: [
         { title: "Create {app} account" },
         { title: "Migrate domain", when: yes("domainSetup") },
-        { title: "Setup {app}" },
+        { title: "Setup app ({app})" },
       ],
     },
   ];
@@ -376,6 +376,138 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
         tasks: [{ title: "Optimize {platforms} profile ({languages})", repeat: ["platforms", "languages"] }],
       },
       { name: "Review", tasks: [{ title: "Review all accounts with the client" }] },
+    ],
+  },
+  BLOG: {
+    fields: [
+      { key: "app", label: "Blog platform", type: "select", options: ["WordPress", "Systeme.io", "GoHighLevel", "ClickFunnels", "Wix", "Squarespace"], allowOther: true },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+      { key: "topics", label: "Topics / categories", type: "multiselect", options: [], allowOther: true },
+      { key: "articles", label: "Number of articles to write", type: "text" },
+      { key: "research", label: "Keyword & competition research", type: "yesno" },
+      { key: "seo", label: "SEO optimization", type: "yesno" },
+      { key: "optIn", label: "Newsletter opt-in form on the blog", type: "yesno" },
+    ],
+    phases: [
+      { name: "Research", when: yes("research"), tasks: [{ title: "Research keywords" }, { title: "Review competitor blogs" }, { title: "Produce content plan" }] },
+      {
+        name: "Blog Setup",
+        tasks: [
+          { title: "Create the blog ({app})" },
+          { title: "Configure design and menus" },
+          { title: "Create categories: {topics}", when: filled("topics") },
+          { title: "Add newsletter opt-in form", when: yes("optIn") },
+        ],
+      },
+      {
+        name: "Writing",
+        tasks: [{ title: "Write {languages} article – {topics}", repeat: ["languages", "topics"] }],
+      },
+      { name: "SEO", when: yes("seo"), tasks: [{ title: "Optimize titles and meta descriptions" }, { title: "Add internal links and images" }] },
+      { name: "Publishing", tasks: [{ title: "Review articles with the client" }, { title: "Publish articles" }, { title: "Test blog on mobile" }] },
+    ],
+  },
+  NEWSLETTER: {
+    fields: [
+      { key: "esp", label: "Email platform", type: "select", options: ["GetResponse", "Systeme.io", "Mailchimp", "ClickFunnels", "GoHighLevel", "Brevo", "Kit"], allowOther: true },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+      { key: "frequency", label: "Frequency", type: "select", options: ["Weekly", "Bi-weekly", "Monthly"], allowOther: true },
+      { key: "listImport", label: "Import an existing list", type: "yesno" },
+      { key: "welcome", label: "Welcome email sequence", type: "yesno" },
+    ],
+    phases: [
+      {
+        name: "Setup",
+        tasks: [
+          { title: "Create {esp} account" },
+          { title: "Authenticate sender domain" },
+          { title: "Import and clean the existing list", when: yes("listImport") },
+          { title: "Create sign-up form" },
+        ],
+      },
+      { name: "Template", tasks: [{ title: "Design newsletter template" }, { title: "Get template approval" }] },
+      { name: "Welcome Sequence", when: yes("welcome"), tasks: [{ title: "Write {languages} welcome email", repeat: ["languages"] }, { title: "Build welcome automation" }] },
+      { name: "Content", tasks: [{ title: "Write first {languages} newsletter ({frequency})", repeat: ["languages"] }] },
+      { name: "Testing & Launch", tasks: [{ title: "Send test emails" }, { title: "Check deliverability and spam score" }, { title: "Send first newsletter" }] },
+    ],
+  },
+  POST_AUTOMATION: {
+    fields: [
+      { key: "platforms", label: "Platforms", type: "multiselect", options: ["Facebook", "Instagram", "LinkedIn", "TikTok", "X", "YouTube"], allowOther: true },
+      { key: "tool", label: "Automation tool", type: "select", options: ["Buffer", "Make", "Zapier", "Hootsuite", "Later", "Metricool"], allowOther: true },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+      { key: "postsPerWeek", label: "Posts per week", type: "text" },
+      { key: "contentSource", label: "Who creates the content", type: "select", options: ["Client provides it", "We create it", "AI-assisted"] },
+    ],
+    phases: [
+      { name: "Tool Setup", tasks: [{ title: "Create {tool} account" }, { title: "Connect {platforms} account", repeat: ["platforms"] }] },
+      {
+        name: "Content Calendar",
+        tasks: [
+          { title: "Create content calendar" },
+          { title: "Plan {postsPerWeek} posts per week", when: filled("postsPerWeek") },
+          { title: "Prepare {languages} content for {platforms}", repeat: ["languages", "platforms"] },
+        ],
+      },
+      { name: "Automation", tasks: [{ title: "Build posting schedule" }, { title: "Build automation workflow" }] },
+      { name: "Testing", tasks: [{ title: "Test scheduled post – {platforms}", repeat: ["platforms"] }, { title: "Review first week of posts with the client" }] },
+    ],
+  },
+  APP: {
+    fields: [
+      { key: "platforms", label: "Platforms", type: "multiselect", options: ["iOS", "Android", "Web"], allowOther: true },
+      { key: "research", label: "Research competition", type: "yesno" },
+      { key: "mockups", label: "Design mock-ups", type: "yesno" },
+      { key: "mockupApproval", label: "Mock-up approval", type: "yesno", showIf: yes("mockups") },
+      { key: "approvalBy", label: "Approval by", type: "text", showIf: yes("mockupApproval") },
+      {
+        key: "features",
+        label: "Features",
+        type: "multiselect",
+        options: ["User login", "Payments", "Notifications", "Admin dashboard", "API integration", "Analytics"],
+        allowOther: true,
+      },
+      { key: "languages", label: "Languages", type: "languages", allowOther: true },
+    ],
+    phases: [
+      { name: "Research", when: yes("research"), tasks: [{ title: "Find competing apps" }, { title: "Take screenshots" }, { title: "Produce report" }] },
+      {
+        name: "Design",
+        when: yes("mockups"),
+        tasks: [{ title: "Design mock-ups" }, { title: "Present mock-ups", when: yes("mockupApproval") }, { title: "Get mock-up approval ({approvalBy})", when: yes("mockupApproval") }],
+      },
+      { name: "Development", tasks: [{ title: "Set up project and environments" }, { title: "Build {features}", repeat: ["features"] }, { title: "Translate app to {languages}", repeat: ["languages"], when: filled("languages") }] },
+      { name: "Testing", tasks: [{ title: "Test on {platforms}", repeat: ["platforms"] }, { title: "Fix bugs" }] },
+      { name: "Release", tasks: [{ title: "Publish to {platforms}", repeat: ["platforms"] }, { title: "Hand over to the client" }] },
+    ],
+  },
+  CONSULTING: {
+    fields: [
+      {
+        key: "topics",
+        label: "Consulting topics",
+        type: "multiselect",
+        options: ["Funnel strategy", "AI tools deployment", "Traffic generation", "Client acquisition", "Affiliate marketing"],
+        allowOther: true,
+      },
+      { key: "format", label: "Format", type: "select", options: ["Video call", "Phone", "In person"], allowOther: true },
+      { key: "discoveryCall", label: "Discovery call", type: "yesno" },
+      { key: "report", label: "Written report", type: "yesno" },
+    ],
+    phases: [
+      { name: "Discovery", when: yes("discoveryCall"), tasks: [{ title: "Schedule discovery call ({format})" }, { title: "Run discovery call" }, { title: "Document needs and goals" }] },
+      { name: "Strategy", tasks: [{ title: "Prepare strategy – {topics}", repeat: ["topics"] }] },
+      { name: "Sessions", tasks: [{ title: "Hold consulting session – {topics}", repeat: ["topics"] }] },
+      { name: "Report", when: yes("report"), tasks: [{ title: "Write summary report" }, { title: "Present report" }] },
+      { name: "Follow-up", tasks: [{ title: "Follow-up call" }, { title: "Collect feedback" }] },
+    ],
+  },
+  OTHER: {
+    fields: [],
+    phases: [
+      { name: "Planning", tasks: [{ title: "Define goals and scope" }, { title: "Break the work into tasks" }] },
+      { name: "Delivery", tasks: [{ title: "Do the work" }, { title: "Deliver to the client" }] },
+      { name: "Wrap-up", tasks: [{ title: "Collect feedback" }, { title: "Send final invoice" }] },
     ],
   },
 };
