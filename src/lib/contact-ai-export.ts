@@ -1,6 +1,8 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { BRAND_CATEGORIES, isDataUri } from "@/lib/brand";
 import { decryptSecret } from "@/lib/crypto";
+import { signPath } from "@/lib/signed-url";
+import { publicBaseUrl } from "@/lib/twilio";
 import { CREDENTIAL_LOGIN_METHODS } from "@/lib/contact-form-fields";
 import { displayValue, defaultTemplate, type FieldValues } from "@/lib/project-templates";
 import { getProjectTemplate } from "@/lib/project-template-store";
@@ -24,7 +26,7 @@ function address(parts: unknown[]): string {
   return parts.map(clean).filter(Boolean).join(", ");
 }
 
-export async function buildContactMarkdownFiles(db: PrismaClient, contactId: string, options: { isAdmin?: boolean; includeSharedApiKeys?: boolean } = {}): Promise<{ contactName: string; files: { name: string; content: string }[] } | null> {
+export async function buildContactMarkdownFiles(db: PrismaClient, contactId: string, options: { isAdmin?: boolean; includeSharedApiKeys?: boolean; origin?: string } = {}): Promise<{ contactName: string; files: { name: string; content: string }[] } | null> {
   const c = await db.contact.findUnique({
     where: { id: contactId },
     include: {
@@ -129,6 +131,19 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
   );
 
   // ---- 03 brand
+  // Uploaded files get a signed link (valid 7 days, no login) so an AI given
+  // this export can download them by itself.
+  const FILE_LINK_DAYS = 7;
+  const base = publicBaseUrl(options.origin);
+  const fileLinks = new Map<string, string>();
+  if (base) {
+    for (const b of c.brandItems) {
+      if (!isDataUri(b.value)) continue;
+      const path = `/api/brand-files/${b.id}`;
+      const { exp, sig } = await signPath(path, FILE_LINK_DAYS * 86400);
+      fileLinks.set(b.id, `${base}${path}?exp=${exp}&sig=${sig}`);
+    }
+  }
   let brand = `# ${fullName} — Brand\n\n`;
   if (c.brandItems.length === 0) brand += "_No brand assets recorded yet._\n";
   for (const cat of BRAND_CATEGORIES) {
@@ -136,7 +151,7 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
     if (items.length === 0) continue;
     const lines = items.map((b) => {
       const value = clean(b.value);
-      const shown = isDataUri(value) ? "(file uploaded in the CRM — not included in this export)" : value;
+      const shown = isDataUri(value) ? (fileLinks.get(b.id) ?? "(file uploaded in the CRM)") : value;
       return `- **${b.label}**${shown ? `: ${shown}` : ""}${b.note ? ` — ${b.note}` : ""}`;
     });
     brand += section(cat.en, lines.join("\n"));
@@ -200,7 +215,7 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
   for (const p of c.projects) {
     const template = await getProjectTemplate(db, p.type).catch(() => defaultTemplate(p.type));
     const answers = (p.customFields ?? {}) as FieldValues;
-    projects += `## ${p.name}\n\n`;
+    projects += `## ${p.name}\n\n${base ? `CRM page: ${base}/projects/${p.id}\n\n` : ""}`;
     projects += kv([
       ["Type", p.type],
       ["Status", p.status],
@@ -216,7 +231,8 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
       projects += "\n**Phases & tasks**\n\n";
       for (const ph of p.phases) {
         projects += `- **${ph.name}** (${ph.status})${ph.notes ? ` — ${clean(ph.notes)}` : ""}\n`;
-        for (const tk of ph.tasks) projects += `  - [${tk.status === "DONE" ? "x" : " "}] ${tk.title}${tk.assignee ? ` — ${tk.assignee.name}` : ""}${tk.dueDate ? ` (due ${day(tk.dueDate)})` : ""}\n`;
+        for (const tk of ph.tasks)
+          projects += `  - [${tk.status === "DONE" ? "x" : " "}] ${tk.title} _(${tk.status.toLowerCase().replace("_", " ")})_${tk.assignee ? ` — ${tk.assignee.name}` : ""}${tk.dueDate ? ` (due ${day(tk.dueDate)})` : ""}${tk.description ? `\n    - ${clean(tk.description).replace(/\n/g, " ")}` : ""}\n`;
       }
     }
     if (p.tasks.length > 0) {
@@ -245,6 +261,13 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
 
 Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM. Give an AI assistant these files so it understands who this contact is and what we're doing for them.
 
+## Instructions for the AI
+
+- **Do not duplicate work.** Before proposing or creating any project, phase or task, read \`05-projects.md\`: every existing project, phase and task (open and done) is listed there. If something equivalent already exists, refer to it instead of adding it again. Only propose what is genuinely missing.
+- Use \`03-brand.md\` (colours, fonts, voice, logos) and \`02-ai-context.md\` for tone and preferences, and \`04-tech-stack-and-domains.md\` for the tools already in use.
+- Files uploaded to the brand card appear as download links in \`03-brand.md\` — fetch them yourself when you need them (the links expire).
+- If something you need isn't in these files, ask rather than guess.
+
 | File | What it holds |
 |---|---|
 | 01-profile.md | Identity, company, contact info, addresses, billing, relations |
@@ -254,7 +277,7 @@ Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM. Give an AI 
 | 05-projects.md | Projects with custom answers, phases and tasks |
 | 06-communications.md | Recent calls, texts, meetings and linked email subjects |
 
-User IDs and passwords are never exported (the apps themselves are listed in 04). API keys appear only if they were explicitly flagged for sharing and requested at export time. Uploaded image files are listed by name only.
+User IDs and passwords are never exported (the apps themselves are listed in 04). API keys appear only if they were explicitly flagged for sharing and requested at export time. Uploaded brand files are given as download links (valid for 7 days, no login needed — anyone holding a link can fetch that file, so only share this pack with an AI you trust). Links to files hosted elsewhere are included as they are.
 `;
 
   return {

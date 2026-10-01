@@ -20,7 +20,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const wantKeys = url.searchParams.get("apikeys") === "1";
   if (wantKeys && !isAdmin) return new Response("Forbidden", { status: 403 });
 
-  const built = await withScopedPrismaClient((db) => buildContactMarkdownFiles(db, id, { isAdmin, includeSharedApiKeys: wantKeys }));
+  const built = await withScopedPrismaClient((db) => buildContactMarkdownFiles(db, id, { isAdmin, includeSharedApiKeys: wantKeys, origin: url.origin }));
   if (!built) return new Response("Not found", { status: 404 });
 
   const slug = built.contactName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "contact";
