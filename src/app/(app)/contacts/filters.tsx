@@ -84,6 +84,17 @@ export default function ContactFilters({
     <form className="flex flex-nowrap items-center gap-2 sm:flex-wrap sm:gap-3">
       <input
         type="search"
+        // A plain "search" box, not an address/payment field: a neutral name plus
+        // autocomplete off (and password-manager opt-outs) stops the browser from
+        // offering saved cards or addresses in its autofill drop-down.
+        name="contact-list-filter"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        aria-label={searchPlaceholder}
+        data-1p-ignore
+        data-lpignore="true"
+        data-form-type="other"
         value={text}
         onChange={(e) => {
           const value = e.target.value;

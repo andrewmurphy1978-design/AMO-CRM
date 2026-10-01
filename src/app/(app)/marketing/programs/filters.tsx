@@ -53,6 +53,10 @@ export default function AffiliateProgramFilters({
     >
       <input
         type="search"
+        name="program-list-filter"
+        autoComplete="off"
+        data-1p-ignore
+        data-lpignore="true"
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={() => push(text, category)}
