@@ -1,6 +1,7 @@
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getValidAccessToken } from "@/lib/google";
 import { publicBaseUrl } from "@/lib/twilio";
+import { advanceProjectPlan } from "@/lib/project-progress";
 
 // Two-way sync between CRM tasks and Google Tasks, per user:
 //  - only tasks assigned to that user are mirrored, into a Google Tasks list
@@ -186,6 +187,7 @@ export async function syncUserTasks(db: PrismaClient, userId: string): Promise<R
             ...(!gDone && task.status === "DONE" ? { status: "TODO", completedAt: null } : {}),
           },
         });
+        if (gDone) await advanceProjectPlan(db, task.projectId);
         counts.pulled += 1;
       } else if (!same && crmChanged) {
         await google(token, `/lists/${listId}/tasks/${link.googleTaskId}`, {

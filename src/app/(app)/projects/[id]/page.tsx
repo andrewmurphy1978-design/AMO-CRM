@@ -402,6 +402,7 @@ export default async function ProjectDetailPage({
             users={users}
             defaultTeamMemberIds={project.teamMembers.map((tm) => tm.userId)}
             selectedPhaseId={selectedPhaseId ?? null}
+            upcoming={(Array.isArray(project.pendingPhases) ? (project.pendingPhases as { name?: string }[]) : []).map((p) => String(p.name ?? "")).filter(Boolean)}
             lang={lang}
           />
 

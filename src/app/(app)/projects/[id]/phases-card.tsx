@@ -23,6 +23,7 @@ export default function PhasesCard({
   users,
   defaultTeamMemberIds,
   selectedPhaseId,
+  upcoming,
   lang,
 }: {
   projectId: string;
@@ -30,6 +31,8 @@ export default function PhasesCard({
   users: { id: string; name: string }[];
   defaultTeamMemberIds: string[];
   selectedPhaseId: string | null;
+  // Phases still waiting to be created (added automatically, one at a time).
+  upcoming: string[];
   lang: Lang;
 }) {
   const t = getDict(lang);
@@ -109,6 +112,13 @@ export default function PhasesCard({
             </tbody>
           </table>
         </div>
+      )}
+
+      {upcoming.length > 0 && (
+        <p className="mt-2 text-xs text-soft">
+          {lang === "fr" ? "À venir (ajoutées automatiquement une à la fois) : " : "Coming next (added automatically, one at a time): "}
+          <span className="text-ink">{upcoming.join(" → ")}</span>
+        </p>
       )}
 
       {open && (

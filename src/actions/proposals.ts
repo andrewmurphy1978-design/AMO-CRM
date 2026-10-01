@@ -1,5 +1,6 @@
 "use server";
 
+import { onProposalAccepted } from "@/lib/project-progress";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -90,6 +91,7 @@ export async function updateProposalStatus(proposalId: string, projectId: string
         ...(status === "ACCEPTED" || status === "DECLINED" ? { respondedAt: now } : {}),
       },
     });
+    if (status === "ACCEPTED") await onProposalAccepted(db, projectId);
     return contactIdForProject(db, projectId);
   });
 
@@ -309,6 +311,8 @@ export async function updateFullProposal(
         data: paymentSchedule.map((row, i) => ({ proposalId, ...row, order: i })),
       });
     }
+
+    if (data.status === "ACCEPTED" && existing.status !== "ACCEPTED") await onProposalAccepted(db, data.projectId);
 
     revalidateBoth(data.projectId, project.contactId);
   });

@@ -869,14 +869,17 @@ model ProjectTypeTemplate {
 }
 
 model Project {
-  id           String        @id @default(cuid())
-  name         String
-  description  String?       @db.Text
-  notes        String?       @db.Text
+  id            String        @id @default(cuid())
+  name          String
+  description   String?       @db.Text
+  notes         String?       @db.Text
   // Answers to the custom fields of this project's type (key -> value).
-  customFields Json?
-  status       ProjectStatus @default(PLANNING)
-  type         ProjectType   @default(OTHER)
+  customFields  Json?
+  // Phases not created yet ([{ name, tasks: string[] }]): the next one is added
+  // when the latest phase is completed (see lib/project-progress.ts).
+  pendingPhases Json?
+  status        ProjectStatus @default(PLANNING)
+  type          ProjectType   @default(OTHER)
 
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)

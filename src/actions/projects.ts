@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import type { PrismaClient } from "@/lib/prisma";
+import { advanceProjectPlan } from "@/lib/project-progress";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { buildPlan, cleanValues, readFieldValues, type FieldValues } from "@/lib/project-templates";
 
@@ -117,7 +118,11 @@ export async function updatePhase(
     throw error;
   }
 
-  await withScopedPrismaClient((db) => db.projectPhase.update({ where: { id: phaseId }, data }));
+  await withScopedPrismaClient(async (db) => {
+    await db.projectPhase.update({ where: { id: phaseId }, data });
+    // Marking the latest phase Completed releases the next one.
+    if (data.status === "COMPLETED") await advanceProjectPlan(db, projectId);
+  });
   revalidatePath(`/projects/${projectId}/edit`);
   revalidatePath(`/projects/${projectId}`);
   return {};
@@ -173,11 +178,21 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
   }
 
   const plan = buildPlan(input.template, values, input.name);
-  for (const [index, phase] of plan.phases.entries()) {
-    const created = await db.projectPhase.create({ data: { projectId: project.id, name: phase.name, order: index } });
+  const progressive = input.template.progressive !== false;
+  // Progressive (default): only the first phase now — the rest are released as
+  // each phase is completed. Phases that ended up with no tasks are dropped.
+  const phases = progressive ? plan.phases.filter((p) => p.tasks.length > 0) : plan.phases;
+  const now = progressive ? phases.slice(0, 1) : phases;
+  for (const [index, phase] of now.entries()) {
+    const created = await db.projectPhase.create({
+      data: { projectId: project.id, name: phase.name, order: index, ...(progressive ? { status: "ACTIVE" as const } : {}) },
+    });
     if (phase.tasks.length > 0) {
       await db.task.createMany({ data: phase.tasks.map((title) => ({ projectId: project.id, phaseId: created.id, title })) });
     }
+  }
+  if (progressive && phases.length > 1) {
+    await db.project.update({ where: { id: project.id }, data: { pendingPhases: phases.slice(1) as never } });
   }
 
   await db.activityLogEntry.create({

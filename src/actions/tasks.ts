@@ -1,5 +1,6 @@
 "use server";
 
+import { advanceProjectPlan } from "@/lib/project-progress";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { syncGoogleTasksForTask, removeTaskFromGoogle } from "@/lib/google-tasks";
@@ -126,6 +127,7 @@ export async function updateTaskViaDialog(
         completedAt: data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
       },
     });
+    if (data.status === "DONE") await advanceProjectPlan(db, projectId);
   });
 
   revalidatePath(`/projects/${projectId}`);
@@ -264,6 +266,7 @@ export async function updateTask(
         completedAt: data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
       },
     });
+    if (data.status === "DONE") await advanceProjectPlan(db, data.projectId);
 
     return existing?.projectId;
   });
@@ -282,15 +285,17 @@ export async function toggleTaskStatus(taskId: string, projectId: string, done: 
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await withScopedPrismaClient((db) =>
-    db.task.update({
+  await withScopedPrismaClient(async (db) => {
+    await db.task.update({
       where: { id: taskId },
       data: {
         status: done ? "DONE" : "TODO",
         completedAt: done ? new Date() : null,
       },
-    })
-  );
+    });
+    // Finishing the last task of the latest phase releases the next phase.
+    if (done) await advanceProjectPlan(db, projectId);
+  });
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/tasks");

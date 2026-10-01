@@ -166,6 +166,22 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
         {message && <span className="text-sm text-emerald-700">{message}</span>}
       </div>
 
+      <label className="flex items-start gap-2 rounded-xl border border-card-border bg-card-bg p-3 text-sm text-ink">
+        <input
+          type="checkbox"
+          className="mt-0.5"
+          checked={config.progressive !== false}
+          onChange={(e) => setConfig((c) => ({ ...c, progressive: e.target.checked ? undefined : false }))}
+        />
+        <span>
+          <span className="font-semibold">Create phases one at a time</span>
+          <span className="block text-xs text-soft">
+            A new project only gets its first phase (normally Planning) and that phase&apos;s tasks. When a phase is completed — all its tasks done, or the phase marked Completed
+            — the next phase and its tasks are added. For the Planning phase, accepting the proposal completes it. Untick to create every phase at once.
+          </span>
+        </span>
+      </label>
+
       <section className="rounded-2xl border border-card-border bg-card-bg p-4 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-ink">Custom fields</h2>
         <p className="mt-1 text-xs text-soft">Asked when a {typeLabels[type]} project is created. Use a field&apos;s name in task titles as {"{field_name}"} (shown under each field).</p>

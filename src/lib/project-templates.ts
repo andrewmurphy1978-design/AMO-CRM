@@ -47,6 +47,10 @@ export interface PhaseTpl {
 export interface TemplateConfig {
   fields: FieldTpl[];
   phases: PhaseTpl[];
+  // Default (undefined / true): a new project only gets its first phase and
+  // that phase's tasks; each next phase is added when the previous one is
+  // completed. Set to false to create every phase up front.
+  progressive?: boolean;
 }
 
 export type FieldValues = Record<string, string | string[]>;
@@ -173,6 +177,16 @@ function expandTitle(task: TaskTpl, values: FieldValues): string[] {
   );
 }
 
+// Every project type starts with this phase: the proposal is prepared, sent,
+// and answered. Approval (proposal accepted, or the phase completed) is what
+// releases the next phase.
+export function planningPhase(): PhaseTpl {
+  return {
+    name: "Planning",
+    tasks: [{ title: "Prepare the proposal" }, { title: "Present (send) the proposal" }, { title: "Await the answer to the proposal" }],
+  };
+}
+
 export interface ProjectPlan {
   phases: { name: string; tasks: string[] }[];
   spawns: { type: string; name: string }[];
@@ -247,7 +261,7 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
     }
     phases.push({ name, ...(cond(p?.when) ? { when: cond(p?.when) } : {}), tasks });
   }
-  return { fields, phases };
+  return { fields, phases, ...(obj.progressive === false ? { progressive: false } : {}) };
 }
 
 // ---------------------------------------------------------------- defaults
@@ -684,6 +698,9 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
     ],
   },
 };
+
+// Planning comes first in every built-in template.
+for (const template of Object.values(DEFAULT_TEMPLATES)) template.phases.unshift(planningPhase());
 
 export function defaultTemplate(type: string): TemplateConfig {
   return DEFAULT_TEMPLATES[type] ?? { fields: [], phases: [] };
