@@ -5,6 +5,7 @@ import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-te
 import type { InvoicePdfData, PdfAttachment, ProposalPdfData } from "@/lib/proposal-pdf";
 import { proposalSupplierCosts } from "@/lib/supplier-costs";
 import { signPath } from "@/lib/signed-url";
+import { localizeText, localizeValue } from "@/lib/project-i18n";
 import { LOGO_FULL_EN_B64, LOGO_FULL_FR_B64 } from "@/lib/logo-assets";
 
 // Gathers what the Proposal / Invoice PDFs need from the database.
@@ -76,8 +77,8 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const pending = Array.isArray(project.pendingPhases) ? (project.pendingPhases as { name: string; tasks: string[] }[]) : [];
   const existing = project.phases
     .filter((p) => !/^(proposal|proposition)$/i.test(p.name))
-    .map((p) => ({ name: p.name, tasks: p.tasks.map((tk) => tk.title).filter((x) => !INTERNAL_TASK.test(x)) }));
-  const plan = [...existing, ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: p.name, tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)) }))];
+    .map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.map((tk) => tk.title).filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }));
+  const plan = [...existing, ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }))];
 
   const grand = proposal.subtotal + proposal.taxAmount;
   const instalments = proposal.paymentSchedule.map((r) => ({
@@ -114,7 +115,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     },
     details: template.fields
       .filter((f) => isFieldVisible(f, answers))
-      .map((f) => ({ label: f.label, value: displayValue(answers[f.key]) }))
+      .map((f) => ({ label: localizeText(f.label, lang), value: localizeValue(displayValue(answers[f.key]), lang) }))
       .filter((d) => d.value),
     coverLetter: proposal.coverLetter,
     plan,

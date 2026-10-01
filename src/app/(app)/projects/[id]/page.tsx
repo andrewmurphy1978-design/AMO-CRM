@@ -25,6 +25,7 @@ import { getValidAccessToken } from "@/lib/google";
 import { getLinkedCalendarEvents, getEventLinkTargets } from "@/lib/calendar-links";
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
+import { frText, localizeText, localizeValue } from "@/lib/project-i18n";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader, { HeaderBreadcrumb } from "../../page-header";
@@ -211,6 +212,12 @@ export default async function ProjectDetailPage({
     noResults: t.linkPicker.noResults,
   };
 
+  // French reader: show the built-in phases / tasks in French (stored in English).
+  if (lang === "fr") {
+    for (const ph of project.phases) ph.name = frText(ph.name);
+    for (const tk of project.tasks) tk.title = frText(tk.title);
+  }
+
   const clientName =
     [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.email || "";
   const teamNames = project.teamMembers.map((tm) => tm.user.name);
@@ -332,7 +339,7 @@ export default async function ProjectDetailPage({
   const defaultSubscriptions = typeof appAnswer === "string" && appAnswer ? [{ name: appAnswer, amount: 0, period: "month", note: "" }] : [];
   // A new proposal starts with the usual 50 / 40 / 10 instalments.
   const proposalDefaults = {
-    title: `${lang === "fr" ? "Proposition" : "Proposal"} — ${project.name}`,
+    title: `${lang === "fr" ? "Soumission" : "Proposal"} — ${project.name}`,
     currency: "CAD",
     coverLetter: defaultCoverLetter,
     subscriptions: defaultSubscriptions,
@@ -570,10 +577,10 @@ export default async function ProjectDetailPage({
                 {template.fields
                   .filter((f) => isFieldVisible(f, (project.customFields ?? {}) as FieldValues))
                   .map((f) => {
-                    const v = displayValue(((project.customFields ?? {}) as FieldValues)[f.key]);
+                    const v = localizeValue(displayValue(((project.customFields ?? {}) as FieldValues)[f.key]), lang);
                     return (
                       <div key={f.key} className={f.type === "textarea" || f.type === "multiselect" || f.type === "languages" ? "lg:col-span-3" : ""}>
-                        <p className={LABEL_CLASS}>{f.label}</p>
+                        <p className={LABEL_CLASS}>{localizeText(f.label, lang)}</p>
                         <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{v || "—"}</p>
                       </div>
                     );
