@@ -9,6 +9,8 @@ import PageHeader from "../page-header";
 import SmsIcon from "../sms-icon";
 import SmsInbox, { type UnlinkedGroup, type NewText } from "./sms-inbox";
 
+const sevenDaysAgo = () => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
 // The SMS inbox: incoming texts nobody has looked at yet, plus texts from
 // numbers that match no contact (those stay here until linked).
 export default async function SmsPage() {
@@ -16,7 +18,7 @@ export default async function SmsPage() {
   const lang = await getLang();
   const t = getDict(lang);
 
-  const { unlinked, fresh, contacts, projects, phases, tasks, twilioReady, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { unlinked, fresh, noProject, contacts, projects, phases, tasks, twilioReady, hour12 } = await withScopedPrismaClient(async (db) => {
     const include = { loggedBy: true, updatedBy: true } as const;
     const unlinked = await db.interaction.findMany({
       where: { type: "SMS", direction: "INBOUND", contactId: null },
@@ -25,6 +27,13 @@ export default async function SmsPage() {
     });
     const fresh = await db.interaction.findMany({
       where: { type: "SMS", direction: "INBOUND", contactId: { not: null }, seenAt: null },
+      orderBy: { occurredAt: "desc" },
+      include: { ...include, contact: { select: { id: true, firstName: true, lastName: true, company: true } } },
+    });
+    // Texts (received and sent) of the last 7 days from known contacts that
+    // aren't attached to any project yet.
+    const noProject = await db.interaction.findMany({
+      where: { type: "SMS", contactId: { not: null }, projectId: null, occurredAt: { gte: sevenDaysAgo() } },
       orderBy: { occurredAt: "desc" },
       include: { ...include, contact: { select: { id: true, firstName: true, lastName: true, company: true } } },
     });
@@ -43,7 +52,7 @@ export default async function SmsPage() {
     });
     const twilioReady = Boolean(await getTwilioConfig(db));
     const hour12 = await getHour12(session, db);
-    return { unlinked, fresh, contacts, projects, phases, tasks, twilioReady, hour12 };
+    return { unlinked, fresh, noProject, contacts, projects, phases, tasks, twilioReady, hour12 };
   });
 
   const toEntry = (i: (typeof unlinked)[number]): CallsSmsEntry => ({
@@ -87,6 +96,15 @@ export default async function SmsPage() {
     entry: toEntry(i),
   }));
 
+  const noProjectTexts: NewText[] = noProject.map((i) => ({
+    id: i.id,
+    contactId: i.contact?.id ?? "",
+    contactName: [i.contact?.firstName, i.contact?.lastName].filter(Boolean).join(" ") || i.contact?.company || "—",
+    text: i.notes,
+    receivedAt: i.occurredAt.toISOString(),
+    entry: toEntry(i),
+  }));
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -101,6 +119,7 @@ export default async function SmsPage() {
       <SmsInbox
         unlinked={[...groups.values()]}
         newTexts={newTexts}
+        noProjectTexts={noProjectTexts}
         contacts={contacts.map((c) => ({
           id: c.id,
           label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || "—",

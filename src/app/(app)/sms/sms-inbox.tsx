@@ -46,6 +46,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
 export default function SmsInbox({
   unlinked,
   newTexts,
+  noProjectTexts,
   contacts,
   linkData,
   twilioReady,
@@ -54,6 +55,7 @@ export default function SmsInbox({
 }: {
   unlinked: UnlinkedGroup[];
   newTexts: NewText[];
+  noProjectTexts: NewText[];
   contacts: { id: string; label: string }[];
   linkData: CallsSmsLinkData;
   twilioReady: boolean;
@@ -264,6 +266,32 @@ export default function SmsInbox({
               ))}
             </ul>
           </>
+        )}
+      </Section>
+
+      <Section title={t.smsPage.unlinkedProjectTitle} count={noProjectTexts.length}>
+        {noProjectTexts.length === 0 ? (
+          <p className="text-sm text-soft">{t.smsPage.noUnlinkedProject}</p>
+        ) : (
+          <ul className="divide-y divide-card-border">
+            {noProjectTexts.map((n) => (
+              <li key={n.id} className="py-3 first:pt-0">
+                <Link href={`/contacts/${n.contactId}`} className="text-sm font-semibold text-ink hover:underline">
+                  {n.contactName}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => openDialog(n.entry, { id: n.contactId, name: n.contactName })}
+                  className="mt-0.5 block w-full rounded-md text-left hover:bg-black/[0.04]"
+                >
+                  <span className="block whitespace-pre-wrap break-words text-sm text-ink">{n.text}</span>
+                  <span className="mt-1 block text-xs text-soft" suppressHydrationWarning>
+                    {n.entry.direction === "OUTBOUND" ? t.smsPage.sentAt : t.smsPage.receivedAt} {fmt.format(new Date(n.receivedAt))}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </Section>
 
