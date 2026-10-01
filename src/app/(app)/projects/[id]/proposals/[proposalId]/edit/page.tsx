@@ -45,7 +45,7 @@ export default async function EditProposalPage({
         <ProposalForm
           action={boundUpdate}
           projectId={project.id}
-          defaultValues={proposal}
+          defaultValues={{ ...proposal, subscriptions: (Array.isArray(proposal.subscriptions) ? proposal.subscriptions : []) as { name: string; amount: number; period: string; note: string }[] }}
           catalog={catalog}
           taxLocation={contactTaxLocation(project.contact)}
           chargeCanadianTax={billingSettings.chargeCanadianTax}

@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { billPendingSupplierCosts } from "@/lib/supplier-costs";
 import type { PhaseStage } from "@/lib/project-templates";
 
 // The project lifecycle, driven by approvals, payments and finished phases:
@@ -86,7 +87,7 @@ async function release(db: PrismaClient, pr: Loaded, pending: PendingPhase[], ex
   const created = await db.projectPhase.create({ data: { projectId: pr.id, name: next.name, order: (last?.order ?? -1) + 1, status: "ACTIVE" } });
   const titles = [...(extraFirstTask ? [extraFirstTask] : []), ...next.tasks];
   if (titles.length > 0) await db.task.createMany({ data: titles.map((title) => ({ projectId: pr.id, phaseId: created.id, title })) });
-  await db.project.update({ where: { id: pr.id }, data: { pendingPhases: rest.length > 0 ? (rest as never) : (null as never) } });
+  await db.project.update({ where: { id: pr.id }, data: { pendingPhases: rest.length > 0 ? (rest as never) : ([] as never) } });
 }
 
 // Issues (as a DRAFT, awaiting approval) the invoice for one instalment of the
@@ -143,6 +144,8 @@ export async function ensureInstalmentInvoices(db: PrismaClient, projectId: stri
       data: { invoiceId: invoice.id, description: `${proposal.title} — ${row.label}${row.percentage != null ? ` (${row.percentage}%)` : ""}`, quantity: 1, unitPrice: subtotal, order: 0 },
     });
   }
+  // Supplier costs paid since the proposal went out ride on this new invoice.
+  await billPendingSupplierCosts(db, projectId);
 }
 
 async function setStatus(db: PrismaClient, projectId: string, status: "PLANNING" | "ACTIVE" | "FINAL" | "COMPLETED") {

@@ -915,11 +915,55 @@ model Project {
   invoices           Invoice[]
   emailLinks         EmailLink[]
   calendarEventLinks CalendarEventLink[]
+  supplierInvoices   ProjectSupplierInvoice[]
 
   @@index([status])
   @@index([contactId])
   @@index([supervisorId])
   @@map("projects")
+}
+
+// A supplier's invoice paid for this project on the client's behalf (hosting,
+// domain, a plugin, a freelancer...) — kept with its file so the books are
+// accurate and it can be re-billed at cost and attached to the proposal.
+model ProjectSupplierInvoice {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  supplier      String
+  reference     String? // the supplier's invoice number
+  description   String?   @db.Text
+  invoiceDate   DateTime?
+  paidDate      DateTime?
+  currency      String    @default("CAD")
+  subtotal      Float     @default(0)
+  gstAmount     Float     @default(0)
+  qstAmount     Float     @default(0)
+  hstAmount     Float     @default(0)
+  totalAmount   Float     @default(0)
+  paymentMethod String?
+
+  // Whether the client reimburses this, and where that stands:
+  // PENDING (to re-bill) | BILLED (on a client invoice) | REIMBURSED | ABSORBED (our cost).
+  reimbursable        Boolean  @default(true)
+  reimbursementStatus String   @default("PENDING")
+  attachToProposal    Boolean  @default(true)
+  // The client invoice this cost was re-billed on (status BILLED).
+  billedInvoiceId     String?
+  billedInvoice       Invoice? @relation(fields: [billedInvoiceId], references: [id], onDelete: SetNull)
+  notes               String?  @db.Text
+
+  fileName String?
+  fileMime String?
+  fileData Bytes?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([billedInvoiceId])
+  @@index([projectId])
+  @@map("project_supplier_invoices")
 }
 
 // Team members working on a project, beyond its single owner — e.g. a
@@ -1008,10 +1052,14 @@ model Proposal {
   taxAmount   Float @default(0) // gstAmount + qstAmount + hstAmount
   totalAmount Float @default(0) // subtotal + taxAmount
 
+  // Third-party apps / subscriptions the client will pay the providers directly
+  // ([{ name, amount, period: "month" | "year" | "once", note }]) — listed in the
+  // proposal's Investment section, not part of its total.
+  subscriptions Json?
   // Internal sign-off before the document is sent to the client.
-  approvedAt  DateTime?
-  sentAt      DateTime?
-  respondedAt DateTime?
+  approvedAt    DateTime?
+  sentAt        DateTime?
+  respondedAt   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1032,6 +1080,8 @@ model ProposalLineItem {
   proposalId  String
   proposal    Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   description String
+  // Longer explanation of this line, shown under it in the PDF.
+  details     String?  @db.Text
   quantity    Float    @default(1)
   unitPrice   Float
   order       Int      @default(0)
@@ -1115,7 +1165,8 @@ model Invoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lineItems InvoiceLineItem[]
+  supplierInvoices ProjectSupplierInvoice[]
+  lineItems        InvoiceLineItem[]
 
   @@index([projectId])
   @@index([instalmentId])
@@ -1128,6 +1179,7 @@ model InvoiceLineItem {
   invoiceId   String
   invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   description String
+  details     String? @db.Text
   quantity    Float   @default(1)
   unitPrice   Float
   order       Int     @default(0)
@@ -1733,17 +1785,23 @@ model SyncLog {
 // Proposal's line items — not client-facing on its own, managed from
 // Settings.
 model ServicePriceListItem {
-  id          String   @id @default(cuid())
-  name        String
-  description String?  @db.Text
-  unitPrice   Float
-  currency    String   @default("CAD")
+  id                String   @id @default(cuid())
+  name              String
+  description       String?  @db.Text
+  // What the client reads under the line in a proposal / invoice ("description"
+  // above stays an internal pricing note).
+  clientDescription String?  @db.Text
+  // The project type this service belongs to (a ProjectType value), so a
+  // proposal can offer the matching services first. Null = general.
+  projectType       String?
+  unitPrice         Float
+  currency          String   @default("CAD")
   // Free text, e.g. "flat", "hour", "month" — shown next to the price, not
   // used in any calculation.
-  unit        String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  unit              String?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@map("service_price_list_items")
 }

@@ -5,6 +5,12 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFIm
 // with taxes, instalment schedule, payment method, terms and acceptance.
 // Pure pdf-lib (no native deps) so it runs on Cloudflare Workers.
 
+export interface PdfAttachment {
+  label: string; // e.g. "Supplier invoice — GoDaddy #123"
+  mime: string;
+  data: Uint8Array;
+}
+
 export interface ProposalPdfData {
   lang: "en" | "fr";
   logoPng?: Uint8Array | null;
@@ -19,7 +25,10 @@ export interface ProposalPdfData {
   details: { label: string; value: string }[]; // custom-field answers
   coverLetter?: string | null;
   plan: { name: string; tasks: string[] }[]; // phases to deliver, in order
-  lineItems: { description: string; quantity: number; unitPrice: number }[];
+  lineItems: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
+  subscriptions?: { name: string; amount: number; period: string; note: string }[];
+  supplierCosts?: { supplier: string; reference?: string | null; description?: string | null; total: number; currency: string }[];
+  attachments?: PdfAttachment[];
   totals: { subtotal: number; gst: number; qst: number; hst: number; total: number };
   instalments: { label: string; percentage: number | null; amount: number; dueDate?: Date | null }[];
   notes?: string | null;
@@ -88,6 +97,19 @@ const L = {
     gst: "GST",
     qst: "QST",
     hst: "HST",
+    subsTitle: "Apps & subscription fees",
+    subsNote: "Paid directly to each provider; not included in the total above.",
+    service: "Service",
+    billing: "Billing",
+    note: "Note",
+    perMonth: "/ month",
+    perYear: "/ year",
+    oneTime: "one-time",
+    subsEstimate: "Estimated recurring",
+    supplierTitle: "Supplier costs paid on your behalf",
+    supplierNote: "Billed at cost, with the supplier's taxes, in addition to the total above. The supplier invoices are attached.",
+    attachments: "Attachments",
+    tagline: "AI  ·  FUNNELS  ·  WEBSITES  ·  AUTOMATION",
   },
   fr: {
     proposal: "PROPOSITION",
@@ -136,6 +158,19 @@ const L = {
     gst: "TPS",
     qst: "TVQ",
     hst: "TVH",
+    subsTitle: "Applications et abonnements",
+    subsNote: "Payés directement à chaque fournisseur; non inclus dans le total ci-dessus.",
+    service: "Service",
+    billing: "Facturation",
+    note: "Note",
+    perMonth: "/ mois",
+    perYear: "/ an",
+    oneTime: "une fois",
+    subsEstimate: "Récurrent estimé",
+    supplierTitle: "Frais de fournisseurs payés en votre nom",
+    supplierNote: "Facturés au coût, avec les taxes du fournisseur, en plus du total ci-dessus. Les factures des fournisseurs sont jointes.",
+    attachments: "Pièces jointes",
+    tagline: "IA  ·  TUNNELS  ·  SITES WEB  ·  AUTOMATISATION",
   },
 };
 
@@ -150,6 +185,36 @@ function safe(text: string): string {
     else out += "?";
   }
   return out;
+}
+
+async function appendAttachments(doc: PDFDocument, fonts: { regular: PDFFont; bold: PDFFont }, title: string, items: PdfAttachment[]) {
+  if (items.length === 0) return;
+  const divider = doc.addPage([W, H]);
+  divider.drawRectangle({ x: 0, y: H - 120, width: W, height: 120, color: GREEN });
+  divider.drawRectangle({ x: 0, y: H - 124, width: W, height: 4, color: GOLD });
+  divider.drawText(safe(title), { x: MX, y: H - 78, size: 26, font: fonts.bold, color: MIST });
+  let y = H - 170;
+  items.forEach((it, i) => {
+    divider.drawText(safe(`${i + 1}.  ${it.label}`), { x: MX, y, size: 11, font: fonts.regular, color: INK, maxWidth: CONTENT_W } as never);
+    y -= 20;
+  });
+  for (const it of items) {
+    try {
+      if (/pdf/i.test(it.mime)) {
+        const src = await PDFDocument.load(it.data, { ignoreEncryption: true });
+        const pages = await doc.copyPages(src, src.getPageIndices());
+        pages.forEach((pg) => doc.addPage(pg));
+      } else if (/png/i.test(it.mime) || /jpe?g/i.test(it.mime)) {
+        const img = /png/i.test(it.mime) ? await doc.embedPng(it.data) : await doc.embedJpg(it.data);
+        const page = doc.addPage([W, H]);
+        const scale = Math.min((W - 80) / img.width, (H - 120) / img.height, 1);
+        page.drawText(safe(it.label), { x: 40, y: H - 40, size: 10, font: fonts.bold, color: SOFT });
+        page.drawImage(img, { x: 40, y: H - 70 - img.height * scale, width: img.width * scale, height: img.height * scale });
+      }
+    } catch {
+      // an unreadable file is skipped rather than failing the whole document
+    }
+  }
 }
 
 const money = (n: number, cur: string) => `${n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`;
@@ -248,7 +313,7 @@ class Layout {
   table(
     cols: { header: string; width: number; align?: "left" | "right" }[],
     rows: string[][],
-    opts: { boldLast?: boolean } = {}
+    opts: { boldLast?: boolean; details?: (string | null | undefined)[] } = {}
   ) {
     const colX: number[] = [];
     let acc = MX + 8;
@@ -269,7 +334,8 @@ class Layout {
     rows.forEach((row, ri) => {
       const wrapped = row.map((cell, i) => this.wrap(cell, cols[i].width - 12, 9.5, this.regular));
       const lines = Math.max(...wrapped.map((w) => w.length));
-      const h = lines * 12 + 8;
+      const detailLines = opts.details?.[ri] ? this.wrap(opts.details[ri] as string, cols[0].width - 16, 8.5, this.regular) : [];
+      const h = lines * 12 + (detailLines.length ? detailLines.length * 11 + 3 : 0) + 8;
       if (this.y - h < BOTTOM) {
         this.newPage();
         drawHeader();
@@ -282,6 +348,9 @@ class Layout {
           const w = font.widthOfTextAtSize(line, 9.5);
           this.text(line, cols[i].align === "right" ? colX[i] + cols[i].width - 12 - w : colX[i], this.y - li * 12, { size: 9.5, font });
         });
+      });
+      detailLines.forEach((dl, di) => {
+        this.text(dl, colX[0] + 4, this.y - lines * 12 - 1 - di * 11, { size: 8.5, color: SOFT });
       });
       this.gap(h);
     });
@@ -312,13 +381,18 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   // ---- cover band
   lo.page.drawRectangle({ x: 0, y: H - 190, width: W, height: 190, color: GREEN });
   lo.page.drawRectangle({ x: 0, y: H - 194, width: W, height: 4, color: GOLD });
+  // Logo with the business details beside it.
+  const logoH = 58;
+  let textX = MX;
   if (logo) {
-    const h = 64;
-    const w = (logo.width / logo.height) * h;
-    lo.page.drawImage(logo, { x: MX, y: H - 40 - h, width: Math.min(w, 200), height: (Math.min(w, 200) / w) * h });
-  } else {
-    lo.text(data.company.name, MX, H - 70, { size: 18, font: bold, color: MIST });
+    const w = Math.min((logo.width / logo.height) * logoH, 120);
+    lo.page.drawImage(logo, { x: MX, y: H - 36 - logoH, width: w, height: (w / logo.width) * logo.height });
+    textX = MX + w + 14;
   }
+  lo.text(data.company.name, textX, H - 52, { size: 17, font: bold, color: MIST, maxWidth: 250 });
+  lo.text(t.tagline, textX, H - 67, { size: 8.5, font: bold, color: GOLD, maxWidth: 250 });
+  lo.text(data.company.website, textX, H - 82, { size: 9, color: MIST, maxWidth: 250 });
+  if (data.company.email) lo.text(data.company.email, textX, H - 94, { size: 9, color: MIST, maxWidth: 250 });
   lo.text(t.proposal, W - MX - bold.widthOfTextAtSize(t.proposal, 30), H - 70, { size: 30, font: bold, color: MIST });
   lo.text(`${t.number} ${data.number}`, W - MX - bold.widthOfTextAtSize(`${t.number} ${data.number}`, 10), H - 90, { size: 10, font: bold, color: GOLD });
   lo.text(fmtDate(data.date, data.lang), W - MX - regular.widthOfTextAtSize(safe(fmtDate(data.date, data.lang)), 10), H - 106, { size: 10, color: MIST });
@@ -406,7 +480,8 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
       { header: t.unit, width: 100, align: "right" },
       { header: t.amount, width: 100, align: "right" },
     ],
-    rows
+    rows,
+    { details: data.lineItems.map((li) => li.details) }
   );
   // totals block (right aligned)
   const totalsRows: [string, number, boolean][] = [[t.subtotal, data.totals.subtotal, false]];
@@ -415,6 +490,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   if (data.totals.hst) totalsRows.push([t.hst, data.totals.hst, false]);
   const grand = data.totals.subtotal + data.totals.total;
   totalsRows.push([t.total, grand, true]);
+  lo.ensure(totalsRows.length * 16 + 36); // keep the totals block together
   for (const [label, amount, strong] of totalsRows) {
     lo.ensure(strong ? 36 : 16);
     if (strong) {
@@ -432,6 +508,49 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     }
   }
   if (data.totals.total > 0) lo.paragraph(t.taxesNote, { size: 8.5, color: SOFT, font: italic });
+
+  // third-party apps & subscriptions (paid to the providers, not in the total)
+  if (data.subscriptions && data.subscriptions.length > 0) {
+    lo.gap(6);
+    lo.ensure(60);
+    lo.text(t.subsTitle, MX, lo.y, { size: 11.5, font: bold, color: GREEN });
+    lo.gap(14);
+    lo.paragraph(t.subsNote, { size: 8.5, color: SOFT, font: italic });
+    lo.gap(8);
+    const periodLabel = (p: string) => (p === "year" ? t.perYear : p === "once" ? t.oneTime : t.perMonth);
+    lo.table(
+      [
+        { header: t.service, width: 180 },
+        { header: t.billing, width: 80 },
+        { header: t.amount, width: 100, align: "right" },
+        { header: t.note, width: CONTENT_W - 8 - 180 - 80 - 100 },
+      ],
+      data.subscriptions.map((x) => [x.name, periodLabel(x.period), x.amount > 0 ? money(x.amount, data.currency) : "—", x.note])
+    );
+    const monthly = data.subscriptions.filter((x) => x.period === "month").reduce((a, x) => a + x.amount, 0);
+    const yearly = data.subscriptions.filter((x) => x.period === "year").reduce((a, x) => a + x.amount, 0);
+    const once = data.subscriptions.filter((x) => x.period === "once").reduce((a, x) => a + x.amount, 0);
+    const est = [monthly ? `${money(monthly, data.currency)} ${t.perMonth}` : "", yearly ? `${money(yearly, data.currency)} ${t.perYear}` : "", once ? `${money(once, data.currency)} ${t.oneTime}` : ""].filter(Boolean).join("  ·  ");
+    if (est) lo.paragraph(`${t.subsEstimate}: ${est}`, { size: 9, font: bold });
+  }
+
+  // supplier costs already paid on the client's behalf (billed at cost; invoices attached)
+  if (data.supplierCosts && data.supplierCosts.length > 0) {
+    lo.gap(6);
+    lo.ensure(60);
+    lo.text(t.supplierTitle, MX, lo.y, { size: 11.5, font: bold, color: GREEN });
+    lo.gap(14);
+    lo.paragraph(t.supplierNote, { size: 8.5, color: SOFT, font: italic });
+    lo.gap(8);
+    lo.table(
+      [
+        { header: t.service, width: CONTENT_W - 8 - 100 },
+        { header: t.amount, width: 100, align: "right" },
+      ],
+      data.supplierCosts.map((c) => [`${c.supplier}${c.reference ? ` #${c.reference}` : ""}`, money(c.total, c.currency)]),
+      { details: data.supplierCosts.map((c) => c.description) }
+    );
+  }
 
   // ---- schedule
   if (data.instalments.length > 0) {
@@ -494,6 +613,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     pg.drawText(label, { x: W - MX - regular.widthOfTextAtSize(label, 8.5), y: 22, size: 8.5, font: regular, color: MIST });
   });
 
+  await appendAttachments(doc, { regular, bold }, t.attachments, data.attachments ?? []);
   return doc.save();
 }
 
@@ -511,7 +631,8 @@ export interface InvoicePdfData {
   client: ProposalPdfData["client"];
   projectName: string;
   instalmentLabel?: string | null; // e.g. "Instalment 2 of 3 — Approval"
-  lineItems: { description: string; quantity: number; unitPrice: number }[];
+  lineItems: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
+  attachments?: PdfAttachment[];
   totals: { subtotal: number; gst: number; qst: number; hst: number; total: number };
   notes?: string | null;
 }
@@ -519,10 +640,10 @@ export interface InvoicePdfData {
 const LI = {
   en: { invoice: "INVOICE", billTo: "Billed to", from: "From", issued: "Issued", due: "Due", paid: "PAID", project: "Project", payment: "How to pay",
     paymentBody: "Please pay by the due date using the method agreed in your proposal (for example Interac e-Transfer or credit card). Payment details will be confirmed with this invoice; reply to this email if you need them again.",
-    thanks: "Thank you for your business.", amountDue: "Amount due", subtotal: "Subtotal", description: "Description", qty: "Qty", unit: "Unit price", amount: "Amount", notes: "Notes", gst: "GST", qst: "QST", hst: "HST", page: (n: number, t: number) => `Page ${n} of ${t}` },
+    thanks: "Thank you for your business.", amountDue: "Amount due", subtotal: "Subtotal", description: "Description", qty: "Qty", unit: "Unit price", amount: "Amount", notes: "Notes", gst: "GST", qst: "QST", hst: "HST", attachments: "Attachments", page: (n: number, t: number) => `Page ${n} of ${t}` },
   fr: { invoice: "FACTURE", billTo: "Facturé à", from: "De", issued: "Émise le", due: "Échéance", paid: "PAYÉE", project: "Projet", payment: "Comment payer",
     paymentBody: "Veuillez payer d'ici l'échéance selon le mode convenu dans votre proposition (par exemple virement Interac ou carte de crédit). Les détails de paiement seront confirmés avec cette facture; répondez à ce courriel si vous en avez besoin à nouveau.",
-    thanks: "Merci de votre confiance.", amountDue: "Montant dû", subtotal: "Sous-total", description: "Description", qty: "Qté", unit: "Prix unitaire", amount: "Montant", notes: "Notes", gst: "TPS", qst: "TVQ", hst: "TVH", page: (n: number, t: number) => `Page ${n} de ${t}` },
+    thanks: "Merci de votre confiance.", amountDue: "Montant dû", subtotal: "Sous-total", description: "Description", qty: "Qté", unit: "Prix unitaire", amount: "Montant", notes: "Notes", gst: "TPS", qst: "TVQ", hst: "TVH", attachments: "Pièces jointes", page: (n: number, t: number) => `Page ${n} de ${t}` },
 };
 
 export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array> {
@@ -547,13 +668,16 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
 
   lo.page.drawRectangle({ x: 0, y: H - 150, width: W, height: 150, color: GREEN });
   lo.page.drawRectangle({ x: 0, y: H - 154, width: W, height: 4, color: GOLD });
+  const logoH = 52;
+  let textX = MX;
   if (logo) {
-    const h = 58;
-    const w = Math.min((logo.width / logo.height) * h, 190);
-    lo.page.drawImage(logo, { x: MX, y: H - 36 - h, width: w, height: (w / logo.width) * logo.height });
-  } else {
-    lo.text(data.company.name, MX, H - 70, { size: 18, font: bold, color: MIST });
+    const w = Math.min((logo.width / logo.height) * logoH, 110);
+    lo.page.drawImage(logo, { x: MX, y: H - 34 - logoH, width: w, height: (w / logo.width) * logo.height });
+    textX = MX + w + 14;
   }
+  lo.text(data.company.name, textX, H - 52, { size: 16, font: bold, color: MIST, maxWidth: 250 });
+  lo.text(data.company.website, textX, H - 68, { size: 9, color: MIST, maxWidth: 250 });
+  if (data.company.email) lo.text(data.company.email, textX, H - 80, { size: 9, color: MIST, maxWidth: 250 });
   lo.text(t.invoice, W - MX - bold.widthOfTextAtSize(t.invoice, 28), H - 66, { size: 28, font: bold, color: MIST });
   const num = `#${data.number}`;
   lo.text(num, W - MX - bold.widthOfTextAtSize(safe(num), 11), H - 86, { size: 11, font: bold, color: GOLD });
@@ -602,7 +726,8 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
       { header: t.unit, width: 100, align: "right" },
       { header: t.amount, width: 100, align: "right" },
     ],
-    data.lineItems.map((li) => [li.description, String(li.quantity), money(li.unitPrice, data.currency), money(li.quantity * li.unitPrice, data.currency)])
+    data.lineItems.map((li) => [li.description, String(li.quantity), money(li.unitPrice, data.currency), money(li.quantity * li.unitPrice, data.currency)]),
+    { details: data.lineItems.map((li) => li.details) }
   );
   const rows: [string, number, boolean][] = [[t.subtotal, data.totals.subtotal, false]];
   if (data.totals.gst) rows.push([t.gst, data.totals.gst, false]);
@@ -643,5 +768,6 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
     const label = safe(t.page(i + 1, pages.length));
     pg.drawText(label, { x: W - MX - regular.widthOfTextAtSize(label, 8.5), y: 22, size: 8.5, font: regular, color: MIST });
   });
+  await appendAttachments(doc, { regular, bold }, t.attachments, data.attachments ?? []);
   return doc.save();
 }

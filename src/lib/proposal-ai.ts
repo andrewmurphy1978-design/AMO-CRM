@@ -3,11 +3,12 @@ import { decryptSecret } from "@/lib/crypto";
 
 // A quote is client-facing business content, not bulk triage — worth a
 // stronger model than the Haiku one email-classifier.ts uses.
-const CLAUDE_MODEL = "claude-opus-5";
+const CLAUDE_MODEL = "claude-opus-5-5";
 
 export interface AIProposalDraft {
   coverLetter: string;
-  lineItems: { description: string; quantity: number; unitPrice: number }[];
+  lineItems: { description: string; details?: string; quantity: number; unitPrice: number }[];
+  subscriptions?: { name: string; amount: number; period: string; note: string }[];
 }
 
 // Same key source as email-classifier.ts (Settings > Anthropic API key,
@@ -25,6 +26,7 @@ function buildPrompt(input: {
   currency: string;
   servicesCatalog: { name: string; description: string | null; unitPrice: number; currency: string; unit: string | null }[];
   brief: string;
+  language: "en" | "fr";
 }): string {
   const catalogText =
     input.servicesCatalog.length > 0
@@ -49,11 +51,12 @@ What the consultant told you about this client's needs:
 ${input.brief}
 
 Write:
-1. A short, warm, professional cover paragraph (2-4 sentences) introducing the proposal to the client, in English. Do not include a greeting salutation or sign-off — just the body paragraph.
-2. A list of line items covering the work described, each with a description, a quantity, and a unit price in ${input.currency}. Prefer matching existing price list items where they fit; add new reasonably-priced items for anything not covered.
+1. A warm, professional cover letter (3-5 short paragraphs) introducing the proposal to the client, written in ${input.language === "fr" ? "French" : "English"}, in the voice described in the client background if any. Start with a greeting using the client's first name and end with a short sign-off from Andrew Murphy, Andrew Murphy Online.
+2. A list of line items covering the work described, each with a short description (the item name), "details" (1-3 sentences saying exactly what is included, written for the client), a quantity, and a unit price in ${input.currency}. Prefer matching existing price list items where they fit; add new reasonably-priced items for anything not covered.
+3. "subscriptions": the third-party apps / services the client will pay the providers directly for this project (for example the website/funnel app, hosting, domain, automation tools), each with name, amount (best estimate, 0 if unknown), period ("month", "year" or "once") and a short note. Leave the list empty if none apply.
 
 Respond with ONLY a JSON object, no markdown fences, no other text, in exactly this shape:
-{"coverLetter": "...", "lineItems": [{"description": "...", "quantity": 1, "unitPrice": 0}]}`;
+{"coverLetter": "...", "lineItems": [{"description": "...", "details": "...", "quantity": 1, "unitPrice": 0}], "subscriptions": [{"name": "...", "amount": 0, "period": "month", "note": ""}]}`;
 }
 
 // Never persists anything — returns a draft for the Proposal form to
@@ -66,11 +69,11 @@ export async function draftProposalWithAI(
     currency: string;
     servicesCatalog: { name: string; description: string | null; unitPrice: number; currency: string; unit: string | null }[];
     brief: string;
+    language: "en" | "fr";
   }
 ): Promise<AIProposalDraft | { error: string }> {
   const apiKey = await getStoredApiKey(db);
   if (!apiKey) return { error: "No Anthropic API key configured — add one in Settings first." };
-  if (!input.brief.trim()) return { error: "Describe what the client needs first." };
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -100,13 +103,15 @@ export async function draftProposalWithAI(
 
     const parsed = JSON.parse(cleaned) as {
       coverLetter?: string;
-      lineItems?: { description?: string; quantity?: number; unitPrice?: number }[];
+      lineItems?: { description?: string; details?: string; quantity?: number; unitPrice?: number }[];
+      subscriptions?: { name?: string; amount?: number; period?: string; note?: string }[];
     };
 
     const lineItems = (parsed.lineItems ?? [])
       .filter((li) => li.description && typeof li.unitPrice === "number")
       .map((li) => ({
         description: li.description!,
+        details: li.details?.trim() || undefined,
         quantity: typeof li.quantity === "number" && li.quantity > 0 ? li.quantity : 1,
         unitPrice: li.unitPrice!,
       }));
@@ -115,7 +120,11 @@ export async function draftProposalWithAI(
       return { error: "The AI didn't return any usable line items — try describing the work in more detail." };
     }
 
-    return { coverLetter: parsed.coverLetter?.trim() ?? "", lineItems };
+    const subscriptions = (parsed.subscriptions ?? [])
+      .filter((x) => x.name)
+      .map((x) => ({ name: x.name!, amount: typeof x.amount === "number" && x.amount >= 0 ? x.amount : 0, period: ["month", "year", "once"].includes(x.period ?? "") ? x.period! : "month", note: x.note ?? "" }));
+
+    return { coverLetter: parsed.coverLetter?.trim() ?? "", lineItems, subscriptions };
   } catch (error) {
     console.error("proposal-ai: failed to draft proposal", error);
     return { error: "Something went wrong drafting the proposal — try again." };

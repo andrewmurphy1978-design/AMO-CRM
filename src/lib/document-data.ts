@@ -2,7 +2,8 @@ import type { PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
-import type { InvoicePdfData, ProposalPdfData } from "@/lib/proposal-pdf";
+import type { InvoicePdfData, PdfAttachment, ProposalPdfData } from "@/lib/proposal-pdf";
+import { proposalSupplierCosts } from "@/lib/supplier-costs";
 import { signPath } from "@/lib/signed-url";
 
 // Gathers what the Proposal / Invoice PDFs need from the database.
@@ -84,6 +85,12 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     dueDate: r.dueDate,
   }));
 
+  // Supplier invoices paid on the client's behalf before this proposal was issued.
+  const costs = await proposalSupplierCosts(db, projectId, { sentAt: proposal.sentAt });
+  const attachments: PdfAttachment[] = costs
+    .filter((c) => c.fileData && c.fileMime)
+    .map((c) => ({ label: `${lang === "fr" ? "Facture du fournisseur" : "Supplier invoice"} — ${c.supplier}${c.reference ? ` #${c.reference}` : ""}`, mime: c.fileMime as string, data: c.fileData as unknown as Uint8Array }));
+
   const stamp = proposal.createdAt.toISOString().slice(0, 10).replace(/-/g, "");
   const number = `PR-${stamp}-${proposal.id.slice(-4).toUpperCase()}`;
   const data: ProposalPdfData = {
@@ -109,7 +116,10 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
       .filter((d) => d.value),
     coverLetter: proposal.coverLetter,
     plan,
-    lineItems: proposal.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unitPrice })),
+    lineItems: proposal.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
+    subscriptions: (Array.isArray(proposal.subscriptions) ? proposal.subscriptions : []) as { name: string; amount: number; period: string; note: string }[],
+    supplierCosts: costs.map((c) => ({ supplier: c.supplier, reference: c.reference, description: c.description, total: c.totalAmount, currency: c.currency })),
+    attachments,
     totals: { subtotal: proposal.subtotal, gst: proposal.gstAmount, qst: proposal.qstAmount, hst: proposal.hstAmount, total: proposal.taxAmount },
     instalments,
     notes: proposal.notes,
@@ -134,6 +144,10 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     const idx = rows.findIndex((r) => r.id === invoice.instalmentId);
     instalmentLabel = `${lang === "fr" ? "Versement" : "Instalment"} ${idx + 1} ${lang === "fr" ? "de" : "of"} ${rows.length} — ${invoice.instalment.label}`;
   }
+  const billed = await db.projectSupplierInvoice.findMany({ where: { billedInvoiceId: invoice.id } });
+  const attachments: PdfAttachment[] = billed
+    .filter((c) => c.fileData && c.fileMime)
+    .map((c) => ({ label: `${lang === "fr" ? "Facture du fournisseur" : "Supplier invoice"} — ${c.supplier}${c.reference ? ` #${c.reference}` : ""}`, mime: c.fileMime as string, data: c.fileData as unknown as Uint8Array }));
   const number = invoice.number || `INV-${invoice.createdAt.toISOString().slice(0, 10).replace(/-/g, "")}-${invoice.id.slice(-4).toUpperCase()}`;
   const data: InvoicePdfData = {
     lang,
@@ -147,7 +161,8 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     client: clientBlock(project.contact),
     projectName: project.name,
     instalmentLabel,
-    lineItems: invoice.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unitPrice })),
+    lineItems: invoice.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
+    attachments,
     totals: { subtotal: invoice.subtotal, gst: invoice.gstAmount, qst: invoice.qstAmount, hst: invoice.hstAmount, total: invoice.taxAmount },
     notes: invoice.notes,
   };

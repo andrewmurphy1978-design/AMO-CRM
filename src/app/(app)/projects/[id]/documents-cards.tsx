@@ -21,8 +21,9 @@ import InvoiceLineItemsForm from "./invoices/invoice-line-items-form";
 import SendDocumentButton from "./send-document-button";
 import NewInvoiceButton from "./new-invoice-button";
 
-type CatalogItem = { id: string; name: string; description: string | null; unitPrice: number; currency: string; unit: string | null };
-type Line = { description: string; quantity: number; unitPrice: number };
+type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
+type Line = { description: string; details?: string | null; quantity: number; unitPrice: number };
+type Sub = { name: string; amount: number; period: string; note: string };
 
 export interface ProposalRowData {
   id: string;
@@ -35,6 +36,7 @@ export interface ProposalRowData {
   coverLetter: string | null;
   notes: string | null;
   lineItems: Line[];
+  subscriptions: Sub[];
   paymentSchedule: { label: string; percentage: number | null; amount: number | null; dueDate: string | null }[];
 }
 
@@ -109,13 +111,15 @@ export function ProposalsCard({
   statusLabels,
   lang,
   emailing,
+  projectType,
 }: {
   projectId: string;
   proposals: ProposalRowData[];
+  projectType?: string;
   catalog: CatalogItem[];
   taxLocation: { country: string | null; province: string | null };
   chargeCanadianTax: boolean;
-  newDefaults: { title: string; currency: string; paymentSchedule: { label: string; percentage: number | null; amount: number | null; dueDate: string | null }[] };
+  newDefaults: { title: string; currency: string; coverLetter: string; subscriptions: Sub[]; paymentSchedule: { label: string; percentage: number | null; amount: number | null; dueDate: string | null }[] };
   title: string;
   statusLabels: Record<string, string>;
   lang: Lang;
@@ -247,9 +251,10 @@ export function ProposalsCard({
                     coverLetter: editing.coverLetter,
                     notes: editing.notes,
                     lineItems: editing.lineItems,
+                    subscriptions: editing.subscriptions,
                     paymentSchedule: editing.paymentSchedule,
                   }
-                : { title: newDefaults.title, status: "DRAFT", currency: newDefaults.currency, paymentSchedule: newDefaults.paymentSchedule }
+                : { title: newDefaults.title, status: "DRAFT", currency: newDefaults.currency, coverLetter: newDefaults.coverLetter, subscriptions: newDefaults.subscriptions, paymentSchedule: newDefaults.paymentSchedule }
             }
             catalog={catalog}
             taxLocation={taxLocation}
@@ -257,6 +262,7 @@ export function ProposalsCard({
             submitLabel={editing ? (fr ? "Enregistrer" : "Save changes") : fr ? "Créer la proposition" : "Create proposal"}
             lang={lang}
             inline
+            projectType={projectType}
             onSuccess={() => {
               setDialog(null);
               router.refresh();

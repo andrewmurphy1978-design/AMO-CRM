@@ -159,6 +159,7 @@ export async function convertProposalToInvoice(proposalId: string, projectId: st
         data: proposal.lineItems.map((li) => ({
           invoiceId: invoice.id,
           description: li.description,
+          details: li.details,
           quantity: li.quantity,
           unitPrice: li.unitPrice,
           order: li.order,
@@ -192,17 +193,18 @@ export async function markInvoiceReminderSent(invoiceId: string) {
 
 // --- Full invoice line-item editor (for invoices not created from a Proposal) ---
 
-function readLineItems(formData: FormData): (LineItemInput & { description: string })[] {
+function readLineItems(formData: FormData): (LineItemInput & { description: string; details: string | null })[] {
   const descriptions = formData.getAll("lineItemDescription").map(String);
   const quantities = formData.getAll("lineItemQuantity").map(String);
   const unitPrices = formData.getAll("lineItemUnitPrice").map(String);
-  const items: { description: string; quantity: number; unitPrice: number }[] = [];
+  const detailsList = formData.getAll("lineItemDetails").map(String);
+  const items: { description: string; quantity: number; unitPrice: number; details: string | null }[] = [];
   for (let i = 0; i < descriptions.length; i++) {
     const description = descriptions[i].trim();
     const unitPrice = Number(unitPrices[i]);
     if (!description || Number.isNaN(unitPrice)) continue;
     const quantity = Number(quantities[i]);
-    items.push({ description, quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1, unitPrice });
+    items.push({ description, quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1, unitPrice, details: (detailsList[i] ?? "").trim() || null });
   }
   return items;
 }

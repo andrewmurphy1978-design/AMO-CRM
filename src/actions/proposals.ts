@@ -8,6 +8,8 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { computeBillingTotals, contactTaxLocation, type LineItemInput } from "@/lib/billing-totals";
+import { getProjectTemplate } from "@/lib/project-template-store";
+import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
 import { publicBaseUrl } from "@/lib/twilio";
 import { signedDocumentUrl } from "@/lib/document-data";
 import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
@@ -145,17 +147,18 @@ const FullProposalSchema = z.object({
   notes: z.string().trim().optional(),
 });
 
-function readLineItems(formData: FormData): (LineItemInput & { description: string })[] {
+function readLineItems(formData: FormData): (LineItemInput & { description: string; details: string | null })[] {
   const descriptions = formData.getAll("lineItemDescription").map(String);
   const quantities = formData.getAll("lineItemQuantity").map(String);
   const unitPrices = formData.getAll("lineItemUnitPrice").map(String);
-  const items: { description: string; quantity: number; unitPrice: number }[] = [];
+  const detailsList = formData.getAll("lineItemDetails").map(String);
+  const items: { description: string; quantity: number; unitPrice: number; details: string | null }[] = [];
   for (let i = 0; i < descriptions.length; i++) {
     const description = descriptions[i].trim();
     const unitPrice = Number(unitPrices[i]);
     if (!description || Number.isNaN(unitPrice)) continue;
     const quantity = Number(quantities[i]);
-    items.push({ description, quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1, unitPrice });
+    items.push({ description, quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1, unitPrice, details: (detailsList[i] ?? "").trim() || null });
   }
   return items;
 }
@@ -185,6 +188,21 @@ function readPaymentSchedule(formData: FormData): {
     });
   }
   return rows;
+}
+
+function readSubscriptions(formData: FormData): { name: string; amount: number; period: string; note: string }[] {
+  const names = formData.getAll("subName").map(String);
+  const amounts = formData.getAll("subAmount").map(String);
+  const periods = formData.getAll("subPeriod").map(String);
+  const notes = formData.getAll("subNote").map(String);
+  const out: { name: string; amount: number; period: string; note: string }[] = [];
+  for (let i = 0; i < names.length; i++) {
+    const name = names[i].trim();
+    if (!name) continue;
+    const amount = Number(amounts[i]);
+    out.push({ name, amount: Number.isFinite(amount) && amount >= 0 ? amount : 0, period: ["month", "year", "once"].includes(periods[i]) ? periods[i] : "month", note: (notes[i] ?? "").trim() });
+  }
+  return out;
 }
 
 async function computeProposalTotals(db: PrismaClient, projectId: string, lineItems: LineItemInput[]) {
@@ -223,6 +241,7 @@ export async function createFullProposal(
 
   const lineItems = readLineItems(formData);
   const paymentSchedule = readPaymentSchedule(formData);
+  const subscriptions = readSubscriptions(formData);
 
   const proposal = await withScopedPrismaClient(async (db) => {
     const { project, totals } = await computeProposalTotals(db, data.projectId, lineItems);
@@ -235,6 +254,7 @@ export async function createFullProposal(
         currency: data.currency,
         coverLetter: data.coverLetter,
         notes: data.notes,
+        subscriptions: subscriptions as never,
         subtotal: totals.subtotal,
         gstAmount: totals.gst,
         qstAmount: totals.qst,
@@ -292,6 +312,7 @@ export async function updateFullProposal(
 
   const lineItems = readLineItems(formData);
   const paymentSchedule = readPaymentSchedule(formData);
+  const subscriptions = readSubscriptions(formData);
 
   await withScopedPrismaClient(async (db) => {
     const existing = await db.proposal.findUniqueOrThrow({ where: { id: proposalId } });
@@ -305,6 +326,7 @@ export async function updateFullProposal(
         currency: data.currency,
         coverLetter: data.coverLetter,
         notes: data.notes,
+        subscriptions: subscriptions as never,
         subtotal: totals.subtotal,
         gstAmount: totals.gst,
         qstAmount: totals.qst,
@@ -360,13 +382,41 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
       project.contact.company ||
       project.contact.email ||
       "";
+    const language: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
+
+    // With no brief typed, work from what the CRM already knows: the project
+    // (type, description, custom answers) and what's been written for AI about
+    // the client (voice, preferences, background).
+    let fullBrief = brief.trim();
+    if (!fullBrief) {
+      const template = await getProjectTemplate(db, project.type);
+      const answers = (project.customFields ?? {}) as FieldValues;
+      const details = template.fields
+        .filter((f) => isFieldVisible(f, answers))
+        .map((f) => `${f.label}: ${displayValue(answers[f.key])}`)
+        .filter((line) => !line.endsWith(": "));
+      const voice = await db.contactBrandItem.findMany({ where: { contactId: project.contactId, category: "voice" }, select: { label: true, value: true } });
+      fullBrief = [
+        `Project type: ${project.type}`,
+        project.description ? `Project description: ${project.description}` : "",
+        details.length ? `Project details:\n${details.join("\n")}` : "",
+        project.contact.company ? `Client company: ${project.contact.company}` : "",
+        project.contact.industry ? `Client industry: ${project.contact.industry}` : "",
+        project.contact.aiDetails ? `Background about the client:\n${project.contact.aiDetails}` : "",
+        voice.length ? `Client brand voice:\n${voice.map((v) => `${v.label}: ${v.value}`).join("\n")}` : "",
+        `Client first name: ${project.contact.firstName ?? ""}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
 
     return draftProposalWithAI(db, {
       clientLabel,
       projectName: project.name,
       currency: "CAD",
       servicesCatalog,
-      brief,
+      brief: fullBrief,
+      language,
     });
   });
 }

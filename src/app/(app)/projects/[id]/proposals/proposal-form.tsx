@@ -4,8 +4,10 @@ import { useActionState, useEffect, useMemo, useRef, useState, useTransition } f
 import { draftProposalAI } from "@/actions/proposals";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { clientFacingDescription } from "@/lib/catalog-text";
 
-type LineItemRow = { tempKey: number; description: string; quantity: number; unitPrice: number };
+type LineItemRow = { tempKey: number; description: string; details: string; quantity: number; unitPrice: number };
+type SubRow = { tempKey: number; name: string; amount: number; period: string; note: string };
 type ScheduleRow = { tempKey: number; label: string; percentage: number | null; amount: number | null; dueDate: string };
 
 type ProposalFormValues = {
@@ -14,11 +16,12 @@ type ProposalFormValues = {
   currency?: string;
   coverLetter?: string | null;
   notes?: string | null;
-  lineItems?: { description: string; quantity: number; unitPrice: number }[];
+  lineItems?: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
+  subscriptions?: { name: string; amount: number; period: string; note: string }[];
   paymentSchedule?: { label: string; percentage: number | null; amount: number | null; dueDate: Date | string | null }[];
 };
 
-type CatalogItem = { id: string; name: string; description: string | null; unitPrice: number; currency: string; unit: string | null };
+type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -42,6 +45,7 @@ export default function ProposalForm({
   lang,
   inline,
   onSuccess,
+  projectType,
 }: {
   action: (
     prevState: { error?: string; success?: string; proposalId?: string } | undefined,
@@ -57,6 +61,8 @@ export default function ProposalForm({
   // In a dialog: stay on the page and report back when saved.
   inline?: boolean;
   onSuccess?: () => void;
+  // Services of this project type are listed first in the price-list picker.
+  projectType?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   useEffect(() => {
@@ -66,9 +72,11 @@ export default function ProposalForm({
   const t = getDict(lang);
 
   const [lineItems, setLineItems] = useState<LineItemRow[]>(() =>
-    (defaultValues?.lineItems ?? []).map((li, tempKey) => ({ tempKey, ...li }))
+    (defaultValues?.lineItems ?? []).map((li, tempKey) => ({ tempKey, ...li, details: li.details ?? "" }))
   );
   const nextLineKey = useRef(lineItems.length);
+  const [subs, setSubs] = useState<SubRow[]>(() => (defaultValues?.subscriptions ?? []).map((x, tempKey) => ({ tempKey, ...x })));
+  const nextSubKey = useRef(subs.length);
 
   const [schedule, setSchedule] = useState<ScheduleRow[]>(() =>
     (defaultValues?.paymentSchedule ?? []).map((row, tempKey) => ({
@@ -92,10 +100,10 @@ export default function ProposalForm({
     [lineItems, taxLocation, chargeCanadianTax]
   );
 
-  function addLineItem(preset?: { description: string; unitPrice: number }) {
+  function addLineItem(preset?: { description: string; unitPrice: number; details?: string }) {
     setLineItems((rows) => [
       ...rows,
-      { tempKey: nextLineKey.current++, description: preset?.description ?? "", quantity: 1, unitPrice: preset?.unitPrice ?? 0 },
+      { tempKey: nextLineKey.current++, description: preset?.description ?? "", details: preset?.details ?? "", quantity: 1, unitPrice: preset?.unitPrice ?? 0 },
     ]);
   }
 
@@ -112,8 +120,12 @@ export default function ProposalForm({
         return;
       }
       setCoverLetter(result.coverLetter);
-      setLineItems(result.lineItems.map((li, tempKey) => ({ tempKey, ...li })));
+      setLineItems(result.lineItems.map((li, tempKey) => ({ tempKey, ...li, details: li.details ?? "" })));
       nextLineKey.current = result.lineItems.length;
+      if (result.subscriptions && result.subscriptions.length > 0 && subs.length === 0) {
+        setSubs(result.subscriptions.map((x, tempKey) => ({ tempKey, ...x })));
+        nextSubKey.current = result.subscriptions.length;
+      }
     });
   }
 
@@ -169,11 +181,16 @@ export default function ProposalForm({
         <button
           type="button"
           onClick={handleGenerateWithAI}
-          disabled={aiPending || !brief.trim()}
+          disabled={aiPending}
           className="mt-2 rounded-md bg-[#0fa38a] px-3 py-1.5 text-xs font-medium text-[#f4faf6] hover:opacity-90 disabled:opacity-40"
         >
           {aiPending ? t.proposals.generating : t.proposals.generateWithAI}
         </button>
+        <p className="mt-2 text-xs text-soft">
+          {lang === "fr"
+            ? "Laissez la zone vide pour utiliser les détails du projet, du client et de sa marque. Nécessite la clé API Anthropic (Paramètres)."
+            : "Leave the box empty to use the project, client and brand details. Needs the Anthropic API key (Settings)."}
+        </p>
         {aiError && <p className="mt-2 text-xs text-red-600">{aiError}</p>}
       </div>
 
@@ -182,7 +199,7 @@ export default function ProposalForm({
         <textarea
           value={coverLetter}
           onChange={(e) => setCoverLetter(e.target.value)}
-          rows={4}
+          rows={9}
           className={FIELD_CLASS}
         />
       </div>
@@ -196,7 +213,7 @@ export default function ProposalForm({
               defaultValue=""
               onChange={(e) => {
                 const item = catalog.find((c) => c.id === e.target.value);
-                if (item) addLineItem({ description: item.name, unitPrice: item.unitPrice });
+                if (item) addLineItem({ description: item.name, unitPrice: item.unitPrice, details: item.clientDescription || clientFacingDescription(item.description) });
                 e.target.value = "";
               }}
               className="rounded-md border border-card-border bg-field-bg px-2 py-1 text-xs text-ink"
@@ -204,8 +221,9 @@ export default function ProposalForm({
               <option value="" disabled>
                 {t.proposals.pickFromPriceList}
               </option>
-              {catalog.map((c) => (
+              {[...catalog].sort((a, b) => Number(b.projectType === projectType && Boolean(projectType)) - Number(a.projectType === projectType && Boolean(projectType))).map((c) => (
                 <option key={c.id} value={c.id}>
+                  {c.projectType && c.projectType === projectType ? "★ " : ""}
                   {c.name} ({c.unitPrice} {c.currency})
                 </option>
               ))}
@@ -215,10 +233,12 @@ export default function ProposalForm({
 
         <div className="mt-2 space-y-2">
           {lineItems.map((row) => (
-            <div key={row.tempKey} className="flex flex-wrap items-center gap-2">
+            <div key={row.tempKey} className="space-y-1.5 rounded-lg border border-card-border p-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input type="hidden" name="lineItemDescription" value={row.description} />
               <input type="hidden" name="lineItemQuantity" value={row.quantity} />
               <input type="hidden" name="lineItemUnitPrice" value={row.unitPrice} />
+              <input type="hidden" name="lineItemDetails" value={row.details} />
               <input
                 value={row.description}
                 onChange={(e) => updateLineItem(row.tempKey, { description: e.target.value })}
@@ -251,6 +271,14 @@ export default function ProposalForm({
               >
                 ✕
               </button>
+            </div>
+              <textarea
+                value={row.details}
+                onChange={(e) => updateLineItem(row.tempKey, { details: e.target.value })}
+                rows={2}
+                placeholder={lang === "fr" ? "Détails affichés sous cette ligne dans le PDF (ce qui est inclus)…" : "Details shown under this line in the PDF (what's included)…"}
+                className={`${FIELD_CLASS} mt-0 text-xs`}
+              />
             </div>
           ))}
           {lineItems.length === 0 && <p className="text-sm text-soft">{t.proposals.noLineItems}</p>}
@@ -378,6 +406,75 @@ export default function ProposalForm({
             className="text-xs font-semibold text-amo-lime hover:underline"
           >
             + {t.proposals.addScheduleItem}
+          </button>
+        </div>
+      </div>
+
+      {/* Apps & subscriptions */}
+      <div>
+        <label className={LABEL_CLASS}>{lang === "fr" ? "Applications et abonnements" : "Apps & subscriptions"}</label>
+        <p className="text-xs text-soft">
+          {lang === "fr"
+            ? "Frais payés directement aux fournisseurs (Systeme.io, hébergement, domaine…). Affichés dans la section Investissement du PDF, hors du total ci-dessus."
+            : "Fees the client pays the providers directly (Systeme.io, hosting, domain…). Shown in the PDF's Investment section, outside the total above."}
+        </p>
+        <div className="mt-2 space-y-2">
+          {subs.map((row) => (
+            <div key={row.tempKey} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="subName" value={row.name} />
+              <input type="hidden" name="subAmount" value={row.amount} />
+              <input type="hidden" name="subPeriod" value={row.period} />
+              <input type="hidden" name="subNote" value={row.note} />
+              <input
+                value={row.name}
+                list="sub-suggestions"
+                onChange={(e) => setSubs((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, name: e.target.value } : r)))}
+                placeholder={lang === "fr" ? "Application / service" : "App / service"}
+                className={`${FIELD_CLASS} mt-0 min-w-[9rem] flex-1`}
+              />
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={row.amount}
+                onChange={(e) => setSubs((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, amount: Number(e.target.value) } : r)))}
+                className={`${FIELD_CLASS} mt-0 w-28`}
+              />
+              <select
+                value={row.period}
+                onChange={(e) => setSubs((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, period: e.target.value } : r)))}
+                className={`${FIELD_CLASS} mt-0 w-32`}
+              >
+                <option value="month">{lang === "fr" ? "/ mois" : "/ month"}</option>
+                <option value="year">{lang === "fr" ? "/ an" : "/ year"}</option>
+                <option value="once">{lang === "fr" ? "une fois" : "one-time"}</option>
+              </select>
+              <input
+                value={row.note}
+                onChange={(e) => setSubs((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, note: e.target.value } : r)))}
+                placeholder={lang === "fr" ? "Note (forfait, etc.)" : "Note (plan, etc.)"}
+                className={`${FIELD_CLASS} mt-0 min-w-[8rem] flex-1`}
+              />
+              <button
+                type="button"
+                onClick={() => setSubs((rows) => rows.filter((r) => r.tempKey !== row.tempKey))}
+                className="rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <datalist id="sub-suggestions">
+            {["Systeme.io", "ClickFunnels", "GoHighLevel", "WordPress hosting", "GoDaddy hosting", "Domain name", "Make", "Zapier", "Buffer", "GetResponse", "ChatGPT / AI tools"].map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+          <button
+            type="button"
+            onClick={() => setSubs((rows) => [...rows, { tempKey: nextSubKey.current++, name: "", amount: 0, period: "month", note: "" }])}
+            className="text-xs font-semibold text-amo-lime hover:underline"
+          >
+            + {lang === "fr" ? "Ajouter un abonnement" : "Add a subscription"}
           </button>
         </div>
       </div>

@@ -4,12 +4,15 @@ import { useState, useTransition } from "react";
 import { createServicePriceListItem, updateServicePriceListItem, deleteServicePriceListItem } from "@/actions/service-price-list";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { CARD_COLORS } from "@/components/section-card";
+import { PROJECT_TYPE_ORDER } from "@/lib/project-templates";
 import SectionDialog from "../contacts/[id]/section-dialog";
 
 type ServiceItem = {
   id: string;
   name: string;
   description: string | null;
+  clientDescription: string | null;
+  projectType: string | null;
   unitPrice: number;
   currency: string;
   unit: string | null;
@@ -83,8 +86,26 @@ function ServiceDialog({ item, lang, onClose }: { item: ServiceItem | null; lang
           </label>
         </div>
         <div className="sm:col-span-2">
-          <label className={LABEL_CLASS}>{t.servicePriceList.description}</label>
-          <textarea name="description" rows={4} defaultValue={item?.description ?? ""} className={FIELD_CLASS} />
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Type de projet" : "Project type"}</label>
+          <select name="projectType" defaultValue={item?.projectType ?? ""} className={FIELD_CLASS}>
+            <option value="">{lang === "fr" ? "— Général —" : "— General —"}</option>
+            {PROJECT_TYPE_ORDER.map((tp) => (
+              <option key={tp} value={tp}>
+                {t.projectTypes[tp as keyof typeof t.projectTypes]}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-soft">
+            {lang === "fr" ? "Dans une proposition, les services du type du projet sont proposés en premier." : "In a proposal, the services for the project's type are offered first."}
+          </p>
+        </div>
+        <div className="sm:col-span-2">
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Description pour le client (affichée sous la ligne)" : "Client description (shown under the line)"}</label>
+          <textarea name="clientDescription" rows={3} defaultValue={item?.clientDescription ?? ""} className={FIELD_CLASS} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Note interne (fourchette de prix, etc.)" : "Internal note (price range, etc.)"}</label>
+          <textarea name="description" rows={2} defaultValue={item?.description ?? ""} className={FIELD_CLASS} />
         </div>
       </div>
     </SectionDialog>

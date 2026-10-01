@@ -3,18 +3,19 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { clientFacingDescription } from "@/lib/catalog-text";
 
-type LineItemRow = { tempKey: number; description: string; quantity: number; unitPrice: number };
+type LineItemRow = { tempKey: number; description: string; details: string; quantity: number; unitPrice: number };
 
 type InvoiceFormValues = {
   number?: string | null;
   currency?: string;
   dueDate?: Date | string | null;
   notes?: string | null;
-  lineItems?: { description: string; quantity: number; unitPrice: number }[];
+  lineItems?: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
 };
 
-type CatalogItem = { id: string; name: string; description: string | null; unitPrice: number; currency: string; unit: string | null };
+type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -55,7 +56,7 @@ export default function InvoiceLineItemsForm({
   const t = getDict(lang);
 
   const [lineItems, setLineItems] = useState<LineItemRow[]>(() =>
-    (defaultValues?.lineItems ?? []).map((li, tempKey) => ({ tempKey, ...li }))
+    (defaultValues?.lineItems ?? []).map((li, tempKey) => ({ tempKey, ...li, details: li.details ?? "" }))
   );
   const nextLineKey = useRef(lineItems.length);
   const [currency, setCurrency] = useState(defaultValues?.currency ?? "CAD");
@@ -65,10 +66,10 @@ export default function InvoiceLineItemsForm({
     [lineItems, taxLocation, chargeCanadianTax]
   );
 
-  function addLineItem(preset?: { description: string; unitPrice: number }) {
+  function addLineItem(preset?: { description: string; unitPrice: number; details?: string }) {
     setLineItems((rows) => [
       ...rows,
-      { tempKey: nextLineKey.current++, description: preset?.description ?? "", quantity: 1, unitPrice: preset?.unitPrice ?? 0 },
+      { tempKey: nextLineKey.current++, description: preset?.description ?? "", details: preset?.details ?? "", quantity: 1, unitPrice: preset?.unitPrice ?? 0 },
     ]);
   }
 
@@ -106,7 +107,7 @@ export default function InvoiceLineItemsForm({
               defaultValue=""
               onChange={(e) => {
                 const item = catalog.find((c) => c.id === e.target.value);
-                if (item) addLineItem({ description: item.name, unitPrice: item.unitPrice });
+                if (item) addLineItem({ description: item.name, unitPrice: item.unitPrice, details: item.clientDescription || clientFacingDescription(item.description) });
                 e.target.value = "";
               }}
               className="rounded-md border border-card-border bg-field-bg px-2 py-1 text-xs text-ink"
@@ -125,10 +126,12 @@ export default function InvoiceLineItemsForm({
 
         <div className="mt-2 space-y-2">
           {lineItems.map((row) => (
-            <div key={row.tempKey} className="flex flex-wrap items-center gap-2">
+            <div key={row.tempKey} className="space-y-1.5 rounded-lg border border-card-border p-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input type="hidden" name="lineItemDescription" value={row.description} />
               <input type="hidden" name="lineItemQuantity" value={row.quantity} />
               <input type="hidden" name="lineItemUnitPrice" value={row.unitPrice} />
+              <input type="hidden" name="lineItemDetails" value={row.details} />
               <input
                 value={row.description}
                 onChange={(e) => updateLineItem(row.tempKey, { description: e.target.value })}
@@ -161,6 +164,14 @@ export default function InvoiceLineItemsForm({
               >
                 ✕
               </button>
+            </div>
+              <textarea
+                value={row.details}
+                onChange={(e) => updateLineItem(row.tempKey, { details: e.target.value })}
+                rows={2}
+                placeholder={lang === "fr" ? "Détails sous cette ligne dans le PDF…" : "Details under this line in the PDF…"}
+                className={`${FIELD_CLASS} mt-0 text-xs`}
+              />
             </div>
           ))}
           {lineItems.length === 0 && <p className="text-sm text-soft">{t.invoices.noLineItems}</p>}

@@ -433,7 +433,7 @@ export async function updateProjectCustomFields(
     const values = readFieldValues(template, (name) => formData.getAll(name).map(String));
     await db.project.update({
       where: { id: projectId },
-      data: { customFields: Object.keys(values).length > 0 ? (values as never) : (null as never) },
+      data: { customFields: Object.keys(values).length > 0 ? (values as never) : ({} as never) },
     });
   });
 

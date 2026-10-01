@@ -12,6 +12,7 @@ import PhasesCard from "./phases-card";
 import TasksCard, { type TaskCardItem } from "./tasks-card";
 import { ProposalsCard, InvoicesCard, type ProposalRowData, type InvoiceRowData } from "./documents-cards";
 import { contactTaxLocation } from "@/lib/billing-totals";
+import SupplierCard, { type SupplierRow } from "./supplier-card";
 import InstalmentsCard, { type InstalmentRow } from "./instalments-card";
 import NewEmailButton from "../../contacts/[id]/new-email-button";
 import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
@@ -102,6 +103,7 @@ export default async function ProjectDetailPage({
           include: { loggedBy: true, updatedBy: true, participants: { include: { contact: true, user: true } } },
         },
         emailLinks: { orderBy: { messageDate: "desc" } },
+        supplierInvoices: { orderBy: { createdAt: "desc" }, omit: { fileData: true } },
         proposals: { orderBy: { createdAt: "desc" }, include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { orderBy: { order: "asc" } } } },
         invoices: { orderBy: { createdAt: "desc" }, include: { lineItems: { orderBy: { order: "asc" } }, instalment: { include: { proposal: { select: { paymentSchedule: { select: { id: true }, orderBy: { order: "asc" } } } } } } } },
       },
@@ -264,6 +266,29 @@ export default async function ProjectDetailPage({
     };
   });
 
+  const ymd = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+  const supplierRows: SupplierRow[] = project.supplierInvoices.map((c) => ({
+    id: c.id,
+    supplier: c.supplier,
+    reference: c.reference,
+    description: c.description,
+    invoiceDate: ymd(c.invoiceDate),
+    paidDate: ymd(c.paidDate),
+    currency: c.currency,
+    subtotal: c.subtotal,
+    gstAmount: c.gstAmount,
+    qstAmount: c.qstAmount,
+    hstAmount: c.hstAmount,
+    totalAmount: c.totalAmount,
+    paymentMethod: c.paymentMethod,
+    reimbursable: c.reimbursable,
+    reimbursementStatus: c.reimbursementStatus,
+    attachToProposal: c.attachToProposal,
+    notes: c.notes,
+    fileName: c.fileName,
+    hasFile: Boolean(c.fileName),
+  }));
+
   const iso = (d: Date | null) => (d ? d.toISOString() : null);
   const proposalRows: ProposalRowData[] = project.proposals.map((p) => ({
     id: p.id,
@@ -275,7 +300,8 @@ export default async function ProjectDetailPage({
     sentAt: iso(p.sentAt),
     coverLetter: p.coverLetter,
     notes: p.notes,
-    lineItems: p.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unitPrice })),
+    lineItems: p.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
+    subscriptions: (Array.isArray(p.subscriptions) ? p.subscriptions : []) as { name: string; amount: number; period: string; note: string }[],
     paymentSchedule: p.paymentSchedule.map((r) => ({ label: r.label, percentage: r.percentage, amount: r.amount, dueDate: iso(r.dueDate) })),
   }));
   const invoiceRows: InvoiceRowData[] = project.invoices.map((inv) => {
@@ -290,13 +316,26 @@ export default async function ProjectDetailPage({
       approvedAt: iso(inv.approvedAt),
       notes: inv.notes,
       instalmentLabel: inv.instalment ? `${lang === "fr" ? "Versement" : "Instalment"} ${ids.indexOf(inv.instalment.id) + 1}/${ids.length} · ${inv.instalment.label}` : null,
-      lineItems: inv.lineItems.map((li) => ({ description: li.description, quantity: li.quantity, unitPrice: li.unitPrice })),
+      lineItems: inv.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
     };
   });
+  // A new proposal starts with a cover letter drafted from the project (to be
+  // reviewed and edited), the usual 50 / 40 / 10 instalments, and the app the
+  // project is built on as a subscription to fill in.
+  const firstName = project.contact.firstName || "";
+  const descriptionLine = project.description ? project.description.trim().split("\n")[0] : "";
+  const defaultCoverLetter =
+    lang === "fr"
+      ? `Bonjour ${firstName},\n\nMerci de me confier votre projet « ${project.name} ». Cette proposition présente ce que nous allons réaliser ensemble, comment le travail sera organisé et l'investissement requis.${descriptionLine ? `\n\nEn bref : ${descriptionLine}` : ""}\n\nLe projet avance par phases claires : chaque phase commence lorsque la précédente est terminée, pour que vous sachiez toujours où nous en sommes et ce qui suit. Un premier versement lance les travaux; les versements suivants sont facturés aux grandes étapes du projet.\n\nSi vous souhaitez ajuster quoi que ce soit, je serai heureux d'en discuter. Dès que vous êtes à l'aise, il suffit d'accepter la proposition et nous démarrons.\n\nCordialement,\nAndrew Murphy\nAndrew Murphy Online`
+      : `Hi ${firstName},\n\nThank you for trusting me with "${project.name}". This proposal outlines what we will build together, how the work will be organized, and the investment involved.${descriptionLine ? `\n\nIn short: ${descriptionLine}` : ""}\n\nThe project moves forward in clear phases — each one begins once the previous one is complete — so you always know where things stand and what comes next. A first instalment starts the work, and the remaining instalments are invoiced as the project reaches its key milestones.\n\nIf you'd like to adjust anything, I'm happy to talk it through. Once you're comfortable, simply accept the proposal and we'll get started.\n\nBest regards,\nAndrew Murphy\nAndrew Murphy Online`;
+  const appAnswer = ((project.customFields ?? {}) as Record<string, string | string[]>).app;
+  const defaultSubscriptions = typeof appAnswer === "string" && appAnswer ? [{ name: appAnswer, amount: 0, period: "month", note: "" }] : [];
   // A new proposal starts with the usual 50 / 40 / 10 instalments.
   const proposalDefaults = {
     title: `${lang === "fr" ? "Proposition" : "Proposal"} — ${project.name}`,
     currency: "CAD",
+    coverLetter: defaultCoverLetter,
+    subscriptions: defaultSubscriptions,
     paymentSchedule:
       lang === "fr"
         ? [
@@ -591,6 +630,8 @@ export default async function ProjectDetailPage({
             lang={lang}
           />
 
+          <SupplierCard projectId={project.id} rows={supplierRows} lang={lang} />
+
           <TechStackCard contact={project.contact} lang={lang} />
 
           <DomainsCard contact={project.contact} lang={lang} />
@@ -718,6 +759,7 @@ export default async function ProjectDetailPage({
 
           <ProposalsCard
             projectId={project.id}
+            projectType={project.type}
             proposals={proposalRows}
             catalog={catalog}
             taxLocation={contactTaxLocation(project.contact)}

@@ -9,6 +9,8 @@ import { getDict } from "@/lib/i18n/dictionaries";
 const ServiceItemSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   description: z.string().trim().optional(),
+  clientDescription: z.string().trim().optional(),
+  projectType: z.string().trim().optional(),
   unitPrice: z.coerce.number().min(0, "Price must be 0 or more"),
   currency: z.enum(["CAD", "USD", "EUR", "GBP"]),
   unit: z.string().trim().optional(),
@@ -19,6 +21,8 @@ function readServiceItemForm(formData: FormData) {
   const raw = {
     name: String(formData.get("name") ?? "").trim(),
     description: String(formData.get("description") ?? "").trim() || undefined,
+    clientDescription: String(formData.get("clientDescription") ?? "").trim() || undefined,
+    projectType: String(formData.get("projectType") ?? "").trim() || undefined,
     unitPrice: String(formData.get("unitPrice") ?? "0"),
     currency: String(formData.get("currency") ?? "CAD"),
     unit: String(formData.get("unit") ?? "").trim() || undefined,
@@ -50,7 +54,7 @@ export async function createServicePriceListItem(
     throw error;
   }
 
-  await withScopedPrismaClient((db) => db.servicePriceListItem.create({ data }));
+  await withScopedPrismaClient((db) => db.servicePriceListItem.create({ data: { ...data, clientDescription: data.clientDescription ?? null, projectType: data.projectType ?? null } }));
   revalidatePath("/settings");
   return { success: t.servicePriceList.saved };
 }
@@ -75,7 +79,7 @@ export async function updateServicePriceListItem(
     throw error;
   }
 
-  await withScopedPrismaClient((db) => db.servicePriceListItem.update({ where: { id: itemId }, data }));
+  await withScopedPrismaClient((db) => db.servicePriceListItem.update({ where: { id: itemId }, data: { ...data, description: data.description ?? null, clientDescription: data.clientDescription ?? null, projectType: data.projectType ?? null } }));
   revalidatePath("/settings");
   return { success: t.servicePriceList.saved };
 }
