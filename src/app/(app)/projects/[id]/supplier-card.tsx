@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import Card, { CARD_COLORS } from "@/components/section-card";
 import SectionDialog from "../../contacts/[id]/section-dialog";
 import type { Lang } from "@/lib/i18n/dictionaries";
-import { saveSupplierInvoice, deleteSupplierInvoice, MAX_SUPPLIER_FILE_BYTES } from "@/actions/supplier-invoices";
+import { saveSupplierInvoice, deleteSupplierInvoice } from "@/actions/supplier-invoices";
+import { MAX_SUPPLIER_FILE_BYTES } from "@/lib/supplier-limits";
 
 export interface SupplierRow {
   id: string;

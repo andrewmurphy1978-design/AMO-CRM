@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { billPendingSupplierCosts } from "@/lib/supplier-costs";
+import { MAX_SUPPLIER_FILE_BYTES } from "@/lib/supplier-limits";
 
-export const MAX_SUPPLIER_FILE_BYTES = 4_000_000;
 const STATUSES = ["PENDING", "BILLED", "REIMBURSED", "ABSORBED"];
 
 const num = (v: FormDataEntryValue | null) => {
