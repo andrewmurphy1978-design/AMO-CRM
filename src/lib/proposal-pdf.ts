@@ -442,6 +442,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   }
 
   if (data.details.length > 0) {
+    if (doc.getPageCount() === 1) lo.newPage(); // project details start on page 2
     lo.heading(t.details);
     for (const d of data.details) {
       const lines = lo.wrap(d.value, CONTENT_W - 150, 9.5, regular);
