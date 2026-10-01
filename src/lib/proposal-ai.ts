@@ -125,14 +125,16 @@ export async function draftProposalWithAI(
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 6000,
+        max_tokens: 4096,
         messages: [{ role: "user", content: buildPrompt(input) }],
       }),
+      signal: AbortSignal.timeout(55_000),
     });
 
     if (!res.ok) {
-      console.error("proposal-ai: Anthropic API returned", res.status, await res.text());
-      return { error: "The AI request failed — check the Anthropic API key in Settings and try again." };
+      const body = await res.text();
+      console.error("proposal-ai: Anthropic API returned", res.status, body);
+      return { error: `The AI request failed (HTTP ${res.status}: ${body.slice(0, 160)}) — check the Anthropic API key in Settings and try again.` };
     }
 
     const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
@@ -167,6 +169,9 @@ export async function draftProposalWithAI(
     return { coverLetter: parsed.coverLetter?.trim() ?? "", lineItems, subscriptions };
   } catch (error) {
     console.error("proposal-ai: failed to draft proposal", error);
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      return { error: "The AI took too long to answer (over 55 s) — try again, or type a short brief to speed it up." };
+    }
     return { error: `Something went wrong drafting the proposal — try again. (${error instanceof Error ? error.message.slice(0, 120) : "unknown error"})` };
   }
 }

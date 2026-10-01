@@ -105,6 +105,7 @@ export default function ProposalForm({
   const [brief, setBrief] = useState("");
   const [aiPending, startAiTransition] = useTransition();
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiDone, setAiDone] = useState<string | null>(null);
 
   const totals = useMemo(
     () => computeBillingTotals(lineItems, taxLocation, chargeCanadianTax),
@@ -124,6 +125,7 @@ export default function ProposalForm({
 
   function handleGenerateWithAI() {
     setAiError(null);
+    setAiDone(null);
     startAiTransition(async () => {
       let result: Awaited<ReturnType<typeof draftProposalAI>>;
       try {
@@ -136,6 +138,12 @@ export default function ProposalForm({
         setAiError(result && "error" in result ? result.error : "The AI returned nothing — try again.");
         return;
       }
+      setAiError(null);
+      setAiDone(
+        lang === "fr"
+          ? `Brouillon appliqué : ${result.lineItems.length} ligne(s) — vérifiez la lettre et les lignes ci-dessous.`
+          : `Draft applied: ${result.lineItems.length} line item(s) — review the letter and lines below.`
+      );
       setCoverLetter(result.coverLetter);
       setLineItems(result.lineItems.map((li, tempKey) => ({ tempKey, ...li, details: li.details ?? "" })));
       nextLineKey.current = result.lineItems.length;
@@ -209,6 +217,7 @@ export default function ProposalForm({
             : "Leave the box empty to use the project, client and brand details. Needs the Anthropic API key (Settings)."}
         </p>
         {aiError && <p className="mt-2 text-xs text-red-600">{aiError}</p>}
+        {aiDone && <p className="mt-2 text-xs text-emerald-700">{aiDone}</p>}
       </div>
 
       <div>
