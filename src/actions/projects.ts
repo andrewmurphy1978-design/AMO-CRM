@@ -6,13 +6,16 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
+import type { PrismaClient } from "@/lib/prisma";
+import { getProjectTemplate } from "@/lib/project-template-store";
+import { buildPlan, cleanValues, readFieldValues, type FieldValues } from "@/lib/project-templates";
 
 const ProjectSchema = z.object({
   name: z.string().trim().min(1, "Project name is required"),
   contactId: z.string().min(1, "Client is required"),
   description: z.string().trim().optional(),
   status: z.enum(["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"]),
-  type: z.enum(["WEBSITE", "FUNNEL", "APP", "SOCIAL_MEDIA", "CONSULTING", "OTHER"]),
+  type: z.enum(["WEBSITE", "FUNNEL", "APP", "SOCIAL_MEDIA", "CONSULTING", "OTHER", "BLOG", "NEWSLETTER", "POST_AUTOMATION"]),
   ownerId: z.string().optional(),
   supervisorId: z.string().optional(),
   startDate: z.string().optional(),
@@ -129,6 +132,65 @@ export async function deletePhase(phaseId: string, projectId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
+interface NewProjectInput {
+  name: string;
+  type: string;
+  description?: string;
+  contactId: string;
+  status: "PLANNING" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+  ownerId: string;
+  supervisorId: string | null;
+  teamMemberIds: string[];
+  startDate?: Date;
+  dueDate?: Date;
+  userId: string;
+  userName: string;
+  template: Parameters<typeof buildPlan>[0];
+  values: FieldValues;
+}
+
+// Creates the project row, its team, an activity entry, and the phases and
+// tasks its type's template calls for given the custom-field answers.
+async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInput) {
+  const values = cleanValues(input.template, input.values);
+  const project = await db.project.create({
+    data: {
+      name: input.name,
+      contactId: input.contactId,
+      description: input.description,
+      status: input.status,
+      type: input.type as never,
+      ownerId: input.ownerId,
+      supervisorId: input.supervisorId,
+      startDate: input.startDate,
+      dueDate: input.dueDate,
+      customFields: Object.keys(values).length > 0 ? (values as never) : undefined,
+    },
+  });
+
+  if (input.teamMemberIds.length > 0) {
+    await db.projectTeamMember.createMany({ data: input.teamMemberIds.map((userId) => ({ projectId: project.id, userId })) });
+  }
+
+  const plan = buildPlan(input.template, values, input.name);
+  for (const [index, phase] of plan.phases.entries()) {
+    const created = await db.projectPhase.create({ data: { projectId: project.id, name: phase.name, order: index } });
+    if (phase.tasks.length > 0) {
+      await db.task.createMany({ data: phase.tasks.map((title) => ({ projectId: project.id, phaseId: created.id, title })) });
+    }
+  }
+
+  await db.activityLogEntry.create({
+    data: {
+      projectId: project.id,
+      contactId: input.contactId,
+      userId: input.userId,
+      message: getDict("en").actions.createdProject(input.userName, project.name),
+    },
+  });
+  return project;
+}
+
 export async function createProject(
   _prevState: { error?: string } | undefined,
   formData: FormData
@@ -148,35 +210,35 @@ export async function createProject(
   }
 
   const project = await withScopedPrismaClient(async (db) => {
-    const project = await db.project.create({
-      data: {
-        name: data.name,
-        contactId: data.contactId,
-        description: data.description,
-        status: data.status,
-        type: data.type,
-        ownerId: data.ownerId || session.user.id,
-        supervisorId: data.supervisorId || null,
-        startDate: data.startDate ? new Date(data.startDate) : undefined,
-        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-      },
+    const template = await getProjectTemplate(db, data.type);
+    const values = readFieldValues(template, (name) => formData.getAll(name).map(String));
+    const common = {
+      contactId: data.contactId,
+      status: data.status,
+      ownerId: data.ownerId || session.user.id,
+      supervisorId: data.supervisorId || null,
+      teamMemberIds: data.teamMemberIds,
+      userId: session.user.id,
+      userName: session.user.name ?? "",
+    };
+    const project = await createProjectFromTemplate(db, {
+      ...common,
+      name: data.name,
+      type: data.type,
+      description: data.description,
+      startDate: data.startDate ? new Date(data.startDate) : undefined,
+      dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      template,
+      values,
     });
 
-    if (data.teamMemberIds.length > 0) {
-      await db.projectTeamMember.createMany({
-        data: data.teamMemberIds.map((userId) => ({ projectId: project.id, userId })),
-      });
+    // "Blog", "Newsletters", "Post automation"... answered Yes: each becomes
+    // its own project for the same client.
+    const plan = buildPlan(template, values, data.name);
+    for (const spawn of plan.spawns) {
+      const spawnTemplate = await getProjectTemplate(db, spawn.type);
+      await createProjectFromTemplate(db, { ...common, name: spawn.name, type: spawn.type, template: spawnTemplate, values: {} });
     }
-
-    await db.activityLogEntry.create({
-      data: {
-        projectId: project.id,
-        contactId: data.contactId,
-        userId: session.user.id,
-        message: t.actions.createdProject(session.user.name ?? "", project.name),
-      },
-    });
-
     return project;
   });
 
@@ -332,6 +394,32 @@ export async function updatePhaseNotes(
 
   const notes = String(formData.get("notes") ?? "").trim();
   await withScopedPrismaClient((db) => db.projectPhase.updateMany({ where: { id: phaseId, projectId }, data: { notes: notes || null } }));
+
+  revalidatePath(`/projects/${projectId}`);
+  return { success: t.actions.projectUpdated };
+}
+
+// The Project Details card's dialog: just the answers to this type's custom
+// fields (phases and tasks already created are left alone).
+export async function updateProjectCustomFields(
+  projectId: string,
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const t = getDict(session.user.language === "FR" ? "fr" : "en");
+
+  await withScopedPrismaClient(async (db) => {
+    const project = await db.project.findUnique({ where: { id: projectId }, select: { type: true } });
+    if (!project) return;
+    const template = await getProjectTemplate(db, project.type);
+    const values = readFieldValues(template, (name) => formData.getAll(name).map(String));
+    await db.project.update({
+      where: { id: projectId },
+      data: { customFields: Object.keys(values).length > 0 ? (values as never) : (null as never) },
+    });
+  });
 
   revalidatePath(`/projects/${projectId}`);
   return { success: t.actions.projectUpdated };

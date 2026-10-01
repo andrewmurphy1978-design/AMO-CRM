@@ -97,9 +97,14 @@ export default async function ProjectsPage({
         lang={lang}
         location={t.dashboard.myLocation}
         actions={
-          <Link href="/projects/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
-            {t.projects.newProject}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/project-types" className="rounded-lg border border-white/40 px-3 py-2 text-sm font-medium text-amo-white hover:bg-white/10">
+              {lang === "fr" ? "Types de projet" : "Project types"}
+            </Link>
+            <Link href="/projects/new" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm">
+              {t.projects.newProject}
+            </Link>
+          </div>
         }
       />
 

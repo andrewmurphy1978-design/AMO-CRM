@@ -8,6 +8,8 @@ import { getDateLocale } from "@/lib/i18n/date-locale";
 import MultiSelect from "@/components/multi-select";
 import PhaseList, { type PhaseRowData } from "./phase-list";
 import PageHeader from "../page-header";
+import CustomFieldsInputs from "./custom-fields-inputs";
+import type { TemplateConfig } from "@/lib/project-templates";
 
 type ProjectFormValues = {
   id?: string;
@@ -34,6 +36,7 @@ export default function ProjectForm({
   title,
   hour12,
   location,
+  templates,
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -47,11 +50,15 @@ export default function ProjectForm({
   title: string;
   hour12: boolean;
   location: string;
+  // Custom fields per project type, asked for on create (new projects only).
+  templates?: Record<string, TemplateConfig>;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const t = getDict(lang);
   const router = useRouter();
 
+  const [type, setType] = useState(defaultValues?.type ?? "OTHER");
+  const typeFields = !defaultValues?.id ? (templates?.[type]?.fields ?? []) : [];
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>(
     () => defaultValues?.teamMembers?.map((tm) => tm.userId) ?? []
   );
@@ -91,6 +98,9 @@ export default function ProjectForm({
     { value: "APP", label: t.projectTypes.APP },
     { value: "SOCIAL_MEDIA", label: t.projectTypes.SOCIAL_MEDIA },
     { value: "CONSULTING", label: t.projectTypes.CONSULTING },
+    { value: "BLOG", label: t.projectTypes.BLOG },
+    { value: "NEWSLETTER", label: t.projectTypes.NEWSLETTER },
+    { value: "POST_AUTOMATION", label: t.projectTypes.POST_AUTOMATION },
     { value: "OTHER", label: t.projectTypes.OTHER },
   ];
 
@@ -167,7 +177,8 @@ export default function ProjectForm({
           <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.type}</label>
           <select
             name="type"
-            defaultValue={defaultValues?.type ?? "OTHER"}
+            value={type}
+            onChange={(e) => setType(e.target.value)}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
             {TYPES.map((ty) => (
@@ -225,6 +236,18 @@ export default function ProjectForm({
         <DateField label={t.projectForm.startDate} name="startDate" defaultValue={defaultValues?.startDate} lang={lang} />
         <DateField label={t.projectForm.dueDate} name="dueDate" defaultValue={defaultValues?.dueDate} lang={lang} />
       </div>
+
+      {typeFields.length > 0 && (
+        <div className="space-y-3 rounded-xl border border-card-border p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-soft">{t.projectTypes[type as keyof typeof t.projectTypes]}</p>
+          <p className="text-xs text-soft">
+            {lang === "fr"
+              ? "Vos réponses créent automatiquement les phases et les tâches du projet."
+              : "Your answers automatically create the project's phases and tasks."}
+          </p>
+          <CustomFieldsInputs key={type} fields={typeFields} lang={lang} />
+        </div>
+      )}
 
       {defaultValues?.id && defaultValues?.phases !== undefined && (
         <PhaseList

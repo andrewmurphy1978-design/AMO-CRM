@@ -5,6 +5,7 @@ import { getHour12 } from "@/lib/time-format";
 import ProjectForm from "../project-form";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { getAllProjectTemplates } from "@/lib/project-template-store";
 
 export default async function NewProjectPage({
   searchParams,
@@ -17,14 +18,15 @@ export default async function NewProjectPage({
   const t = getDict(lang);
 
   // One shared client — see src/lib/prisma.ts for why.
-  const { contacts, users, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { contacts, users, hour12, templates } = await withScopedPrismaClient(async (db) => {
     const contacts = await db.contact.findMany({
       orderBy: { createdAt: "desc" },
       select: { id: true, email: true, firstName: true, lastName: true },
     });
     const users = await db.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
     const hour12 = await getHour12(session, db);
-    return { contacts, users, hour12 };
+    const templates = await getAllProjectTemplates(db);
+    return { contacts, users, hour12, templates };
   });
 
   return (
@@ -41,6 +43,7 @@ export default async function NewProjectPage({
         label: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "",
       }))}
       users={users}
+      templates={templates}
     />
   );
 }

@@ -255,6 +255,9 @@ export const dictionaries = {
       SOCIAL_MEDIA: "Social media setup",
       CONSULTING: "Consulting",
       OTHER: "Other",
+      BLOG: "Blog building",
+      NEWSLETTER: "Newsletter building",
+      POST_AUTOMATION: "Post automation",
     },
     taskStatuses: {
       TODO: "To do",
@@ -1796,6 +1799,9 @@ export const dictionaries = {
       SOCIAL_MEDIA: "Configuration des médias sociaux",
       CONSULTING: "Consultation",
       OTHER: "Autre",
+      BLOG: "Création de blogue",
+      NEWSLETTER: "Création d'infolettres",
+      POST_AUTOMATION: "Automatisation des publications",
     },
     taskStatuses: {
       TODO: "À faire",

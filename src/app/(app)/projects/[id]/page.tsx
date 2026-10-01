@@ -6,13 +6,16 @@ import DeleteProjectButton from "./delete-button";
 import CalendarEventsCard from "../../calendar-events-card";
 import LinkedEmailsList from "../../linked-emails-list";
 import ProjectGeneralDialog from "./project-general-dialog";
+import ProjectDetailsDialog from "./project-details-dialog";
 import ProjectNotesDialog from "./project-notes-dialog";
 import PhasesCard from "./phases-card";
 import TasksCard, { type TaskCardItem } from "./tasks-card";
 import NewInvoiceButton from "./new-invoice-button";
 import NewEmailButton from "../../contacts/[id]/new-email-button";
 import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
-import { updateProjectGeneral, updateProjectNotes, updatePhaseNotes } from "@/actions/projects";
+import { updateProjectGeneral, updateProjectNotes, updatePhaseNotes, updateProjectCustomFields } from "@/actions/projects";
+import { getProjectTemplate } from "@/lib/project-template-store";
+import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
 import { getTwilioConfig, contactPhoneOptions } from "@/lib/twilio";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken } from "@/lib/google";
@@ -72,6 +75,7 @@ export default async function ProjectDetailPage({
     addressColors,
     defaultComposeSource,
     twilioReady,
+    template,
   } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
@@ -155,6 +159,7 @@ export default async function ProjectDetailPage({
       addressColors,
       defaultComposeSource: composePrefs?.defaultComposeSource ?? null,
       twilioReady,
+      template: project ? await getProjectTemplate(db, project.type) : null,
     };
   });
 
@@ -359,6 +364,37 @@ export default async function ProjectDetailPage({
               </div>
             )}
           </Card>
+
+          {template && template.fields.length > 0 && (
+            <Card
+              color="general"
+              title={`${t.projectTypes[project.type]} · ${lang === "fr" ? "Détails" : "Details"}`}
+              compact
+              actions={
+                <ProjectDetailsDialog
+                  action={updateProjectCustomFields.bind(null, project.id)}
+                  fields={template.fields}
+                  values={(project.customFields ?? {}) as FieldValues}
+                  title={`${t.projectTypes[project.type]} · ${lang === "fr" ? "Détails" : "Details"}`}
+                  lang={lang}
+                />
+              }
+            >
+              <div className="grid gap-4 lg:grid-cols-3">
+                {template.fields
+                  .filter((f) => isFieldVisible(f, (project.customFields ?? {}) as FieldValues))
+                  .map((f) => {
+                    const v = displayValue(((project.customFields ?? {}) as FieldValues)[f.key]);
+                    return (
+                      <div key={f.key} className={f.type === "textarea" || f.type === "multiselect" || f.type === "languages" ? "lg:col-span-3" : ""}>
+                        <p className={LABEL_CLASS}>{f.label}</p>
+                        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{v || "—"}</p>
+                      </div>
+                    );
+                  })}
+              </div>
+            </Card>
+          )}
 
           <PhasesCard
             projectId={project.id}

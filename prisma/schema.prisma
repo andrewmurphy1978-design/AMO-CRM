@@ -815,15 +815,31 @@ enum ProjectType {
   SOCIAL_MEDIA
   CONSULTING
   OTHER
+  BLOG
+  NEWSLETTER
+  POST_AUTOMATION
+}
+
+// The editable recipe for a project type: its custom fields and the phases/
+// tasks created with a new project of that type (see lib/project-templates.ts).
+// A type with no row here uses the built-in default.
+model ProjectTypeTemplate {
+  type      ProjectType @id
+  config    Json
+  updatedAt DateTime    @updatedAt
+
+  @@map("project_type_templates")
 }
 
 model Project {
-  id          String        @id @default(cuid())
-  name        String
-  description String?       @db.Text
-  notes       String?       @db.Text
-  status      ProjectStatus @default(PLANNING)
-  type        ProjectType   @default(OTHER)
+  id           String        @id @default(cuid())
+  name         String
+  description  String?       @db.Text
+  notes        String?       @db.Text
+  // Answers to the custom fields of this project's type (key -> value).
+  customFields Json?
+  status       ProjectStatus @default(PLANNING)
+  type         ProjectType   @default(OTHER)
 
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -892,7 +908,7 @@ model ProjectPhase {
   startDate     DateTime?
   dueDate       DateTime?
   description   String?       @db.Text
-  notes       String?       @db.Text
+  notes         String?       @db.Text
   createdAt     DateTime      @default(now())
 
   tasks Task[]
