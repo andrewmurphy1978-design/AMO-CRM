@@ -135,7 +135,7 @@ function FileOrLink({
 }: {
   value: string;
   onChange: (v: string) => void;
-  onPicked: (uri: string, name: string) => void;
+  onPicked: (files: { uri: string; name: string }[]) => void;
   placeholder: string;
   fr: boolean;
 }) {
@@ -144,19 +144,27 @@ function FileOrLink({
   const [busy, setBusy] = useState(false);
   const uploaded = isDataUri(value);
 
-  async function pick(file: File | undefined) {
-    if (!file) return;
+  async function pick(list: FileList | null) {
+    const files = list ? [...list] : [];
+    if (files.length === 0) return;
     setBusy(true);
     setError(null);
-    const result = await fileToDataUri(file);
+    const done: { uri: string; name: string }[] = [];
+    const problems: string[] = [];
+    for (const file of files) {
+      const result = await fileToDataUri(file);
+      if (result.uri) done.push({ uri: result.uri, name: file.name });
+      else if (result.error) problems.push(result.error);
+    }
     setBusy(false);
-    if (result.error) setError(result.error);
-    else if (result.uri) onPicked(result.uri, file.name);
+    if (problems.length > 0) setError(problems.join(" "));
+    if (done.length > 0) onPicked(done);
+    if (inputRef.current) inputRef.current.value = "";
   }
 
   return (
     <div>
-      <input ref={inputRef} type="file" accept="image/*,.svg,.pdf,.ai,.eps,.psd" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
+      <input ref={inputRef} type="file" multiple accept="image/*,.svg,.pdf,.ai,.eps,.psd" className="hidden" onChange={(e) => pick(e.target.files)} />
       <div className="flex items-center gap-1.5">
         {uploaded ? (
           <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-card-border bg-field-bg px-2 py-1">
@@ -245,7 +253,16 @@ export default function BrandDialog({
                         <FileOrLink
                           value={row.value}
                           onChange={(v) => update(index, { value: v })}
-                          onPicked={(uri, name) => update(index, { value: uri, label: row.label || name.replace(/\.[^.]+$/, "") })}
+                          onPicked={(files) =>
+                            // The first file fills this row; each extra file gets its own new row below it.
+                            setRows((all) => {
+                              const baseName = (n: string) => n.replace(/\.[^.]+$/, "");
+                              const next = all.map((r, i) => (i === index ? { ...r, value: files[0].uri, label: r.label || baseName(files[0].name) } : r));
+                              const extras = files.slice(1).map((f) => ({ category: cat.key, label: baseName(f.name), value: f.uri, note: "" }));
+                              next.splice(index + 1, 0, ...extras);
+                              return next;
+                            })
+                          }
                           placeholder={fr ? cat.valueHint.fr : cat.valueHint.en}
                           fr={fr}
                         />
