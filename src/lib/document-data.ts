@@ -40,7 +40,11 @@ function clientBlock(c: {
   billingEmail: string | null;
 }) {
   const useBilling = Boolean(c.billingAddress || c.billingCity);
-  const addr = (useBilling ? [c.billingAddress, c.billingCity, c.billingState, c.billingZip, c.billingCountry] : [c.address, c.city, c.state, c.zip, c.country]).filter(Boolean).join(", ");
+  const [street, city, state, zip, country] = useBilling
+    ? [c.billingAddress, c.billingCity, c.billingState, c.billingZip, c.billingCountry]
+    : [c.address, c.city, c.state, c.zip, c.country];
+  // Street on the first line, "City Province Postal code" on the second, country third.
+  const addr = [street, [city, state, zip].filter(Boolean).join(" "), country].filter(Boolean).join("\n");
   return {
     name: c.billingContactName || [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || "",
     company: c.company,

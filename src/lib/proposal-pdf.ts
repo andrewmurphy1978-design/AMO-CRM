@@ -414,7 +414,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     });
     return y;
   };
-  const y1 = block(t.preparedFor, [data.client.name, data.client.company ?? "", data.client.email ?? "", data.client.phone ?? "", data.client.address ?? ""], MX);
+  const y1 = block(t.preparedFor, [data.client.name, data.client.company ?? "", data.client.email ?? "", data.client.phone ?? "", ...(data.client.address ?? "").split("\n")], MX);
   const y2 = block(t.preparedBy, [data.company.name, data.company.website, data.company.email ?? ""], MX + colW + 16);
   lo.y = Math.min(y1, y2) - 6;
 
@@ -704,7 +704,7 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
     });
     return y;
   };
-  const y1 = block(t.billTo, [data.client.name, data.client.company ?? "", data.client.email ?? "", data.client.address ?? ""], MX);
+  const y1 = block(t.billTo, [data.client.name, data.client.company ?? "", data.client.email ?? "", ...(data.client.address ?? "").split("\n")], MX);
   const y2 = block(t.from, [data.company.name, data.company.website, data.company.email ?? ""], MX + colW + 16);
   lo.y = Math.min(y1, y2) - 8;
 
