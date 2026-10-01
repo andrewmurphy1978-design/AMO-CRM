@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { BRAND_CATEGORIES, isDataUri } from "@/lib/brand";
+import { CREDENTIAL_LOGIN_METHODS } from "@/lib/contact-form-fields";
 import { displayValue, defaultTemplate, type FieldValues } from "@/lib/project-templates";
 import { getProjectTemplate } from "@/lib/project-template-store";
 
@@ -35,6 +36,7 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
       voipAccounts: { orderBy: { order: "asc" } },
       techStackItems: { orderBy: { order: "asc" } },
       domains: { orderBy: { order: "asc" } },
+      credentials: { orderBy: { createdAt: "asc" }, select: { label: true, url: true, loginMethod: true } },
       brandItems: { orderBy: [{ category: "asc" }, { order: "asc" }] },
       contactNotes: { orderBy: { createdAt: "desc" } },
       relationsFrom: { include: { relatedContact: { select: { firstName: true, lastName: true, company: true, email: true } } } },
@@ -166,6 +168,20 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
       : "_No domains recorded._"
   );
 
+  // The apps/sites the contact has accounts with — names, addresses and how
+  // they sign in only. User IDs, passwords and notes are never exported.
+  tech += section(
+    "Apps & accounts used (no user IDs or passwords)",
+    c.credentials.length
+      ? c.credentials
+          .map((a) => {
+            const method = a.loginMethod && a.loginMethod !== "password" ? CREDENTIAL_LOGIN_METHODS.find((m) => m.value === a.loginMethod)?.label ?? a.loginMethod : null;
+            return `- **${a.label}**${a.url ? ` — ${a.url}` : ""}${method ? ` (signs in with ${method})` : ""}`;
+          })
+          .join("\n")
+      : "_None recorded._"
+  );
+
   // ---- 05 projects
   let projects = `# ${fullName} — Projects\n\n`;
   if (c.projects.length === 0) projects += "_No projects yet._\n";
@@ -222,11 +238,11 @@ Generated ${new Date().toISOString().slice(0, 10)} from the AMO CRM. Give an AI 
 | 01-profile.md | Identity, company, contact info, addresses, billing, relations |
 | 02-ai-context.md | Background written for AI, plus notes |
 | 03-brand.md | Logos, colours, fonts, voice, photos, components, icons, graphics, charts |
-| 04-tech-stack-and-domains.md | Websites, hosting, apps, domains |
+| 04-tech-stack-and-domains.md | Websites, hosting, apps, domains, and the apps/accounts used (no logins) |
 | 05-projects.md | Projects with custom answers, phases and tasks |
 | 06-communications.md | Recent calls, texts, meetings and linked email subjects |
 
-Login credentials are never exported. Uploaded image files are listed by name only.
+User IDs and passwords are never exported (the apps themselves are listed in 04). Uploaded image files are listed by name only.
 `;
 
   return {
