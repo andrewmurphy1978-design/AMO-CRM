@@ -125,9 +125,15 @@ export default function ProposalForm({
   function handleGenerateWithAI() {
     setAiError(null);
     startAiTransition(async () => {
-      const result = await draftProposalAI(projectId, brief);
-      if ("error" in result) {
-        setAiError(result.error);
+      let result: Awaited<ReturnType<typeof draftProposalAI>>;
+      try {
+        result = await draftProposalAI(projectId, brief);
+      } catch {
+        setAiError("The AI request didn't come back (it may have timed out) — try again.");
+        return;
+      }
+      if (!result || "error" in result) {
+        setAiError(result && "error" in result ? result.error : "The AI returned nothing — try again.");
         return;
       }
       setCoverLetter(result.coverLetter);

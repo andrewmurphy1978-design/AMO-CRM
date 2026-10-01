@@ -374,7 +374,8 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  return withScopedPrismaClient(async (db) => {
+  try {
+  return await withScopedPrismaClient(async (db) => {
     const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { contact: true } });
     const servicesCatalog = await db.servicePriceListItem.findMany({ where: { active: true }, orderBy: { name: "asc" } });
     const clientLabel =
@@ -419,6 +420,10 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
       language,
     });
   });
+  } catch (error) {
+    console.error("draftProposalAI failed", error);
+    return { error: `Couldn't prepare the AI draft. (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"})` };
+  }
 }
 
 // ---- internal approval, then send
