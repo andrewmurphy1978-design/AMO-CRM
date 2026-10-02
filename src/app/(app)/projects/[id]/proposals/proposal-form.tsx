@@ -130,8 +130,15 @@ export default function ProposalForm({
       let result: Awaited<ReturnType<typeof draftProposalAI>>;
       try {
         result = await draftProposalAI(projectId, brief);
-      } catch {
-        setAiError("The AI request didn't come back (it may have timed out) — try again.");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "";
+        setAiError(
+          /server action/i.test(msg)
+            ? lang === "fr"
+              ? "La page n'est plus à jour (nouvelle version déployée) — rechargez-la (Ctrl+Maj+R) et réessayez."
+              : "This page is out of date (a new version was deployed) — reload it (Ctrl+Shift+R) and try again."
+            : `The AI request didn't come back (it may have timed out) — try again.${msg ? ` (${msg.slice(0, 120)})` : ""}`
+        );
         return;
       }
       if (!result || "error" in result) {
