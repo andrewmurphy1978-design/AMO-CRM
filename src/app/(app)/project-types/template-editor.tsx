@@ -34,6 +34,23 @@ const OPS: { value: Cond["op"]; label: string }[] = [
   { value: "includes", label: "includes" },
 ];
 
+// Moves the item at `from` to position `to` (drag and drop).
+function moveTo<T>(list: T[], from: number, to: number): T[] {
+  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
 function move<T>(list: T[], i: number, dir: -1 | 1): T[] {
   const j = i + dir;
   if (j < 0 || j >= list.length) return list;
@@ -86,6 +103,10 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
   const [auto, setAuto] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  // Drag and drop of field cards: the card is only draggable while its handle is held.
+  const [armed, setArmed] = useState<number | null>(null);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
 
   const { fields, phases } = config;
   const setFields = (f: FieldTpl[]) => setConfig((c) => ({ ...c, fields: f }));
@@ -175,6 +196,43 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
 
   const multiFields = fields.filter(isMulti);
 
+  const handle = (i: number) => (
+    <span
+      title="Drag to move"
+      onMouseDown={() => setArmed(i)}
+      onMouseUp={() => setArmed(null)}
+      className="cursor-grab select-none text-sm leading-none text-soft hover:text-ink"
+      aria-hidden
+    >
+      ⠿
+    </span>
+  );
+  const dragProps = (i: number) => ({
+    draggable: armed === i,
+    onDragStart: (e: React.DragEvent) => {
+      setDragFrom(i);
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(i));
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (dragFrom === null) return;
+      e.preventDefault();
+      if (dragOver !== i) setDragOver(i);
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      if (dragFrom !== null) setFields(moveTo(fields, dragFrom, i));
+      setDragFrom(null);
+      setDragOver(null);
+      setArmed(null);
+    },
+    onDragEnd: () => {
+      setDragFrom(null);
+      setDragOver(null);
+      setArmed(null);
+    },
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -218,8 +276,10 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
         <div className="mt-3 grid items-start gap-3 lg:grid-cols-3">
           {fields.map((f, i) =>
             f.type === "spacer" ? (
-              <div key={i} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-card-border p-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-soft">Free space (empty cell)</span>
+              <div key={i} {...dragProps(i)} className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border border-dashed p-3 ${dragOver === i && dragFrom !== i ? "border-emerald-600 bg-emerald-50/50" : "border-card-border"} ${dragFrom === i ? "opacity-50" : ""}`}>
+                <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-soft">
+                  {handle(i)}Free space (empty cell)
+                </span>
                 <div className="flex items-center gap-1">
                   <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, -1))} disabled={i === 0}>
                     ↑
@@ -227,37 +287,39 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
                   <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, 1))} disabled={i === fields.length - 1}>
                     ↓
                   </button>
-                  <button type="button" className={`${SMALL_BTN} text-red-600`} onClick={() => setFields(fields.filter((_, j) => j !== i))}>
-                    Delete
+                  <button type="button" title="Delete" aria-label="Delete" className={`${SMALL_BTN} text-red-600`} onClick={() => setFields(fields.filter((_, j) => j !== i))}>
+                    <TrashIcon />
                   </button>
                 </div>
               </div>
             ) : (
-            <div key={i} className="min-w-0 rounded-xl border border-card-border p-3">
+            <div key={i} {...dragProps(i)} className={`min-w-0 rounded-xl border p-3 ${dragOver === i && dragFrom !== i ? "border-emerald-600 bg-emerald-50/50" : "border-card-border"} ${dragFrom === i ? "opacity-50" : ""}`}>
               <div className="grid gap-2">
                 <div>
-                  <label className={LABEL}>Label</label>
+                  <label className={`${LABEL} flex items-center gap-2`}>
+                    {handle(i)}Label
+                  </label>
                   <input value={f.label} onChange={(e) => relabel(i, e.target.value)} className={INPUT} />
                 </div>
-                <div>
-                  <label className={LABEL}>Type</label>
-                  <select value={f.type} onChange={(e) => updateField(i, { type: e.target.value as FieldType })} className={INPUT}>
-                    {FIELD_TYPES.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-wrap items-end gap-1">
-                  <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, -1))} disabled={i === 0}>
+                <div className="flex items-end gap-1">
+                  <div className="min-w-0 flex-1">
+                    <label className={LABEL}>Type</label>
+                    <select value={f.type} onChange={(e) => updateField(i, { type: e.target.value as FieldType })} className={INPUT}>
+                      {FIELD_TYPES.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button type="button" className={`${SMALL_BTN} py-2`} onClick={() => setFields(move(fields, i, -1))} disabled={i === 0}>
                     ↑
                   </button>
-                  <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, 1))} disabled={i === fields.length - 1}>
+                  <button type="button" className={`${SMALL_BTN} py-2`} onClick={() => setFields(move(fields, i, 1))} disabled={i === fields.length - 1}>
                     ↓
                   </button>
-                  <button type="button" className={`${SMALL_BTN} text-red-600`} onClick={() => setFields(fields.filter((_, j) => j !== i))}>
-                    Delete
+                  <button type="button" title="Delete" aria-label="Delete" className={`${SMALL_BTN} py-2 text-red-600`} onClick={() => setFields(fields.filter((_, j) => j !== i))}>
+                    <TrashIcon />
                   </button>
                 </div>
               </div>
