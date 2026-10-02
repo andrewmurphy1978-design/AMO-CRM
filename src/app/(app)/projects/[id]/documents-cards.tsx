@@ -32,6 +32,7 @@ export interface ProposalRowData {
   status: string;
   currency: string;
   totalAmount: number;
+  totalCad?: number | null;
   approvedAt: string | null;
   signedFileName?: string | null;
   sentAt: string | null;
@@ -48,6 +49,7 @@ export interface InvoiceRowData {
   status: string;
   currency: string;
   totalAmount: number;
+  totalCad?: number | null;
   dueDate: string | null;
   approvedAt: string | null;
   notes: string | null;
@@ -64,6 +66,7 @@ export interface EmailingProps {
 
 const PILL: Record<string, string> = {
   DRAFT: "bg-black/5 text-soft",
+  APPROVED: "bg-amber-50 text-amber-700",
   SENT: "bg-sky-50 text-sky-700",
   ACCEPTED: "bg-emerald-50 text-emerald-700",
   DECLINED: "bg-red-50 text-red-600",
@@ -228,7 +231,10 @@ export function ProposalsCard({
                 ) : (
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{p.title}</span>
                 )}
-                <span className="shrink-0 text-xs text-soft">{money(p.totalAmount, p.currency)}</span>
+                <span className="shrink-0 text-right text-xs text-soft">
+                  {money(p.totalAmount, p.currency)}
+                  {p.totalCad != null && <span className="block text-[10px]">≈ {money(p.totalCad, "CAD")}</span>}
+                </span>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[p.status] ?? PILL.DRAFT}`}>{statusLabels[p.status] ?? p.status}</span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -240,12 +246,12 @@ export function ProposalsCard({
                     {fr ? "Modifier" : "Edit"}
                   </button>
                 )}
-                {p.status === "DRAFT" && !p.approvedAt && (
+                {p.status === "DRAFT" && (
                   <button type="button" disabled={pending} onClick={() => run(() => approveProposal(p.id, projectId))} className="rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
                     {fr ? "Approuver" : "Approve"}
                   </button>
                 )}
-                {p.status === "DRAFT" && p.approvedAt && (
+                {p.status === "APPROVED" && (
                   <>
                     <span className="text-xs font-medium text-emerald-700">✓ {fr ? "Approuvée" : "Approved"}</span>
                     <SendDocumentButton
@@ -260,7 +266,7 @@ export function ProposalsCard({
                     </button>
                   </>
                 )}
-                {p.status !== "DRAFT" && <SignedCopy projectId={projectId} proposalId={p.id} fileName={p.signedFileName} fr={fr} />}
+                {p.status !== "DRAFT" && p.status !== "APPROVED" && <SignedCopy projectId={projectId} proposalId={p.id} fileName={p.signedFileName} fr={fr} />}
                 {p.status === "SENT" && (
                   <>
                     <button type="button" disabled={pending} onClick={() => run(() => updateProposalStatus(p.id, projectId, "ACCEPTED"))} className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
@@ -429,7 +435,10 @@ export function InvoicesCard({
                     {inv.instalmentLabel && <span className="block truncate text-xs text-soft">{inv.instalmentLabel}</span>}
                   </span>
                 )}
-                <span className="shrink-0 text-xs text-soft">{money(inv.totalAmount, inv.currency)}</span>
+                <span className="shrink-0 text-right text-xs text-soft">
+                  {money(inv.totalAmount, inv.currency)}
+                  {inv.totalCad != null && <span className="block text-[10px]">≈ {money(inv.totalCad, "CAD")}</span>}
+                </span>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[inv.status] ?? PILL.DRAFT}`}>{statusLabels[inv.status] ?? inv.status}</span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">

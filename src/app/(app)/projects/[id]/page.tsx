@@ -31,6 +31,7 @@ import { loadTypeInfo } from "@/lib/project-type-store";
 
 import { frText, localizeText, localizeValue } from "@/lib/project-i18n";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
+import { getExchangeRates, toCad, type Currency } from "@/lib/exchange-rates";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader, { HeaderBreadcrumb } from "../../page-header";
@@ -88,6 +89,7 @@ export default async function ProjectDetailPage({
     defaultComposeSource,
     twilioReady,
     template,
+    rates,
     catalog,
     billingChargeTax,
   } = await withScopedPrismaClient(async (db) => {
@@ -159,6 +161,8 @@ export default async function ProjectDetailPage({
       }),
     ]);
 
+    // CAD equivalents for proposals / invoices issued in another currency.
+    const rates = await getExchangeRates(db).catch(() => null);
     const projectTemplate = project ? await getProjectTemplate(db, project.type) : null;
     // Apps & subscriptions start from the apps chosen in the Project details: fill
     // them in for a project that has none yet (e.g. created before this card existed).
@@ -193,6 +197,7 @@ export default async function ProjectDetailPage({
       catalog,
       billingChargeTax,
       template: projectTemplate,
+      rates,
     };
   });
 
@@ -319,12 +324,15 @@ export default async function ProjectDetailPage({
   }));
 
   const iso = (d: Date | null) => (d ? d.toISOString() : null);
+  const cadOf = (amount: number, currency: string): number | null =>
+    rates && currency !== "CAD" && currency in rates ? toCad(amount, currency as Currency, rates) : null;
   const proposalRows: ProposalRowData[] = project.proposals.map((p) => ({
     id: p.id,
     title: p.title,
     status: p.status,
     currency: p.currency,
     totalAmount: p.totalAmount,
+    totalCad: cadOf(p.totalAmount, p.currency),
     approvedAt: iso(p.approvedAt),
     signedFileName: p.signedFileName,
     sentAt: iso(p.sentAt),
@@ -342,6 +350,7 @@ export default async function ProjectDetailPage({
       status: inv.status,
       currency: inv.currency,
       totalAmount: inv.totalAmount || inv.amount,
+      totalCad: cadOf(inv.totalAmount || inv.amount, inv.currency),
       dueDate: iso(inv.dueDate),
       approvedAt: iso(inv.approvedAt),
       notes: inv.notes,

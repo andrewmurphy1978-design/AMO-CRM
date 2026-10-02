@@ -433,7 +433,7 @@ export async function updateFullProposal(
     revalidateBoth(data.projectId, project.contactId);
   });
 
-  if (locked) return { error: "This proposal has been sent and can no longer be edited." };
+  if (locked) return { error: "This proposal is approved or sent — return it to draft to edit it." };
   revalidatePath(`/projects/${data.projectId}/proposals/${proposalId}`);
   return { success: t.actions.proposalUpdated };
 }
@@ -505,7 +505,7 @@ export async function approveProposal(proposalId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
-    await db.proposal.update({ where: { id: proposalId }, data: { approvedAt: new Date() } });
+    await db.proposal.update({ where: { id: proposalId }, data: { status: "APPROVED", approvedAt: new Date() } });
     await setProposalTask(db, projectId, PREPARE_TASK, true);
     return contactIdForProject(db, projectId);
   });
@@ -518,8 +518,8 @@ export async function unapproveProposal(proposalId: string, projectId: string) {
   const contactId = await withScopedPrismaClient(async (db) => {
     // Only a proposal that hasn't gone out can go back to draft.
     const p = await db.proposal.findUnique({ where: { id: proposalId }, select: { status: true } });
-    if (p?.status && p.status !== "DRAFT") return contactIdForProject(db, projectId);
-    await db.proposal.update({ where: { id: proposalId }, data: { approvedAt: null } });
+    if (p?.status && p.status !== "DRAFT" && p.status !== "APPROVED") return contactIdForProject(db, projectId);
+    await db.proposal.update({ where: { id: proposalId }, data: { status: "DRAFT", approvedAt: null } });
     await setProposalTask(db, projectId, PREPARE_TASK, false);
     return contactIdForProject(db, projectId);
   });
@@ -547,7 +547,7 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
     });
     if (!proposal || proposal.projectId !== projectId) return { error: "Proposal not found." };
     if (!proposal.approvedAt) return { error: "Approve the proposal before sending it." };
-    if (proposal.status !== "DRAFT") return { error: "This proposal has already been sent." };
+    if (proposal.status !== "DRAFT" && proposal.status !== "APPROVED") return { error: "This proposal has already been sent." };
 
     const pdfData = await loadProposalPdfData(db, projectId, proposalId);
     if (!pdfData) return { error: "Couldn't build the proposal PDF." };

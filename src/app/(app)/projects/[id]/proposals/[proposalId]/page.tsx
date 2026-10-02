@@ -9,6 +9,7 @@ import ConvertToInvoiceButton from "./convert-to-invoice-button";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-black/5 text-soft",
+  APPROVED: "bg-amber-50 text-amber-700",
   SENT: "bg-sky-50 text-sky-700",
   ACCEPTED: "bg-[#0fa38a]/10 text-[#0fa38a]",
   DECLINED: "bg-red-50 text-red-600",

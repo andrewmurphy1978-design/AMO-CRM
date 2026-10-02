@@ -1051,6 +1051,7 @@ model ProjectPhase {
 
 enum ProposalStatus {
   DRAFT
+  APPROVED
   SENT
   ACCEPTED
   DECLINED
