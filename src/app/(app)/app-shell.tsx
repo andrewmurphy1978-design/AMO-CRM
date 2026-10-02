@@ -103,7 +103,7 @@ export default function AppShell({
       <div className="relative flex min-w-0 flex-1 flex-col pl-14 sm:pl-0">
         <div className="amo-bg-image amo-bg-image--app" />
         <div className="amo-bg-overlay amo-bg-overlay--app" />
-        <main className="relative z-10 flex-1 p-4 sm:p-8">{children}</main>
+        <main className="relative z-10 flex-1 px-2 pb-4 pt-2 sm:p-8">{children}</main>
       </div>
     </div>
   );

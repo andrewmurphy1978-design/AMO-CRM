@@ -536,7 +536,7 @@ export default async function ContactDetailPage({
     // screen — cancelled (-mx-4) and replaced with a tighter 8px (px-2),
     // same convention as the Dashboard/Marketing pages. Desktop (sm+) is
     // unaffected (mx-0/px-0 leaves main's own sm:p-8 as the only inset).
-    <div className="-mx-4 space-y-2 px-2 sm:mx-0 sm:space-y-6 sm:px-0">
+    <div className="space-y-2 sm:space-y-6">
       <PageHeader
         title={
           <span className="flex min-w-0 items-center gap-2">

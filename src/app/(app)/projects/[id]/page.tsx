@@ -403,7 +403,7 @@ export default async function ProjectDetailPage({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       <PageHeader
         title={
           <span className="flex min-w-0 items-center gap-2">
@@ -492,8 +492,8 @@ export default async function ProjectDetailPage({
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-3 sm:gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-3 sm:space-y-6 lg:col-span-2">
           <Card
             color="general"
             title={t.contactForm.cardGeneralInfo}
@@ -681,7 +681,7 @@ export default async function ProjectDetailPage({
           <DomainsCard contact={project.contact} lang={lang} />
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-3 sm:space-y-6">
           {(project.parentProject || project.linkedProjects.length > 0) && (
             <Card color="general" title={lang === "fr" ? "Projets liés" : "Linked projects"} compact>
               <ul className="space-y-1.5 text-sm">

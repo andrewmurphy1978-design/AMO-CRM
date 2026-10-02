@@ -84,7 +84,7 @@ export default function PageHeader({
 }) {
   if (logoUrl) {
     return (
-      <header className="@container sticky top-0 z-30 -mx-4 -mt-4 flex items-start justify-between gap-2 bg-amo-green px-4 py-3 sm:items-center sm:gap-4 sm:-mx-8 sm:-mt-8 sm:px-8">
+      <header className="@container sticky top-0 z-30 -mx-2 -mt-2 flex items-start justify-between gap-2 bg-amo-green px-3 py-2 sm:items-center sm:gap-4 sm:-mx-8 sm:-mt-8 sm:px-8">
         <div className="flex shrink-0 items-start gap-1.5 sm:items-center sm:gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={logoUrl} alt="Andrew Murphy Online" className="hidden h-auto w-36 shrink-0 object-contain sm:block sm:w-56" />
@@ -117,7 +117,7 @@ export default function PageHeader({
   }
 
   return (
-    <header className="sticky top-0 z-30 -mx-4 -mt-4 flex items-center gap-4 bg-amo-green px-4 py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
+    <header className="sticky top-0 z-30 -mx-2 -mt-2 flex items-center gap-4 bg-amo-green px-3 py-2 sm:py-3 sm:-mx-8 sm:-mt-8 sm:px-8">
       <h1 className="min-w-0 flex-1 truncate font-display text-xl font-semibold text-amo-white sm:text-2xl">{title}</h1>
       {actions &&
         (centerActions ? (

@@ -447,7 +447,7 @@ export default function CalendarShell({
           whole page instead of scrolling in place, leaving the widget's
           real content stranded above a tall blank gap once the page
           scrolled past it. */}
-      <div className="-mx-4 -mb-4 min-h-0 flex-1 sm:-mx-8 sm:-mb-8">
+      <div className="-mx-2 -mb-4 min-h-0 flex-1 sm:-mx-8 sm:-mb-8">
         <div className="h-full p-2">
           {view === "table" ? (
             <TableView

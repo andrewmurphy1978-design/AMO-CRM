@@ -57,7 +57,7 @@ export default async function CalendarPage() {
         }
       />
       {googleConnection?.email ? (
-        <div className="-mx-4 -mb-4 mt-4 flex-1 sm:-mx-8 sm:-mb-8">
+        <div className="-mx-2 -mb-4 mt-4 flex-1 sm:-mx-8 sm:-mb-8">
           <iframe
             src={embedUrl(googleConnection.email)}
             className="h-full w-full border-0"

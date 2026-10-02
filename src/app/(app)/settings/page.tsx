@@ -542,7 +542,7 @@ export default async function SettingsPage({
     // Marketing/Contact Info pages, plus a tighter vertical rhythm — this
     // page stacks many more cards than most, so the usual sm:space-y-8 felt
     // even longer here.
-    <div className="-mx-4 space-y-2 px-2 sm:mx-0 sm:space-y-6 sm:px-0">
+    <div className="space-y-2 sm:space-y-6">
       <PageHeader title={t.settings.title} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
       <p className="text-sm text-soft">{t.settings.subtitle}</p>
       <SettingsTabs tabs={tabs} />
