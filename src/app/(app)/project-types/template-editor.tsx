@@ -194,10 +194,10 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
       <section className="rounded-2xl border border-card-border bg-card-bg p-4 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-ink">Custom fields</h2>
         <p className="mt-1 text-xs text-soft">Asked when a {typeLabels[type]} project is created. Use a field&apos;s name in task titles as {"{field_name}"} (shown under each field).</p>
-        <div className="mt-3 space-y-3">
+        <div className="mt-3 grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {fields.map((f, i) => (
-            <div key={f.key + i} className="rounded-xl border border-card-border p-3">
-              <div className="grid gap-2 sm:grid-cols-[1fr_180px_auto]">
+            <div key={f.key + i} className="min-w-0 rounded-xl border border-card-border p-3">
+              <div className="grid gap-2">
                 <div>
                   <label className={LABEL}>Label</label>
                   <input value={f.label} onChange={(e) => relabel(i, e.target.value)} className={INPUT} />
@@ -212,7 +212,7 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
                     ))}
                   </select>
                 </div>
-                <div className="flex items-end gap-1">
+                <div className="flex flex-wrap items-end gap-1">
                   <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, -1))} disabled={i === 0}>
                     ↑
                   </button>
