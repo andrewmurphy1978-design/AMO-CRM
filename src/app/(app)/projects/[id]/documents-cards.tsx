@@ -450,12 +450,12 @@ export function InvoicesCard({
                     {fr ? "Modifier" : "Edit"}
                   </button>
                 )}
-                {inv.status === "DRAFT" && !inv.approvedAt && (
+                {inv.status === "DRAFT" && (
                   <button type="button" disabled={pending} onClick={() => run(() => approveInvoice(inv.id, projectId))} className="rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
                     {fr ? "Approuver" : "Approve"}
                   </button>
                 )}
-                {inv.status === "DRAFT" && inv.approvedAt && (
+                {inv.status === "APPROVED" && (
                   <>
                     <span className="text-xs font-medium text-emerald-700">✓ {fr ? "Approuvée" : "Approved"}</span>
                     <SendDocumentButton
@@ -511,7 +511,7 @@ export function InvoicesCard({
             hideSubmit
             onPendingChange={setSavingInvoice}
             action={updateInvoiceLineItems.bind(null, editing.id)}
-            defaultValues={{ number: editing.number, currency: editing.currency, dueDate: editing.dueDate, notes: editing.notes, lineItems: editing.lineItems }}
+            defaultValues={{ number: editing.number, status: editing.status, currency: editing.currency, dueDate: editing.dueDate, notes: editing.notes, lineItems: editing.lineItems }}
             catalog={catalog}
             taxLocation={taxLocation}
             chargeCanadianTax={chargeCanadianTax}

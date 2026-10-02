@@ -113,7 +113,7 @@ export async function updateInvoiceStatus(invoiceId: string, projectId: string, 
     await db.invoice.update({
       where: { id: invoiceId },
       data: {
-        status: status as "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELED",
+        status: status as "DRAFT" | "APPROVED" | "SENT" | "PAID" | "OVERDUE" | "CANCELED",
         ...(status === "SENT" ? { sentAt: new Date() } : {}),
         ...(status === "PAID" ? { paidAt: new Date() } : {}),
       },
@@ -237,6 +237,7 @@ const InvoiceLineItemsSchema = z.object({
   currency: z.enum(["CAD", "USD", "EUR", "GBP"]),
   dueDate: z.string().optional(),
   notes: z.string().trim().optional(),
+  status: z.enum(["DRAFT", "APPROVED", "SENT", "OVERDUE", "PAID"]).default("DRAFT"),
 });
 
 export async function updateInvoiceLineItems(
@@ -255,6 +256,7 @@ export async function updateInvoiceLineItems(
       currency: String(formData.get("currency") ?? "CAD"),
       dueDate: String(formData.get("dueDate") ?? "") || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
+      status: String(formData.get("status") ?? "DRAFT"),
     });
   } catch (error) {
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? t.actions.invalidInput };
@@ -285,6 +287,10 @@ export async function updateInvoiceLineItems(
         currency: data.currency,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         notes: data.notes,
+        status: data.status,
+        approvedAt: data.status === "DRAFT" ? null : invoice.approvedAt ?? new Date(),
+        sentAt: data.status === "SENT" || data.status === "OVERDUE" || data.status === "PAID" ? invoice.sentAt ?? new Date() : null,
+        paidAt: data.status === "PAID" ? invoice.paidAt ?? new Date() : null,
         subtotal: totals.subtotal,
         gstAmount: totals.gst,
         qstAmount: totals.qst,
@@ -302,6 +308,7 @@ export async function updateInvoiceLineItems(
       });
     }
 
+    if (data.status === "PAID") await syncProjectLifecycle(db, invoice.projectId);
     revalidateBoth(invoice.projectId, invoice.project.contactId);
     return invoice.projectId;
   });
@@ -317,7 +324,7 @@ export async function approveInvoice(invoiceId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
-    await db.invoice.update({ where: { id: invoiceId }, data: { approvedAt: new Date() } });
+    await db.invoice.update({ where: { id: invoiceId }, data: { status: "APPROVED", approvedAt: new Date() } });
     return contactIdForProject(db, projectId);
   });
   revalidateBoth(projectId, contactId);
@@ -328,8 +335,8 @@ export async function unapproveInvoice(invoiceId: string, projectId: string) {
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
     const inv = await db.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
-    if (inv && inv.status !== "DRAFT") return contactIdForProject(db, projectId);
-    await db.invoice.update({ where: { id: invoiceId }, data: { approvedAt: null } });
+    if (inv && inv.status !== "DRAFT" && inv.status !== "APPROVED") return contactIdForProject(db, projectId);
+    await db.invoice.update({ where: { id: invoiceId }, data: { status: "DRAFT", approvedAt: null } });
     return contactIdForProject(db, projectId);
   });
   revalidateBoth(projectId, contactId);
@@ -342,7 +349,7 @@ export async function invoiceSendInfo(invoiceId: string, projectId: string): Pro
     const invoice = await db.invoice.findUnique({ where: { id: invoiceId }, select: { projectId: true, approvedAt: true, status: true } });
     if (!invoice || invoice.projectId !== projectId) return { error: "Invoice not found." };
     if (!invoice.approvedAt) return { error: "Approve the invoice before sending it." };
-    if (invoice.status !== "DRAFT") return { error: "This invoice has already been sent." };
+    if (invoice.status !== "DRAFT" && invoice.status !== "APPROVED") return { error: "This invoice has already been sent." };
     return buildInvoiceEmail(db, invoiceId, projectId);
   });
 }

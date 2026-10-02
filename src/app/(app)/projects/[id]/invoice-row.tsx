@@ -6,6 +6,7 @@ import { updateInvoiceStatus, deleteInvoice } from "@/actions/invoices";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 const STATUS_COLORS: Record<string, string> = {
+  APPROVED: "bg-amber-50 text-amber-700",
   DRAFT: "bg-black/5 text-soft",
   SENT: "bg-sky-50 text-sky-700",
   PAID: "bg-[#0fa38a]/10 text-[#0fa38a]",

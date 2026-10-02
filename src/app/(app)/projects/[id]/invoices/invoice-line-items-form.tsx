@@ -9,6 +9,7 @@ type LineItemRow = { tempKey: number; description: string; details: string; quan
 
 type InvoiceFormValues = {
   number?: string | null;
+  status?: string;
   currency?: string;
   dueDate?: Date | string | null;
   notes?: string | null;
@@ -70,6 +71,7 @@ export default function InvoiceLineItemsForm({
   );
   const nextLineKey = useRef(lineItems.length);
   const [currency, setCurrency] = useState(defaultValues?.currency ?? "CAD");
+  const STATUS_OPTIONS = ["DRAFT", "APPROVED", "SENT", "OVERDUE", "PAID"] as const;
 
   const totals = useMemo(
     () => computeBillingTotals(lineItems, taxLocation, chargeCanadianTax),
@@ -103,7 +105,17 @@ export default function InvoiceLineItemsForm({
 
   return (
     <form id={formId} action={formAction} className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className={LABEL_CLASS}>{t.invoices.status}</label>
+          <select name="status" defaultValue={defaultValues?.status && (STATUS_OPTIONS as readonly string[]).includes(defaultValues.status) ? defaultValues.status : "DRAFT"} className={FIELD_CLASS}>
+            {STATUS_OPTIONS.map((st) => (
+              <option key={st} value={st}>
+                {t.invoices.statuses[st]}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className={LABEL_CLASS}>{t.invoices.number}</label>
           <input name="number" defaultValue={defaultValues?.number ?? ""} className={FIELD_CLASS} />
