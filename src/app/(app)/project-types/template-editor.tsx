@@ -218,7 +218,7 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
         <div className="mt-3 grid items-start gap-3 lg:grid-cols-3">
           {fields.map((f, i) =>
             f.type === "spacer" ? (
-              <div key={f.key + i} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-card-border p-3">
+              <div key={i} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-card-border p-3">
                 <span className="text-xs font-semibold uppercase tracking-wide text-soft">Free space (empty cell)</span>
                 <div className="flex items-center gap-1">
                   <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, -1))} disabled={i === 0}>
@@ -233,7 +233,7 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
                 </div>
               </div>
             ) : (
-            <div key={f.key + i} className="min-w-0 rounded-xl border border-card-border p-3">
+            <div key={i} className="min-w-0 rounded-xl border border-card-border p-3">
               <div className="grid gap-2">
                 <div>
                   <label className={LABEL}>Label</label>
