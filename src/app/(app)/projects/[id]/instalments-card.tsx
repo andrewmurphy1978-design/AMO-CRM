@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { setInstalmentPaid } from "@/actions/proposals";
 import Card from "@/components/section-card";
 import type { Lang } from "@/lib/i18n/dictionaries";
@@ -19,7 +20,9 @@ export interface InstalmentRow {
 export default function InstalmentsCard({ projectId, rows, lang }: { projectId: string; rows: InstalmentRow[]; lang: Lang }) {
   const fr = lang === "fr";
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
   const [local, setLocal] = useState<Record<string, boolean>>({});
+  const [note, setNote] = useState<string | null>(null);
 
   return (
     <Card color="invoices" title={fr ? "Versements" : "Instalments"} compact>
@@ -35,7 +38,14 @@ export default function InstalmentsCard({ projectId, rows, lang }: { projectId: 
                   disabled={pending}
                   onChange={(e) => {
                     setLocal((l) => ({ ...l, [row.id]: e.target.checked }));
-                    startTransition(() => setInstalmentPaid(row.id, projectId, e.target.checked));
+                    setNote(null);
+                    startTransition(async () => {
+                      const res = await setInstalmentPaid(row.id, projectId, e.target.checked);
+                      if (res.invoiceEmail === "sent") setNote(fr ? "Facture créée et envoyée au client." : "Invoice created and sent to the client.");
+                      else if (res.invoiceEmail === "failed") setNote(fr ? "Facture créée, mais le courriel n'a pas pu être envoyé — envoyez-la depuis la carte Factures." : "Invoice created, but the email couldn't be sent — send it from the Invoices card.");
+                      else if (res.invoiceEmail === "no_recipient") setNote(fr ? "Facture créée; le client n'a pas de courriel." : "Invoice created; the client has no email address.");
+                      router.refresh();
+                    });
                   }}
                   className="h-4 w-4"
                 />
@@ -53,6 +63,7 @@ export default function InstalmentsCard({ projectId, rows, lang }: { projectId: 
           );
         })}
       </ul>
+      {note && <p className="mt-2 text-xs text-soft">{note}</p>}
     </Card>
   );
 }

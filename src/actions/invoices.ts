@@ -7,8 +7,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { publicBaseUrl } from "@/lib/twilio";
-import { signedDocumentUrl } from "@/lib/document-data";
+import { buildInvoiceEmail, type InvoiceEmail } from "@/lib/invoice-email";
 import { computeBillingTotals, contactTaxLocation, type LineItemInput } from "@/lib/billing-totals";
 
 const InvoiceSchema = z.object({
@@ -240,8 +239,14 @@ export async function updateInvoiceLineItems(
 
   const lineItems = readLineItems(formData);
 
+  let locked = false;
   const projectId = await withScopedPrismaClient(async (db) => {
     const invoice = await db.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: { project: { include: { contact: true } } } });
+    // A sent invoice can no longer be edited.
+    if (invoice.status !== "DRAFT") {
+      locked = true;
+      return invoice.projectId;
+    }
     const billingSettings = await db.billingSettings.upsert({
       where: { id: "singleton" },
       update: {},
@@ -277,6 +282,7 @@ export async function updateInvoiceLineItems(
     return invoice.projectId;
   });
 
+  if (locked) return { error: "This invoice has been sent and can no longer be edited." };
   revalidatePath(`/projects/${projectId}/invoices/${invoiceId}`);
   return { success: t.actions.invoiceUpdated };
 }
@@ -297,31 +303,23 @@ export async function unapproveInvoice(invoiceId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
+    const inv = await db.invoice.findUnique({ where: { id: invoiceId }, select: { status: true } });
+    if (inv && inv.status !== "DRAFT") return contactIdForProject(db, projectId);
     await db.invoice.update({ where: { id: invoiceId }, data: { approvedAt: null } });
     return contactIdForProject(db, projectId);
   });
   revalidateBoth(projectId, contactId);
 }
 
-export async function invoiceSendInfo(invoiceId: string, projectId: string): Promise<{ error?: string; subject?: string; html?: string; to?: string | null }> {
+export async function invoiceSendInfo(invoiceId: string, projectId: string): Promise<InvoiceEmail> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient(async (db) => {
-    const invoice = await db.invoice.findUnique({ where: { id: invoiceId }, include: { project: { include: { contact: true } } } });
+    const invoice = await db.invoice.findUnique({ where: { id: invoiceId }, select: { projectId: true, approvedAt: true, status: true } });
     if (!invoice || invoice.projectId !== projectId) return { error: "Invoice not found." };
     if (!invoice.approvedAt) return { error: "Approve the invoice before sending it." };
-    const origin = publicBaseUrl();
-    if (!origin) return { error: "NEXTAUTH_URL isn't set, so a link to the PDF can't be made." };
-    const url = await signedDocumentUrl(origin, `/api/projects/${projectId}/invoices/${invoiceId}/pdf`, 60);
-    const c = invoice.project.contact;
-    const fr = (c.locale ?? "").toLowerCase().startsWith("fr");
-    const first = c.firstName || "";
-    const label = invoice.number ? `${invoice.number}` : fr ? "facture" : "invoice";
-    const subject = fr ? `Facture ${invoice.number ?? ""} — ${invoice.project.name}`.replace("  ", " ") : `Invoice ${invoice.number ?? ""} — ${invoice.project.name}`.replace("  ", " ");
-    const html = fr
-      ? `<p>Bonjour ${first},</p><p>Voici votre facture pour <strong>${invoice.project.name}</strong> : <a href="${url}">${label} (PDF)</a>. Elle est payable le ${invoice.dueDate ? invoice.dueDate.toISOString().slice(0, 10) : "à réception"}.</p><p>Merci!</p>`
-      : `<p>Hi ${first},</p><p>Here is your invoice for <strong>${invoice.project.name}</strong>: <a href="${url}">${label} (PDF)</a>. It is due ${invoice.dueDate ? `on ${invoice.dueDate.toISOString().slice(0, 10)}` : "on receipt"}.</p><p>Thank you!</p>`;
-    return { subject, html, to: c.billingEmail || c.email };
+    if (invoice.status !== "DRAFT") return { error: "This invoice has already been sent." };
+    return buildInvoiceEmail(db, invoiceId, projectId);
   });
 }
 

@@ -1,6 +1,8 @@
 "use server";
 
-import { onProposalAccepted } from "@/lib/project-progress";
+import { onProposalAccepted, ensureInstalmentInvoices } from "@/lib/project-progress";
+import { buildInvoiceEmail } from "@/lib/invoice-email";
+import { sendEmailAction } from "@/actions/email-messages";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -123,21 +125,65 @@ export async function updateProposalStatus(proposalId: string, projectId: string
 // Ticks (or unticks) an instalment of the accepted proposal's payment schedule.
 // Paying the 1st / last instalment is what moves the project through its
 // lifecycle (see lib/project-progress.ts).
-export async function setInstalmentPaid(rowId: string, projectId: string, paid: boolean) {
+export async function setInstalmentPaid(rowId: string, projectId: string, paid: boolean): Promise<{ invoiceEmail?: "sent" | "failed" | "no_recipient"; error?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  const contactId = await withScopedPrismaClient(async (db) => {
+  const { contactId, emailInvoiceId } = await withScopedPrismaClient(async (db) => {
     await db.proposalPaymentScheduleItem.update({ where: { id: rowId }, data: { paid, paidAt: paid ? new Date() : null } });
-    // An invoice issued for this instalment follows it.
-    await db.invoice.updateMany({
-      where: { instalmentId: rowId, ...(paid ? { NOT: { status: "PAID" } } : { status: "PAID" }) },
-      data: paid ? { status: "PAID", paidAt: new Date() } : { status: "SENT", paidAt: null },
-    });
+    let emailInvoiceId: string | null = null;
+    if (paid) {
+      // The invoice for this instalment is issued automatically when the payment is
+      // recorded (if it doesn't exist yet), marked paid, and sent to the client.
+      const row = await db.proposalPaymentScheduleItem.findUnique({ where: { id: rowId }, select: { proposalId: true } });
+      if (row) {
+        const rows = await db.proposalPaymentScheduleItem.findMany({ where: { proposalId: row.proposalId }, orderBy: { order: "asc" }, select: { id: true } });
+        const index = rows.findIndex((r) => r.id === rowId) + 1;
+        if (index > 0) await ensureInstalmentInvoices(db, projectId, index);
+      }
+      const invoice = await db.invoice.findFirst({ where: { instalmentId: rowId } });
+      if (invoice) {
+        const now = new Date();
+        await db.invoice.update({ where: { id: invoice.id }, data: { status: "PAID", paidAt: invoice.paidAt ?? now, approvedAt: invoice.approvedAt ?? now } });
+        if (!invoice.sentAt) emailInvoiceId = invoice.id;
+      }
+    } else {
+      await db.invoice.updateMany({ where: { instalmentId: rowId, status: "PAID" }, data: { status: "SENT", paidAt: null } });
+    }
     if (paid) await onProposalAccepted(db, projectId);
-    return contactIdForProject(db, projectId);
+    return { contactId: await contactIdForProject(db, projectId), emailInvoiceId };
   });
+
+  // Send the (paid) invoice to the client with the PDF attached.
+  let invoiceEmail: "sent" | "failed" | "no_recipient" | undefined;
+  if (emailInvoiceId) {
+    const info = await withScopedPrismaClient((db) => buildInvoiceEmail(db, emailInvoiceId, projectId));
+    if (info.error || !info.to || !info.attachment) {
+      invoiceEmail = info.to ? "failed" : "no_recipient";
+    } else {
+      const res = await sendEmailAction({
+        inReplyToId: null,
+        threadId: null,
+        messageIdHeader: null,
+        references: [],
+        to: [info.to],
+        cc: [],
+        bcc: [],
+        subject: info.subject ?? "",
+        fromOverride: null,
+        html: info.html ?? "",
+        attachments: [info.attachment],
+      });
+      if ("success" in res) {
+        invoiceEmail = "sent";
+        await withScopedPrismaClient((db) => db.invoice.update({ where: { id: emailInvoiceId }, data: { sentAt: new Date() } }));
+      } else {
+        invoiceEmail = "failed";
+      }
+    }
+  }
   revalidateBoth(projectId, contactId);
+  return { invoiceEmail };
 }
 
 export async function deleteProposal(proposalId: string, projectId: string) {

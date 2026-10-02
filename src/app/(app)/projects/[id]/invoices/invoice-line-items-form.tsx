@@ -134,10 +134,19 @@ export default function InvoiceLineItemsForm({
           )}
         </div>
 
-        <div className="mt-2 space-y-2">
+        {lineItems.length > 0 && (
+          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_4.5rem_6.5rem_5.5rem_2rem] items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-soft">
+            <span>{t.invoices.description}</span>
+            <span>{t.invoices.quantity}</span>
+            <span>{t.invoices.unitPrice}</span>
+            <span className="text-right">Total</span>
+            <span />
+          </div>
+        )}
+        <div className="mt-1 space-y-2">
           {lineItems.map((row) => (
             <div key={row.tempKey} className="space-y-1.5 rounded-lg border border-card-border p-2">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_6.5rem_5.5rem_2rem] items-center gap-2">
               <input type="hidden" name="lineItemDescription" value={row.description} />
               <input type="hidden" name="lineItemQuantity" value={row.quantity} />
               <input type="hidden" name="lineItemUnitPrice" value={row.unitPrice} />
@@ -146,7 +155,7 @@ export default function InvoiceLineItemsForm({
                 value={row.description}
                 onChange={(e) => updateLineItem(row.tempKey, { description: e.target.value })}
                 placeholder={t.invoices.description}
-                className={`${FIELD_CLASS} mt-0 min-w-[10rem] flex-1`}
+                className={`${FIELD_CLASS} mt-0`}
               />
               <input
                 type="number"
@@ -155,7 +164,7 @@ export default function InvoiceLineItemsForm({
                 value={row.quantity}
                 onChange={(e) => updateLineItem(row.tempKey, { quantity: Number(e.target.value) })}
                 placeholder={t.invoices.quantity}
-                className={`${FIELD_CLASS} mt-0 w-20`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               />
               <input
                 type="number"
@@ -164,13 +173,13 @@ export default function InvoiceLineItemsForm({
                 value={row.unitPrice}
                 onChange={(e) => updateLineItem(row.tempKey, { unitPrice: Number(e.target.value) })}
                 placeholder={t.invoices.unitPrice}
-                className={`${FIELD_CLASS} mt-0 w-28`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               />
-              <span className="w-24 text-right text-sm text-soft">{(row.quantity * row.unitPrice).toFixed(2)}</span>
+              <span className="text-right text-sm text-soft">{(row.quantity * row.unitPrice).toFixed(2)}</span>
               <button
                 type="button"
                 onClick={() => setLineItems((rows) => rows.filter((r) => r.tempKey !== row.tempKey))}
-                className="rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                className="rounded-md border border-card-border px-1 py-2 text-xs text-soft hover:text-ink"
               >
                 ✕
               </button>

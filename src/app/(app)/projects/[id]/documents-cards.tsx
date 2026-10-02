@@ -402,10 +402,17 @@ export function InvoicesCard({
           {invoices.map((inv) => (
             <li key={inv.id} className="space-y-1.5 py-2 first:pt-0">
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setEditId({ id: inv.id, key: Date.now() })} className="min-w-0 flex-1 text-left hover:underline">
-                  <span className="block truncate text-sm font-medium text-ink">{inv.number || (fr ? "Facture" : "Invoice")}</span>
-                  {inv.instalmentLabel && <span className="block truncate text-xs text-soft">{inv.instalmentLabel}</span>}
-                </button>
+                {inv.status === "DRAFT" ? (
+                  <button type="button" onClick={() => setEditId({ id: inv.id, key: Date.now() })} className="min-w-0 flex-1 text-left hover:underline">
+                    <span className="block truncate text-sm font-medium text-ink">{inv.number || (fr ? "Facture" : "Invoice")}</span>
+                    {inv.instalmentLabel && <span className="block truncate text-xs text-soft">{inv.instalmentLabel}</span>}
+                  </button>
+                ) : (
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block truncate text-sm font-medium text-ink">{inv.number || (fr ? "Facture" : "Invoice")}</span>
+                    {inv.instalmentLabel && <span className="block truncate text-xs text-soft">{inv.instalmentLabel}</span>}
+                  </span>
+                )}
                 <span className="shrink-0 text-xs text-soft">{money(inv.totalAmount, inv.currency)}</span>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[inv.status] ?? PILL.DRAFT}`}>{statusLabels[inv.status] ?? inv.status}</span>
               </div>
@@ -413,9 +420,11 @@ export function InvoicesCard({
                 <a href={`/api/projects/${projectId}/invoices/${inv.id}/pdf`} target="_blank" rel="noreferrer" className={BTN}>
                   PDF
                 </a>
-                <button type="button" onClick={() => setEditId({ id: inv.id, key: Date.now() })} className={BTN}>
-                  {fr ? "Modifier" : "Edit"}
-                </button>
+                {inv.status === "DRAFT" && (
+                  <button type="button" onClick={() => setEditId({ id: inv.id, key: Date.now() })} className={BTN}>
+                    {fr ? "Modifier" : "Edit"}
+                  </button>
+                )}
                 {inv.status === "DRAFT" && !inv.approvedAt && (
                   <button type="button" disabled={pending} onClick={() => run(() => approveInvoice(inv.id, projectId))} className="rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
                     {fr ? "Approuver" : "Approve"}
@@ -432,7 +441,7 @@ export function InvoicesCard({
                       {...emailing}
                     />
                     <button type="button" disabled={pending} onClick={() => run(() => unapproveInvoice(inv.id, projectId))} className="text-xs text-soft hover:underline">
-                      {fr ? "annuler" : "undo"}
+                      {fr ? "Remettre en brouillon" : "Return to draft"}
                     </button>
                   </>
                 )}
