@@ -585,7 +585,7 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
     return {
       subject,
       html: letterHtml + callHtml + payHtml,
-      to: c.billingEmail || c.email,
+      to: c.billingEmail || c.email || c.email2 || c.extraEmails[0] || null,
       attachment: { filename: pdfData.fileName, mimeType: "application/pdf", base64: toBase64(pdf) },
     };
   });

@@ -341,7 +341,10 @@ export default function EmailComposeDialog({
     const selfAddress = message.replyIdentity.accountAddress.toLowerCase();
     let nextTo = "";
     let nextCc = "";
-    if (mode === "reply") {
+    if (mode === "new") {
+      // A prepared message (e.g. a proposal's "Send to client") arrives already addressed.
+      nextTo = message.to.map((a) => a.trim()).filter(Boolean).join(", ");
+    } else if (mode === "reply") {
       nextTo = message.from.email;
     } else if (mode === "replyAll") {
       const rest = [message.from.email, ...message.to, ...message.cc].filter((a) => a.toLowerCase() !== selfAddress);
