@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { saveProjectTemplate, resetProjectTemplate, deleteProjectType } from "@/actions/project-types";
 import { PHASE_STAGES, isMulti, type PhaseStage, type Cond, type FieldTpl, type FieldType, type PhaseTpl, type TaskTpl, type TemplateConfig } from "@/lib/project-templates";
@@ -103,6 +104,12 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
   const [auto, setAuto] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  // The header's action slot, filled in after mount (it lives outside this component).
+  const [actionsSlot, setActionsSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActionsSlot(document.getElementById("type-editor-actions"));
+  }, []);
   // Drag and drop of field cards: the card is only draggable while its handle is held.
   // Phases whose tasks are folded away (by phase index).
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
@@ -269,22 +276,29 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={save} disabled={pending} className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60">
-          {pending ? "Saving…" : "Save changes"}
-        </button>
-        {isCustom && (
-          <button type="button" onClick={reset} disabled={pending} className={SMALL_BTN}>
-            Reset to default
-          </button>
+      {/* Save / Reset live in the page header (see the actions slot in project-types/page.tsx). */}
+      {actionsSlot &&
+        createPortal(
+          <>
+            {message && <span className="hidden text-sm text-amo-lime sm:inline">{message}</span>}
+            {isCustom && (
+              <button type="button" onClick={reset} disabled={pending} className="rounded-lg border border-white/30 px-3 py-1.5 text-xs font-semibold text-amo-white hover:bg-white/10 disabled:opacity-60 sm:text-sm">
+                Reset to default
+              </button>
+            )}
+            <button type="button" onClick={save} disabled={pending} className="btn-primary rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm disabled:opacity-60 sm:text-sm">
+              {pending ? "Saving…" : "Save changes"}
+            </button>
+          </>,
+          actionsSlot
         )}
-        {isUserType && (
+      {isUserType && (
+        <div>
           <button type="button" onClick={removeType} disabled={pending} className={`${SMALL_BTN} text-red-600`}>
             Delete this project type
           </button>
-        )}
-        {message && <span className="text-sm text-emerald-700">{message}</span>}
-      </div>
+        </div>
+      )}
 
       <label className="flex items-start gap-2 rounded-xl border border-card-border bg-card-bg p-3 text-sm text-ink">
         <input

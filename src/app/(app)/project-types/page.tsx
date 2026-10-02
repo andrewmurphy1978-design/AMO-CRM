@@ -29,7 +29,13 @@ export default async function ProjectTypesPage({ searchParams }: { searchParams:
 
   return (
     <div className="space-y-6">
-      <PageHeader title={lang === "fr" ? "Personnalisation des types de projet" : "Project type customization"} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
+      <PageHeader
+        title={lang === "fr" ? "Personnalisation des types de projet" : "Project type customization"}
+        hour12={hour12}
+        lang={lang}
+        location={t.dashboard.myLocation}
+        actions={<div id="type-editor-actions" className="flex items-center gap-2" />}
+      />
 
       <div className="grid gap-6 md:grid-cols-[13.5rem_minmax(0,1fr)] md:items-start">
         <TypeSidebar keys={typeKeys} labels={typeLabels} saved={saved} selected={type} lang={lang} />
