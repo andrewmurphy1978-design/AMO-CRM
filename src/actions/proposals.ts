@@ -545,6 +545,34 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
   });
 }
 
+// The copy signed and returned by the client (base64 from the browser, 4 MB max).
+export async function attachSignedProposal(proposalId: string, projectId: string, base64: string, fileName: string, mime: string): Promise<{ error?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  if (bytes.length === 0) return { error: "Empty file." };
+  if (bytes.length > 4_000_000) return { error: "The file is over 4 MB." };
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposal.update({
+      where: { id: proposalId },
+      data: { signedFileName: fileName.slice(0, 200), signedFileMime: mime || "application/octet-stream", signedFileData: bytes as never, signedAt: new Date() },
+    });
+    return contactIdForProject(db, projectId);
+  });
+  revalidateBoth(projectId, contactId);
+  return {};
+}
+
+export async function removeSignedProposal(proposalId: string, projectId: string) {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposal.update({ where: { id: proposalId }, data: { signedFileName: null, signedFileMime: null, signedFileData: null as never, signedAt: null } });
+    return contactIdForProject(db, projectId);
+  });
+  revalidateBoth(projectId, contactId);
+}
+
 // After the email went out: the proposal is now with the client.
 export async function markProposalSent(proposalId: string, projectId: string) {
   const session = await auth();

@@ -113,7 +113,7 @@ export default async function ProjectDetailPage({
         subscriptions: { orderBy: { order: "asc" } },
         parentProject: { select: { id: true, name: true } },
         linkedProjects: { orderBy: { createdAt: "asc" }, select: { id: true, name: true, type: true, status: true } },
-        proposals: { orderBy: { createdAt: "desc" }, include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { orderBy: { order: "asc" } } } },
+        proposals: { orderBy: { createdAt: "desc" }, omit: { signedFileData: true }, include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { orderBy: { order: "asc" } } } },
         invoices: { orderBy: { createdAt: "desc" }, include: { lineItems: { orderBy: { order: "asc" } }, instalment: { include: { proposal: { select: { paymentSchedule: { select: { id: true }, orderBy: { order: "asc" } } } } } } } },
       },
     });
@@ -314,6 +314,7 @@ export default async function ProjectDetailPage({
     currency: p.currency,
     totalAmount: p.totalAmount,
     approvedAt: iso(p.approvedAt),
+    signedFileName: p.signedFileName,
     sentAt: iso(p.sentAt),
     coverLetter: p.coverLetter,
     notes: p.notes,

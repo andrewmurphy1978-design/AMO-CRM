@@ -1091,6 +1091,11 @@ model Proposal {
   subscriptions Json?
   // Internal sign-off before the document is sent to the client.
   approvedAt    DateTime?
+  // The copy signed and returned by the client (PDF or image, up to 4 MB).
+  signedFileName String?
+  signedFileMime String?
+  signedFileData Bytes?
+  signedAt       DateTime?
   sentAt        DateTime?
   respondedAt   DateTime?
 

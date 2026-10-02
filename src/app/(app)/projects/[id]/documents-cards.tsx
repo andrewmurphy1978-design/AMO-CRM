@@ -14,6 +14,8 @@ import {
   deleteProposal,
   createFullProposal,
   updateFullProposal,
+  attachSignedProposal,
+  removeSignedProposal,
 } from "@/actions/proposals";
 import { approveInvoice, unapproveInvoice, invoiceSendInfo, markInvoiceSent, updateInvoiceStatus, deleteInvoice, updateInvoiceLineItems } from "@/actions/invoices";
 import ProposalForm from "./proposals/proposal-form";
@@ -32,6 +34,7 @@ export interface ProposalRowData {
   currency: string;
   totalAmount: number;
   approvedAt: string | null;
+  signedFileName?: string | null;
   sentAt: string | null;
   coverLetter: string | null;
   notes: string | null;
@@ -105,6 +108,50 @@ function HeaderSave({ form, saving, label, savingLabel }: { form: string; saving
 }
 
 const money = (n: number, cur: string) => `${n.toFixed(2)} ${cur}`;
+
+// The copy signed and returned by the client: attach it (PDF or image, 4 MB max),
+// open it, or remove it.
+function SignedCopy({ projectId, proposalId, fileName, fr }: { projectId: string; proposalId: string; fileName: string | null | undefined; fr: boolean }) {
+  const router = useRouter();
+  const [busy, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    if (file.size > 4_000_000) return setError(fr ? "Le fichier dépasse 4 Mo." : "The file is over 4 MB.");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    startTransition(async () => {
+      const res = await attachSignedProposal(proposalId, projectId, btoa(bin), file.name, file.type);
+      if (res.error) setError(res.error);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {fileName ? (
+        <>
+          <span className="text-soft">📎 {fr ? "Copie signée" : "Signed copy"}:</span>
+          <a href={`/api/projects/${projectId}/proposals/${proposalId}/signed`} target="_blank" rel="noreferrer" className="max-w-[12rem] truncate text-emerald-700 hover:underline" title={fileName}>
+            {fileName}
+          </a>
+          <button type="button" disabled={busy} onClick={() => startTransition(async () => { await removeSignedProposal(proposalId, projectId); router.refresh(); })} className="text-red-600 hover:underline">
+            {fr ? "retirer" : "remove"}
+          </button>
+        </>
+      ) : (
+        <label className="cursor-pointer rounded-md border border-card-border px-2 py-1 font-medium text-ink hover:bg-black/5">
+          {busy ? "…" : `📎 ${fr ? "Joindre la soumission signée" : "Attach signed proposal"}`}
+          <input type="file" accept="application/pdf,image/png,image/jpeg" className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
+        </label>
+      )}
+      {error && <span className="text-red-600">{error}</span>}
+    </div>
+  );
+}
 
 // ------------------------------------------------------------------ proposals
 
@@ -214,6 +261,7 @@ export function ProposalsCard({
                     </button>
                   </>
                 )}
+                {p.status !== "DRAFT" && <SignedCopy projectId={projectId} proposalId={p.id} fileName={p.signedFileName} fr={fr} />}
                 {p.status === "SENT" && (
                   <>
                     <button type="button" disabled={pending} onClick={() => run(() => updateProposalStatus(p.id, projectId, "ACCEPTED"))} className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
