@@ -90,6 +90,7 @@ export default function PhasesCard({
                 <th className="px-3 py-2 font-semibold">{t.phaseDialog.supervisor}</th>
                 <th className="px-3 py-2 font-semibold">{t.phaseDialog.startDate}</th>
                 <th className="px-3 py-2 font-semibold">{t.phaseDialog.dueDate}</th>
+                <th className="px-3 py-2 font-semibold">{t.phaseDialog.completedDate}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-card-border">
@@ -109,6 +110,7 @@ export default function PhasesCard({
                   <td className="px-3 py-2 text-soft">{(phase.supervisorId && users.find((u) => u.id === phase.supervisorId)?.name) || "—"}</td>
                   <td className="px-3 py-2 text-soft">{fmt(phase.startDate)}</td>
                   <td className="px-3 py-2 text-soft">{fmt(phase.dueDate)}</td>
+                  <td className="px-3 py-2 text-soft">{fmt(phase.completedDate ?? "")}</td>
                 </tr>
               ))}
             </tbody>

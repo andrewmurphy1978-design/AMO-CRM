@@ -90,8 +90,8 @@ export const LEGACY_PROJECT_TYPES = ["CONSULTING", "OTHER"] as const;
 
 export const TEMPLATE_TYPES = PROJECT_TYPE_ORDER;
 
-export function projectTypeOptions(labels: Record<string, string>, current?: string | null): { value: string; label: string }[] {
-  const list: string[] = [...PROJECT_TYPE_ORDER];
+export function projectTypeOptions(labels: Record<string, string>, current?: string | null, customKeys: string[] = []): { value: string; label: string }[] {
+  const list: string[] = [...PROJECT_TYPE_ORDER, ...customKeys];
   if (current && (LEGACY_PROJECT_TYPES as readonly string[]).includes(current)) list.push(current);
   return list.map((value) => ({ value, label: labels[value] ?? value }));
 }

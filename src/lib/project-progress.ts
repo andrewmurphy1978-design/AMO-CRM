@@ -76,14 +76,14 @@ async function closeLatestPhase(db: PrismaClient, pr: Loaded) {
   const last = pr.phases[0];
   if (!last) return;
   await db.task.updateMany({ where: { phaseId: last.id, NOT: { status: "DONE" } }, data: { status: "DONE", completedAt: new Date() } });
-  await db.projectPhase.update({ where: { id: last.id }, data: { status: "COMPLETED" } });
+  await db.projectPhase.update({ where: { id: last.id }, data: { status: "COMPLETED", completedAt: new Date() } });
 }
 
 // Creates the next waiting phase (closing the previous one if it isn't).
 async function release(db: PrismaClient, pr: Loaded, pending: PendingPhase[], extraFirstTask?: string) {
   const [next, ...rest] = pending;
   const last = pr.phases[0];
-  if (last && last.status !== "COMPLETED") await db.projectPhase.update({ where: { id: last.id }, data: { status: "COMPLETED" } });
+  if (last && last.status !== "COMPLETED") await db.projectPhase.update({ where: { id: last.id }, data: { status: "COMPLETED", completedAt: new Date() } });
   const created = await db.projectPhase.create({ data: { projectId: pr.id, name: next.name, order: (last?.order ?? -1) + 1, status: "ACTIVE" } });
   const titles = [...(extraFirstTask ? [extraFirstTask] : []), ...next.tasks];
   if (titles.length > 0) await db.task.createMany({ data: titles.map((title) => ({ projectId: pr.id, phaseId: created.id, title })) });
@@ -149,7 +149,7 @@ export async function ensureInstalmentInvoices(db: PrismaClient, projectId: stri
 }
 
 async function setStatus(db: PrismaClient, projectId: string, status: "PLANNING" | "ACTIVE" | "FINAL" | "COMPLETED") {
-  await db.project.update({ where: { id: projectId }, data: { status } });
+  await db.project.update({ where: { id: projectId }, data: { status, ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) } });
 }
 
 // One step of the lifecycle; true if something changed (so the caller loops).

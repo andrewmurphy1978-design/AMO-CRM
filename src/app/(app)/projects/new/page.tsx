@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { getHour12 } from "@/lib/time-format";
 import ProjectForm from "../project-form";
 import { getLang } from "@/lib/i18n/get-lang";
+import { loadTypeInfo } from "@/lib/project-type-store";
+
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getAllProjectTemplates } from "@/lib/project-template-store";
 
@@ -16,6 +18,7 @@ export default async function NewProjectPage({
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
+  const { labels: typeLabels, customKeys: customTypeKeys } = await loadTypeInfo(lang);
 
   // One shared client — see src/lib/prisma.ts for why.
   const { contacts, users, hour12, templates } = await withScopedPrismaClient(async (db) => {
@@ -31,6 +34,8 @@ export default async function NewProjectPage({
 
   return (
     <ProjectForm
+      typeLabels={typeLabels}
+      customTypeKeys={customTypeKeys}
       action={createProject}
       submitLabel={t.projectForm.createProject}
       defaultValues={{ contactId }}

@@ -16,7 +16,7 @@ const ProjectSchema = z.object({
   contactId: z.string().min(1, "Client is required"),
   description: z.string().trim().optional(),
   status: z.enum(["PROPOSAL", "PLANNING", "ACTIVE", "FINAL", "ON_HOLD", "COMPLETED", "CANCELLED"]),
-  type: z.enum(["WEBSITE", "FUNNEL", "APP", "SOCIAL_MEDIA", "CONSULTING", "OTHER", "BLOG", "NEWSLETTER", "POST_AUTOMATION", "STORE", "CRM_CUSTOMIZATION", "AUTOMATION", "EMAIL_MARKETING", "SMS_MARKETING", "TRAINING", "AFFILIATE_MARKETING"]),
+  type: z.string().min(1),
   ownerId: z.string().optional(),
   supervisorId: z.string().optional(),
   startDate: z.string().optional(),
@@ -48,6 +48,7 @@ export interface PhaseValues {
   supervisorId: string;
   startDate: string;
   dueDate: string;
+  completedDate?: string;
   description: string;
 }
 
@@ -59,6 +60,7 @@ const PhaseSchema = z.object({
   supervisorId: z.string().optional(),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
+  completedDate: z.string().optional(),
   description: z.string().trim().optional(),
 });
 
@@ -73,6 +75,8 @@ function phaseData(values: PhaseValues) {
     startDate: data.startDate ? new Date(data.startDate) : null,
     dueDate: data.dueDate ? new Date(data.dueDate) : null,
     description: data.description || null,
+    // The date typed in, if any; otherwise (set when saving) today for a completed phase.
+    completedAt: data.completedDate && data.status === "COMPLETED" ? new Date(data.completedDate) : null,
   };
 }
 
@@ -96,7 +100,7 @@ export async function createPhase(
     throw error;
   }
 
-  const phase = await withScopedPrismaClient((db) => db.projectPhase.create({ data: { projectId, order, ...data } }));
+  const phase = await withScopedPrismaClient((db) => db.projectPhase.create({ data: { projectId, order, ...data, completedAt: data.completedAt ?? (data.status === "COMPLETED" ? new Date() : null) } }));
   revalidatePath(`/projects/${projectId}/edit`);
   revalidatePath(`/projects/${projectId}`);
   return { id: phase.id };
@@ -119,7 +123,9 @@ export async function updatePhase(
   }
 
   await withScopedPrismaClient(async (db) => {
-    await db.projectPhase.update({ where: { id: phaseId }, data });
+    const existing = await db.projectPhase.findUnique({ where: { id: phaseId }, select: { completedAt: true } });
+    const completedAt = data.completedAt ?? (data.status === "COMPLETED" ? existing?.completedAt ?? new Date() : null);
+    await db.projectPhase.update({ where: { id: phaseId }, data: { ...data, completedAt } });
     // Marking the latest phase Completed releases the next one.
     if (data.status === "COMPLETED") await advanceProjectPlan(db, projectId);
   });
@@ -353,11 +359,15 @@ export async function updateProjectGeneral(
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? t.actions.invalidInput };
     throw error;
   }
+  const completedInput = String(formData.get("completedAt") ?? "");
 
   await withScopedPrismaClient(async (db) => {
+    const before = await db.project.findUnique({ where: { id: projectId }, select: { completedAt: true } });
+    const completedAt = completedInput && data.status === "COMPLETED" ? new Date(completedInput) : data.status === "COMPLETED" ? before?.completedAt ?? new Date() : null;
     await db.project.update({
       where: { id: projectId },
       data: {
+        completedAt,
         name: data.name,
         description: data.description || null,
         contactId: data.contactId,

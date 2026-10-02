@@ -14,6 +14,7 @@ export interface PhaseRowData {
   supervisorId: string | null;
   startDate: string;
   dueDate: string;
+  completedDate?: string;
   description: string | null;
 }
 
@@ -35,6 +36,7 @@ const BLANK: PhaseValues = {
   supervisorId: "",
   startDate: "",
   dueDate: "",
+  completedDate: "",
   description: "",
 };
 
@@ -87,6 +89,7 @@ export default function PhaseList({
                   <th className="px-3 py-2 font-semibold">{t.phaseDialog.supervisor}</th>
                   <th className="px-3 py-2 font-semibold">{t.phaseDialog.startDate}</th>
                   <th className="px-3 py-2 font-semibold">{t.phaseDialog.dueDate}</th>
+                  <th className="px-3 py-2 font-semibold">{t.phaseDialog.completedDate}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-card-border">
@@ -107,6 +110,7 @@ export default function PhaseList({
                     <td className="px-3 py-2 text-soft">{supervisorNameFor(phase.supervisorId)}</td>
                     <td className="px-3 py-2 text-soft">{phase.startDate ? new Date(phase.startDate).toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2 text-soft">{phase.dueDate ? new Date(phase.dueDate).toLocaleDateString() : "—"}</td>
+                    <td className="px-3 py-2 text-soft">{phase.completedDate ? new Date(phase.completedDate).toLocaleDateString() : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -138,6 +142,7 @@ export default function PhaseList({
                   supervisorId: dialog.phase.supervisorId ?? "",
                   startDate: dialog.phase.startDate,
                   dueDate: dialog.phase.dueDate,
+                  completedDate: dialog.phase.completedDate ?? "",
                   description: dialog.phase.description ?? "",
                 }
               : { ...BLANK, teamMemberIds: defaultTeamMemberIds }

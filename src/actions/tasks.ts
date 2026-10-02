@@ -20,6 +20,7 @@ const TaskSchema = z.object({
   supervisorId: z.string().optional(),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
+  completedDate: z.string().optional(),
 });
 
 function readTaskForm(formData: FormData) {
@@ -34,6 +35,7 @@ function readTaskForm(formData: FormData) {
     supervisorId: String(formData.get("supervisorId") ?? "") || undefined,
     startDate: String(formData.get("startDate") ?? "") || undefined,
     dueDate: String(formData.get("dueDate") ?? "") || undefined,
+    completedDate: String(formData.get("completedDate") ?? "") || undefined,
   };
   return TaskSchema.parse(raw);
 }
@@ -47,6 +49,7 @@ export interface TaskDialogValues {
   supervisorId: string;
   startDate: string;
   dueDate: string;
+  completedDate?: string;
   description: string;
 }
 
@@ -81,7 +84,7 @@ export async function createTaskViaDialog(
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        completedAt: data.status === "DONE" ? new Date() : null,
+        completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? new Date() : null,
       },
     })
   );
@@ -124,7 +127,7 @@ export async function updateTaskViaDialog(
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        completedAt: data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
+        completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
       },
     });
     if (data.status === "DONE") await advanceProjectPlan(db, projectId);
@@ -168,7 +171,7 @@ export async function createTask(
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        completedAt: data.status === "DONE" ? new Date() : null,
+        completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? new Date() : null,
       },
     })
   );
@@ -213,7 +216,7 @@ export async function createTaskAndRedirect(
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        completedAt: data.status === "DONE" ? new Date() : null,
+        completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? new Date() : null,
       },
     })
   );
@@ -263,7 +266,7 @@ export async function updateTask(
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        completedAt: data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
+        completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
       },
     });
     if (data.status === "DONE") await advanceProjectPlan(db, data.projectId);

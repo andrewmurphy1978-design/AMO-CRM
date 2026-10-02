@@ -37,6 +37,8 @@ export default function ProjectForm({
   hour12,
   location,
   templates,
+  typeLabels,
+  customTypeKeys = [],
 }: {
   action: (
     prevState: { error?: string; success?: string } | undefined,
@@ -52,6 +54,8 @@ export default function ProjectForm({
   location: string;
   // Custom fields per project type, asked for on create (new projects only).
   templates?: Record<string, TemplateConfig>;
+  typeLabels: Record<string, string>;
+  customTypeKeys?: string[];
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const t = getDict(lang);
@@ -94,7 +98,7 @@ export default function ProjectForm({
     { value: "CANCELLED", label: t.projectStatuses.CANCELLED },
   ];
 
-  const TYPES = projectTypeOptions(t.projectTypes, defaultValues?.type);
+  const TYPES = projectTypeOptions(typeLabels, defaultValues?.type, customTypeKeys);
 
   return (
     <form action={formAction} className="space-y-6">
@@ -231,7 +235,7 @@ export default function ProjectForm({
 
       {typeFields.length > 0 && (
         <div className="space-y-3 rounded-xl border border-card-border p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-soft">{t.projectTypes[type as keyof typeof t.projectTypes]}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-soft">{typeLabels[type] ?? type}</p>
           <p className="text-xs text-soft">
             {lang === "fr"
               ? "Vos réponses créent automatiquement les phases et les tâches du projet."

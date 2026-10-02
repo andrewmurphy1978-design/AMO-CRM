@@ -12,6 +12,8 @@ import { getLinkedCalendarEvents, getEventLinkTargets } from "@/lib/calendar-lin
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { loadTypeInfo } from "@/lib/project-type-store";
+
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { countryFullName } from "@/lib/country-flag";
 import { getTimezoneForCountryState, utcOffsetLabel } from "@/lib/timezone";
@@ -193,6 +195,7 @@ export default async function ContactDetailPage({
   const { id } = await params;
   const lang = await getLang();
   const t = getDict(lang);
+  const { labels: typeLabels } = await loadTypeInfo(lang);
   const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
   const STAGE_LABELS = t.stages;
@@ -996,7 +999,7 @@ export default async function ContactDetailPage({
                         <div className="min-w-0 space-y-0.5">
                           <p className="font-medium text-ink">{project.name}</p>
                           <p className="text-xs text-soft">
-                            <span className="uppercase tracking-wide text-ink">{t.projectForm.typeShort}:</span> {t.projectTypes[project.type]}
+                            <span className="uppercase tracking-wide text-ink">{t.projectForm.typeShort}:</span> {typeLabels[project.type] ?? project.type}
                           </p>
                           {project.owner && (
                             <p className="text-xs text-soft">

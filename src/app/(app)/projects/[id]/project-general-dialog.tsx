@@ -20,6 +20,7 @@ export interface ProjectGeneralValues {
   teamMemberIds: string[];
   startDate: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD
+  completedAt: string; // YYYY-MM-DD
   description: string;
 }
 
@@ -32,12 +33,16 @@ export default function ProjectGeneralDialog({
   contacts,
   users,
   lang,
+  typeLabels,
+  customTypeKeys,
 }: {
   action: (prevState: { error?: string; success?: string } | undefined, formData: FormData) => Promise<{ error?: string; success?: string }>;
   values: ProjectGeneralValues;
   contacts: { id: string; label: string }[];
   users: { id: string; name: string }[];
   lang: Lang;
+  typeLabels: Record<string, string>;
+  customTypeKeys: string[];
 }) {
   const t = getDict(lang);
   const [open, setOpen] = useState(false);
@@ -73,7 +78,7 @@ export default function ProjectGeneralDialog({
           <div>
             <label className={LABEL_CLASS}>{t.projectForm.type}</label>
             <select name="type" defaultValue={values.type} className={FIELD_CLASS}>
-              {projectTypeOptions(t.projectTypes, values.type).map(({ value, label }) => (
+              {projectTypeOptions(typeLabels, values.type, customTypeKeys).map(({ value, label }) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
@@ -135,7 +140,7 @@ export default function ProjectGeneralDialog({
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <label className={LABEL_CLASS}>{t.projectForm.startDate}</label>
             <input type="date" name="startDate" defaultValue={values.startDate} className={FIELD_CLASS} />
@@ -143,6 +148,10 @@ export default function ProjectGeneralDialog({
           <div>
             <label className={LABEL_CLASS}>{t.projectForm.dueDate}</label>
             <input type="date" name="dueDate" defaultValue={values.dueDate} className={FIELD_CLASS} />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>{t.projectForm.completedDate}</label>
+            <input type="date" name="completedAt" defaultValue={values.completedAt} className={FIELD_CLASS} />
           </div>
         </div>
         <div>

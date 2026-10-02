@@ -5,6 +5,8 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { loadTypeInfo } from "@/lib/project-type-store";
+
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { getHour12 } from "@/lib/time-format";
 import PageHeader from "../page-header";
@@ -55,6 +57,7 @@ export default async function ProjectsPage({
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
+  const { labels: typeLabels } = await loadTypeInfo(lang);
   const dateLocale = getDateLocale(lang);
   const STATUS_LABELS = t.projectStatuses;
 
@@ -163,7 +166,7 @@ export default async function ProjectsPage({
                   {[project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") ||
                     project.contact.email}
                 </p>
-                <p className="mt-2 text-xs text-soft">{t.projectTypes[project.type]}</p>
+                <p className="mt-2 text-xs text-soft">{typeLabels[project.type] ?? project.type}</p>
 
                 {project.tasks.length > 0 && (
                   <div className="mt-3">
@@ -232,7 +235,7 @@ export default async function ProjectsPage({
                       {[project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") ||
                         project.contact.email}
                     </td>
-                    <td className="px-4 py-3 text-ink/70">{t.projectTypes[project.type]}</td>
+                    <td className="px-4 py-3 text-ink/70">{typeLabels[project.type] ?? project.type}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[project.status]}`}>
                         {STATUS_LABELS[project.status]}

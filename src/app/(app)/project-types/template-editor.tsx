@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { saveProjectTemplate, resetProjectTemplate } from "@/actions/project-types";
-import { TEMPLATE_TYPES, PHASE_STAGES, isMulti, type PhaseStage, type Cond, type FieldTpl, type FieldType, type PhaseTpl, type TaskTpl, type TemplateConfig } from "@/lib/project-templates";
+import { saveProjectTemplate, resetProjectTemplate, deleteProjectType } from "@/actions/project-types";
+import { PHASE_STAGES, isMulti, type PhaseStage, type Cond, type FieldTpl, type FieldType, type PhaseTpl, type TaskTpl, type TemplateConfig } from "@/lib/project-templates";
 
 const INPUT = "w-full min-w-0 rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL = "block text-[11px] font-semibold uppercase tracking-wide text-soft";
@@ -80,7 +80,7 @@ function CondEditor({ cond, onChange, fields, label }: { cond?: Cond; onChange: 
   );
 }
 
-export default function TemplateEditor({ type, initial, typeLabels, isCustom }: { type: string; initial: TemplateConfig; typeLabels: Record<string, string>; isCustom: boolean }) {
+export default function TemplateEditor({ type, typeKeys, isUserType, initial, typeLabels, isCustom }: { type: string; typeKeys: string[]; isUserType: boolean; initial: TemplateConfig; typeLabels: Record<string, string>; isCustom: boolean }) {
   const router = useRouter();
   const [config, setConfig] = useState<TemplateConfig>(initial);
   const [auto, setAuto] = useState<Set<string>>(new Set());
@@ -163,6 +163,16 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
     });
   }
 
+  function removeType() {
+    if (!confirm(`Delete the project type "${typeLabels[type]}"? This can't be undone.`)) return;
+    startTransition(async () => {
+      const res = await deleteProjectType(type);
+      if (res.error) return setMessage(res.error);
+      router.push("/project-types");
+      router.refresh();
+    });
+  }
+
   const multiFields = fields.filter(isMulti);
 
   return (
@@ -174,6 +184,11 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
         {isCustom && (
           <button type="button" onClick={reset} disabled={pending} className={SMALL_BTN}>
             Reset to default
+          </button>
+        )}
+        {isUserType && (
+          <button type="button" onClick={removeType} disabled={pending} className={`${SMALL_BTN} text-red-600`}>
+            Delete this project type
           </button>
         )}
         {message && <span className="text-sm text-emerald-700">{message}</span>}
@@ -269,7 +284,7 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
                   <span className={LABEL}>If Yes, also create a project of type</span>
                   <select value={f.spawnType ?? ""} onChange={(e) => updateField(i, { spawnType: e.target.value || undefined })} className={`${INPUT} !w-auto`}>
                     <option value="">— none —</option>
-                    {TEMPLATE_TYPES.map((tp) => (
+                    {typeKeys.map((tp) => (
                       <option key={tp} value={tp}>
                         {typeLabels[tp]}
                       </option>

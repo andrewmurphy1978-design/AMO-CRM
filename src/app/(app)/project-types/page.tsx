@@ -5,25 +5,28 @@ import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getAllProjectTemplates, getSavedTypes } from "@/lib/project-template-store";
-import { TEMPLATE_TYPES } from "@/lib/project-templates";
+import { getCustomProjectTypes, mergeTypeLabels, allTypeKeys } from "@/lib/project-type-store";
 import PageHeader from "../page-header";
 import TemplateEditor from "./template-editor";
+import NewTypeButton from "./new-type-button";
 
 export default async function ProjectTypesPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
   const { type: typeParam } = await searchParams;
-  const type = (TEMPLATE_TYPES as readonly string[]).includes(typeParam ?? "") ? (typeParam as string) : "WEBSITE";
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
 
-  const { templates, saved, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { templates, saved, hour12, customTypes } = await withScopedPrismaClient(async (db) => {
     const templates = await getAllProjectTemplates(db);
     const saved = await getSavedTypes(db);
     const hour12 = await getHour12(session, db);
-    return { templates, saved, hour12 };
+    const customTypes = await getCustomProjectTypes(db);
+    return { templates, saved, hour12, customTypes };
   });
 
-  const typeLabels = t.projectTypes as Record<string, string>;
+  const typeKeys = allTypeKeys(customTypes);
+  const type = typeKeys.includes(typeParam ?? "") ? (typeParam as string) : "WEBSITE";
+  const typeLabels = mergeTypeLabels(t.projectTypes as Record<string, string>, customTypes, lang);
 
   return (
     <div className="space-y-6">
@@ -35,7 +38,7 @@ export default async function ProjectTypesPage({ searchParams }: { searchParams:
           aria-label={lang === "fr" ? "Types de projet" : "Project types"}
           className="flex flex-wrap gap-2 md:sticky md:top-20 md:max-h-[calc(100dvh-6rem)] md:flex-col md:flex-nowrap md:gap-1 md:overflow-y-auto md:rounded-2xl md:border md:border-card-border md:bg-card-bg md:p-2 md:shadow-sm"
         >
-          {TEMPLATE_TYPES.map((tp) => (
+          {typeKeys.map((tp) => (
             <Link
               key={tp}
               href={`/project-types?type=${tp}`}
@@ -46,10 +49,11 @@ export default async function ProjectTypesPage({ searchParams }: { searchParams:
               {saved.includes(tp) && <span className="text-[10px] opacity-80">●</span>}
             </Link>
           ))}
+          <NewTypeButton lang={lang} />
         </nav>
 
         <div className="min-w-0">
-          <TemplateEditor key={type} type={type} initial={templates[type]} typeLabels={typeLabels} isCustom={saved.includes(type)} />
+          <TemplateEditor key={type} type={type} typeKeys={typeKeys} isUserType={customTypes.some((c) => c.key === type)} initial={templates[type]} typeLabels={typeLabels} isCustom={saved.includes(type)} />
         </div>
       </div>
     </div>

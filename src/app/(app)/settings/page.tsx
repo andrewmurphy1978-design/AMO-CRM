@@ -26,6 +26,7 @@ import EmailScreeningForm from "./email-screening-form";
 import ApiKeyVaultForm from "./api-key-vault-form";
 import TagsForm from "./tags-form";
 import ServicePriceListForm from "./service-price-list-form";
+import { loadTypeInfo } from "@/lib/project-type-store";
 import BillingSettingsForm from "./billing-settings-form";
 import EmailComposePreferencesForm from "./email-compose-preferences-form";
 import EmailSignaturesForm from "./email-signatures-form";
@@ -430,7 +431,7 @@ export default async function SettingsPage({
         </SettingsCard>
       )}
       <SettingsCard>
-        <ServicePriceListForm items={serviceItems} lang={lang} />
+        <ServicePriceListForm items={serviceItems} lang={lang} customTypes={(await loadTypeInfo(lang)).custom.map((c) => ({ key: c.key, label: lang === "fr" && c.labelFr ? c.labelFr : c.label }))} />
       </SettingsCard>
 
       <SettingsGroupLabel>{t.settings.groupIntegrations}</SettingsGroupLabel>

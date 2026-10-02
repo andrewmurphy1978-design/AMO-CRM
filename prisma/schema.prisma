@@ -845,32 +845,26 @@ enum ProjectStatus {
 
 // Based on Andrew's own service lines — drives no logic yet, just lets
 // Projects be filtered/reported on by the kind of work.
-enum ProjectType {
-  WEBSITE
-  FUNNEL
-  APP
-  SOCIAL_MEDIA
-  CONSULTING
-  OTHER
-  BLOG
-  NEWSLETTER
-  POST_AUTOMATION
-  STORE
-  CRM_CUSTOMIZATION
-  AUTOMATION
-  EMAIL_MARKETING
-  SMS_MARKETING
-  TRAINING
-  AFFILIATE_MARKETING
-}
 
 // The editable recipe for a project type: its custom fields and the phases/
 // tasks created with a new project of that type (see lib/project-templates.ts).
 // A type with no row here uses the built-in default.
+// A project type added by the user (the built-in ones live in code). `key` is
+// what Project.type stores, e.g. CUSTOM_PODCAST.
+model CustomProjectType {
+  key       String   @id
+  label     String
+  labelFr   String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("custom_project_types")
+}
+
 model ProjectTypeTemplate {
-  type      ProjectType @id
+  type      String   @id
   config    Json
-  updatedAt DateTime    @updatedAt
+  updatedAt DateTime @updatedAt
 
   @@map("project_type_templates")
 }
@@ -888,8 +882,10 @@ model Project {
   // True for projects created from a template with the one-phase-at-a-time
   // lifecycle (older projects are never moved automatically).
   lifecycleManaged Boolean       @default(false)
+  // When the project was completed (set automatically, editable).
+  completedAt      DateTime?
   status           ProjectStatus @default(PLANNING)
-  type             ProjectType   @default(OTHER)
+  type             String        @default("OTHER")
 
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -1003,6 +999,7 @@ model ProjectPhase {
   dueDate       DateTime?
   description   String?       @db.Text
   notes         String?       @db.Text
+  completedAt   DateTime?
   createdAt     DateTime      @default(now())
 
   tasks Task[]

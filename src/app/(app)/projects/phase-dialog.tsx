@@ -36,6 +36,7 @@ export default function PhaseDialog({
   const [supervisorId, setSupervisorId] = useState(initial.supervisorId);
   const [startDate, setStartDate] = useState(initial.startDate);
   const [dueDate, setDueDate] = useState(initial.dueDate);
+  const [completedDate, setCompletedDate] = useState(initial.completedDate ?? "");
   const [description, setDescription] = useState(initial.description);
   const [error, setError] = useState<string | undefined>();
   const [pending, startTransition] = useTransition();
@@ -54,7 +55,7 @@ export default function PhaseDialog({
 
   function save() {
     startTransition(async () => {
-      const result = await onSave({ name, status, phaseType, teamMemberIds, supervisorId, startDate, dueDate, description });
+      const result = await onSave({ name, status, phaseType, teamMemberIds, supervisorId, startDate, dueDate, completedDate, description });
       if (result?.error) setError(result.error);
       else onClose();
     });
@@ -153,6 +154,13 @@ export default function PhaseDialog({
               onChange={(e) => setDueDate(e.target.value)}
               className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
             />
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.completedDate}</label>
+            <input type="date" value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30" />
           </div>
         </div>
 

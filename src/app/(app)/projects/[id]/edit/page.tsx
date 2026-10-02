@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth";
 import { getHour12 } from "@/lib/time-format";
 import ProjectForm from "../../project-form";
 import { getLang } from "@/lib/i18n/get-lang";
+import { loadTypeInfo } from "@/lib/project-type-store";
+
 import { getDict } from "@/lib/i18n/dictionaries";
 
 function toDateInput(value: Date | null): string {
@@ -41,10 +43,13 @@ export default async function EditProjectPage({
 
   const lang = await getLang();
   const t = getDict(lang);
+  const { labels: typeLabels, customKeys: customTypeKeys } = await loadTypeInfo(lang);
   const boundUpdate = updateProject.bind(null, project.id);
 
   return (
     <ProjectForm
+      typeLabels={typeLabels}
+      customTypeKeys={customTypeKeys}
       action={boundUpdate}
       defaultValues={{
         ...project,
@@ -57,6 +62,7 @@ export default async function EditProjectPage({
           supervisorId: p.supervisorId,
           startDate: toDateInput(p.startDate),
           dueDate: toDateInput(p.dueDate),
+          completedDate: toDateInput(p.completedAt),
           description: p.description,
         })),
       }}

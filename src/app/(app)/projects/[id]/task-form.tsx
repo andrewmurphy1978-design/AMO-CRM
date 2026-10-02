@@ -13,6 +13,7 @@ type TaskFormValues = {
   supervisorId?: string | null;
   startDate?: Date | string | null;
   dueDate?: Date | string | null;
+  completedAt?: Date | string | null;
 };
 
 export default function TaskForm({
@@ -141,6 +142,10 @@ export default function TaskForm({
             defaultValue={toDateInput(defaultValues?.dueDate)}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.completedDate}</label>
+          <input type="date" name="completedDate" defaultValue={toDateInput(defaultValues?.completedAt)} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30" />
         </div>
         {phases && phases.length > 0 && (
           <div>

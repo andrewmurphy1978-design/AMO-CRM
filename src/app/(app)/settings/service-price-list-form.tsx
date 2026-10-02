@@ -24,7 +24,7 @@ const FIELD_CLASS =
 const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
 
 // One dialog for both Add and Edit (Delete lives in its header when editing).
-function ServiceDialog({ item, lang, onClose }: { item: ServiceItem | null; lang: Lang; onClose: () => void }) {
+function ServiceDialog({ item, lang, onClose, customTypes }: { item: ServiceItem | null; lang: Lang; onClose: () => void; customTypes: { key: string; label: string }[] }) {
   const t = getDict(lang);
   const [deleting, startDelete] = useTransition();
 
@@ -94,6 +94,11 @@ function ServiceDialog({ item, lang, onClose }: { item: ServiceItem | null; lang
                 {t.projectTypes[tp as keyof typeof t.projectTypes]}
               </option>
             ))}
+            {customTypes.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
+              </option>
+            ))}
           </select>
           <p className="mt-1 text-xs text-soft">
             {lang === "fr" ? "Dans une proposition, les services du type du projet sont proposés en premier." : "In a proposal, the services for the project's type are offered first."}
@@ -112,7 +117,7 @@ function ServiceDialog({ item, lang, onClose }: { item: ServiceItem | null; lang
   );
 }
 
-export default function ServicePriceListForm({ items, lang }: { items: ServiceItem[]; lang: Lang }) {
+export default function ServicePriceListForm({ items, lang, customTypes = [] }: { items: ServiceItem[]; lang: Lang; customTypes?: { key: string; label: string }[] }) {
   // `null` = closed; { item: null } = adding; { item } = editing.
   const [dialog, setDialog] = useState<{ item: ServiceItem | null; key: number } | null>(null);
   const [counter, setCounter] = useState(0);
@@ -154,7 +159,7 @@ export default function ServicePriceListForm({ items, lang }: { items: ServiceIt
         {items.length === 0 && <p className="px-3 py-4 text-sm text-soft">{t.servicePriceList.noItems}</p>}
       </ul>
 
-      {dialog && <ServiceDialog key={dialog.key} item={dialog.item} lang={lang} onClose={() => setDialog(null)} />}
+      {dialog && <ServiceDialog key={dialog.key} item={dialog.item} lang={lang} customTypes={customTypes} onClose={() => setDialog(null)} />}
     </div>
   );
 }

@@ -25,6 +25,8 @@ import { getValidAccessToken } from "@/lib/google";
 import { getLinkedCalendarEvents, getEventLinkTargets } from "@/lib/calendar-links";
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
+import { loadTypeInfo } from "@/lib/project-type-store";
+
 import { frText, localizeText, localizeValue } from "@/lib/project-i18n";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -55,6 +57,7 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const { phase: phaseParam } = await searchParams;
   const lang = await getLang();
+  const { labels: typeLabels, customKeys: customTypeKeys } = await loadTypeInfo(lang);
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
@@ -244,6 +247,7 @@ export default async function ProjectDetailPage({
       supervisorId: task.supervisorId ?? "",
       startDate: toDateInput(task.startDate),
       dueDate: toDateInput(task.dueDate),
+      completedDate: toDateInput(task.completedAt),
       description: task.description ?? "",
     },
   }));
@@ -257,6 +261,7 @@ export default async function ProjectDetailPage({
     supervisorId: p.supervisorId,
     startDate: toDateInput(p.startDate),
     dueDate: toDateInput(p.dueDate),
+    completedDate: toDateInput(p.completedAt),
     description: p.description,
   }));
 
@@ -489,6 +494,8 @@ export default async function ProjectDetailPage({
               <ProjectGeneralDialog
                 action={updateProjectGeneral.bind(null, project.id)}
                 lang={lang}
+                typeLabels={typeLabels}
+                customTypeKeys={customTypeKeys}
                 contacts={clientOptions}
                 users={users}
                 values={{
@@ -501,6 +508,7 @@ export default async function ProjectDetailPage({
                   teamMemberIds: project.teamMembers.map((tm) => tm.userId),
                   startDate: toDateInput(project.startDate),
                   dueDate: toDateInput(project.dueDate),
+                  completedAt: toDateInput(project.completedAt),
                   description: project.description ?? "",
                 }}
               />
@@ -516,7 +524,7 @@ export default async function ProjectDetailPage({
               </div>
               <div>
                 <p className={LABEL_CLASS}>{t.projects.colType}</p>
-                <p className="mt-1 text-sm text-ink">{t.projectTypes[project.type]}</p>
+                <p className="mt-1 text-sm text-ink">{typeLabels[project.type] ?? project.type}</p>
               </div>
               <div>
                 <p className={LABEL_CLASS}>{t.projects.colClient}</p>
@@ -548,6 +556,10 @@ export default async function ProjectDetailPage({
                 <p className={LABEL_CLASS}>{t.projects.colDue}</p>
                 <p className="mt-1 text-sm text-ink">{project.dueDate ? longDate(project.dueDate, lang, dateLocale) : "—"}</p>
               </div>
+              <div>
+                <p className={LABEL_CLASS}>{t.projectForm.completedDate}</p>
+                <p className="mt-1 text-sm text-ink">{project.completedAt ? longDate(project.completedAt, lang, dateLocale) : "—"}</p>
+              </div>
             </div>
 
             {project.description && (
@@ -561,14 +573,14 @@ export default async function ProjectDetailPage({
           {template && template.fields.length > 0 && (
             <Card
               color="general"
-              title={`${t.projectTypes[project.type]} · ${lang === "fr" ? "Détails" : "Details"}`}
+              title={`${typeLabels[project.type] ?? project.type} · ${lang === "fr" ? "Détails" : "Details"}`}
               compact
               actions={
                 <ProjectDetailsDialog
                   action={updateProjectCustomFields.bind(null, project.id)}
                   fields={template.fields}
                   values={(project.customFields ?? {}) as FieldValues}
-                  title={`${t.projectTypes[project.type]} · ${lang === "fr" ? "Détails" : "Details"}`}
+                  title={`${typeLabels[project.type] ?? project.type} · ${lang === "fr" ? "Détails" : "Details"}`}
                   lang={lang}
                 />
               }

@@ -4,6 +4,7 @@ import { getProjectTemplate } from "@/lib/project-template-store";
 import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
 import type { InvoicePdfData, PdfAttachment, ProposalPdfData } from "@/lib/proposal-pdf";
 import { proposalSupplierCosts } from "@/lib/supplier-costs";
+import { getTypeLabels } from "@/lib/project-type-store";
 import { signPath } from "@/lib/signed-url";
 import { localizeText, localizeValue } from "@/lib/project-i18n";
 import { LOGO_FULL_EN_B64, LOGO_FULL_FR_B64 } from "@/lib/logo-assets";
@@ -69,6 +70,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
   const lang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
   const dict = getDict(lang);
+  const typeLabels = await getTypeLabels(db, dict.projectTypes as Record<string, string>, lang);
   const template = await getProjectTemplate(db, project.type);
   const answers = (project.customFields ?? {}) as FieldValues;
 
@@ -108,7 +110,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     client: clientBlock(project.contact),
     project: {
       name: project.name,
-      typeLabel: dict.projectTypes[project.type as keyof typeof dict.projectTypes] ?? project.type,
+      typeLabel: typeLabels[project.type] ?? project.type,
       description: project.description,
       startDate: project.startDate,
       dueDate: project.dueDate,
