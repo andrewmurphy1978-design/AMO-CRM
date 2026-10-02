@@ -17,11 +17,10 @@ import {
   attachSignedProposal,
   removeSignedProposal,
 } from "@/actions/proposals";
-import { approveInvoice, unapproveInvoice, invoiceSendInfo, markInvoiceSent, updateInvoiceStatus, deleteInvoice, updateInvoiceLineItems } from "@/actions/invoices";
+import { createDraftInvoice, approveInvoice, unapproveInvoice, invoiceSendInfo, markInvoiceSent, updateInvoiceStatus, deleteInvoice, updateInvoiceLineItems } from "@/actions/invoices";
 import ProposalForm from "./proposals/proposal-form";
 import InvoiceLineItemsForm from "./invoices/invoice-line-items-form";
 import SendDocumentButton from "./send-document-button";
-import NewInvoiceButton from "./new-invoice-button";
 
 type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
 type Line = { description: string; details?: string | null; quantity: number; unitPrice: number };
@@ -393,7 +392,24 @@ export function InvoicesCard({
         </>
       }
       compact
-      actions={<NewInvoiceButton projectId={projectId} lang={lang} />}
+      actions={
+        <button
+          type="button"
+          disabled={pending}
+          title={fr ? "Nouvelle facture" : "New invoice"}
+          aria-label={fr ? "Nouvelle facture" : "New invoice"}
+          onClick={() =>
+            startTransition(async () => {
+              const { id } = await createDraftInvoice(projectId);
+              setEditId({ id, key: Date.now() });
+              router.refresh();
+            })
+          }
+          className="flex h-5 w-5 items-center justify-center rounded text-lg font-bold leading-none text-white hover:bg-white/20 disabled:opacity-50"
+        >
+          +
+        </button>
+      }
     >
       {invoices.length === 0 ? (
         <p className="text-sm text-soft">—</p>

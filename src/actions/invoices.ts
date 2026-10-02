@@ -30,6 +30,30 @@ function revalidateBoth(projectId: string, contactId: string) {
   revalidatePath(`/contacts/${contactId}`);
 }
 
+// "+" on the Invoices card: starts an empty draft (the contact's currency and payment
+// terms, an automatic number) and returns its id so the full editor can open on it.
+export async function createDraftInvoice(projectId: string): Promise<{ id: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  const result = await withScopedPrismaClient(async (db) => {
+    const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { contact: true } });
+    const days = Number.parseInt(/\d+/.exec(project.contact.paymentTerms ?? "")?.[0] ?? "", 10);
+    const invoice = await db.invoice.create({
+      data: {
+        projectId,
+        status: "DRAFT",
+        amount: 0,
+        currency: project.contact.preferredCurrency || "CAD",
+        dueDate: Number.isFinite(days) ? new Date(Date.now() + days * 86400000) : null,
+      },
+    });
+    await db.invoice.update({ where: { id: invoice.id }, data: { number: `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${invoice.id.slice(-4).toUpperCase()}` } });
+    revalidateBoth(projectId, project.contactId);
+    return { id: invoice.id };
+  });
+  return result;
+}
+
 export async function createInvoice(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
