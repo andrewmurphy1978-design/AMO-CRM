@@ -29,20 +29,29 @@ export default async function ProjectTypesPage({ searchParams }: { searchParams:
     <div className="space-y-6">
       <PageHeader title={lang === "fr" ? "Personnalisation des types de projet" : "Project type customization"} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
 
-      <div className="flex flex-wrap gap-2">
-        {TEMPLATE_TYPES.map((tp) => (
-          <Link
-            key={tp}
-            href={`/project-types?type=${tp}`}
-            className={`rounded-full border px-3 py-1.5 text-sm font-medium ${tp === type ? "border-emerald-600 bg-emerald-600 text-white" : "border-card-border bg-card-bg text-ink hover:border-amo-gold"}`}
-          >
-            {typeLabels[tp]}
-            {saved.includes(tp) && <span className="ml-1 text-[10px] opacity-80">●</span>}
-          </Link>
-        ))}
-      </div>
+      <div className="grid gap-6 md:grid-cols-[13.5rem_minmax(0,1fr)] md:items-start">
+        {/* Second sidebar: stays in view while the editor scrolls. */}
+        <nav
+          aria-label={lang === "fr" ? "Types de projet" : "Project types"}
+          className="flex flex-wrap gap-2 md:sticky md:top-20 md:max-h-[calc(100dvh-6rem)] md:flex-col md:flex-nowrap md:gap-1 md:overflow-y-auto md:rounded-2xl md:border md:border-card-border md:bg-card-bg md:p-2 md:shadow-sm"
+        >
+          {TEMPLATE_TYPES.map((tp) => (
+            <Link
+              key={tp}
+              href={`/project-types?type=${tp}`}
+              scroll={false}
+              className={`flex items-center justify-between gap-2 rounded-full border px-3 py-1.5 text-sm font-medium md:rounded-lg md:border-transparent ${tp === type ? "border-emerald-600 bg-emerald-600 text-white" : "border-card-border bg-card-bg text-ink hover:border-amo-gold md:bg-transparent md:hover:bg-black/5"}`}
+            >
+              <span className="min-w-0 truncate">{typeLabels[tp]}</span>
+              {saved.includes(tp) && <span className="text-[10px] opacity-80">●</span>}
+            </Link>
+          ))}
+        </nav>
 
-      <TemplateEditor key={type} type={type} initial={templates[type]} typeLabels={typeLabels} isCustom={saved.includes(type)} />
+        <div className="min-w-0">
+          <TemplateEditor key={type} type={type} initial={templates[type]} typeLabels={typeLabels} isCustom={saved.includes(type)} />
+        </div>
+      </div>
     </div>
   );
 }
