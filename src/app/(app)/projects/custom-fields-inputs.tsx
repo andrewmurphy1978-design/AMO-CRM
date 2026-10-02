@@ -27,8 +27,9 @@ export default function CustomFieldsInputs({
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {fields
-        .filter((f) => isFieldVisible(f, values))
+        .filter((f) => isFieldVisible(f, values) || f.keepSpace)
         .map((field) => {
+          if (field.keepSpace && !isFieldVisible(field, values)) return <div key={field.key} className="hidden md:block" aria-hidden />;
           const name = `cf_${field.key}`;
           const v = values[field.key];
           if (field.type === "spacer") return <div key={field.key} className="hidden md:block" aria-hidden />;

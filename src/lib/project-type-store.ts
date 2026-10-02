@@ -24,17 +24,29 @@ export async function getTypeLabels(db: PrismaClient, base: Record<string, strin
   return mergeTypeLabels(base, await getCustomProjectTypes(db), lang);
 }
 
-/** Every type offered for new projects: built-ins in order, then custom ones. */
+/** Every type, default order: built-ins, then custom ones. */
 export function allTypeKeys(custom: { key: string }[]): string[] {
   return [...PROJECT_TYPE_ORDER, ...custom.map((c) => c.key)];
 }
 
+/** The saved order (drag and drop) applied to the default list. */
+export async function getOrderedTypeKeys(db: PrismaClient, custom: { key: string }[]): Promise<string[]> {
+  const rows = await db.projectTypeOrder.findMany({ orderBy: { position: "asc" } });
+  const all = allTypeKeys(custom);
+  const saved = rows.map((r) => r.key).filter((k) => all.includes(k));
+  return [...saved, ...all.filter((k) => !saved.includes(k))];
+}
+
 /** Labels and custom keys for server pages (opens its own scoped client). */
-export async function loadTypeInfo(lang: "en" | "fr"): Promise<{ labels: Record<string, string>; customKeys: string[]; custom: CustomProjectType[] }> {
+export async function loadTypeInfo(lang: "en" | "fr"): Promise<{ keys: string[]; labels: Record<string, string>; customKeys: string[]; custom: CustomProjectType[] }> {
   const { withScopedPrismaClient } = await import("@/lib/prisma");
   const { getDict } = await import("@/lib/i18n/dictionaries");
-  const custom = await withScopedPrismaClient((db) => getCustomProjectTypes(db));
+  const { custom, keys } = await withScopedPrismaClient(async (db) => {
+    const custom = await getCustomProjectTypes(db);
+    return { custom, keys: await getOrderedTypeKeys(db, custom) };
+  });
   return {
+    keys,
     labels: mergeTypeLabels(getDict(lang).projectTypes as Record<string, string>, custom, lang),
     customKeys: custom.map((c) => c.key),
     custom,

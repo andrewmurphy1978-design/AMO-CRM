@@ -82,3 +82,19 @@ export async function deleteProjectType(key: string): Promise<{ error?: string }
   revalidatePath("/projects");
   return result;
 }
+
+// Saves the order of the project type list (drag and drop on the customization page).
+export async function saveProjectTypeOrder(keys: string[]): Promise<void> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  await withScopedPrismaClient(async (db) => {
+    const custom = await db.customProjectType.findMany({ select: { key: true } });
+    const valid = new Set<string>([...TEMPLATE_TYPES, ...custom.map((c) => c.key)]);
+    const clean = [...new Set(keys)].filter((k) => valid.has(k));
+    await db.projectTypeOrder.deleteMany({});
+    if (clean.length > 0) await db.projectTypeOrder.createMany({ data: clean.map((key, position) => ({ key, position })) });
+  });
+  revalidatePath("/project-types");
+  revalidatePath("/projects");
+  revalidatePath("/projects/new");
+}

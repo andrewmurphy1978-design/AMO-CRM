@@ -861,6 +861,15 @@ model CustomProjectType {
   @@map("custom_project_types")
 }
 
+// The order project types are listed in (drag and drop on the customization
+// page). Types with no row keep their default position after the ordered ones.
+model ProjectTypeOrder {
+  key      String @id
+  position Int
+
+  @@map("project_type_order")
+}
+
 model ProjectTypeTemplate {
   type      String   @id
   config    Json

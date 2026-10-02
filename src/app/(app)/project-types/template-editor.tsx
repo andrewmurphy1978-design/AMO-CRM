@@ -104,9 +104,26 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   // Drag and drop of field cards: the card is only draggable while its handle is held.
-  const [armed, setArmed] = useState<number | null>(null);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
+  // Phases whose tasks are folded away (by phase index).
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const toggleCollapsed = (pi: number) =>
+    setCollapsed((c) => {
+      const n = new Set(c);
+      if (n.has(pi)) n.delete(pi);
+      else n.add(pi);
+      return n;
+    });
+  // Reorders phases and keeps the folded state attached to the right phases.
+  function reorderPhases(from: number, to: number) {
+    if (from === to) return;
+    const idx = (i: number) => (i === from ? to : from < to && i > from && i <= to ? i - 1 : from > to && i >= to && i < from ? i + 1 : i);
+    setCollapsed((c) => new Set([...c].map(idx)));
+    setPhases(moveTo(phases, from, to));
+  }
+  // Ids look like "f3" (field), "p1" (phase) or "t1.2" (task 2 of phase 1).
+  const [armed, setArmed] = useState<string | null>(null);
+  const [dragFrom, setDragFrom] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
 
   const { fields, phases } = config;
   const setFields = (f: FieldTpl[]) => setConfig((c) => ({ ...c, fields: f }));
@@ -196,10 +213,10 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
 
   const multiFields = fields.filter(isMulti);
 
-  const handle = (i: number) => (
+  const handle = (id: string) => (
     <span
       title="Drag to move"
-      onMouseDown={() => setArmed(i)}
+      onMouseDown={() => setArmed(id)}
       onMouseUp={() => setArmed(null)}
       className="cursor-grab select-none text-sm leading-none text-soft hover:text-ink"
       aria-hidden
@@ -207,21 +224,36 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
       ⠿
     </span>
   );
-  const dragProps = (i: number) => ({
-    draggable: armed === i,
+  // Same-kind drops only; a task can only move within its own phase.
+  function dropOn(from: string, to: string) {
+    const kind = to[0];
+    if (from[0] !== kind) return;
+    if (kind === "f") setFields(moveTo(fields, Number(from.slice(1)), Number(to.slice(1))));
+    else if (kind === "p") reorderPhases(Number(from.slice(1)), Number(to.slice(1)));
+    else if (kind === "t") {
+      const [fp, ft] = from.slice(1).split(".").map(Number);
+      const [tp, tt] = to.slice(1).split(".").map(Number);
+      if (fp === tp) setPhases(phases.map((ph, j) => (j === fp ? { ...ph, tasks: moveTo(ph.tasks, ft, tt) } : ph)));
+    }
+  }
+  const dragProps = (id: string) => ({
+    draggable: armed === id,
     onDragStart: (e: React.DragEvent) => {
-      setDragFrom(i);
+      e.stopPropagation();
+      setDragFrom(id);
       e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", String(i));
+      e.dataTransfer.setData("text/plain", id);
     },
     onDragOver: (e: React.DragEvent) => {
-      if (dragFrom === null) return;
+      if (dragFrom === null || dragFrom[0] !== id[0]) return;
       e.preventDefault();
-      if (dragOver !== i) setDragOver(i);
+      e.stopPropagation();
+      if (dragOver !== id) setDragOver(id);
     },
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
-      if (dragFrom !== null) setFields(moveTo(fields, dragFrom, i));
+      e.stopPropagation();
+      if (dragFrom !== null) dropOn(dragFrom, id);
       setDragFrom(null);
       setDragOver(null);
       setArmed(null);
@@ -232,6 +264,8 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
       setArmed(null);
     },
   });
+  const dropClass = (id: string, idle: string) =>
+    `${idle} ${dragOver === id && dragFrom !== id ? "ring-2 ring-emerald-600" : ""} ${dragFrom === id ? "opacity-50" : ""}`;
 
   return (
     <div className="space-y-6">
@@ -276,9 +310,9 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
         <div className="mt-3 grid items-start gap-3 lg:grid-cols-3">
           {fields.map((f, i) =>
             f.type === "spacer" ? (
-              <div key={i} {...dragProps(i)} className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border border-dashed p-3 ${dragOver === i && dragFrom !== i ? "border-emerald-600 bg-emerald-50/50" : "border-card-border"} ${dragFrom === i ? "opacity-50" : ""}`}>
+              <div key={i} {...dragProps(`f${i}`)} className={dropClass(`f${i}`, "flex min-w-0 items-center justify-between gap-2 rounded-xl border border-dashed border-card-border p-3")}>
                 <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-soft">
-                  {handle(i)}Free space (empty cell)
+                  {handle(`f${i}`)}Free space (empty cell)
                 </span>
                 <div className="flex items-center gap-1">
                   <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, -1))} disabled={i === 0}>
@@ -293,11 +327,11 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
                 </div>
               </div>
             ) : (
-            <div key={i} {...dragProps(i)} className={`min-w-0 rounded-xl border p-3 ${dragOver === i && dragFrom !== i ? "border-emerald-600 bg-emerald-50/50" : "border-card-border"} ${dragFrom === i ? "opacity-50" : ""}`}>
+            <div key={i} {...dragProps(`f${i}`)} className={dropClass(`f${i}`, "min-w-0 rounded-xl border border-card-border p-3")}>
               <div className="grid gap-2">
                 <div>
                   <label className={`${LABEL} flex items-center gap-2`}>
-                    {handle(i)}Label
+                    {handle(`f${i}`)}Label
                   </label>
                   <input value={f.label} onChange={(e) => relabel(i, e.target.value)} className={INPUT} />
                 </div>
@@ -361,6 +395,12 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
                   onChange={(c) => updateField(i, { showIf: c })}
                   fields={fields.filter((x) => x.key !== f.key)}
                 />
+                {f.showIf && (
+                  <label className="mt-1 flex items-center gap-2 text-xs text-ink">
+                    <input type="checkbox" checked={Boolean(f.keepSpace)} onChange={(e) => updateField(i, { keepSpace: e.target.checked || undefined })} />
+                    Keep its space empty while hidden (other fields don&apos;t move up)
+                  </label>
+                )}
               </div>
             </div>
             )
@@ -381,12 +421,23 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
         <p className="mt-1 text-xs text-soft">
           A task can be repeated for every selected value of one or more multi-choice fields (e.g. each language × each page); use {"{field_name}"} in its title.
         </p>
+        {phases.length > 0 && (
+          <button
+            type="button"
+            className={`${SMALL_BTN} mt-2`}
+            onClick={() => setCollapsed(collapsed.size >= phases.length ? new Set() : new Set(phases.map((_, i) => i)))}
+          >
+            {collapsed.size >= phases.length ? "▸ Show all tasks" : "▾ Hide all tasks (phases only)"}
+          </button>
+        )}
         <div className="mt-3 space-y-4">
           {phases.map((p, pi) => (
-            <div key={pi} className="rounded-xl border border-card-border p-3">
+            <div key={pi} {...dragProps(`p${pi}`)} className={dropClass(`p${pi}`, "rounded-xl border border-card-border p-3")}>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="min-w-[200px] flex-1">
-                  <label className={LABEL}>Phase {pi + 1}</label>
+                  <label className={`${LABEL} flex items-center gap-2`}>
+                    {handle(`p${pi}`)}Phase {pi + 1}
+                  </label>
                   <input value={p.name} onChange={(e) => updatePhase(pi, { name: e.target.value })} className={INPUT} />
                 </div>
                 <div>
@@ -399,23 +450,39 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
                     ))}
                   </select>
                 </div>
-                <button type="button" className={SMALL_BTN} onClick={() => setPhases(move(phases, pi, -1))} disabled={pi === 0}>
+                <button
+                  type="button"
+                  title={collapsed.has(pi) ? "Show tasks" : "Hide tasks"}
+                  aria-label={collapsed.has(pi) ? "Show tasks" : "Hide tasks"}
+                  aria-expanded={!collapsed.has(pi)}
+                  className={`${SMALL_BTN} py-2`}
+                  onClick={() => toggleCollapsed(pi)}
+                >
+                  {collapsed.has(pi) ? "▸" : "▾"} {p.tasks.length}
+                </button>
+                <button type="button" className={SMALL_BTN} onClick={() => reorderPhases(pi, pi - 1)} disabled={pi === 0}>
                   ↑
                 </button>
-                <button type="button" className={SMALL_BTN} onClick={() => setPhases(move(phases, pi, 1))} disabled={pi === phases.length - 1}>
+                <button type="button" className={SMALL_BTN} onClick={() => reorderPhases(pi, pi + 1)} disabled={pi === phases.length - 1}>
                   ↓
                 </button>
-                <button type="button" className={`${SMALL_BTN} text-red-600`} onClick={() => setPhases(phases.filter((_, j) => j !== pi))}>
-                  Delete phase
+                <button type="button" title="Delete phase" aria-label="Delete phase" className={`${SMALL_BTN} py-2 text-red-600`} onClick={() => {
+                    setCollapsed((c) => new Set([...c].filter((i) => i !== pi).map((i) => (i > pi ? i - 1 : i))));
+                    setPhases(phases.filter((_, j) => j !== pi));
+                  }}>
+                  <TrashIcon />
                 </button>
               </div>
               <div className="mt-2">
                 <CondEditor label="Create when" cond={p.when} onChange={(c) => updatePhase(pi, { when: c })} fields={fields} />
               </div>
+              {!collapsed.has(pi) && (
+              <>
               <ul className="mt-3 space-y-2 border-l-2 border-card-border pl-3">
                 {p.tasks.map((tk, ti) => (
-                  <li key={ti} className="space-y-1.5 rounded-lg bg-black/[0.03] p-2">
+                  <li key={ti} {...dragProps(`t${pi}.${ti}`)} className={dropClass(`t${pi}.${ti}`, "space-y-1.5 rounded-lg bg-black/[0.03] p-2")}>
                     <div className="flex items-center gap-1.5">
+                      {handle(`t${pi}.${ti}`)}
                       <input value={tk.title} onChange={(e) => updateTask(pi, ti, { title: e.target.value })} className={INPUT} placeholder="Task title" />
                       <button type="button" className={SMALL_BTN} onClick={() => updatePhase(pi, { tasks: move(p.tasks, ti, -1) })} disabled={ti === 0}>
                         ↑
@@ -423,8 +490,8 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
                       <button type="button" className={SMALL_BTN} onClick={() => updatePhase(pi, { tasks: move(p.tasks, ti, 1) })} disabled={ti === p.tasks.length - 1}>
                         ↓
                       </button>
-                      <button type="button" className={`${SMALL_BTN} text-red-600`} onClick={() => updatePhase(pi, { tasks: p.tasks.filter((_, j) => j !== ti) })}>
-                        ✕
+                      <button type="button" title="Delete task" aria-label="Delete task" className={`${SMALL_BTN} py-2 text-red-600`} onClick={() => updatePhase(pi, { tasks: p.tasks.filter((_, j) => j !== ti) })}>
+                        <TrashIcon />
                       </button>
                     </div>
                     <CondEditor label="Create when" cond={tk.when} onChange={(c) => updateTask(pi, ti, { when: c })} fields={fields} />
@@ -452,12 +519,16 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
               <button type="button" className={`${SMALL_BTN} mt-2`} onClick={() => updatePhase(pi, { tasks: [...p.tasks, { title: "" }] })}>
                 + Add task
               </button>
+              </>
+              )}
             </div>
           ))}
         </div>
-        <button type="button" onClick={() => setPhases([...phases, { name: "New phase", tasks: [] }])} className={`${SMALL_BTN} mt-3`}>
-          + Add phase
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => setPhases([...phases, { name: "New phase", tasks: [] }])} className={SMALL_BTN}>
+            + Add phase
+          </button>
+        </div>
       </section>
     </div>
   );

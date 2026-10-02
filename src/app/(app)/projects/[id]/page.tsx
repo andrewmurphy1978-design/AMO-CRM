@@ -57,7 +57,7 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const { phase: phaseParam } = await searchParams;
   const lang = await getLang();
-  const { labels: typeLabels, customKeys: customTypeKeys } = await loadTypeInfo(lang);
+  const { labels: typeLabels, keys: customTypeKeys } = await loadTypeInfo(lang);
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
   const intlLocale = lang === "fr" ? "fr-CA" : "en-US";
@@ -587,8 +587,9 @@ export default async function ProjectDetailPage({
             >
               <div className="grid gap-4 lg:grid-cols-3">
                 {template.fields
-                  .filter((f) => isFieldVisible(f, (project.customFields ?? {}) as FieldValues))
+                  .filter((f) => isFieldVisible(f, (project.customFields ?? {}) as FieldValues) || f.keepSpace)
                   .map((f) => {
+                    if (f.keepSpace && !isFieldVisible(f, (project.customFields ?? {}) as FieldValues)) return <div key={f.key} className="hidden lg:block" aria-hidden />;
                     if (f.type === "spacer") return <div key={f.key} className="hidden lg:block" aria-hidden />;
                     const v = localizeValue(displayValue(((project.customFields ?? {}) as FieldValues)[f.key]), lang);
                     return (

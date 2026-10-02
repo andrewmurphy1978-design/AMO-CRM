@@ -26,6 +26,9 @@ export interface FieldTpl {
   allowOther?: boolean;
   // Only asked (and used) while this condition holds.
   showIf?: Cond;
+  // While the field is hidden, leave its cell empty instead of letting the
+  // next fields move up.
+  keepSpace?: boolean;
   // A Yes/No field that, when Yes, also creates a separate project of this
   // type (e.g. Blog -> a "Blog building" project for the same client).
   spawnType?: string;
@@ -90,8 +93,9 @@ export const LEGACY_PROJECT_TYPES = ["CONSULTING", "OTHER"] as const;
 
 export const TEMPLATE_TYPES = PROJECT_TYPE_ORDER;
 
-export function projectTypeOptions(labels: Record<string, string>, current?: string | null, customKeys: string[] = []): { value: string; label: string }[] {
-  const list: string[] = [...PROJECT_TYPE_ORDER, ...customKeys];
+// `keys`: the full ordered list (built-in + custom, as saved); defaults to the built-in order.
+export function projectTypeOptions(labels: Record<string, string>, current?: string | null, keys?: string[]): { value: string; label: string }[] {
+  const list: string[] = keys && keys.length > 0 ? [...keys] : [...PROJECT_TYPE_ORDER];
   if (current && (LEGACY_PROJECT_TYPES as readonly string[]).includes(current)) list.push(current);
   return list.map((value) => ({ value, label: labels[value] ?? value }));
 }
@@ -259,6 +263,7 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
       ...(Array.isArray(f?.options) ? { options: f.options.map(str).map((o: string) => o.trim()).filter(Boolean) } : {}),
       ...(f?.allowOther ? { allowOther: true } : {}),
       ...(cond(f?.showIf) ? { showIf: cond(f?.showIf) } : {}),
+      ...(f?.keepSpace && cond(f?.showIf) ? { keepSpace: true } : {}),
       ...(type === "yesno" && f?.spawnType ? { spawnType: str(f.spawnType), ...(f.spawnName ? { spawnName: str(f.spawnName) } : {}) } : {}),
     });
   }

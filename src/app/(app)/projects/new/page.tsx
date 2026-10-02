@@ -18,7 +18,7 @@ export default async function NewProjectPage({
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
-  const { labels: typeLabels, customKeys: customTypeKeys } = await loadTypeInfo(lang);
+  const { labels: typeLabels, keys: customTypeKeys } = await loadTypeInfo(lang);
 
   // One shared client — see src/lib/prisma.ts for why.
   const { contacts, users, hour12, templates } = await withScopedPrismaClient(async (db) => {

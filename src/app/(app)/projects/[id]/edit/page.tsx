@@ -43,7 +43,7 @@ export default async function EditProjectPage({
 
   const lang = await getLang();
   const t = getDict(lang);
-  const { labels: typeLabels, customKeys: customTypeKeys } = await loadTypeInfo(lang);
+  const { labels: typeLabels, keys: customTypeKeys } = await loadTypeInfo(lang);
   const boundUpdate = updateProject.bind(null, project.id);
 
   return (
