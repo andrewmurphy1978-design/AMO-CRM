@@ -863,6 +863,24 @@ model CustomProjectType {
 
 // The order project types are listed in (drag and drop on the customization
 // page). Types with no row keep their default position after the ordered ones.
+// Apps & subscription fees of a project (paid by the client directly to the
+// providers). Filled from the apps chosen in the Project details; the proposal's
+// "Apps & subscription fees" section is built from these.
+model ProjectSubscription {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  amount    Float    @default(0)
+  period    String   @default("month") // month | year | once
+  note      String   @default("")
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@map("project_subscriptions")
+}
+
 model ProjectTypeOrder {
   key      String @id
   position Int
@@ -893,6 +911,15 @@ model Project {
   lifecycleManaged Boolean       @default(false)
   // When the project was completed (set automatically, editable).
   completedAt      DateTime?
+  // The email address used to sign up for the apps / subscriptions of this project.
+  subscriptionEmail String?
+  // A project spawned from another (Blog / Newsletter / ... answered Yes): the
+  // parent handles the proposal and the payments; its proposal includes this
+  // project's phases and tasks.
+  parentProjectId  String?
+  parentProject    Project?      @relation("LinkedProjects", fields: [parentProjectId], references: [id], onDelete: SetNull)
+  linkedProjects   Project[]     @relation("LinkedProjects")
+  subscriptions    ProjectSubscription[]
   status           ProjectStatus @default(PLANNING)
   type             String        @default("OTHER")
 
@@ -1833,6 +1860,11 @@ model ExchangeRateCache {
 // until he flips it.
 model BillingSettings {
   id                String   @id @default("singleton")
+  // Where clients pay the 1st instalment (proposal email): an Interac e-Transfer
+  // address and/or a credit-card payment page, plus the funnel page to book a call.
+  interacEmail      String?
+  cardPaymentUrl    String?
+  bookingUrl        String?
   chargeCanadianTax Boolean  @default(false)
   gstNumber         String?
   qstNumber         String?

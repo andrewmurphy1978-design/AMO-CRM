@@ -21,7 +21,7 @@ export default function SendDocumentButton({
   emailComposeLabels,
 }: {
   label: string;
-  getInfo: () => Promise<{ error?: string; subject?: string; html?: string; to?: string | null }>;
+  getInfo: () => Promise<{ error?: string; subject?: string; html?: string; to?: string | null; attachment?: { filename: string; mimeType: string; base64: string } }>;
   onSentAction: () => Promise<void>;
   defaultComposeSource: string | null;
   lang: Lang;
@@ -43,6 +43,7 @@ export default function SendDocumentButton({
       if (!composed) return setError(lang === "fr" ? "Aucune boîte courriel connectée." : "No mailbox is connected.");
       composed.message.subject = info.subject ?? "";
       composed.initialHtml = info.html ?? "";
+      if (info.attachment) composed.initialAttachments = [info.attachment];
       setTarget(composed);
     });
   }

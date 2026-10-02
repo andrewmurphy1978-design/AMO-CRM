@@ -150,6 +150,8 @@ export async function ensureInstalmentInvoices(db: PrismaClient, projectId: stri
 
 async function setStatus(db: PrismaClient, projectId: string, status: "PLANNING" | "ACTIVE" | "FINAL" | "COMPLETED") {
   await db.project.update({ where: { id: projectId }, data: { status, ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) } });
+  // Linked projects (spawned from this one) follow the parent's status.
+  await db.project.updateMany({ where: { parentProjectId: projectId, NOT: { status: "CANCELLED" } }, data: { status, ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) } });
 }
 
 // One step of the lifecycle; true if something changed (so the caller loops).

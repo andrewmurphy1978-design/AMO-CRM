@@ -26,6 +26,9 @@ export interface FieldTpl {
   allowOther?: boolean;
   // Only asked (and used) while this condition holds.
   showIf?: Cond;
+  // Names an app / service the client pays for: its answer is added to the
+  // project's Apps & subscriptions (default: the built-in app-like fields).
+  app?: boolean;
   // While the field is hidden, leave its cell empty instead of letting the
   // next fields move up.
   keepSpace?: boolean;
@@ -282,6 +285,7 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
       ...(f?.allowOther ? { allowOther: true } : {}),
       ...(cond(f?.showIf) ? { showIf: cond(f?.showIf) } : {}),
       ...(f?.keepSpace && cond(f?.showIf) ? { keepSpace: true } : {}),
+      ...(typeof f?.app === "boolean" ? { app: f.app } : {}),
       ...(type === "yesno" && f?.spawnType ? { spawnType: str(f.spawnType), ...(f.spawnName ? { spawnName: str(f.spawnName) } : {}) } : {}),
     });
   }

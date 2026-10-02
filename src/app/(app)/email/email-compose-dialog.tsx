@@ -27,6 +27,8 @@ export interface EmailComposeTarget {
   linkConfig?: EmailLinkConfig;
   // For mode "new": body placed above the signature (e.g. a prepared message).
   initialHtml?: string;
+  // For mode "new": files attached from the start (e.g. the proposal PDF).
+  initialAttachments?: { filename: string; mimeType: string; base64: string }[];
   // Set only for mode "draft" — which Drafts-folder row this came from, so
   // Send/Discard know where to remove it from afterward (see
   // sendDraftAction/discardDraftAction — a draft's own account is never in
@@ -323,7 +325,7 @@ export default function EmailComposeDialog({
     setBcc("");
     setHtml("");
     setError(null);
-    setAttachments([]);
+    setAttachments((target.initialAttachments ?? []).map((a) => ({ ...a, sizeBytes: Math.floor((a.base64.length * 3) / 4) })));
     const { message, mode } = target;
     setFromIdentity({ source: message.replyIdentity.source, accountAddress: message.replyIdentity.accountAddress });
 

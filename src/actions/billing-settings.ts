@@ -30,12 +30,18 @@ export async function updateBillingSettings(
         chargeCanadianTax: formData.get("chargeCanadianTax") === "on",
         gstNumber: String(formData.get("gstNumber") ?? "").trim() || null,
         qstNumber: String(formData.get("qstNumber") ?? "").trim() || null,
+        interacEmail: String(formData.get("interacEmail") ?? "").trim() || null,
+        cardPaymentUrl: String(formData.get("cardPaymentUrl") ?? "").trim() || null,
+        bookingUrl: String(formData.get("bookingUrl") ?? "").trim() || null,
       },
       create: {
         id: "singleton",
         chargeCanadianTax: formData.get("chargeCanadianTax") === "on",
         gstNumber: String(formData.get("gstNumber") ?? "").trim() || null,
         qstNumber: String(formData.get("qstNumber") ?? "").trim() || null,
+        interacEmail: String(formData.get("interacEmail") ?? "").trim() || null,
+        cardPaymentUrl: String(formData.get("cardPaymentUrl") ?? "").trim() || null,
+        bookingUrl: String(formData.get("bookingUrl") ?? "").trim() || null,
       },
     })
   );

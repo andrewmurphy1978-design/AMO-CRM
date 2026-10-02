@@ -10,6 +10,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { buildPlan, cleanValues, readFieldValues, type FieldValues } from "@/lib/project-templates";
+import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 
 const ProjectSchema = z.object({
   name: z.string().trim().min(1, "Project name is required"),
@@ -158,6 +159,8 @@ interface NewProjectInput {
   userName: string;
   template: Parameters<typeof buildPlan>[0];
   values: FieldValues;
+  // A project spawned from another: no Proposal phase (the parent handles it).
+  parentProjectId?: string;
 }
 
 // Creates the project row, its team, an activity entry, and the phases and
@@ -176,16 +179,22 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
       startDate: input.startDate,
       dueDate: input.dueDate,
       customFields: Object.keys(values).length > 0 ? (values as never) : undefined,
-      lifecycleManaged: input.template.progressive !== false,
+      lifecycleManaged: !input.parentProjectId && input.template.progressive !== false,
+      parentProjectId: input.parentProjectId,
     },
   });
+
+  // The apps chosen in the details become the project's Apps & subscriptions.
+  const subs = appSubscriptionsFrom(input.template, values);
+  if (subs.length > 0) await db.projectSubscription.createMany({ data: subs.map((x, order) => ({ ...x, projectId: project.id, order })) });
 
   if (input.teamMemberIds.length > 0) {
     await db.projectTeamMember.createMany({ data: input.teamMemberIds.map((userId) => ({ projectId: project.id, userId })) });
   }
 
   const plan = buildPlan(input.template, values, input.name);
-  const progressive = input.template.progressive !== false;
+  if (input.parentProjectId) plan.phases = plan.phases.filter((p) => p.stage !== "PROPOSAL");
+  const progressive = !input.parentProjectId && input.template.progressive !== false;
   // Progressive (default): only the first phase now — the rest are released as
   // each phase is completed. Phases that ended up with no tasks are dropped.
   const phases = progressive ? plan.phases.filter((p) => p.tasks.length > 0) : plan.phases;
@@ -259,7 +268,7 @@ export async function createProject(
     const plan = buildPlan(template, values, data.name);
     for (const spawn of plan.spawns) {
       const spawnTemplate = await getProjectTemplate(db, spawn.type);
-      await createProjectFromTemplate(db, { ...common, name: spawn.name, type: spawn.type, template: spawnTemplate, values: {} });
+      await createProjectFromTemplate(db, { ...common, name: spawn.name, type: spawn.type, template: spawnTemplate, values: {}, parentProjectId: project.id });
     }
     return project;
   });
@@ -377,6 +386,7 @@ export async function updateProjectGeneral(
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        subscriptionEmail: String(formData.get("subscriptionEmail") ?? "").trim() || null,
       },
     });
     await db.projectTeamMember.deleteMany({ where: { projectId } });
@@ -445,6 +455,11 @@ export async function updateProjectCustomFields(
       where: { id: projectId },
       data: { customFields: Object.keys(values).length > 0 ? (values as never) : ({} as never) },
     });
+    // Newly chosen apps join the Apps & subscriptions (existing rows are kept).
+    const have = await db.projectSubscription.findMany({ where: { projectId }, select: { name: true } });
+    const known = new Set(have.map((x) => x.name.trim().toLowerCase()));
+    const fresh = appSubscriptionsFrom(template, values).filter((x) => !known.has(x.name.toLowerCase()));
+    if (fresh.length > 0) await db.projectSubscription.createMany({ data: fresh.map((x, i) => ({ ...x, projectId, order: have.length + i })) });
   });
 
   revalidatePath(`/projects/${projectId}`);

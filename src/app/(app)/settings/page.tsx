@@ -426,6 +426,9 @@ export default async function SettingsPage({
             chargeCanadianTax={billingSettings.chargeCanadianTax}
             gstNumber={billingSettings.gstNumber}
             qstNumber={billingSettings.qstNumber}
+            interacEmail={billingSettings.interacEmail}
+            cardPaymentUrl={billingSettings.cardPaymentUrl}
+            bookingUrl={billingSettings.bookingUrl}
             lang={lang}
           />
         </SettingsCard>

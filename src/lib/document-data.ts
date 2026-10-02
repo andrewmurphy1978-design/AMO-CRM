@@ -64,7 +64,11 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   if (!proposal || proposal.projectId !== projectId) return null;
   const project = await db.project.findUnique({
     where: { id: projectId },
-    include: { contact: true, phases: { orderBy: { order: "asc" }, include: { tasks: { orderBy: { createdAt: "asc" } } } } },
+    include: {
+      contact: true,
+      phases: { orderBy: { order: "asc" }, include: { tasks: { orderBy: { createdAt: "asc" } } } },
+      linkedProjects: { orderBy: { createdAt: "asc" }, include: { phases: { orderBy: { order: "asc" }, include: { tasks: { orderBy: { createdAt: "asc" } } } } } },
+    },
   });
   if (!project) return null;
   const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
@@ -80,7 +84,13 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const existing = project.phases
     .filter((p) => !/^(proposal|proposition)$/i.test(p.name))
     .map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.map((tk) => tk.title).filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }));
-  const plan = [...existing, ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }))];
+  // Linked projects (Blog, Newsletters...) are part of this proposal: their phases and tasks follow.
+  const linked = project.linkedProjects.flatMap((lp) =>
+    lp.phases
+      .filter((p) => !/^(proposal|proposition)$/i.test(p.name))
+      .map((p) => ({ name: `${lp.name} — ${localizeText(p.name, lang)}`, tasks: p.tasks.map((tk) => tk.title).filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }))
+  );
+  const plan = [...existing, ...linked, ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }))];
 
   const grand = proposal.subtotal + proposal.taxAmount;
   const instalments = proposal.paymentSchedule.map((r) => ({

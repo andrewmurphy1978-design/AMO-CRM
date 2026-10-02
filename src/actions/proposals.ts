@@ -10,8 +10,8 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import { computeBillingTotals, contactTaxLocation, type LineItemInput } from "@/lib/billing-totals";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
-import { publicBaseUrl } from "@/lib/twilio";
-import { signedDocumentUrl } from "@/lib/document-data";
+import { loadProposalPdfData } from "@/lib/document-data";
+import { buildProposalPdf } from "@/lib/proposal-pdf";
 import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
 
 const ProposalSchema = z.object({
@@ -32,6 +32,24 @@ function revalidateBoth(projectId: string, contactId: string) {
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/contacts/${contactId}`);
 }
+
+// The Proposal phase's "Prepare the proposal" / "Present (send) the proposal" tasks
+// follow the proposal: approving completes the first, sending the second.
+const PREPARE_TASK = /^(prepare the proposal|préparer la soumission|préparer la proposition)/i;
+const SEND_TASK = /^(present \(send\) the proposal|présenter \(envoyer\) la soumission|présenter \(envoyer\) la proposition)/i;
+async function setProposalTask(db: PrismaClient, projectId: string, which: RegExp, done: boolean) {
+  const tasks = await db.task.findMany({ where: { projectId }, select: { id: true, title: true, status: true } });
+  const ids = tasks.filter((t) => which.test(t.title) && (done ? t.status !== "DONE" : t.status === "DONE")).map((t) => t.id);
+  if (ids.length > 0) await db.task.updateMany({ where: { id: { in: ids } }, data: { status: done ? "DONE" : "TODO", completedAt: done ? new Date() : null } });
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export async function createProposal(
   _prevState: { error?: string; success?: string } | undefined,
@@ -314,8 +332,14 @@ export async function updateFullProposal(
   const paymentSchedule = readPaymentSchedule(formData);
   const subscriptions = readSubscriptions(formData);
 
+  let locked = false;
   await withScopedPrismaClient(async (db) => {
     const existing = await db.proposal.findUniqueOrThrow({ where: { id: proposalId } });
+    // Once the proposal has gone to the client it can no longer be edited.
+    if (existing.status !== "DRAFT") {
+      locked = true;
+      return;
+    }
     const { project, totals } = await computeProposalTotals(db, data.projectId, lineItems);
 
     await db.proposal.update({
@@ -334,9 +358,9 @@ export async function updateFullProposal(
         taxAmount: totals.total,
         totalAmount: totals.totalAmount,
         amount: totals.totalAmount,
-        sentAt: data.status === "SENT" && existing.status !== "SENT" ? new Date() : existing.sentAt,
+        sentAt: data.status === "SENT" ? new Date() : existing.sentAt,
         respondedAt:
-          (data.status === "ACCEPTED" || data.status === "DECLINED") && existing.status !== data.status
+          data.status === "ACCEPTED" || data.status === "DECLINED"
             ? new Date()
             : existing.respondedAt,
       },
@@ -358,11 +382,12 @@ export async function updateFullProposal(
       });
     }
 
-    if (data.status === "ACCEPTED" && existing.status !== "ACCEPTED") await onProposalAccepted(db, data.projectId);
+    if (data.status === "ACCEPTED") await onProposalAccepted(db, data.projectId);
 
     revalidateBoth(data.projectId, project.contactId);
   });
 
+  if (locked) return { error: "This proposal has been sent and can no longer be edited." };
   revalidatePath(`/projects/${data.projectId}/proposals/${proposalId}`);
   return { success: t.actions.proposalUpdated };
 }
@@ -415,7 +440,7 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
     return draftProposalWithAI(db, {
       clientLabel,
       projectName: project.name,
-      currency: "CAD",
+      currency: project.contact.preferredCurrency || "CAD",
       servicesCatalog,
       brief: fullBrief,
       language,
@@ -435,6 +460,7 @@ export async function approveProposal(proposalId: string, projectId: string) {
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
     await db.proposal.update({ where: { id: proposalId }, data: { approvedAt: new Date() } });
+    await setProposalTask(db, projectId, PREPARE_TASK, true);
     return contactIdForProject(db, projectId);
   });
   revalidateBoth(projectId, contactId);
@@ -444,32 +470,78 @@ export async function unapproveProposal(proposalId: string, projectId: string) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
+    // Only a proposal that hasn't gone out can go back to draft.
+    const p = await db.proposal.findUnique({ where: { id: proposalId }, select: { status: true } });
+    if (p?.status && p.status !== "DRAFT") return contactIdForProject(db, projectId);
     await db.proposal.update({ where: { id: proposalId }, data: { approvedAt: null } });
+    await setProposalTask(db, projectId, PREPARE_TASK, false);
     return contactIdForProject(db, projectId);
   });
   revalidateBoth(projectId, contactId);
 }
 
-// What the "Send to client" email should say: subject, body (with a signed link
-// to the PDF) and the recipient. Refuses an unapproved proposal.
-export async function proposalSendInfo(proposalId: string, projectId: string): Promise<{ error?: string; subject?: string; html?: string; to?: string | null }> {
+export interface ProposalSendInfo {
+  error?: string;
+  subject?: string;
+  html?: string;
+  to?: string | null;
+  attachment?: { filename: string; mimeType: string; base64: string };
+}
+
+// What the "Send to client" email should say: subject, a body (the cover letter, an
+// invitation to book a call, how to pay the 1st instalment) with the proposal PDF
+// attached, and the recipient. Refuses an unapproved proposal.
+export async function proposalSendInfo(proposalId: string, projectId: string): Promise<ProposalSendInfo> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient(async (db) => {
-    const proposal = await db.proposal.findUnique({ where: { id: proposalId }, include: { project: { include: { contact: true } } } });
+    const proposal = await db.proposal.findUnique({
+      where: { id: proposalId },
+      include: { project: { include: { contact: true } }, paymentSchedule: { orderBy: { order: "asc" } } },
+    });
     if (!proposal || proposal.projectId !== projectId) return { error: "Proposal not found." };
     if (!proposal.approvedAt) return { error: "Approve the proposal before sending it." };
-    const origin = publicBaseUrl();
-    if (!origin) return { error: "NEXTAUTH_URL isn't set, so a link to the PDF can't be made." };
-    const url = await signedDocumentUrl(origin, `/api/projects/${projectId}/proposals/${proposalId}/pdf`, 30);
+    if (proposal.status !== "DRAFT") return { error: "This proposal has already been sent." };
+
+    const pdfData = await loadProposalPdfData(db, projectId, proposalId);
+    if (!pdfData) return { error: "Couldn't build the proposal PDF." };
+    const pdf = await buildProposalPdf(pdfData.data);
+
+    const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
     const c = proposal.project.contact;
     const fr = (c.locale ?? "").toLowerCase().startsWith("fr");
     const first = c.firstName || "";
-    const subject = fr ? `Proposition — ${proposal.project.name}` : `Proposal — ${proposal.project.name}`;
-    const html = fr
-      ? `<p>Bonjour ${first},</p><p>Voici la proposition pour <strong>${proposal.project.name}</strong>. Vous pouvez la consulter et la télécharger en PDF ici : <a href="${url}">${proposal.title} (PDF)</a>. Le lien est valide 30 jours.</p><p>Dites-moi si vous avez des questions; je suis heureux d'en discuter.</p>`
-      : `<p>Hi ${first},</p><p>Here is the proposal for <strong>${proposal.project.name}</strong>. You can view and download the PDF here: <a href="${url}">${proposal.title} (PDF)</a>. The link is valid for 30 days.</p><p>Let me know if you have any questions — happy to talk it through.</p>`;
-    return { subject, html, to: c.billingEmail || c.email };
+    const grand = proposal.subtotal + proposal.taxAmount;
+    const firstRow = proposal.paymentSchedule[0];
+    const firstAmount = firstRow ? firstRow.amount ?? (firstRow.percentage != null ? Math.round((firstRow.percentage / 100) * grand * 100) / 100 : null) : null;
+    const money = (n: number) => new Intl.NumberFormat(fr ? "fr-CA" : "en-CA", { style: "currency", currency: proposal.currency }).format(n);
+
+    const subject = fr ? `Soumission — ${proposal.project.name}` : `Proposal — ${proposal.project.name}`;
+    const letter = (proposal.coverLetter ?? "").trim();
+    const letterHtml = letter
+      ? letter.split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("")
+      : `<p>${fr ? `Bonjour ${esc(first)},` : `Hi ${esc(first)},`}</p><p>${fr ? `Vous trouverez ci-joint la soumission pour <strong>${esc(proposal.project.name)}</strong>.` : `Please find attached the proposal for <strong>${esc(proposal.project.name)}</strong>.`}</p>`;
+
+    const callHtml = fr
+      ? `<p>Je serais heureux de passer la soumission en revue avec vous et de répondre à vos questions. ${settings.bookingUrl ? `Vous pouvez réserver un appel au moment qui vous convient ici : <a href="${esc(settings.bookingUrl)}">réserver un appel</a>.` : "Répondez simplement à ce courriel pour fixer un moment."}</p>`
+      : `<p>I'd be happy to walk you through the proposal and answer any questions. ${settings.bookingUrl ? `You can book a call at a time that suits you here: <a href="${esc(settings.bookingUrl)}">book a call</a>.` : "Just reply to this email to set up a time."}</p>`;
+
+    const methods: string[] = [];
+    if (settings.interacEmail) methods.push(fr ? `Virement Interac à <strong>${esc(settings.interacEmail)}</strong>` : `Interac e-Transfer to <strong>${esc(settings.interacEmail)}</strong>`);
+    if (settings.cardPaymentUrl) methods.push(fr ? `Carte de crédit : <a href="${esc(settings.cardPaymentUrl)}">payer en ligne</a>` : `Credit card: <a href="${esc(settings.cardPaymentUrl)}">pay online</a>`);
+    const payHtml =
+      methods.length > 0
+        ? fr
+          ? `<p><strong>Pour démarrer — 1er versement${firstAmount != null ? ` : ${money(firstAmount)}` : ""}</strong><br>Vous pouvez payer par :</p><ul>${methods.map((m) => `<li>${m}</li>`).join("")}</ul><p>Dès la réception du paiement, la facture vous sera envoyée automatiquement.</p>`
+          : `<p><strong>To get started — 1st instalment${firstAmount != null ? `: ${money(firstAmount)}` : ""}</strong><br>You can pay by:</p><ul>${methods.map((m) => `<li>${m}</li>`).join("")}</ul><p>Once the payment is received, your invoice will be sent to you automatically.</p>`
+        : "";
+
+    return {
+      subject,
+      html: letterHtml + callHtml + payHtml,
+      to: c.billingEmail || c.email,
+      attachment: { filename: pdfData.fileName, mimeType: "application/pdf", base64: toBase64(pdf) },
+    };
   });
 }
 
@@ -479,6 +551,8 @@ export async function markProposalSent(proposalId: string, projectId: string) {
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
     await db.proposal.update({ where: { id: proposalId }, data: { status: "SENT", sentAt: new Date() } });
+    await setProposalTask(db, projectId, PREPARE_TASK, true);
+    await setProposalTask(db, projectId, SEND_TASK, true);
     return contactIdForProject(db, projectId);
   });
   revalidateBoth(projectId, contactId);

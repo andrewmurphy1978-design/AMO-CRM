@@ -21,6 +21,7 @@ export interface ProjectGeneralValues {
   startDate: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD
   completedAt: string; // YYYY-MM-DD
+  subscriptionEmail: string;
   description: string;
 }
 
@@ -153,6 +154,10 @@ export default function ProjectGeneralDialog({
             <label className={LABEL_CLASS}>{t.projectForm.completedDate}</label>
             <input type="date" name="completedAt" defaultValue={values.completedAt} className={FIELD_CLASS} />
           </div>
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Courriel à utiliser pour les abonnements" : "Email to use for subscriptions"}</label>
+          <input type="email" name="subscriptionEmail" defaultValue={values.subscriptionEmail} className={FIELD_CLASS} />
         </div>
         <div>
           <label className={LABEL_CLASS}>{t.projectForm.description}</label>

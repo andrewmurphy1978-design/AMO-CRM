@@ -257,10 +257,19 @@ export default function ProposalForm({
           )}
         </div>
 
-        <div className="mt-2 space-y-2">
+        {lineItems.length > 0 && (
+          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_4.5rem_6.5rem_5.5rem_2rem] items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-soft">
+            <span>{t.proposals.description}</span>
+            <span>{t.proposals.quantity}</span>
+            <span>{t.proposals.unitPrice}</span>
+            <span className="text-right">Total</span>
+            <span />
+          </div>
+        )}
+        <div className="mt-1 space-y-2">
           {lineItems.map((row) => (
             <div key={row.tempKey} className="space-y-1.5 rounded-lg border border-card-border p-2">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_6.5rem_5.5rem_2rem] items-center gap-2">
               <input type="hidden" name="lineItemDescription" value={row.description} />
               <input type="hidden" name="lineItemQuantity" value={row.quantity} />
               <input type="hidden" name="lineItemUnitPrice" value={row.unitPrice} />
@@ -269,7 +278,7 @@ export default function ProposalForm({
                 value={row.description}
                 onChange={(e) => updateLineItem(row.tempKey, { description: e.target.value })}
                 placeholder={t.proposals.description}
-                className={`${FIELD_CLASS} mt-0 min-w-[10rem] flex-1`}
+                className={`${FIELD_CLASS} mt-0`}
               />
               <input
                 type="number"
@@ -278,7 +287,7 @@ export default function ProposalForm({
                 value={row.quantity}
                 onChange={(e) => updateLineItem(row.tempKey, { quantity: Number(e.target.value) })}
                 placeholder={t.proposals.quantity}
-                className={`${FIELD_CLASS} mt-0 w-20`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               />
               <input
                 type="number"
@@ -287,13 +296,13 @@ export default function ProposalForm({
                 value={row.unitPrice}
                 onChange={(e) => updateLineItem(row.tempKey, { unitPrice: Number(e.target.value) })}
                 placeholder={t.proposals.unitPrice}
-                className={`${FIELD_CLASS} mt-0 w-28`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               />
-              <span className="w-24 text-right text-sm text-soft">{(row.quantity * row.unitPrice).toFixed(2)}</span>
+              <span className="text-right text-sm text-soft">{(row.quantity * row.unitPrice).toFixed(2)}</span>
               <button
                 type="button"
                 onClick={() => setLineItems((rows) => rows.filter((r) => r.tempKey !== row.tempKey))}
-                className="rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                className="rounded-md border border-card-border px-1 py-2 text-xs text-soft hover:text-ink"
               >
                 ✕
               </button>
@@ -362,8 +371,17 @@ export default function ProposalForm({
       <div>
         <label className={LABEL_CLASS}>{t.proposals.paymentScheduleTitle}</label>
         <div className="mt-2 space-y-2">
+          {schedule.length > 0 && (
+            <div className="grid grid-cols-[minmax(0,1fr)_4rem_6rem_8.5rem_2rem] items-center gap-2 px-0 text-[10px] font-semibold uppercase tracking-wide text-soft">
+              <span>{t.proposals.scheduleLabelField}</span>
+              <span>%</span>
+              <span>{t.proposals.fixedAmount}</span>
+              <span>Date</span>
+              <span />
+            </div>
+          )}
           {schedule.map((row) => (
-            <div key={row.tempKey} className="flex flex-wrap items-center gap-2">
+            <div key={row.tempKey} className="grid grid-cols-[minmax(0,1fr)_4rem_6rem_8.5rem_2rem] items-center gap-2">
               <input type="hidden" name="scheduleLabel" value={row.label} />
               <input type="hidden" name="schedulePercentage" value={row.percentage ?? ""} />
               <input type="hidden" name="scheduleAmount" value={row.amount ?? ""} />
@@ -374,7 +392,7 @@ export default function ProposalForm({
                   setSchedule((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, label: e.target.value } : r)))
                 }
                 placeholder={t.proposals.scheduleLabelField}
-                className={`${FIELD_CLASS} mt-0 min-w-[8rem] flex-1`}
+                className={`${FIELD_CLASS} mt-0`}
               />
               <input
                 type="number"
@@ -388,7 +406,7 @@ export default function ProposalForm({
                   )
                 }
                 placeholder={t.proposals.percentage}
-                className={`${FIELD_CLASS} mt-0 w-24`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               />
               <input
                 type="number"
@@ -401,7 +419,7 @@ export default function ProposalForm({
                   )
                 }
                 placeholder={t.proposals.fixedAmount}
-                className={`${FIELD_CLASS} mt-0 w-28`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               />
               <input
                 type="date"
@@ -409,12 +427,12 @@ export default function ProposalForm({
                 onChange={(e) =>
                   setSchedule((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, dueDate: e.target.value } : r)))
                 }
-                className={`${FIELD_CLASS} mt-0 w-40`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               />
               <button
                 type="button"
                 onClick={() => setSchedule((rows) => rows.filter((r) => r.tempKey !== row.tempKey))}
-                className="rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                className="rounded-md border border-card-border px-1 py-2 text-xs text-soft hover:text-ink"
               >
                 ✕
               </button>
@@ -445,8 +463,17 @@ export default function ProposalForm({
             : "Fees the client pays the providers directly (Systeme.io, hosting, domain…). Shown in the PDF's Investment section, outside the total above."}
         </p>
         <div className="mt-2 space-y-2">
+          {subs.length > 0 && (
+            <div className="grid grid-cols-[minmax(0,1fr)_6rem_6rem_minmax(0,1fr)_2rem] items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-soft">
+              <span>{lang === "fr" ? "Application / service" : "App / service"}</span>
+              <span>{lang === "fr" ? "Montant" : "Amount"}</span>
+              <span>{lang === "fr" ? "Période" : "Period"}</span>
+              <span>Note</span>
+              <span />
+            </div>
+          )}
           {subs.map((row) => (
-            <div key={row.tempKey} className="flex flex-wrap items-center gap-2">
+            <div key={row.tempKey} className="grid grid-cols-[minmax(0,1fr)_6rem_6rem_minmax(0,1fr)_2rem] items-center gap-2">
               <input type="hidden" name="subName" value={row.name} />
               <input type="hidden" name="subAmount" value={row.amount} />
               <input type="hidden" name="subPeriod" value={row.period} />
@@ -456,7 +483,7 @@ export default function ProposalForm({
                 list="sub-suggestions"
                 onChange={(e) => setSubs((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, name: e.target.value } : r)))}
                 placeholder={lang === "fr" ? "Application / service" : "App / service"}
-                className={`${FIELD_CLASS} mt-0 min-w-[9rem] flex-1`}
+                className={`${FIELD_CLASS} mt-0`}
               />
               <input
                 type="number"
@@ -464,12 +491,12 @@ export default function ProposalForm({
                 min="0"
                 value={row.amount}
                 onChange={(e) => setSubs((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, amount: Number(e.target.value) } : r)))}
-                className={`${FIELD_CLASS} mt-0 w-28`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               />
               <select
                 value={row.period}
                 onChange={(e) => setSubs((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, period: e.target.value } : r)))}
-                className={`${FIELD_CLASS} mt-0 w-32`}
+                className={`${FIELD_CLASS} mt-0 px-2`}
               >
                 <option value="month">{lang === "fr" ? "/ mois" : "/ month"}</option>
                 <option value="year">{lang === "fr" ? "/ an" : "/ year"}</option>
@@ -479,12 +506,12 @@ export default function ProposalForm({
                 value={row.note}
                 onChange={(e) => setSubs((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, note: e.target.value } : r)))}
                 placeholder={lang === "fr" ? "Note (forfait, etc.)" : "Note (plan, etc.)"}
-                className={`${FIELD_CLASS} mt-0 min-w-[8rem] flex-1`}
+                className={`${FIELD_CLASS} mt-0`}
               />
               <button
                 type="button"
                 onClick={() => setSubs((rows) => rows.filter((r) => r.tempKey !== row.tempKey))}
-                className="rounded-md border border-card-border px-2 py-2 text-xs text-soft hover:text-ink"
+                className="rounded-md border border-card-border px-1 py-2 text-xs text-soft hover:text-ink"
               >
                 ✕
               </button>

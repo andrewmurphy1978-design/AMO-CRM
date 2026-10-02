@@ -175,9 +175,13 @@ export function ProposalsCard({
           {proposals.map((p) => (
             <li key={p.id} className="space-y-1.5 py-2 first:pt-0">
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setDialog({ id: p.id, key: Date.now() })} className="min-w-0 flex-1 truncate text-left text-sm font-medium text-ink hover:underline">
-                  {p.title}
-                </button>
+                {p.status === "DRAFT" ? (
+                  <button type="button" onClick={() => setDialog({ id: p.id, key: Date.now() })} className="min-w-0 flex-1 truncate text-left text-sm font-medium text-ink hover:underline">
+                    {p.title}
+                  </button>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{p.title}</span>
+                )}
                 <span className="shrink-0 text-xs text-soft">{money(p.totalAmount, p.currency)}</span>
                 <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[p.status] ?? PILL.DRAFT}`}>{statusLabels[p.status] ?? p.status}</span>
               </div>
@@ -185,9 +189,11 @@ export function ProposalsCard({
                 <a href={`/api/projects/${projectId}/proposals/${p.id}/pdf`} target="_blank" rel="noreferrer" className={BTN}>
                   PDF
                 </a>
-                <button type="button" onClick={() => setDialog({ id: p.id, key: Date.now() })} className={BTN}>
-                  {fr ? "Modifier" : "Edit"}
-                </button>
+                {p.status === "DRAFT" && (
+                  <button type="button" onClick={() => setDialog({ id: p.id, key: Date.now() })} className={BTN}>
+                    {fr ? "Modifier" : "Edit"}
+                  </button>
+                )}
                 {p.status === "DRAFT" && !p.approvedAt && (
                   <button type="button" disabled={pending} onClick={() => run(() => approveProposal(p.id, projectId))} className="rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
                     {fr ? "Approuver" : "Approve"}
@@ -204,7 +210,7 @@ export function ProposalsCard({
                       {...emailing}
                     />
                     <button type="button" disabled={pending} onClick={() => run(() => unapproveProposal(p.id, projectId))} className="text-xs text-soft hover:underline">
-                      {fr ? "annuler" : "undo"}
+                      {fr ? "Remettre en brouillon" : "Return to draft"}
                     </button>
                   </>
                 )}

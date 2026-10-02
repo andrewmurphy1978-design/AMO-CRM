@@ -13,6 +13,8 @@ import TasksCard, { type TaskCardItem } from "./tasks-card";
 import { ProposalsCard, InvoicesCard, type ProposalRowData, type InvoiceRowData } from "./documents-cards";
 import { contactTaxLocation } from "@/lib/billing-totals";
 import SupplierCard, { type SupplierRow } from "./supplier-card";
+import SubscriptionsCard from "./subscriptions-card";
+import { defaultInstalments } from "@/lib/default-instalments";
 import InstalmentsCard, { type InstalmentRow } from "./instalments-card";
 import NewEmailButton from "../../contacts/[id]/new-email-button";
 import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
@@ -108,6 +110,9 @@ export default async function ProjectDetailPage({
         },
         emailLinks: { orderBy: { messageDate: "desc" } },
         supplierInvoices: { orderBy: { createdAt: "desc" }, omit: { fileData: true } },
+        subscriptions: { orderBy: { order: "asc" } },
+        parentProject: { select: { id: true, name: true } },
+        linkedProjects: { orderBy: { createdAt: "asc" }, select: { id: true, name: true, type: true, status: true } },
         proposals: { orderBy: { createdAt: "desc" }, include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { orderBy: { order: "asc" } } } },
         invoices: { orderBy: { createdAt: "desc" }, include: { lineItems: { orderBy: { order: "asc" } }, instalment: { include: { proposal: { select: { paymentSchedule: { select: { id: true }, orderBy: { order: "asc" } } } } } } } },
       },
@@ -336,30 +341,22 @@ export default async function ProjectDetailPage({
   // project is built on as a subscription to fill in.
   const firstName = project.contact.firstName || "";
   const descriptionLine = project.description ? project.description.trim().split("\n")[0] : "";
+  // The proposal is written in the client's language (not the reader's), and uses the
+  // client's currency and payment schedule when the contact has them.
+  const docLang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
   const defaultCoverLetter =
-    lang === "fr"
+    docLang === "fr"
       ? `Bonjour ${firstName},\n\nMerci de me confier votre projet « ${project.name} ». Cette proposition présente ce que nous allons réaliser ensemble, comment le travail sera organisé et l'investissement requis.${descriptionLine ? `\n\nEn bref : ${descriptionLine}` : ""}\n\nLe projet avance par phases claires : chaque phase commence lorsque la précédente est terminée, pour que vous sachiez toujours où nous en sommes et ce qui suit. Un premier versement lance les travaux; les versements suivants sont facturés aux grandes étapes du projet.\n\nSi vous souhaitez ajuster quoi que ce soit, je serai heureux d'en discuter. Dès que vous êtes à l'aise, il suffit d'accepter la proposition et nous démarrons.\n\nCordialement,\nAndrew Murphy\nAndrew Murphy Online`
       : `Hi ${firstName},\n\nThank you for trusting me with "${project.name}". This proposal outlines what we will build together, how the work will be organized, and the investment involved.${descriptionLine ? `\n\nIn short: ${descriptionLine}` : ""}\n\nThe project moves forward in clear phases — each one begins once the previous one is complete — so you always know where things stand and what comes next. A first instalment starts the work, and the remaining instalments are invoiced as the project reaches its key milestones.\n\nIf you'd like to adjust anything, I'm happy to talk it through. Once you're comfortable, simply accept the proposal and we'll get started.\n\nBest regards,\nAndrew Murphy\nAndrew Murphy Online`;
-  const appAnswer = ((project.customFields ?? {}) as Record<string, string | string[]>).app;
-  const defaultSubscriptions = typeof appAnswer === "string" && appAnswer ? [{ name: appAnswer, amount: 0, period: "month", note: "" }] : [];
+  // The proposal's Apps & subscriptions come from the project's Apps & subscriptions card.
+  const defaultSubscriptions = project.subscriptions.map((x) => ({ name: x.name, amount: x.amount, period: x.period, note: x.note }));
   // A new proposal starts with the usual 50 / 40 / 10 instalments.
   const proposalDefaults = {
-    title: `${lang === "fr" ? "Soumission" : "Proposal"} — ${project.name}`,
-    currency: "CAD",
+    title: `${docLang === "fr" ? "Soumission" : "Proposal"} — ${project.name}`,
+    currency: project.contact.preferredCurrency || "CAD",
     coverLetter: defaultCoverLetter,
     subscriptions: defaultSubscriptions,
-    paymentSchedule:
-      lang === "fr"
-        ? [
-            { label: "Dépôt — à l'acceptation", percentage: 50, amount: null, dueDate: null },
-            { label: "À l'approbation de la maquette", percentage: 40, amount: null, dueDate: null },
-            { label: "Au lancement", percentage: 10, amount: null, dueDate: null },
-          ]
-        : [
-            { label: "Deposit — on acceptance", percentage: 50, amount: null, dueDate: null },
-            { label: "On mock-up approval", percentage: 40, amount: null, dueDate: null },
-            { label: "At launch", percentage: 10, amount: null, dueDate: null },
-          ],
+    paymentSchedule: defaultInstalments(project.contact.paymentSchedule, docLang),
   };
   const emailing = { defaultComposeSource, intlLocale, hour12, emailComposeLabels: t.emailCompose };
 
@@ -509,6 +506,7 @@ export default async function ProjectDetailPage({
                   startDate: toDateInput(project.startDate),
                   dueDate: toDateInput(project.dueDate),
                   completedAt: toDateInput(project.completedAt),
+                  subscriptionEmail: project.subscriptionEmail ?? "",
                   description: project.description ?? "",
                 }}
               />
@@ -560,6 +558,11 @@ export default async function ProjectDetailPage({
                 <p className={LABEL_CLASS}>{t.projectForm.completedDate}</p>
                 <p className="mt-1 text-sm text-ink">{project.completedAt ? longDate(project.completedAt, lang, dateLocale) : "—"}</p>
               </div>
+            </div>
+
+            <div className="mt-4">
+              <p className={LABEL_CLASS}>{lang === "fr" ? "Courriel à utiliser pour les abonnements" : "Email to use for subscriptions"}</p>
+              <p className="mt-1 text-sm text-ink">{project.subscriptionEmail || "—"}</p>
             </div>
 
             {project.description && (
@@ -650,6 +653,43 @@ export default async function ProjectDetailPage({
             phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
             lang={lang}
           />
+
+          <SubscriptionsCard
+            key={project.subscriptions.map((x) => x.id).join(",")}
+            projectId={project.id}
+            initial={project.subscriptions.map((x) => ({ name: x.name, amount: x.amount, period: x.period, note: x.note }))}
+            lang={lang}
+          />
+
+          {(project.parentProject || project.linkedProjects.length > 0) && (
+            <Card color="general" title={lang === "fr" ? "Projets liés" : "Linked projects"} compact>
+              <ul className="space-y-1.5 text-sm">
+                {project.parentProject && (
+                  <li>
+                    <span className="text-xs text-soft">{lang === "fr" ? "Projet principal : " : "Parent project: "}</span>
+                    <Link href={`/projects/${project.parentProject.id}`} className="text-amo-lime hover:underline">
+                      {project.parentProject.name}
+                    </Link>
+                  </li>
+                )}
+                {project.linkedProjects.map((lp) => (
+                  <li key={lp.id} className="flex items-center justify-between gap-2">
+                    <Link href={`/projects/${lp.id}`} className="min-w-0 truncate text-amo-lime hover:underline">
+                      {lp.name}
+                    </Link>
+                    <span className="shrink-0 text-xs text-soft">
+                      {typeLabels[lp.type] ?? lp.type} · {STATUS_LABELS[lp.status]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {project.linkedProjects.length > 0 && (
+                <p className="mt-2 text-xs text-soft">
+                  {lang === "fr" ? "Leurs phases et tâches figurent dans la soumission de ce projet." : "Their phases and tasks are included in this project's proposal."}
+                </p>
+              )}
+            </Card>
+          )}
 
           <SupplierCard projectId={project.id} rows={supplierRows} lang={lang} />
 

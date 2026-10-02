@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { isAppField } from "@/lib/project-subscriptions";
 import { useRouter } from "next/navigation";
 import { saveProjectTemplate, resetProjectTemplate, deleteProjectType } from "@/actions/project-types";
 import { PHASE_STAGES, isMulti, type PhaseStage, type Cond, type FieldTpl, type FieldType, type PhaseTpl, type TaskTpl, type TemplateConfig } from "@/lib/project-templates";
@@ -388,6 +389,12 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
                     Allow typing other choices
                   </label>
                 </div>
+              )}
+              {(f.type === "select" || f.type === "multiselect" || f.type === "text") && (
+                <label className="mt-1 flex items-center gap-2 text-xs text-ink">
+                  <input type="checkbox" checked={isAppField(f)} onChange={(e) => updateField(i, { app: e.target.checked })} />
+                  The answer is an app / service (adds it to Apps &amp; subscriptions)
+                </label>
               )}
               {f.type === "yesno" && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
