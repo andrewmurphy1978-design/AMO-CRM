@@ -30,6 +30,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { loadTypeInfo } from "@/lib/project-type-store";
 
 import { frText, localizeText, localizeValue } from "@/lib/project-i18n";
+import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader, { HeaderBreadcrumb } from "../../page-header";
@@ -158,6 +159,17 @@ export default async function ProjectDetailPage({
       }),
     ]);
 
+    const projectTemplate = project ? await getProjectTemplate(db, project.type) : null;
+    // Apps & subscriptions start from the apps chosen in the Project details: fill
+    // them in for a project that has none yet (e.g. created before this card existed).
+    if (project && projectTemplate && project.subscriptions.length === 0) {
+      const subs = appSubscriptionsFrom(projectTemplate, (project.customFields ?? {}) as FieldValues);
+      if (subs.length > 0) {
+        await db.projectSubscription.createMany({ data: subs.map((x, order) => ({ ...x, projectId: project.id, order })) });
+        project.subscriptions = await db.projectSubscription.findMany({ where: { projectId: project.id }, orderBy: { order: "asc" } });
+      }
+    }
+
     return {
       project,
       hour12,
@@ -180,7 +192,7 @@ export default async function ProjectDetailPage({
       twilioReady,
       catalog,
       billingChargeTax,
-      template: project ? await getProjectTemplate(db, project.type) : null,
+      template: projectTemplate,
     };
   });
 
@@ -662,6 +674,14 @@ export default async function ProjectDetailPage({
             lang={lang}
           />
 
+          <SupplierCard projectId={project.id} rows={supplierRows} lang={lang} />
+
+          <TechStackCard contact={project.contact} lang={lang} />
+
+          <DomainsCard contact={project.contact} lang={lang} />
+        </div>
+
+        <div className="space-y-6">
           {(project.parentProject || project.linkedProjects.length > 0) && (
             <Card color="general" title={lang === "fr" ? "Projets liés" : "Linked projects"} compact>
               <ul className="space-y-1.5 text-sm">
@@ -692,14 +712,6 @@ export default async function ProjectDetailPage({
             </Card>
           )}
 
-          <SupplierCard projectId={project.id} rows={supplierRows} lang={lang} />
-
-          <TechStackCard contact={project.contact} lang={lang} />
-
-          <DomainsCard contact={project.contact} lang={lang} />
-        </div>
-
-        <div className="space-y-6">
           <CalendarEventsCard
             title={t.calendarApp.title}
             events={calendarEvents}

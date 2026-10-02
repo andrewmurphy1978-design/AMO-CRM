@@ -26,7 +26,44 @@ export default function SubscriptionsCard({ projectId, initial, lang }: { projec
   };
 
   return (
-    <Card color="general" title={fr ? "Applications et abonnements" : "Apps & subscriptions"} compact>
+    <Card
+      color="general"
+      title={fr ? "Applications et abonnements" : "Apps & subscriptions"}
+      compact
+      actions={
+        <div className="flex items-center gap-2">
+          {dirty && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  await saveProjectSubscriptions(projectId, rows);
+                  setDirty(false);
+                  router.refresh();
+                })
+              }
+              className="rounded-md bg-white/25 px-2.5 py-0.5 text-xs font-semibold text-white hover:bg-white/35 disabled:opacity-60"
+            >
+              {pending ? "…" : fr ? "Enregistrer" : "Save"}
+            </button>
+          )}
+          <button
+            type="button"
+            title={fr ? "Ajouter" : "Add"}
+            aria-label={fr ? "Ajouter" : "Add"}
+            onClick={() => {
+              setRows((rs) => [...rs, { key: nextKey, name: "", amount: 0, period: "month", note: "" }]);
+              setNextKey((k) => k + 1);
+              setDirty(true);
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded text-lg font-bold leading-none text-white hover:bg-white/20"
+          >
+            +
+          </button>
+        </div>
+      }
+    >
       {rows.length === 0 && <p className="text-sm text-soft">{fr ? "Aucune application pour l'instant." : "No apps yet."}</p>}
       <div className="space-y-1.5">
         {rows.map((r) => (
@@ -55,35 +92,6 @@ export default function SubscriptionsCard({ projectId, initial, lang }: { projec
             <input value={r.note} onChange={(e) => update(r.key, { note: e.target.value })} placeholder={fr ? "Note (facultatif)" : "Note (optional)"} className={`${INPUT} col-span-4 text-xs`} />
           </div>
         ))}
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setRows((rs) => [...rs, { key: nextKey, name: "", amount: 0, period: "month", note: "" }]);
-            setNextKey((k) => k + 1);
-            setDirty(true);
-          }}
-          className="rounded-md border border-card-border px-2.5 py-1 text-xs font-medium text-ink hover:bg-black/5"
-        >
-          + {fr ? "Ajouter" : "Add"}
-        </button>
-        {dirty && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                await saveProjectSubscriptions(projectId, rows);
-                setDirty(false);
-                router.refresh();
-              })
-            }
-            className="btn-primary rounded-md px-3 py-1 text-xs font-semibold disabled:opacity-60"
-          >
-            {pending ? "…" : fr ? "Enregistrer" : "Save"}
-          </button>
-        )}
       </div>
     </Card>
   );
