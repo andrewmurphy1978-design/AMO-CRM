@@ -119,6 +119,20 @@ export default function ProposalForm({
     ]);
   }
 
+  // Line items can be reordered with the arrows or by dragging the ⠿ handle.
+  const [armedLine, setArmedLine] = useState<number | null>(null);
+  const [dragLine, setDragLine] = useState<number | null>(null);
+  const [overLine, setOverLine] = useState<number | null>(null);
+  function moveLine(from: number, to: number) {
+    if (from === to || from < 0 || to < 0 || to >= lineItems.length) return;
+    setLineItems((rows) => {
+      const next = [...rows];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+  }
+
   function updateLineItem(tempKey: number, patch: Partial<LineItemRow>) {
     setLineItems((rows) => rows.map((r) => (r.tempKey === tempKey ? { ...r, ...patch } : r)));
   }
@@ -265,7 +279,8 @@ export default function ProposalForm({
         </div>
 
         {lineItems.length > 0 && (
-          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_4.5rem_6.5rem_5.5rem_2rem] items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-soft">
+          <div className="mt-2 grid grid-cols-[1rem_minmax(0,1fr)_4.5rem_6.5rem_5rem_auto] items-center gap-2 px-2 text-[10px] font-semibold uppercase tracking-wide text-soft">
+            <span />
             <span>{t.proposals.description}</span>
             <span>{t.proposals.quantity}</span>
             <span>{t.proposals.unitPrice}</span>
@@ -274,13 +289,48 @@ export default function ProposalForm({
           </div>
         )}
         <div className="mt-1 space-y-2">
-          {lineItems.map((row) => (
-            <div key={row.tempKey} className="space-y-1.5 rounded-lg border border-card-border p-2">
-            <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_6.5rem_5.5rem_2rem] items-center gap-2">
+          {lineItems.map((row, ri) => (
+            <div
+              key={row.tempKey}
+              draggable={armedLine === row.tempKey}
+              onDragStart={(e) => {
+                setDragLine(row.tempKey);
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", String(row.tempKey));
+              }}
+              onDragOver={(e) => {
+                if (dragLine === null) return;
+                e.preventDefault();
+                if (overLine !== row.tempKey) setOverLine(row.tempKey);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragLine !== null) moveLine(lineItems.findIndex((r) => r.tempKey === dragLine), ri);
+                setDragLine(null);
+                setOverLine(null);
+                setArmedLine(null);
+              }}
+              onDragEnd={() => {
+                setDragLine(null);
+                setOverLine(null);
+                setArmedLine(null);
+              }}
+              className={`space-y-1.5 rounded-lg border p-2 ${overLine === row.tempKey && dragLine !== row.tempKey ? "border-emerald-600 ring-2 ring-emerald-600" : "border-card-border"} ${dragLine === row.tempKey ? "opacity-50" : ""}`}
+            >
+            <div className="grid grid-cols-[1rem_minmax(0,1fr)_4.5rem_6.5rem_5rem_auto] items-center gap-2">
               <input type="hidden" name="lineItemDescription" value={row.description} />
               <input type="hidden" name="lineItemQuantity" value={row.quantity} />
               <input type="hidden" name="lineItemUnitPrice" value={row.unitPrice} />
               <input type="hidden" name="lineItemDetails" value={row.details} />
+              <span
+                title={lang === "fr" ? "Glisser pour déplacer" : "Drag to move"}
+                onMouseDown={() => setArmedLine(row.tempKey)}
+                onMouseUp={() => setArmedLine(null)}
+                className="cursor-grab select-none text-sm leading-none text-soft hover:text-ink"
+                aria-hidden
+              >
+                ⠿
+              </span>
               <input
                 value={row.description}
                 onChange={(e) => updateLineItem(row.tempKey, { description: e.target.value })}
@@ -306,13 +356,17 @@ export default function ProposalForm({
                 className={`${FIELD_CLASS} mt-0 px-2`}
               />
               <span className="text-right text-sm text-soft">{(row.quantity * row.unitPrice).toFixed(2)}</span>
-              <button
-                type="button"
-                onClick={() => setLineItems((rows) => rows.filter((r) => r.tempKey !== row.tempKey))}
-                className="rounded-md border border-card-border px-1 py-2 text-xs text-soft hover:text-ink"
-              >
-                ✕
-              </button>
+              <span className="flex items-center gap-1">
+                <button type="button" title={lang === "fr" ? "Monter" : "Move up"} onClick={() => moveLine(ri, ri - 1)} disabled={ri === 0} className="rounded-md border border-card-border px-1.5 py-2 text-xs text-soft hover:text-ink disabled:opacity-40">
+                  ↑
+                </button>
+                <button type="button" title={lang === "fr" ? "Descendre" : "Move down"} onClick={() => moveLine(ri, ri + 1)} disabled={ri === lineItems.length - 1} className="rounded-md border border-card-border px-1.5 py-2 text-xs text-soft hover:text-ink disabled:opacity-40">
+                  ↓
+                </button>
+                <button type="button" title={lang === "fr" ? "Supprimer" : "Delete"} onClick={() => setLineItems((rows) => rows.filter((r) => r.tempKey !== row.tempKey))} className="rounded-md border border-card-border px-1.5 py-2 text-xs text-soft hover:text-red-600">
+                  ✕
+                </button>
+              </span>
             </div>
               <textarea
                 value={row.details}
