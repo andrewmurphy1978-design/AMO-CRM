@@ -82,7 +82,7 @@ export async function buildProjectMarkdownFiles(
       ["Description", p.description],
     ])
   );
-  proj += section(`${p.type} details (custom fields)`, kv(template.fields.map((f) => [f.label, displayValue(answers[f.key])] as [string, unknown])));
+  proj += section(`${p.type} details (custom fields)`, kv(template.fields.filter((f) => f.type !== "spacer").map((f) => [f.label, displayValue(answers[f.key])] as [string, unknown])));
   proj += section("Notes", clean(p.notes) || "_No notes._");
 
   proj += "## Phases & tasks (existing — do not duplicate)\n\n";

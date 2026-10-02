@@ -577,9 +577,10 @@ export default async function ProjectDetailPage({
                 {template.fields
                   .filter((f) => isFieldVisible(f, (project.customFields ?? {}) as FieldValues))
                   .map((f) => {
+                    if (f.type === "spacer") return <div key={f.key} className="hidden lg:block" aria-hidden />;
                     const v = localizeValue(displayValue(((project.customFields ?? {}) as FieldValues)[f.key]), lang);
                     return (
-                      <div key={f.key} className={f.type === "textarea" || f.type === "multiselect" || f.type === "languages" ? "lg:col-span-3" : ""}>
+                      <div key={f.key} className="min-w-0">
                         <p className={LABEL_CLASS}>{localizeText(f.label, lang)}</p>
                         <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{v || "—"}</p>
                       </div>

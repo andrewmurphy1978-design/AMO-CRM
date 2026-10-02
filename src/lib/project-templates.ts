@@ -6,7 +6,9 @@
 // A template is plain JSON, stored per type in ProjectTypeTemplate; types
 // with no saved row fall back to DEFAULT_TEMPLATES below.
 
-export type FieldType = "yesno" | "text" | "textarea" | "url" | "select" | "multiselect" | "languages";
+// "spacer" is a blank cell ("Free space"): it asks nothing and just pushes the next
+// field along in the 3-column layout, e.g. to start a new line.
+export type FieldType = "yesno" | "text" | "textarea" | "url" | "select" | "multiselect" | "languages" | "spacer";
 
 export interface Cond {
   field: string;
@@ -243,12 +245,13 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
   const seen = new Set<string>();
   const fields: FieldTpl[] = [];
   for (const f of Array.isArray(obj.fields) ? obj.fields : []) {
-    const label = str(f?.label).trim();
+    const isSpacer = f?.type === "spacer";
+    const label = isSpacer ? "Free space" : str(f?.label).trim();
     if (!label) continue;
-    let key = str(f?.key).trim() || label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "field";
+    let key = str(f?.key).trim() || (isSpacer ? "space" : "") || label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "field";
     while (seen.has(key)) key += "_2";
     seen.add(key);
-    const type = (["yesno", "text", "textarea", "url", "select", "multiselect", "languages"] as const).includes(f?.type as FieldType) ? (f.type as FieldType) : "text";
+    const type = (["yesno", "text", "textarea", "url", "select", "multiselect", "languages", "spacer"] as const).includes(f?.type as FieldType) ? (f.type as FieldType) : "text";
     fields.push({
       key,
       label,

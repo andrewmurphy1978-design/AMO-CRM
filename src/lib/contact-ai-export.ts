@@ -247,7 +247,7 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
       ["Due", day(p.dueDate)],
       ["Description", p.description],
       ["Notes", p.notes],
-      ...template.fields.map((f) => [f.label, displayValue(answers[f.key])] as [string, unknown]),
+      ...template.fields.filter((f) => f.type !== "spacer").map((f) => [f.label, displayValue(answers[f.key])] as [string, unknown]),
     ]);
     if (p.phases.length > 0) {
       projects += "\n**Phases & tasks**\n\n";

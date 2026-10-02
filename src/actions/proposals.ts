@@ -393,6 +393,7 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
       const template = await getProjectTemplate(db, project.type);
       const answers = (project.customFields ?? {}) as FieldValues;
       const details = template.fields
+        .filter((f) => f.type !== "spacer")
         .filter((f) => isFieldVisible(f, answers))
         .map((f) => `${f.label}: ${displayValue(answers[f.key])}`)
         .filter((line) => !line.endsWith(": "));

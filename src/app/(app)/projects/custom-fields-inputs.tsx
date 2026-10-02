@@ -25,15 +25,15 @@ export default function CustomFieldsInputs({
   const fr = lang === "fr";
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {fields
         .filter((f) => isFieldVisible(f, values))
         .map((field) => {
           const name = `cf_${field.key}`;
           const v = values[field.key];
-          const wide = isMulti(field) || field.type === "textarea";
+          if (field.type === "spacer") return <div key={field.key} className="hidden md:block" aria-hidden />;
           return (
-            <div key={field.key} className={wide ? "sm:col-span-2" : ""}>
+            <div key={field.key} className="min-w-0">
               <label className={LABEL_CLASS}>{field.label}</label>
 
               {field.type === "yesno" && (

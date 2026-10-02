@@ -129,6 +129,12 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
     setFields([...fields, { key, label: "New field", type: "yesno" }]);
   }
 
+  function addSpacer() {
+    let n = 1;
+    while (fields.some((f) => f.key === `space_${n}`)) n++;
+    setFields([...fields, { key: `space_${n}`, label: "Free space", type: "spacer" }]);
+  }
+
   function updateField(i: number, patch: Partial<FieldTpl>) {
     setFields(fields.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   }
@@ -194,8 +200,24 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
       <section className="rounded-2xl border border-card-border bg-card-bg p-4 shadow-sm">
         <h2 className="font-display text-lg font-semibold text-ink">Custom fields</h2>
         <p className="mt-1 text-xs text-soft">Asked when a {typeLabels[type]} project is created. Use a field&apos;s name in task titles as {"{field_name}"} (shown under each field).</p>
-        <div className="mt-3 grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {fields.map((f, i) => (
+        <div className="mt-3 grid items-start gap-3 lg:grid-cols-3">
+          {fields.map((f, i) =>
+            f.type === "spacer" ? (
+              <div key={f.key + i} className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-card-border p-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-soft">Free space (empty cell)</span>
+                <div className="flex items-center gap-1">
+                  <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, -1))} disabled={i === 0}>
+                    ↑
+                  </button>
+                  <button type="button" className={SMALL_BTN} onClick={() => setFields(move(fields, i, 1))} disabled={i === fields.length - 1}>
+                    ↓
+                  </button>
+                  <button type="button" className={`${SMALL_BTN} text-red-600`} onClick={() => setFields(fields.filter((_, j) => j !== i))}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div key={f.key + i} className="min-w-0 rounded-xl border border-card-border p-3">
               <div className="grid gap-2">
                 <div>
@@ -264,11 +286,17 @@ export default function TemplateEditor({ type, initial, typeLabels, isCustom }: 
                 />
               </div>
             </div>
-          ))}
+            )
+          )}
         </div>
-        <button type="button" onClick={addField} className={`${SMALL_BTN} mt-3`}>
-          + Add field
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={addField} className={SMALL_BTN}>
+            + Add field
+          </button>
+          <button type="button" onClick={addSpacer} className={SMALL_BTN}>
+            + Add free space
+          </button>
+        </div>
       </section>
 
       <section className="rounded-2xl border border-card-border bg-card-bg p-4 shadow-sm">
