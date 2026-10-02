@@ -394,7 +394,7 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
       const answers = (project.customFields ?? {}) as FieldValues;
       const details = template.fields
         .filter((f) => f.type !== "spacer")
-        .filter((f) => isFieldVisible(f, answers))
+        .filter((f) => isFieldVisible(f, answers, template.fields))
         .map((f) => `${f.label}: ${displayValue(answers[f.key])}`)
         .filter((line) => !line.endsWith(": "));
       const voice = await db.contactBrandItem.findMany({ where: { contactId: project.contactId, category: "voice" }, select: { label: true, value: true } });

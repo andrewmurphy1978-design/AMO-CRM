@@ -587,9 +587,9 @@ export default async function ProjectDetailPage({
             >
               <div className="grid gap-4 lg:grid-cols-3">
                 {template.fields
-                  .filter((f) => isFieldVisible(f, (project.customFields ?? {}) as FieldValues) || f.keepSpace)
+                  .filter((f) => isFieldVisible(f, (project.customFields ?? {}) as FieldValues, template.fields) || f.keepSpace)
                   .map((f) => {
-                    if (f.keepSpace && !isFieldVisible(f, (project.customFields ?? {}) as FieldValues)) return <div key={f.key} className="hidden lg:block" aria-hidden />;
+                    if (f.keepSpace && !isFieldVisible(f, (project.customFields ?? {}) as FieldValues, template.fields)) return <div key={f.key} className="hidden lg:block" aria-hidden />;
                     if (f.type === "spacer") return <div key={f.key} className="hidden lg:block" aria-hidden />;
                     const v = localizeValue(displayValue(((project.customFields ?? {}) as FieldValues)[f.key]), lang);
                     return (

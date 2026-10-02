@@ -117,7 +117,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     },
     details: template.fields
       .filter((f) => f.type !== "spacer")
-      .filter((f) => isFieldVisible(f, answers))
+      .filter((f) => isFieldVisible(f, answers, template.fields))
       .map((f) => ({ label: localizeText(f.label, lang), value: localizeValue(displayValue(answers[f.key]), lang) }))
       .filter((d) => d.value),
     coverLetter: proposal.coverLetter,

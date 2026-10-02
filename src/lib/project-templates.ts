@@ -132,16 +132,34 @@ export function evalCond(cond: Cond | undefined, values: FieldValues): boolean {
   return true;
 }
 
-export function isFieldVisible(field: FieldTpl, values: FieldValues): boolean {
-  return evalCond(field.showIf, values);
+// The keys of the fields that are shown. A hidden field's old answer must not
+// keep other fields alive (Model = No hides "Model approval", whose stale Yes
+// would otherwise still show "Model approval by"), so conditions are
+// evaluated against the answers of visible fields only, until nothing changes.
+export function visibleFieldKeys(fields: FieldTpl[], values: FieldValues): Set<string> {
+  let visible = new Set(fields.map((f) => f.key));
+  for (let round = 0; round <= fields.length; round++) {
+    const effective: FieldValues = {};
+    for (const [k, v] of Object.entries(values)) if (visible.has(k)) effective[k] = v;
+    const next = new Set(fields.filter((f) => evalCond(f.showIf, effective)).map((f) => f.key));
+    if (next.size === visible.size && [...next].every((k) => visible.has(k))) return next;
+    visible = next;
+  }
+  return visible;
+}
+
+// Pass `fields` (the whole template) so hidden fields' answers are ignored.
+export function isFieldVisible(field: FieldTpl, values: FieldValues, fields?: FieldTpl[]): boolean {
+  return fields ? visibleFieldKeys(fields, values).has(field.key) : evalCond(field.showIf, values);
 }
 
 // Drops answers to fields that are hidden (their showIf no longer holds) or
 // that no longer exist in the template.
 export function cleanValues(config: TemplateConfig, values: FieldValues): FieldValues {
   const out: FieldValues = {};
+  const visible = visibleFieldKeys(config.fields, values);
   for (const field of config.fields) {
-    if (!isFieldVisible(field, values)) continue;
+    if (!visible.has(field.key)) continue;
     const v = values[field.key];
     if (v !== undefined && !isEmpty(v)) out[field.key] = v;
   }
