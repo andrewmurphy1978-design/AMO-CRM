@@ -325,8 +325,16 @@ export function ProposalsCard({
                   {money(p.totalAmount, p.currency)}
                   {p.totalCad != null && <span className="block text-[10px]">≈ {money(p.totalCad, "CAD")}</span>}
                 </span>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[p.status] ?? PILL.DRAFT}`}>
-                  {p.status === "ACCEPTED" && p.signedFileName ? (fr ? "Acceptée et signée" : "Accepted and Signed") : (statusLabels[p.status] ?? p.status)}
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-center text-xs font-medium ${PILL[p.status] ?? PILL.DRAFT}`}>
+                  {p.status === "ACCEPTED" && p.signedFileName ? (
+                    <>
+                      {fr ? "Acceptée" : "Accepted"}
+                      <br />
+                      {fr ? "et signée" : "and Signed"}
+                    </>
+                  ) : (
+                    (statusLabels[p.status] ?? p.status)
+                  )}
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
