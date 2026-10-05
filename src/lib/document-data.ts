@@ -199,7 +199,7 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
   }
   const jurisdiction = jurisdictionOf(((invoiceRecipient ?? project.contact).billingCountry && (invoiceRecipient ?? project.contact).billingCity ? (invoiceRecipient ?? project.contact).billingCountry : (invoiceRecipient ?? project.contact).country) ?? null);
   const payBase = publicBaseUrl();
-  const payUrl = payBase && invoice.status !== "PAID" && (await getStripeConfig(db)) ? await payLinkFor(payBase, invoice.id) : null;
+  const payUrl = payBase && invoice.status !== "PAID" && invoice.status !== "DRAFT" && invoice.status !== "CANCELED" && (await getStripeConfig(db)) ? await payLinkFor(payBase, invoice.id) : null;
   const billed = await db.projectSupplierInvoice.findMany({ where: { billedInvoiceId: invoice.id } });
   const attachments: PdfAttachment[] = billed
     .filter((c) => c.fileData && c.fileMime)
