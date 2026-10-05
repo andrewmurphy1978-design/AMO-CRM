@@ -304,11 +304,11 @@ class Layout {
   // A cover letter: it can start right under the overview and flow over the page break, but
   // the last paragraph and the sign-off after it (short closing lines) always stay together.
   letter(text: string, size = 10) {
-    const paras = text.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean);
+    const paras = text.replace(/\r\n?/g, "\n").split(/\n[ \t]*\n+/).map((x) => x.trim()).filter(Boolean);
     const lineCount = (x: string) => this.wrap(x, CONTENT_W, size, this.regular).length;
     let tail = paras.length;
     // trailing short paragraphs (the signature), then the paragraph before them
-    while (tail > 1 && paras.length - tail < 2 && paras[tail - 1].length < 100 && lineCount(paras[tail - 1]) <= 3) tail--;
+    while (tail > 1 && paras.length - tail < 3 && paras[tail - 1].length < 100 && lineCount(paras[tail - 1]) <= 3) tail--;
     if (tail > 1) tail--;
     tail = Math.max(0, Math.min(tail, paras.length - 1));
     paras.slice(0, tail).forEach((x) => {
