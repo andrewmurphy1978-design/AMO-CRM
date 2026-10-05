@@ -7,7 +7,7 @@ import ColorPicker from "@/components/color-picker";
 import { type Lang } from "@/lib/i18n/dictionaries";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { CARD_COLORS } from "@/components/section-card";
-import { BRAND_CATEGORIES, BRAND_FONTS, MAX_BRAND_FILE_BYTES, dataUriIsImage, isDataUri, type BrandItemInput } from "@/lib/brand";
+import { BRAND_CATEGORIES, BRAND_FONTS, MAX_BRAND_FILE_BYTES, dataUriIsImage, isDataUri, isKept, keptId, type BrandItemInput } from "@/lib/brand";
 import SectionDialog, { EditCardButton } from "./section-dialog";
 
 const FIELD = "w-full min-w-0 rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -143,7 +143,7 @@ function FileOrLink({
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const uploaded = isDataUri(value);
+  const uploaded = isDataUri(value) || isKept(value);
   const drop = useFileDrop((files) => void pick(files));
 
   async function pick(list: FileList | null) {
@@ -170,7 +170,10 @@ function FileOrLink({
       <div className="flex items-center gap-1.5">
         {uploaded ? (
           <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-card-border bg-field-bg px-2 py-1">
-            {dataUriIsImage(value) ? (
+            {isKept(value) ? (
+              // eslint-disable-next-line @next/next/no-img-element -- the saved file, served by /api/brand-files
+              <img src={`/api/brand-files/${keptId(value)}`} alt="" onError={(e) => (e.currentTarget.style.display = "none")} className="h-7 w-10 shrink-0 rounded object-contain" />
+            ) : dataUriIsImage(value) ? (
               // eslint-disable-next-line @next/next/no-img-element -- local data URI preview
               <img src={value} alt="" className="h-7 w-10 shrink-0 rounded object-contain" />
             ) : (

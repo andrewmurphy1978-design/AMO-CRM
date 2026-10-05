@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { BRAND_CATEGORIES, MAX_BRAND_FILE_BYTES, type BrandItemInput } from "@/lib/brand";
+import { BRAND_CATEGORIES, MAX_BRAND_FILE_BYTES, isKept, keptId, type BrandItemInput } from "@/lib/brand";
 
 export async function saveContactBrand(
   contactId: string,
@@ -36,6 +36,13 @@ export async function saveContactBrand(
   }
 
   await withScopedPrismaClient(async (db) => {
+    // Files already saved come back as "kept:<id>": put the stored file back.
+    const keptIds = items.filter((i) => isKept(i.value)).map((i) => keptId(i.value));
+    if (keptIds.length > 0) {
+      const stored = await db.contactBrandItem.findMany({ where: { contactId, id: { in: keptIds } }, select: { id: true, value: true } });
+      const byId = new Map(stored.map((s) => [s.id, s.value ?? ""]));
+      items = items.map((i) => (isKept(i.value) ? { ...i, value: byId.get(keptId(i.value)) ?? "" } : i));
+    }
     const order = new Map<string, number>();
     await db.$transaction([
       db.contactBrandItem.deleteMany({ where: { contactId } }),

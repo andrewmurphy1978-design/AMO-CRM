@@ -50,6 +50,13 @@ export function isDataUri(v: string | null | undefined): boolean {
   return /^data:[\w.+-]+\/[\w.+-]+;base64,/i.test((v ?? "").trim());
 }
 
+// A file already saved on the Brand card, referred to by its row id while the card is edited (the file
+// itself never travels to the browser): "kept:<id>".
+export const KEPT_PREFIX = "kept:";
+export const isKept = (v: string | null | undefined) => (v ?? "").startsWith(KEPT_PREFIX);
+export const keptId = (v: string) => v.slice(KEPT_PREFIX.length);
+export const mimeIsImage = (m: string | null | undefined) => /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i.test(m ?? "");
+
 export function dataUriIsImage(v: string): boolean {
   return /^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/i.test(v.trim());
 }

@@ -1,3 +1,4 @@
+import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { verifyPath } from "@/lib/signed-url";
 import { isDataUri } from "@/lib/brand";
@@ -8,7 +9,9 @@ import { isDataUri } from "@/lib/brand";
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const url = new URL(request.url);
-  if (!(await verifyPath(`/api/brand-files/${id}`, url.searchParams.get("exp"), url.searchParams.get("sig")))) {
+  // Logged-in users (the Brand card shows its files through this route) need no signature.
+  const session = await auth();
+  if (!session && !(await verifyPath(`/api/brand-files/${id}`, url.searchParams.get("exp"), url.searchParams.get("sig")))) {
     return new Response("This link is invalid or has expired.", { status: 403 });
   }
 

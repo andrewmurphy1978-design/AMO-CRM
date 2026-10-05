@@ -44,6 +44,7 @@ import AiExportMenu from "./ai-export-menu";
 import AiDetailsDialog from "./ai-details-dialog";
 import { saveContactAiDetails } from "@/actions/contact-brand";
 import { BrandCard } from "./brand-card";
+import { loadBrandRows } from "@/lib/brand-rows";
 import { AvatarThumb, AppIdChip, ContactInfoCard, TechStackCard, DomainsCard } from "./contact-cards";
 import RelationsDialog from "./relations-dialog";
 import OtherInfoDialog from "./other-info-dialog";
@@ -210,6 +211,7 @@ export default async function ContactDetailPage({
   // risks Cloudflare Error 1102 without scoping.
   const {
     contact,
+    brandRows,
     hour12,
     defaultComposeSource,
     addressColors,
@@ -266,7 +268,6 @@ export default async function ContactDetailPage({
         voipAccounts: { orderBy: { order: "asc" } },
         techStackItems: { orderBy: { order: "asc" } },
         domains: { orderBy: { order: "asc" } },
-        brandItems: { orderBy: [{ category: "asc" }, { order: "asc" }] },
         credentials: { orderBy: { createdAt: "asc" } },
         appSyncSettings: true,
         relationsFrom: { include: { relatedContact: true }, orderBy: { createdAt: "asc" } },
@@ -332,8 +333,11 @@ export default async function ContactDetailPage({
     });
     const addressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
 
+    const brandRows = await loadBrandRows(db, id);
+
     return {
       contact,
+      brandRows,
       hour12,
       defaultComposeSource: composePrefs?.defaultComposeSource ?? null,
       calendarEvents,
@@ -818,7 +822,7 @@ export default async function ContactDetailPage({
           <BrandCard
             contactId={contact.id}
             lang={lang}
-            items={contact.brandItems.map((b) => ({ id: b.id, category: b.category, label: b.label, value: b.value ?? "", note: b.note ?? "" }))}
+            items={brandRows}
           />
 
           {isAdmin && <ContactCredentialsCard contactId={contact.id} entries={credentialEntries} lang={lang} />}

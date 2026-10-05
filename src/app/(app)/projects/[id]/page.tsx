@@ -10,6 +10,7 @@ import ProjectDetailsDialog from "./project-details-dialog";
 import ProjectNotesDialog from "./project-notes-dialog";
 import PhasesCard from "./phases-card";
 import { BrandCard } from "../../contacts/[id]/brand-card";
+import { loadBrandRows } from "@/lib/brand-rows";
 import TasksCard, { type TaskCardItem } from "./tasks-card";
 import { ProposalsCard, InvoicesCard, type ProposalRowData, type InvoiceRowData } from "./documents-cards";
 import { contactTaxLocation } from "@/lib/billing-totals";
@@ -80,6 +81,7 @@ export default async function ProjectDetailPage({
   // behavior across several sequential reads).
   const {
     project,
+    brandRows,
     hour12,
     users,
     calendarEvents,
@@ -107,7 +109,7 @@ export default async function ProjectDetailPage({
     const project = await db.project.findUnique({
       where: { id },
       include: {
-        contact: { include: { brandItems: { orderBy: [{ category: "asc" }, { order: "asc" }] }, messagingAccounts: { orderBy: { order: "asc" } }, techStackItems: { orderBy: { order: "asc" } }, domains: { orderBy: { order: "asc" } } } },
+        contact: { include: { messagingAccounts: { orderBy: { order: "asc" } }, techStackItems: { orderBy: { order: "asc" } }, domains: { orderBy: { order: "asc" } } } },
         owner: true,
         supervisor: true,
         teamMembers: { include: { user: true } },
@@ -201,8 +203,11 @@ export default async function ProjectDetailPage({
       }
     }
 
+    const brandRows = project ? await loadBrandRows(db, project.contactId) : [];
+
     return {
       project,
+      brandRows,
       hour12,
       users,
       calendarEvents,
@@ -250,7 +255,7 @@ export default async function ProjectDetailPage({
     <BrandCard
       contactId={project.contactId}
       lang={lang}
-      items={project.contact.brandItems.map((b) => ({ id: b.id, category: b.category, label: b.label, value: b.value ?? "", note: b.note ?? "" }))}
+      items={brandRows}
     />
   );
   const selectedPhase =
