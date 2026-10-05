@@ -8,6 +8,8 @@
 
 // "spacer" is a blank cell ("Free space"): it asks nothing and just pushes the next
 // field along in the 3-column layout, e.g. to start a new line.
+import { DEFAULT_FIELDS } from "@/lib/default-fields";
+
 export type FieldType = "yesno" | "text" | "number" | "textarea" | "url" | "select" | "multiselect" | "languages" | "counts" | "spacer";
 
 export interface Cond {
@@ -226,12 +228,12 @@ function expandTitle(task: TaskTpl, values: FieldValues): string[] {
   );
 }
 
-// Right after the Mock-up: the 2nd instalment is invoiced and its payment awaited
-// before the building starts.
+// Right after the Mock-up, still part of Planning: the 2nd instalment is invoiced and its payment
+// awaited before the building starts.
 export function secondInstalmentPhase(): PhaseTpl {
   return {
     name: "2nd Instalment",
-    stage: "ACTIVE",
+    stage: "PLANNING",
     tasks: [{ title: "Send the 2nd instalment invoice" }, { title: "Await the 2nd instalment payment" }],
   };
 }
@@ -925,7 +927,8 @@ function applyLifecycle(template: TemplateConfig): void {
 }
 
 // Model -> Mock-up, Design -> Mock-up (what the client reviews and accepts).
-for (const template of Object.values(DEFAULT_TEMPLATES)) {
+for (const [type, template] of Object.entries(DEFAULT_TEMPLATES)) {
+  if (DEFAULT_FIELDS[type]) template.fields = DEFAULT_FIELDS[type];
   for (const phase of template.phases) {
     if (phase.name === "Model" || phase.name === "Design") phase.name = "Mock-up";
     if (phase.name === "Planning") phase.name = "Catalog Planning";
@@ -1030,7 +1033,7 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
   }
 
   // Saved (customized) templates predate this phase: every project gets it once.
-  if (!shared.has("2nd Instalment")) shared.set("2nd Instalment", { ...secondInstalmentPhase(), tasks: secondInstalmentPhase().tasks.map((t) => t.title), stage: "ACTIVE", delays: [] });
+  if (!shared.has("2nd Instalment")) shared.set("2nd Instalment", { ...secondInstalmentPhase(), tasks: secondInstalmentPhase().tasks.map((t) => t.title), stage: "PLANNING", delays: [] });
   const pick = (name: string) => (shared.has(name) ? [shared.get(name)!] : []);
   // The Brand phase only exists for projects that include a brand; its tasks follow the ticked items
   // (or the type's own Brand phase when none are ticked).

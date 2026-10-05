@@ -8,17 +8,16 @@ import type { PhaseStage } from "@/lib/project-templates";
 //   PROPOSAL  Proposal phase: prepare / send / await the answer. When the
 //             proposal is ACCEPTED and the 1st instalment is paid -> PLANNING
 //             (and the Contact becomes a Client).
-//   PLANNING  Research, then Mock-up (each only once the previous one is done).
-//             When they're finished (the mock-up accepted) -> ACTIVE, which is
-//             when the 2nd instalment is due. With no such phases it goes
-//             straight to ACTIVE.
-//   ACTIVE    Building, Testing, Presenting, Deploying — one phase at a time,
-//             each created only when the previous is completed. After the last
-//             one (deployed) -> FINAL.
+//   PLANNING  ALL the Planning phases (Research, Brand, Mock-up, 2nd Instalment...)
+//             are created at once, each with its tasks. When they're all finished
+//             -> ACTIVE. With no such phases it goes straight to ACTIVE.
+//   ACTIVE    ALL the Active phases (Building, Testing, Presenting, Deploying...)
+//             are created at once, each with its tasks. When they're all finished
+//             -> FINAL.
 //   FINAL     Awaiting the last instalment. Paid -> COMPLETED.
 //
 // Phases wait in Project.pendingPhases (each with its stage) and are created
-// one by one. ON_HOLD / CANCELLED / COMPLETED projects are left alone.
+// a whole stage at a time. ON_HOLD / CANCELLED / COMPLETED projects are left alone.
 
 export interface PendingPhase {
   name: string;
@@ -37,7 +36,7 @@ function asPending(value: unknown): PendingPhase[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((p): p is PendingPhase => Boolean(p) && typeof (p as PendingPhase).name === "string" && Array.isArray((p as PendingPhase).tasks))
-    .map((p) => ({ name: p.name, tasks: p.tasks.map(String), stage: p.stage, delayDays: p.delayDays ?? null, delays: Array.isArray(p.delays) ? p.delays : undefined }));
+    .map((p) => ({ name: p.name, tasks: p.tasks.map(String), stage: /^2nd instalment$/i.test(p.name.trim()) ? ("PLANNING" as PhaseStage) : p.stage, delayDays: p.delayDays ?? null, delays: Array.isArray(p.delays) ? p.delays : undefined }));
 }
 
 // Moves a Contact up the pipeline, never down: Prospect only from Lead;
@@ -69,7 +68,7 @@ async function loadProject(db: PrismaClient, projectId: string) {
       status: true,
       lifecycleManaged: true,
       pendingPhases: true,
-      phases: { orderBy: { order: "desc" }, take: 1, select: { id: true, order: true, status: true, tasks: { select: { status: true } } } },
+      phases: { orderBy: { order: "desc" }, select: { id: true, name: true, order: true, status: true, tasks: { select: { status: true } } } },
     },
   });
 }
@@ -83,17 +82,33 @@ async function closeLatestPhase(db: PrismaClient, pr: Loaded) {
   await db.projectPhase.update({ where: { id: last.id }, data: { status: "COMPLETED", completedAt: new Date() } });
 }
 
-// Creates the next waiting phase (closing the previous one if it isn't).
-async function release(db: PrismaClient, pr: Loaded, pending: PendingPhase[], extraFirstTask?: string) {
-  const [next, ...rest] = pending;
-  const last = pr.phases[0];
-  if (last && last.status !== "COMPLETED") await db.projectPhase.update({ where: { id: last.id }, data: { status: "COMPLETED", completedAt: new Date() } });
+// Creates every waiting phase of one stage at once (closing the finished phases before them),
+// each with its tasks. The first phase starts now and so does its first task; the others are
+// scheduled one after the other from the template's delays, and start for real as the one
+// before them finishes.
+async function releaseStage(db: PrismaClient, pr: Loaded, pending: PendingPhase[], stage: PhaseStage, status: "PLANNING" | "ACTIVE", extraFirstTask?: string) {
+  const batch = pending.filter((p) => (p.stage ?? "ACTIVE") === stage);
+  const rest = pending.filter((p) => (p.stage ?? "ACTIVE") !== stage);
+  if (batch.length === 0) return;
   const now = new Date();
-  const created = await db.projectPhase.create({ data: { projectId: pr.id, name: next.name, order: (last?.order ?? -1) + 1, status: "ACTIVE", ...phaseDates(now, next.delayDays) } });
-  const titles = [...(extraFirstTask ? [extraFirstTask] : []), ...next.tasks];
-  const delays = [...(extraFirstTask ? [null] : []), ...(next.delays ?? [])];
-  // The phase starts now, and so does its first task.
-  if (titles.length > 0) await db.task.createMany({ data: taskRows(pr.id, created.id, titles, delays, now) });
+  // The phases before these are finished (all their tasks done): close them.
+  await db.projectPhase.updateMany({ where: { projectId: pr.id, NOT: { status: "COMPLETED" }, tasks: { none: { NOT: { status: "DONE" } } } }, data: { status: "COMPLETED", completedAt: now } });
+  const baseOrder = (pr.phases[0]?.order ?? -1) + 1;
+  let cursor = now;
+  const phaseRows: { id: string; projectId: string; name: string; order: number; status: "PLANNING" | "ACTIVE"; startDate: Date; dueDate?: Date }[] = [];
+  const taskData: ReturnType<typeof taskRows> = [];
+  batch.forEach((ph, i) => {
+    const id = crypto.randomUUID();
+    const dates = phaseDates(cursor, ph.delayDays);
+    phaseRows.push({ id, projectId: pr.id, name: ph.name, order: baseOrder + i, status, ...dates });
+    const first = i === 0;
+    const titles = [...(first && extraFirstTask ? [extraFirstTask] : []), ...ph.tasks];
+    const delays = [...(first && extraFirstTask ? [null] : []), ...(ph.delays ?? [])];
+    if (titles.length > 0) taskData.push(...taskRows(pr.id, id, titles, delays, first ? now : null));
+    if (ph.delayDays != null) cursor = dates.dueDate ?? cursor;
+  });
+  await db.projectPhase.createMany({ data: phaseRows });
+  if (taskData.length > 0) await db.task.createMany({ data: taskData });
   await db.project.update({ where: { id: pr.id }, data: { pendingPhases: rest.length > 0 ? (rest as never) : ([] as never) } });
 }
 
@@ -164,13 +179,18 @@ async function setStatus(db: PrismaClient, projectId: string, status: "PLANNING"
 // One step of the lifecycle; true if something changed (so the caller loops).
 async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
   const pending = asPending(pr.pendingPhases);
-  const last = pr.phases[0];
-  const lastFinished = !last || last.status === "COMPLETED" || (last.tasks.length > 0 && last.tasks.every((t) => t.status === "DONE"));
-  const stageOf = (p?: PendingPhase) => p?.stage ?? "ACTIVE";
+  const hasPending = (stage: PhaseStage) => pending.some((p) => (p.stage ?? "ACTIVE") === stage);
+  const finished = (ph: Loaded["phases"][number]) => ph.status === "COMPLETED" || (ph.tasks.length > 0 && ph.tasks.every((t) => t.status === "DONE"));
+  const allFinished = pr.phases.every(finished);
   const money = await instalmentState(db, pr.id);
   // The "2nd Instalment" phase carries its own tasks; otherwise a reminder task is added to the first active phase.
-  const reminder = money.paid >= 2 ? undefined : SECOND_INSTALMENT_TASK;
-  const secondFor = (p?: PendingPhase) => (stageOf(p) === "ACTIVE" && !(p && /2nd instalment/i.test(p.name)) ? reminder : undefined);
+  const reminder = money.paid >= 2 || pending.some((p) => /^2nd instalment$/i.test(p.name.trim())) || pr.phases.some((p) => /^2nd instalment$/i.test(p.name.trim())) ? undefined : SECOND_INSTALMENT_TASK;
+
+  const goActive = async () => {
+    await setStatus(db, pr.id, "ACTIVE");
+    await ensureInstalmentInvoices(db, pr.id, "middle");
+    if (hasPending("ACTIVE")) await releaseStage(db, pr, pending, "ACTIVE", "ACTIVE", reminder);
+  };
 
   switch (pr.status) {
     case "PROPOSAL": {
@@ -179,40 +199,37 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
       if (!(money.accepted && money.paid >= 1)) return false;
       await closeLatestPhase(db, pr);
       await promoteContact(db, pr.contactId, "CLIENT");
-      if (stageOf(pending[0]) === "PLANNING" && pending.length > 0) {
+      if (hasPending("PLANNING")) {
+        // Every Planning phase (Research, Brand, Mock-up, 2nd Instalment...) is created now, with its tasks.
         await setStatus(db, pr.id, "PLANNING");
-        await release(db, pr, pending);
+        await ensureInstalmentInvoices(db, pr.id, "middle");
+        await releaseStage(db, pr, pending, "PLANNING", "PLANNING");
       } else {
         // Nothing to research or mock up: straight to Active.
-        await setStatus(db, pr.id, "ACTIVE");
-        await ensureInstalmentInvoices(db, pr.id, "middle");
-        if (pending.length > 0) await release(db, pr, pending, secondFor(pending[0]));
+        await goActive();
       }
       return true;
     }
     case "PLANNING": {
-      if (!lastFinished) return false;
-      if (pending.length > 0 && stageOf(pending[0]) === "PLANNING") {
-        await release(db, pr, pending);
-      } else {
-        // Mock-up (or research) accepted/finished: the project goes Active and the
-        // 2nd instalment falls due.
-        await setStatus(db, pr.id, "ACTIVE");
-        await ensureInstalmentInvoices(db, pr.id, "middle");
-        if (pending.length > 0) await release(db, pr, pending, secondFor(pending[0]));
+      if (hasPending("PLANNING")) {
+        await releaseStage(db, pr, pending, "PLANNING", "PLANNING"); // phases added later join the others
+        return true;
       }
+      if (!allFinished) return false;
+      // Every Planning phase is finished: the project goes Active and all Active phases are created.
+      await goActive();
       return true;
     }
     case "ACTIVE": {
-      if (!lastFinished) return false;
-      if (pending.length > 0 && stageOf(pending[0]) === "ACTIVE") {
-        await release(db, pr, pending);
-      } else {
-        // Deployed: waiting on the final instalment.
-        await setStatus(db, pr.id, "FINAL");
-        await ensureInstalmentInvoices(db, pr.id, "last");
-        if (pending.length > 0) await release(db, pr, pending);
+      if (hasPending("ACTIVE")) {
+        await releaseStage(db, pr, pending, "ACTIVE", "ACTIVE");
+        return true;
       }
+      if (!allFinished) return false;
+      // Deployed: waiting on the final instalment.
+      await setStatus(db, pr.id, "FINAL");
+      await ensureInstalmentInvoices(db, pr.id, "last");
+      if (pending.length > 0) await releaseStage(db, pr, pending, pending[0].stage ?? "ACTIVE", "ACTIVE");
       return true;
     }
     case "FINAL": {

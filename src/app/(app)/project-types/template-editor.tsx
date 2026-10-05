@@ -328,8 +328,8 @@ export default function TemplateEditor({ type, isUserType, initial, typeLabels, 
           <span className="font-semibold">Create phases one at a time</span>
           <span className="block text-xs text-soft">
             A new project only gets its first phase (Proposal) and that phase&apos;s tasks. The project then moves through its statuses: the proposal accepted + the 1st
-            instalment paid → Planning (the contact becomes a Client); Planning finished (mock-up accepted) → Active (2nd instalment due); Deploying finished → Final; the
-            last instalment paid → Completed. Within a status, each phase and its tasks are created only when the previous phase is completed. Each phase&apos;s &quot;Project status&quot;
+            instalment paid → Planning (the contact becomes a Client); Planning finished (Research, Brand, Mock-up and the 2nd instalment) → Active; Deploying finished → Final; the
+            last instalment paid → Completed. When a status begins, all of its phases and their tasks are created at once. Each phase&apos;s &quot;Project status&quot;
             decides where it belongs. Untick to create every phase at once.
           </span>
         </span>

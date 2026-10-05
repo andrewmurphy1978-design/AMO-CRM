@@ -38,6 +38,16 @@ export async function onTaskDone(db: PrismaClient, taskId: string): Promise<void
   const at = done.completedAt ?? new Date();
   const siblings = await db.task.findMany({ where: { phaseId: done.phaseId }, orderBy: { createdAt: "asc" }, select: { id: true, status: true, startDate: true, dueDate: true, delayDays: true } });
   const next = siblings.find((t) => t.status !== "DONE" && !t.startDate);
-  if (!next) return;
+  if (!next) {
+    // The phase is finished: the next phase's first task starts now.
+    if (siblings.some((t) => t.status !== "DONE")) return;
+    const phase = await db.projectPhase.findUnique({ where: { id: done.phaseId }, select: { projectId: true, order: true } });
+    if (!phase) return;
+    const following = await db.projectPhase.findFirst({ where: { projectId: phase.projectId, order: { gt: phase.order } }, orderBy: { order: "asc" }, select: { id: true } });
+    if (!following) return;
+    const first = await db.task.findFirst({ where: { phaseId: following.id, startDate: null, status: { not: "DONE" } }, orderBy: { createdAt: "asc" }, select: { id: true, dueDate: true, delayDays: true } });
+    if (first) await db.task.update({ where: { id: first.id }, data: { startDate: at, ...(first.delayDays != null && !first.dueDate ? { dueDate: addDays(at, first.delayDays) } : {}) } });
+    return;
+  }
   await db.task.update({ where: { id: next.id }, data: { startDate: at, ...(next.delayDays != null && !next.dueDate ? { dueDate: addDays(at, next.delayDays) } : {}) } });
 }
