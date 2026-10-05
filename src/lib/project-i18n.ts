@@ -6,6 +6,16 @@
 // Whole-string translations: field labels, option values, phase names, task titles.
 const EXACT: Record<string, string> = {
   // ---- answers
+  "Create the logo (main, horizontal, icon-only, light and dark versions)": "Créer le logo (principal, horizontal, icône seule, versions pâle et foncée)",
+  "Choose the colour palette (primary, secondary, accent, neutrals)": "Choisir la palette de couleurs (primaire, secondaire, accent, neutres)",
+  "Choose the fonts (headings, body, accents)": "Choisir les polices (titres, texte, accents)",
+  "Create the icon set": "Créer le jeu d'icônes",
+  "Design the interface components (buttons, forms, cards, navigation)": "Concevoir les composants d'interface (boutons, formulaires, cartes, navigation)",
+  "Create the graphics and patterns": "Créer les éléments graphiques et les motifs",
+  "Define the photo style and collect the photos": "Définir le style photo et recueillir les photos",
+  "Define the chart and data-visualization style": "Définir le style des diagrammes et de la visualisation de données",
+  "Define the brand voice and tone": "Définir la voix et le ton de la marque",
+  "Create the brand guide (PDF)": "Créer le guide de marque (PDF)",
   Training: "Formation", "Train the client to manage their accounts": "Former le client à gérer ses comptes", "Hand over the account access (credentials)": "Remettre les accès aux comptes (identifiants)",
   "Send the training materials and recordings": "Envoyer le matériel et les enregistrements de formation", "Confirm the client is comfortable managing it": "Confirmer que le client est à l'aise de gérer ses comptes",
   "2nd Instalment": "2e versement", "Send the 2nd instalment invoice": "Envoyer la facture du 2e versement", "Await the 2nd instalment payment": "Attendre le paiement du 2e versement",

@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "brandItems" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

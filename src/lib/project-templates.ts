@@ -787,20 +787,15 @@ export function defaultTemplate(type: string): TemplateConfig {
 
 // ---- multi-type projects ----------------------------------------------------
 
+import { brandPhaseTasks } from "@/lib/brand-items";
+
 // The Brand question is a project setting (General Info), not part of a type's details:
 // earlier versions put a "brand" Yes/No in the details, which is dropped here.
 export function withoutBrandField(config: TemplateConfig): TemplateConfig {
   return config.fields.some((f) => f.key === "brand") ? { ...config, fields: config.fields.filter((f) => f.key !== "brand") } : config;
 }
 
-export const BRAND_PHASE_TASKS = [
-  "Collect the client's existing brand assets",
-  "Define the brand voice and style",
-  "Create the logo",
-  "Choose the colours and fonts",
-  "Create the brand guide",
-  "Add the brand to the client's Brand card",
-];
+
 
 export interface TypeInput {
   type: string;
@@ -833,6 +828,7 @@ const SHARED_NAMES: Record<string, string> = {
 export interface PlanOptions {
   // Create a brand for the client (project setting): adds the Brand phase.
   brand?: boolean;
+  brandItems?: string[];
   // "CLIENT": the contact controls their own accounts, so a Training phase is added.
   accountMode?: string | null;
 }
@@ -867,7 +863,7 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
   // Saved (customized) templates predate this phase: every project gets it once.
   if (!shared.has("2nd Instalment")) shared.set("2nd Instalment", { ...secondInstalmentPhase(), tasks: secondInstalmentPhase().tasks.map((t) => t.title), stage: "ACTIVE" });
   const pick = (name: string) => (shared.has(name) ? [shared.get(name)!] : []);
-  const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: [...BRAND_PHASE_TASKS] }] : [];
+  const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: brandPhaseTasks(options.brandItems) }] : [];
   const phases: PlanPhase[] = [
     ...pick("Proposal"),
     ...pick("Research"),

@@ -7,6 +7,7 @@ import { createTaskViaDialog, updateTaskViaDialog, type TaskDialogValues } from 
 import Card from "@/components/section-card";
 import TaskRow from "./task-row";
 import TaskDialog from "./task-dialog";
+import PhasePromptDialog from "./phase-prompt-dialog";
 
 export interface TaskCardItem {
   id: string;
@@ -15,6 +16,8 @@ export interface TaskCardItem {
   priority: TaskDialogValues["priority"];
   dueDate: string | null; // ISO
   assignee: { name: string } | null;
+  // Set on a phase's first task when the phase has an AI prompt (research, brand, mock-up, builds).
+  aiPhaseId?: string | null;
   // Everything the edit dialog needs, as plain form values.
   values: TaskDialogValues;
 }
@@ -50,6 +53,7 @@ export default function TasksCard({
   const router = useRouter();
   const [dialog, setDialog] = useState<{ task: TaskCardItem | null; key: number } | null>(null);
   const [count, setCount] = useState(0);
+  const [promptPhase, setPromptPhase] = useState<string | null>(null);
   const open = tasks.filter((tk) => tk.status !== "DONE");
   const done = tasks.filter((tk) => tk.status === "DONE");
 
@@ -65,6 +69,7 @@ export default function TasksCard({
       projectId={projectId}
       lang={lang}
       onEdit={() => show(task)}
+      onPrompt={task.aiPhaseId ? () => setPromptPhase(task.aiPhaseId ?? null) : undefined}
     />
   );
 
@@ -105,6 +110,8 @@ export default function TasksCard({
           )}
         </>
       )}
+
+      {promptPhase && <PhasePromptDialog projectId={projectId} phaseId={promptPhase} onClose={() => setPromptPhase(null)} lang={lang} />}
 
       {dialog && (
         <TaskDialog

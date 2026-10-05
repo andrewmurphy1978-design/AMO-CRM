@@ -915,6 +915,8 @@ model Project {
   subscriptionEmail String?
   // Create a brand (logo, colours, fonts, guide) for the client: adds the Brand phase.
   createBrand       Boolean       @default(false)
+  // What the brand should include (keys of lib/brand-items.ts): logos, colours, fonts, ...
+  brandItems        String[]      @default([])
   // Who holds the accounts: "CLIENT" (the contact controls their own credentials; a Training
   // phase is added) or "MANAGED" (kept as a sub-account with a monthly hosting / update / support fee).
   accountMode       String?

@@ -11,6 +11,7 @@ import PageHeader from "../page-header";
 import CustomFieldsInputs from "./custom-fields-inputs";
 import { projectTypeOptions, type TemplateConfig } from "@/lib/project-templates";
 import ProjectTypesPicker from "@/components/project-types-picker";
+import BrandFields from "@/components/brand-fields";
 
 type ProjectFormValues = {
   id?: string;
@@ -21,6 +22,7 @@ type ProjectFormValues = {
   type?: string;
   types?: string[];
   createBrand?: boolean;
+  brandItems?: string[];
   accountMode?: string | null;
   ownerId?: string | null;
   supervisorId?: string | null;
@@ -229,10 +231,7 @@ export default function ProjectForm({
 
 
       <div className="grid gap-3 rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm sm:grid-cols-2">
-          <label className="flex items-start gap-2 text-sm text-ink">
-            <input type="checkbox" name="createBrand" defaultChecked={defaultValues?.createBrand ?? false} className="mt-1" />
-            <span>{lang === "fr" ? "Créer l'image de marque du client (ajoute la phase Marque)" : "Create a brand for the client (adds the Brand phase)"}</span>
-          </label>
+          <BrandFields defaultChecked={defaultValues?.createBrand ?? false} defaultItems={defaultValues?.brandItems ?? []} lang={lang} />
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{lang === "fr" ? "Comptes du client" : "Client accounts"}</label>
             <select name="accountMode" defaultValue={defaultValues?.accountMode ?? ""} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30">

@@ -17,6 +17,7 @@ export default function TaskRow({
   projectId,
   lang,
   onEdit,
+  onPrompt,
 }: {
   task: {
     id: string;
@@ -31,6 +32,8 @@ export default function TaskRow({
   // When given, clicking the title edits the task in a dialog instead of
   // navigating to its edit page.
   onEdit?: () => void;
+  // The phase's first task: opens the AI prompt for the phase.
+  onPrompt?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const t = getDict(lang);
@@ -67,6 +70,11 @@ export default function TaskRow({
           <span className={`rounded-full px-2 py-0.5 font-medium ${PRIORITY_COLORS[task.priority]}`}>
             {t.priorities[task.priority as keyof typeof t.priorities]}
           </span>
+          {onPrompt && (
+            <button type="button" onClick={onPrompt} className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 hover:bg-emerald-100">
+              🤖 {lang === "fr" ? "Prompt IA" : "AI prompt"}
+            </button>
+          )}
           {task.assignee && <span>{task.assignee.name}</span>}
           {task.dueDate && <span>{t.projectDetail.due} {new Date(task.dueDate).toLocaleDateString()}</span>}
         </div>

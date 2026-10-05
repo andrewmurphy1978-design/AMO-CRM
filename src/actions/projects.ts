@@ -9,7 +9,8 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import type { PrismaClient } from "@/lib/prisma";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { getProjectTemplate } from "@/lib/project-template-store";
-import { BRAND_PHASE_TASKS, TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, readFieldValues, typesOfProject, type FieldValues, type TypeInput } from "@/lib/project-templates";
+import { brandPhaseTasks } from "@/lib/brand-items";
+import { TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, readFieldValues, typesOfProject, type FieldValues, type TypeInput } from "@/lib/project-templates";
 import { getTypeLabels } from "@/lib/project-type-store";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 
@@ -37,7 +38,9 @@ function readTypes(formData: FormData): string[] {
 // Project-level choices: the Brand phase and who holds the accounts.
 function readSettings(formData: FormData) {
   const mode = String(formData.get("accountMode") ?? "");
-  return { createBrand: formData.get("createBrand") === "on", accountMode: mode === "CLIENT" || mode === "MANAGED" ? mode : null };
+  const createBrand = formData.get("createBrand") === "on";
+  const brandItems = createBrand ? [...new Set(formData.getAll("brandItems").map(String).filter(Boolean))] : [];
+  return { createBrand, brandItems, accountMode: mode === "CLIENT" || mode === "MANAGED" ? mode : null };
 }
 
 function readProjectForm(formData: FormData) {
@@ -174,6 +177,7 @@ interface NewProjectInput {
   // One entry per selected type, in order, with that type's template and answers.
   types: TypeInput[];
   createBrand: boolean;
+  brandItems: string[];
   accountMode: string | null;
 }
 
@@ -198,6 +202,7 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
       typeFields: typeFields as never,
       lifecycleManaged: managed,
       createBrand: input.createBrand,
+      brandItems: input.brandItems,
       accountMode: input.accountMode,
     },
   });
@@ -214,7 +219,7 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
     await db.projectTeamMember.createMany({ data: input.teamMemberIds.map((userId) => ({ projectId: project.id, userId })) });
   }
 
-  const plan = buildMultiPlan(input.types.map((t) => ({ ...t, values: typeFields[t.type] })), { brand: input.createBrand, accountMode: input.accountMode });
+  const plan = buildMultiPlan(input.types.map((t) => ({ ...t, values: typeFields[t.type] })), { brand: input.createBrand, brandItems: input.brandItems, accountMode: input.accountMode });
   // Progressive (default): only the first phase now — the rest are released as
   // each phase is completed. Phases that ended up with no tasks are dropped.
   const phases = managed ? plan.phases.filter((p) => p.tasks.length > 0) : plan.phases;
@@ -257,7 +262,7 @@ async function managedFeeRow(db: PrismaClient, contactId: string) {
 // Brand / account-mode settings changed on an existing project: add what the new choice needs
 // (the Brand phase, a Training phase, the monthly managed-account fee). Phases of a stage the
 // project has already passed are created directly instead of waiting in the queue.
-async function applyProjectSettings(db: PrismaClient, projectId: string, next: { createBrand: boolean; accountMode: string | null }) {
+async function applyProjectSettings(db: PrismaClient, projectId: string, next: { createBrand: boolean; brandItems: string[]; accountMode: string | null }) {
   const project = await db.project.findUnique({ where: { id: projectId }, include: { phases: { select: { name: true, order: true } } } });
   if (!project) return;
   const addPhase = async (name: string, tasks: string[], stage: "PLANNING" | "ACTIVE", beforeNames: RegExp) => {
@@ -275,13 +280,13 @@ async function applyProjectSettings(db: PrismaClient, projectId: string, next: {
       if (tasks.length > 0) await db.task.createMany({ data: tasks.map((title) => ({ projectId, phaseId: created.id, title })) });
     }
   };
-  if (next.createBrand && !project.createBrand) await addPhase("Brand", [...BRAND_PHASE_TASKS], "PLANNING", /^mock-up$/i);
+  if (next.createBrand && !project.createBrand) await addPhase("Brand", brandPhaseTasks(next.brandItems), "PLANNING", /^mock-up$/i);
   if (next.accountMode === "CLIENT" && project.accountMode !== "CLIENT") await addPhase("Training", [...TRAINING_PHASE_TASKS], "ACTIVE", /^final payment$/i);
   if (next.accountMode === "MANAGED" && project.accountMode !== "MANAGED") {
     const have = await db.projectSubscription.count({ where: { projectId } });
     await db.projectSubscription.create({ data: { projectId, order: have, ...(await managedFeeRow(db, project.contactId)) } });
   }
-  await db.project.update({ where: { id: projectId }, data: { createBrand: next.createBrand, accountMode: next.accountMode } });
+  await db.project.update({ where: { id: projectId }, data: { createBrand: next.createBrand, brandItems: next.brandItems, accountMode: next.accountMode } });
 }
 
 // A project whose types changed: phases of newly added types are added too (as

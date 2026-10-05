@@ -5,6 +5,7 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { CARD_COLORS } from "@/components/section-card";
 import { projectTypeOptions } from "@/lib/project-templates";
 import ProjectTypesPicker from "@/components/project-types-picker";
+import BrandFields from "@/components/brand-fields";
 import SectionDialog, { EditCardButton } from "../../contacts/[id]/section-dialog";
 
 const FIELD_CLASS =
@@ -25,6 +26,7 @@ export interface ProjectGeneralValues {
   completedAt: string; // YYYY-MM-DD
   subscriptionEmail: string;
   createBrand: boolean;
+  brandItems: string[];
   accountMode: string;
   description: string;
 }
@@ -158,10 +160,7 @@ export default function ProjectGeneralDialog({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex items-start gap-2 text-sm text-ink">
-            <input type="checkbox" name="createBrand" defaultChecked={values.createBrand} className="mt-1" />
-            <span>{lang === "fr" ? "Créer l'image de marque du client (ajoute la phase Marque)" : "Create a brand for the client (adds the Brand phase)"}</span>
-          </label>
+          <BrandFields defaultChecked={values.createBrand} defaultItems={values.brandItems} lang={lang} />
           <div>
             <label className={LABEL_CLASS}>{lang === "fr" ? "Comptes du client" : "Client accounts"}</label>
             <select name="accountMode" defaultValue={values.accountMode} className={FIELD_CLASS}>

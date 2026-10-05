@@ -264,6 +264,8 @@ export default async function ProjectDetailPage({
     noResults: t.linkPicker.noResults,
   };
 
+  // Keep the stored (English) phase names: the AI prompt buttons are matched on them.
+  const originalPhaseNames = new Map(project.phases.map((p) => [p.id, p.name.indexOf(" — ") > 0 ? p.name.slice(p.name.indexOf(" — ") + 3) : p.name]));
   // French reader: show the built-in phases / tasks in French (stored in English).
   if (lang === "fr") {
     for (const ph of project.phases) ph.name = frText(ph.name);
@@ -280,8 +282,25 @@ export default async function ProjectDetailPage({
   const clientOptions = calendarContactOptions.map((c) => ({ id: c.id, label: c.label }));
   if (!clientOptions.some((c) => c.id === project.contactId)) clientOptions.unshift({ id: project.contactId, label: clientName });
 
+  // A phase's first task (in creation order) carries the AI prompt button when the phase has a prompt.
+  const PROMPT_PHASE = /^(research|brand|mock-?up|building pages|building funnels|blog setup|writing|template)$/i;
+  const phaseById = new Map(project.phases.map((p) => [p.id, p]));
+  const headTaskIds = new Set<string>();
+  const firstByPhase = new Map<string, (typeof project.tasks)[number]>();
+  for (const tk of project.tasks) {
+    if (!tk.phaseId) continue;
+    const cur = firstByPhase.get(tk.phaseId);
+    if (!cur || tk.createdAt < cur.createdAt || (tk.createdAt.getTime() === cur.createdAt.getTime() && tk.id < cur.id)) firstByPhase.set(tk.phaseId, tk);
+  }
+  for (const [phaseId, tk] of firstByPhase) {
+    const name = phaseById.get(phaseId)?.name ?? "";
+    const sepAt = name.indexOf(" — ");
+    // (display names may be translated, so match on the stored English name kept in originalPhaseNames)
+    if (PROMPT_PHASE.test(sepAt > 0 ? name.slice(sepAt + 3) : name) || PROMPT_PHASE.test(originalPhaseNames.get(phaseId) ?? "")) headTaskIds.add(tk.id);
+  }
   const taskItems: TaskCardItem[] = visibleTasks.map((task) => ({
     id: task.id,
+    aiPhaseId: headTaskIds.has(task.id) ? task.phaseId : null,
     title: task.title,
     status: task.status,
     priority: task.priority,
@@ -565,6 +584,7 @@ export default async function ProjectDetailPage({
                   completedAt: toDateInput(project.completedAt),
                   subscriptionEmail: project.subscriptionEmail ?? "",
                   createBrand: project.createBrand,
+                  brandItems: project.brandItems,
                   accountMode: project.accountMode ?? "",
                   description: project.description ?? "",
                 }}

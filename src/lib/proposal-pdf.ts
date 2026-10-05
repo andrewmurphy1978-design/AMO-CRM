@@ -222,9 +222,13 @@ async function appendAttachments(doc: PDFDocument, fonts: { regular: PDFFont; bo
 const money = (n: number, cur: string) => `${n.toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cur}`;
 const fmtDate = (d: Date, lang: "en" | "fr") => d.toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
 
+// A page that swallows every drawing call: used to measure a section's height before drawing it.
+const NOOP_PAGE = new Proxy({}, { get: () => () => undefined }) as unknown as PDFPage;
+
 class Layout {
   page!: PDFPage;
   y = TOP;
+  dry = false;
   constructor(
     public doc: PDFDocument,
     public regular: PDFFont,
@@ -235,6 +239,7 @@ class Layout {
   ) {}
 
   newPage(first = false) {
+    if (this.dry) return; // measuring: keep going on the same (imaginary) page
     this.page = this.doc.addPage([W, H]);
     if (!first) {
       // slim running header
@@ -271,6 +276,47 @@ class Layout {
     return lines;
   }
 
+  // How tall a block of drawing code is, measured without drawing it.
+  heightOf(fn: () => void): number {
+    const savedPage = this.page;
+    const savedY = this.y;
+    this.dry = true;
+    this.page = NOOP_PAGE;
+    try {
+      fn();
+      return savedY - this.y;
+    } finally {
+      this.dry = false;
+      this.page = savedPage;
+      this.y = savedY;
+    }
+  }
+
+  // Draws a section so that it stays on one page: if it doesn't fit in what is left of this
+  // page but would fit on a fresh one, it starts on a new page. (A section longer than a page
+  // just flows; its heading still stays with the first lines.)
+  keep(fn: () => void) {
+    const h = this.heightOf(fn);
+    if (this.y - h < BOTTOM && h <= H - 66 - BOTTOM) this.newPage();
+    fn();
+  }
+
+  // A cover letter: the last paragraph and the signature after it never stand apart.
+  letter(text: string, size = 10) {
+    const paras = text.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean);
+    const tail = Math.max(0, paras.length - 2);
+    paras.slice(0, tail).forEach((x) => {
+      this.paragraph(x, { size });
+      this.gap(6);
+    });
+    this.keep(() =>
+      paras.slice(tail).forEach((x) => {
+        this.paragraph(x, { size });
+        this.gap(6);
+      })
+    );
+  }
+
   ensure(h: number) {
     if (this.y - h < BOTTOM) this.newPage();
   }
@@ -280,7 +326,7 @@ class Layout {
   }
 
   heading(title: string) {
-    this.ensure(46);
+    this.ensure(84); // keep the heading with the first lines under it
     this.gap(14);
     this.page.drawRectangle({ x: MX, y: this.y - 3, width: 4, height: 17, color: LIME });
     this.text(title, MX + 12, this.y, { size: 14, font: this.bold, color: GREEN });
@@ -332,6 +378,7 @@ class Layout {
       });
       this.gap(22);
     };
+    this.ensure(60); // the header row and the first row stay together
     drawHeader();
     rows.forEach((row, ri) => {
       const wrapped = row.map((cell, i) => this.wrap(cell, cols[i].width - 12, 9.5, this.regular));
@@ -421,6 +468,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   lo.y = Math.min(y1, y2) - 6;
 
   // ---- overview
+  lo.keep(() => {
   lo.heading(t.overview);
   const typeList = data.project.typeLabels && data.project.typeLabels.length > 0 ? data.project.typeLabels : [data.project.typeLabel];
   const facts: [string, string[]][] = [
@@ -438,9 +486,10 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
       lo.gap(14);
     }
   }
+  });
   if (data.coverLetter) {
     lo.gap(4);
-    lo.paragraph(data.coverLetter, { size: 10 });
+    lo.letter(data.coverLetter, 10);
   }
   if (data.project.description) {
     lo.gap(4);
@@ -449,41 +498,54 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
 
   if (data.details.length > 0) {
     if (doc.getPageCount() === 1) lo.newPage(); // project details start on page 2
-    lo.heading(t.details);
-    let lastGroup: string | undefined;
+    // Each type's details stay together (the heading goes with the first group).
+    const groups: { group?: string; rows: typeof data.details }[] = [];
     for (const d of data.details) {
-      if (d.group && d.group !== lastGroup) {
-        lo.ensure(26);
-        lo.gap(4);
-        lo.text(d.group, MX, lo.y, { size: 10.5, font: bold, color: GREEN });
-        lo.gap(16);
-      }
-      lastGroup = d.group;
-      const lines = lo.wrap(d.value, CONTENT_W - 150, 9.5, regular);
-      lo.ensure(lines.length * 13 + 2);
-      lo.text(d.label, MX, lo.y, { size: 9.5, font: bold, color: SOFT, maxWidth: 140 });
-      lines.forEach((ln, i) => lo.text(ln, MX + 150, lo.y - i * 13, { size: 9.5 }));
-      lo.gap(lines.length * 13 + 2);
+      const last = groups[groups.length - 1];
+      if (last && last.group === d.group) last.rows.push(d);
+      else groups.push({ group: d.group, rows: [d] });
     }
+    groups.forEach((g, gi) =>
+      lo.keep(() => {
+        if (gi === 0) lo.heading(t.details);
+        if (g.group) {
+          lo.gap(4);
+          lo.text(g.group, MX, lo.y, { size: 10.5, font: bold, color: GREEN });
+          lo.gap(16);
+        }
+        for (const d of g.rows) {
+          const lines = lo.wrap(d.value, CONTENT_W - 150, 9.5, regular);
+          lo.ensure(lines.length * 13 + 2);
+          lo.text(d.label, MX, lo.y, { size: 9.5, font: bold, color: SOFT, maxWidth: 140 });
+          lines.forEach((ln, i) => lo.text(ln, MX + 150, lo.y - i * 13, { size: 9.5 }));
+          lo.gap(lines.length * 13 + 2);
+        }
+      })
+    );
   }
 
   // ---- plan
   if (data.plan.length > 0) {
-    lo.heading(t.plan);
-    lo.paragraph(t.planIntro, { size: 9.5, color: SOFT, font: italic });
-    lo.gap(4);
-    data.plan.forEach((ph, i) => {
-      lo.ensure(40);
-      lo.page.drawRectangle({ x: MX, y: lo.y - 5, width: 22, height: 18, color: LIME });
-      lo.text(String(i + 1), MX + (i + 1 > 9 ? 5 : 8), lo.y, { size: 10, font: bold, color: GREEN });
-      lo.text(ph.name, MX + 32, lo.y, { size: 11.5, font: bold, color: GREEN, maxWidth: CONTENT_W - 40 });
-      lo.gap(18);
-      ph.tasks.forEach((tk) => lo.bullet(tk, 32));
-      lo.gap(6);
-    });
+    data.plan.forEach((ph, i) =>
+      lo.keep(() => {
+        if (i === 0) {
+          lo.heading(t.plan);
+          lo.paragraph(t.planIntro, { size: 9.5, color: SOFT, font: italic });
+          lo.gap(4);
+        }
+        lo.ensure(40);
+        lo.page.drawRectangle({ x: MX, y: lo.y - 5, width: 22, height: 18, color: LIME });
+        lo.text(String(i + 1), MX + (i + 1 > 9 ? 5 : 8), lo.y, { size: 10, font: bold, color: GREEN });
+        lo.text(ph.name, MX + 32, lo.y, { size: 11.5, font: bold, color: GREEN, maxWidth: CONTENT_W - 40 });
+        lo.gap(18);
+        ph.tasks.forEach((tk) => lo.bullet(tk, 32));
+        lo.gap(6);
+      })
+    );
   }
 
-  // ---- investment
+  // ---- investment (heading, items, totals and tax note stay together when they fit on a page)
+  lo.keep(() => {
   lo.heading(t.investment);
   const rows: string[][] = data.lineItems.map((li) => [li.description, String(li.quantity), money(li.unitPrice, data.currency), money(li.quantity * li.unitPrice, data.currency)]);
   lo.table(
@@ -521,9 +583,13 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     }
   }
   if (data.totals.total > 0) lo.paragraph(t.taxesNote, { size: 8.5, color: SOFT, font: italic });
+  });
 
+  const subs = data.subscriptions ?? [];
+  const costs = data.supplierCosts ?? [];
   // third-party apps & subscriptions (paid to the providers, not in the total)
-  if (data.subscriptions && data.subscriptions.length > 0) {
+  if (subs.length > 0) {
+    lo.keep(() => {
     lo.gap(6);
     lo.ensure(60);
     lo.text(t.subsTitle, MX, lo.y, { size: 11.5, font: bold, color: GREEN });
@@ -538,17 +604,19 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
         { header: t.amount, width: 100, align: "right" },
         { header: t.note, width: CONTENT_W - 8 - 180 - 80 - 100 },
       ],
-      data.subscriptions.map((x) => [x.name, periodLabel(x.period), x.amount > 0 ? money(x.amount, data.currency) : "—", x.note])
+      subs.map((x) => [x.name, periodLabel(x.period), x.amount > 0 ? money(x.amount, data.currency) : "—", x.note])
     );
-    const monthly = data.subscriptions.filter((x) => x.period === "month").reduce((a, x) => a + x.amount, 0);
-    const yearly = data.subscriptions.filter((x) => x.period === "year").reduce((a, x) => a + x.amount, 0);
-    const once = data.subscriptions.filter((x) => x.period === "once").reduce((a, x) => a + x.amount, 0);
+    const monthly = subs.filter((x) => x.period === "month").reduce((a, x) => a + x.amount, 0);
+    const yearly = subs.filter((x) => x.period === "year").reduce((a, x) => a + x.amount, 0);
+    const once = subs.filter((x) => x.period === "once").reduce((a, x) => a + x.amount, 0);
     const est = [monthly ? `${money(monthly, data.currency)} ${t.perMonth}` : "", yearly ? `${money(yearly, data.currency)} ${t.perYear}` : "", once ? `${money(once, data.currency)} ${t.oneTime}` : ""].filter(Boolean).join("  ·  ");
     if (est) lo.paragraph(`${t.subsEstimate}: ${est}`, { size: 9, font: bold });
+    });
   }
 
   // supplier costs already paid on the client's behalf (billed at cost; invoices attached)
-  if (data.supplierCosts && data.supplierCosts.length > 0) {
+  if (costs.length > 0) {
+    lo.keep(() => {
     lo.gap(6);
     lo.ensure(60);
     lo.text(t.supplierTitle, MX, lo.y, { size: 11.5, font: bold, color: GREEN });
@@ -560,13 +628,15 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
         { header: t.service, width: CONTENT_W - 8 - 100 },
         { header: t.amount, width: 100, align: "right" },
       ],
-      data.supplierCosts.map((c) => [`${c.supplier}${c.reference ? ` #${c.reference}` : ""}`, money(c.total, c.currency)]),
-      { details: data.supplierCosts.map((c) => c.description) }
+      costs.map((c) => [`${c.supplier}${c.reference ? ` #${c.reference}` : ""}`, money(c.total, c.currency)]),
+      { details: costs.map((c) => c.description) }
     );
+    });
   }
 
   // ---- schedule
   if (data.instalments.length > 0) {
+    lo.keep(() => {
     lo.heading(t.schedule);
     lo.table(
       [
@@ -584,23 +654,30 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
         r.dueDate ? fmtDate(r.dueDate, data.lang) : "",
       ])
     );
+    });
   }
 
   // ---- payment method
-  lo.heading(t.payment);
-  lo.paragraph(t.paymentBody, { size: 10 });
+  lo.keep(() => {
+    lo.heading(t.payment);
+    lo.paragraph(t.paymentBody, { size: 10 });
+  });
 
   if (data.notes) {
-    lo.heading(t.notes);
-    lo.paragraph(data.notes);
+    lo.keep(() => {
+      lo.heading(t.notes);
+      lo.paragraph(data.notes as string);
+    });
   }
 
   // ---- terms
-  lo.heading(t.terms);
-  for (const term of [t.terms1, t.terms2, t.terms3, t.terms4, t.terms5]) lo.bullet(term, 4);
+  lo.keep(() => {
+    lo.heading(t.terms);
+    for (const term of [t.terms1, t.terms2, t.terms3, t.terms4, t.terms5]) lo.bullet(term, 4);
+  });
 
   // ---- acceptance
-  lo.ensure(150);
+  lo.keep(() => {
   lo.heading(t.acceptance);
   lo.paragraph(t.acceptBody, { size: 10 });
   lo.gap(34);
@@ -612,6 +689,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   lo.gap(40);
   lo.page.drawLine({ start: { x: MX, y: lo.y }, end: { x: MX + 250, y: lo.y }, thickness: 0.8, color: INK });
   lo.text(t.printed, MX, lo.y - 12, { size: 8.5, color: SOFT });
+  });
 
   // ---- footers
   const pages = doc.getPages();
