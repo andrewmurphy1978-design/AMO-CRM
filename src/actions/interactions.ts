@@ -8,6 +8,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { getTwilioConfig, publicBaseUrl, sendTwilioSms } from "@/lib/twilio";
 import { explainTwilioError } from "@/lib/twilio-errors";
 import { attachSmsNumberToContact } from "@/lib/sms-link";
+import { summarizeInteractionWithAI } from "@/lib/interaction-ai";
 
 const InteractionSchema = z.object({
   type: z.enum(["CALL", "EMAIL", "MEETING", "NOTE"]),
@@ -67,6 +68,7 @@ const ContactInteractionSchema = z.object({
   type: z.enum(["CALL", "EMAIL", "MEETING", "NOTE", "SMS"]),
   subject: z.string().trim().optional(),
   notes: z.string().trim(),
+  summary: z.string().trim().optional(),
   occurredAt: z.date(),
   durationMinutes: z.number().int().min(0).max(100000).nullable(),
   projectId: z.string().optional(),
@@ -96,6 +98,7 @@ export async function saveContactInteraction(
       type: String(formData.get("type") ?? "CALL"),
       subject: String(formData.get("subject") ?? "").trim() || undefined,
       notes: String(formData.get("notes") ?? "").trim(),
+      summary: String(formData.get("summary") ?? "").trim() || undefined,
       occurredAt: isNaN(occurred.getTime()) ? new Date() : occurred,
       durationMinutes: String(formData.get("durationMinutes") ?? "").trim() === "" ? null : Math.round(Number(formData.get("durationMinutes"))),
       projectId: String(formData.get("projectId") ?? "").trim() || undefined,
@@ -158,6 +161,7 @@ export async function saveContactInteraction(
             type: locked && current ? current.type : data.type,
             subject: isSms ? null : (data.subject ?? null),
             notes: locked && current ? current.notes : data.notes,
+            summary: data.summary ?? null,
             occurredAt: locked && current ? current.occurredAt : data.occurredAt,
             durationMinutes: isSms ? null : data.durationMinutes,
             // Projects, phases and tasks belong to a contact: none until linked.
@@ -177,6 +181,7 @@ export async function saveContactInteraction(
           type: data.type,
           subject: data.type === "SMS" ? undefined : data.subject,
           notes: data.notes,
+          summary: data.summary,
           // A text sent from here goes out now; SMS has no duration.
           occurredAt: twilio ? new Date() : data.occurredAt,
           durationMinutes: data.type === "SMS" ? null : data.durationMinutes,
@@ -223,4 +228,13 @@ export async function deleteInteraction(
   if (projectId) {
     revalidatePath(`/projects/${projectId}`);
   }
+}
+
+// "Generate a summary with AI": from the notes / pasted transcript currently in the dialog.
+export async function generateInteractionSummary(notes: string, type: string, subject?: string): Promise<{ summary?: string; error?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  if (!notes.trim()) return { error: "Paste or type the notes first." };
+  const result = await withScopedPrismaClient((db) => summarizeInteractionWithAI(db, { notes, type, subject }));
+  return "error" in result ? { error: result.error } : { summary: result.summary };
 }

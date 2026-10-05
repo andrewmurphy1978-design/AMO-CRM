@@ -55,6 +55,7 @@ export interface InvoiceRowData {
   currency: string;
   totalAmount: number;
   totalCad?: number | null;
+  invoiceDate: string | null;
   dueDate: string | null;
   approvedAt: string | null;
   notes: string | null;
@@ -565,7 +566,7 @@ export function InvoicesCard({
             hideSubmit
             onPendingChange={setSavingInvoice}
             action={updateInvoiceLineItems.bind(null, editing.id)}
-            defaultValues={{ number: editing.number, status: editing.status, currency: editing.currency, dueDate: editing.dueDate, notes: editing.notes, recipientContactId: editing.recipientContactId, recipientEmail: editing.recipientEmail, recipientAddress: editing.recipientAddress, lineItems: editing.lineItems }}
+            defaultValues={{ number: editing.number, status: editing.status, currency: editing.currency, invoiceDate: editing.invoiceDate, dueDate: editing.dueDate, notes: editing.notes, recipientContactId: editing.recipientContactId, recipientEmail: editing.recipientEmail, recipientAddress: editing.recipientAddress, lineItems: editing.lineItems }}
             recipients={recipients}
             catalog={catalog}
             taxLocation={taxLocation}

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteInteraction, saveContactInteraction } from "@/actions/interactions";
+import { deleteInteraction, generateInteractionSummary, saveContactInteraction } from "@/actions/interactions";
 import { markSmsSeen } from "@/actions/sms";
 import { explainTwilioError } from "@/lib/twilio-errors";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -20,6 +20,7 @@ export interface CallsSmsEntry {
   type: string;
   subject: string | null;
   notes: string;
+  summary: string | null;
   occurredAt: string; // ISO
   durationMinutes: number | null;
   createdAt: string; // ISO
@@ -157,6 +158,10 @@ export function CallsSmsDialog({
   }, [unseen, entryId]);
   const [type, setType] = useState(replyTo ? "SMS" : (entry?.type ?? "CALL"));
   const [sendAsText, setSendAsText] = useState(Boolean(replyTo));
+  const [notesText, setNotesText] = useState(entry?.notes ?? "");
+  const [summaryText, setSummaryText] = useState(entry?.summary ?? "");
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   // A text that went through Twilio is a record of what was actually sent or
   // received, so its type and message can't be edited afterwards.
   const locked = Boolean(entry?.direction);
@@ -475,10 +480,35 @@ export function CallsSmsDialog({
         <textarea
           name="notes"
           rows={isSms ? 5 : 9}
-          defaultValue={entry?.notes ?? ""}
+          value={notesText}
+          onChange={(e) => setNotesText(e.target.value)}
           readOnly={locked}
           className={`${FIELD_CLASS} ${locked ? "cursor-not-allowed bg-black/[0.04] text-soft" : ""}`}
         />
+      </div>
+
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Résumé" : "Summary"}</label>
+          <button
+            type="button"
+            disabled={!notesText.trim() || summarizing}
+            title={notesText.trim() ? "" : lang === "fr" ? "Collez d'abord les notes ou la transcription" : "Paste the notes or transcript first"}
+            onClick={async () => {
+              setSummarizing(true);
+              setSummaryError(null);
+              const res = await generateInteractionSummary(notesText, type);
+              setSummarizing(false);
+              if (res.summary) setSummaryText(res.summary);
+              else setSummaryError(res.error ?? "Couldn't generate the summary.");
+            }}
+            className="rounded-md border border-card-border px-2.5 py-1 text-xs font-semibold text-ink hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {summarizing ? (lang === "fr" ? "Génération…" : "Generating…") : lang === "fr" ? "✨ Générer un résumé avec l'IA" : "✨ Generate a summary with AI"}
+          </button>
+        </div>
+        <textarea name="summary" rows={4} value={summaryText} onChange={(e) => setSummaryText(e.target.value)} className={FIELD_CLASS} />
+        {summaryError && <p className="mt-1 text-xs text-red-600">{summaryError}</p>}
       </div>
 
       {entry && (

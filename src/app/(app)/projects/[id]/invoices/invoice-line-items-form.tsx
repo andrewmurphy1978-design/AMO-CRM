@@ -12,6 +12,7 @@ type InvoiceFormValues = {
   number?: string | null;
   status?: string;
   currency?: string;
+  invoiceDate?: Date | string | null;
   dueDate?: Date | string | null;
   notes?: string | null;
   recipientContactId?: string | null;
@@ -141,6 +142,10 @@ export default function InvoiceLineItemsForm({
             <option value="EUR">EUR</option>
             <option value="GBP">GBP</option>
           </select>
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Date de la facture" : "Invoice date"}</label>
+          <input type="date" name="invoiceDate" defaultValue={toDateInput(defaultValues?.invoiceDate) || new Date().toISOString().slice(0, 10)} className={FIELD_CLASS} />
         </div>
         <div>
           <label className={LABEL_CLASS}>{t.invoices.dueDate}</label>

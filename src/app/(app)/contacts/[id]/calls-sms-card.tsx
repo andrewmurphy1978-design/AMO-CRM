@@ -143,7 +143,7 @@ export default function CallsSmsCard({
                         {[...entry.participants.map((p) => p.name), ...(entry.externalNumber ? [formatPhone(entry.externalNumber)] : [])].join(" · ")}
                       </p>
                     )}
-                    {entry.notes && <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-sm text-ink">{entry.notes}</p>}
+                    {(entry.summary || entry.notes) && <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words text-sm text-ink">{entry.summary || entry.notes}</p>}
                     {failureReason(t, lang, entry) && <p className="mt-1 text-xs text-red-600">{failureReason(t, lang, entry)}</p>}
                   </div>
                   <span className="shrink-0 whitespace-nowrap text-right text-xs text-soft" suppressHydrationWarning>

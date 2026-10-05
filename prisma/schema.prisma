@@ -1216,6 +1216,8 @@ model Invoice {
   taxAmount   Float @default(0)
   totalAmount Float @default(0)
 
+  // The date printed on the invoice (defaults to the date it was sent / created).
+  invoiceDate DateTime?
   dueDate    DateTime?
   // Internal sign-off before the invoice is sent to the client.
   approvedAt DateTime?
@@ -1700,6 +1702,8 @@ model Interaction {
   type    InteractionType
   subject String?
   notes   String          @db.Text
+  // A short summary of the notes / transcript (written by hand or generated with AI).
+  summary String?         @db.Text
 
   occurredAt      DateTime @default(now())
   // Length of the call/meeting in minutes (null = not recorded).

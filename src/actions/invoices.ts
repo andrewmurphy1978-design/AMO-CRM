@@ -235,6 +235,7 @@ function readLineItems(formData: FormData): (LineItemInput & { description: stri
 const InvoiceLineItemsSchema = z.object({
   number: z.string().trim().optional(),
   currency: z.enum(["CAD", "USD", "EUR", "GBP"]),
+  invoiceDate: z.string().optional(),
   dueDate: z.string().optional(),
   notes: z.string().trim().optional(),
   status: z.enum(["DRAFT", "APPROVED", "SENT", "OVERDUE", "PAID"]).default("DRAFT"),
@@ -257,6 +258,7 @@ export async function updateInvoiceLineItems(
     data = InvoiceLineItemsSchema.parse({
       number: String(formData.get("number") ?? "").trim() || undefined,
       currency: String(formData.get("currency") ?? "CAD"),
+      invoiceDate: String(formData.get("invoiceDate") ?? "") || undefined,
       dueDate: String(formData.get("dueDate") ?? "") || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
       status: String(formData.get("status") ?? "DRAFT"),
@@ -291,6 +293,7 @@ export async function updateInvoiceLineItems(
       data: {
         number: data.number,
         currency: data.currency,
+        invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         notes: data.notes,
         recipientContactId: data.recipientContactId ?? null,

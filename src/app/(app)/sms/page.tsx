@@ -60,6 +60,7 @@ export default async function SmsPage() {
     type: i.type,
     subject: i.subject,
     notes: i.notes,
+    summary: i.summary,
     occurredAt: i.occurredAt.toISOString(),
     durationMinutes: i.durationMinutes,
     createdAt: i.createdAt.toISOString(),

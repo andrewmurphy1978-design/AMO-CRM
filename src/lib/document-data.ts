@@ -175,7 +175,7 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     lang,
     logoPng: fullLogo(lang),
     number,
-    date: invoice.sentAt ?? invoice.createdAt,
+    date: invoice.invoiceDate ?? invoice.sentAt ?? invoice.createdAt,
     dueDate: invoice.dueDate,
     paidAt: invoice.paidAt,
     currency: invoice.currency,
