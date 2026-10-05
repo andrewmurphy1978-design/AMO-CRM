@@ -57,6 +57,8 @@ export interface PhaseTpl {
 }
 
 export interface TemplateConfig {
+  // The colour of this type's Details card header (hex); a default is assigned per type.
+  color?: string;
   fields: FieldTpl[];
   phases: PhaseTpl[];
   // Default (undefined / true): a new project only gets its first phase and
@@ -297,7 +299,8 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
       tasks,
     });
   }
-  return { fields, phases, ...(obj.progressive === false ? { progressive: false } : {}) };
+  const color = typeof obj.color === "string" && /^#[0-9a-f]{6}$/i.test(obj.color.trim()) ? obj.color.trim() : undefined;
+  return { fields, phases, ...(color ? { color } : {}), ...(obj.progressive === false ? { progressive: false } : {}) };
 }
 
 // ---------------------------------------------------------------- defaults
@@ -867,4 +870,37 @@ export function valuesOfType(p: { type: string; typeFields?: unknown; customFiel
   const tf = (p.typeFields ?? null) as Record<string, FieldValues> | null;
   if (tf && tf[type]) return tf[type];
   return type === p.type ? ((p.customFields ?? {}) as FieldValues) : {};
+}
+
+// ---- Details card colours ------------------------------------------------------
+
+// Each type's Details card has its own header colour (set in the Project Type
+// customization; these are the colours assigned by default).
+export const DEFAULT_TYPE_COLORS: Record<string, string> = {
+  WEBSITE: "#0f766e",
+  FUNNEL: "#c2410c",
+  BLOG: "#7c3aed",
+  NEWSLETTER: "#be185d",
+  APP: "#1d4ed8",
+  STORE: "#b45309",
+  CRM_CUSTOMIZATION: "#0e7490",
+  SOCIAL_MEDIA: "#db2777",
+  POST_AUTOMATION: "#4f46e5",
+  AUTOMATION: "#15803d",
+  EMAIL_MARKETING: "#9a3412",
+  SMS_MARKETING: "#0369a1",
+  TRAINING: "#a16207",
+  AFFILIATE_MARKETING: "#6d28d9",
+  CONSULTING: "#475569",
+  OTHER: "#64748b",
+};
+const FALLBACK_TYPE_COLORS = ["#0f766e", "#c2410c", "#7c3aed", "#be185d", "#1d4ed8", "#b45309", "#15803d", "#0369a1"];
+
+/** The colour of a type's Details card: the one picked in the customization, else the default. */
+export function typeColor(type: string, config?: { color?: string } | null): string {
+  if (config?.color) return config.color;
+  if (DEFAULT_TYPE_COLORS[type]) return DEFAULT_TYPE_COLORS[type];
+  let h = 0;
+  for (const ch of type) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return FALLBACK_TYPE_COLORS[h % FALLBACK_TYPE_COLORS.length];
 }

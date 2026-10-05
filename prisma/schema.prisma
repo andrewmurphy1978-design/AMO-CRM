@@ -1069,6 +1069,10 @@ model Proposal {
   id        String         @id @default(cuid())
   projectId String
   project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Emails, calendar events and calls / texts linked to this document.
+  emailLinks         EmailLink[]
+  calendarEventLinks CalendarEventLink[]
+  interactions       Interaction[]
   title     String
   status    ProposalStatus @default(DRAFT)
   // Legacy flat total from the original quick-add flow — still written
@@ -1171,6 +1175,10 @@ model Invoice {
   id           String                       @id @default(cuid())
   projectId    String
   project      Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Emails, calendar events and calls / texts linked to this document.
+  emailLinks         EmailLink[]
+  calendarEventLinks CalendarEventLink[]
+  interactions       Interaction[]
   proposalId   String?
   proposal     Proposal?                    @relation(fields: [proposalId], references: [id], onDelete: SetNull)
   number       String?
@@ -1347,6 +1355,12 @@ model EmailLink {
 
   phaseId String?
   phase   ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+
+  proposalId String?
+  proposal   Proposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   affiliateProgramId String?
   affiliateProgram   AffiliateProgram? @relation(fields: [affiliateProgramId], references: [id], onDelete: Cascade)
@@ -1625,6 +1639,12 @@ model CalendarEventLink {
   phaseId String?
   phase   ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
 
+  proposalId String?
+  proposal   Proposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
   taskId String?
   task   Task?   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -1689,6 +1709,12 @@ model Interaction {
   // Optional deeper links inside the project.
   phaseId String?
   phase   ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+
+  proposalId String?
+  proposal   Proposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   taskId  String?
   task    Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
 

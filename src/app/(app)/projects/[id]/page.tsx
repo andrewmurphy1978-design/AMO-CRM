@@ -14,6 +14,7 @@ import { ProposalsCard, InvoicesCard, type ProposalRowData, type InvoiceRowData 
 import { contactTaxLocation } from "@/lib/billing-totals";
 import SupplierCard, { type SupplierRow } from "./supplier-card";
 import SubscriptionsCard from "./subscriptions-card";
+import type { Linkables } from "./document-links";
 import { defaultInstalments } from "@/lib/default-instalments";
 import InstalmentsCard, { type InstalmentRow } from "./instalments-card";
 import NewEmailButton from "../../contacts/[id]/new-email-button";
@@ -31,7 +32,7 @@ import { loadTypeInfo } from "@/lib/project-type-store";
 
 import { frText, localizeText, localizeValue } from "@/lib/project-i18n";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
-import { typesOfProject, valuesOfType } from "@/lib/project-templates";
+import { typesOfProject, valuesOfType, typeColor } from "@/lib/project-templates";
 import { getExchangeRates, toCad, type Currency } from "@/lib/exchange-rates";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -90,6 +91,8 @@ export default async function ProjectDetailPage({
     defaultComposeSource,
     twilioReady,
     typeBlocks,
+    eventLinkRows,
+    projectEvents,
     rates,
     catalog,
     billingChargeTax,
@@ -160,6 +163,10 @@ export default async function ProjectDetailPage({
       }),
     ]);
 
+    // Everything linked to the project (not just the selected phase), with the proposal /
+    // invoice each calendar event is linked to, for the document dialogs.
+    const eventLinkRows = project ? await db.calendarEventLink.findMany({ where: { projectId: project.id }, select: { googleEventId: true, proposalId: true, invoiceId: true } }) : [];
+    const projectEvents = project && phaseParam ? await getLinkedCalendarEvents(db, { projectId: project.id }, googleAccessToken) : calendarEvents;
     // CAD equivalents for proposals / invoices issued in another currency.
     const rates = await getExchangeRates(db).catch(() => null);
     // One Details card per selected type, in the order of the types.
@@ -204,6 +211,8 @@ export default async function ProjectDetailPage({
       catalog,
       billingChargeTax,
       typeBlocks,
+      eventLinkRows,
+      projectEvents,
       rates,
     };
   });
@@ -227,6 +236,17 @@ export default async function ProjectDetailPage({
   const visibleTasks = inPhase(project.tasks);
   const visibleEmailLinks = inPhase(project.emailLinks);
   const visibleInteractions = inPhase(project.interactions);
+
+  // What can be linked to a proposal / invoice: the project's emails, calendar events and calls & texts.
+  const fmtWhen = (d: Date | string | null) => (d ? new Date(d).toLocaleString(lang === "fr" ? "fr-CA" : "en-CA", { dateStyle: "medium", timeStyle: "short" }) : "");
+  const eventLinkById = new Map(eventLinkRows.map((r) => [r.googleEventId, r]));
+  const linkables: Linkables = {
+    emails: project.emailLinks.map((l) => ({ id: l.id, title: l.subject || "(no subject)", meta: [l.fromLabel, fmtWhen(l.messageDate)].filter(Boolean).join(" · "), proposalId: l.proposalId, invoiceId: l.invoiceId })),
+    events: projectEvents.map((e) => ({ id: e.id, title: e.title || "(no title)", meta: fmtWhen(e.start), proposalId: eventLinkById.get(e.id)?.proposalId ?? null, invoiceId: eventLinkById.get(e.id)?.invoiceId ?? null })),
+    calls: project.interactions
+      .filter((i) => i.type === "CALL" || i.type === "MEETING" || i.type === "SMS")
+      .map((i) => ({ id: i.id, title: `${i.type === "SMS" ? "SMS" : i.type === "CALL" ? (lang === "fr" ? "Appel" : "Call") : lang === "fr" ? "Rencontre" : "Meeting"}${i.subject ? ` — ${i.subject}` : i.notes ? ` — ${i.notes.slice(0, 60)}` : ""}`, meta: fmtWhen(i.occurredAt), proposalId: i.proposalId, invoiceId: i.invoiceId })),
+  };
 
   const calendarBookingLabelOptions = calendarBookingOptions.map((b) => ({
     id: b.id,
@@ -387,6 +407,13 @@ export default async function ProjectDetailPage({
     subscriptions: defaultSubscriptions,
     paymentSchedule: defaultInstalments(project.contact.paymentSchedule, docLang),
   };
+  // While the project is in Proposal status the Proposals card comes first in the right column; once
+  // the proposal is accepted the payments (Instalments, Invoices) take over the top.
+  const onProposal = project.status === "PROPOSAL";
+  const upcomingTasks = (Array.isArray(project.pendingPhases) ? (project.pendingPhases as { tasks?: string[] }[]) : []).reduce((n, ph) => n + (Array.isArray(ph.tasks) ? ph.tasks.length : 0), 0);
+  const doneTasks = project.tasks.filter((tk) => tk.status === "DONE").length;
+  const totalTasks = project.tasks.length + upcomingTasks;
+  const progress = { done: doneTasks, upcoming: upcomingTasks, total: totalTasks, pct: totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0 };
   const emailing = { defaultComposeSource, intlLocale, hour12, emailComposeLabels: t.emailCompose };
 
   const clientEmail = project.contact.email ?? project.contact.email2 ?? project.contact.extraEmails[0] ?? null;
@@ -545,6 +572,20 @@ export default async function ProjectDetailPage({
           >
             <h1 className="font-display text-xl font-semibold text-ink">{project.name}</h1>
 
+            {/* Whole-project progress: finished tasks out of every task, counting the phases and tasks not created yet. */}
+            <div>
+              <div className="flex items-baseline justify-between gap-2 text-xs text-soft">
+                <span className="font-semibold uppercase tracking-wide">{lang === "fr" ? "Progression du projet" : "Project progress"}</span>
+                <span>
+                  {progress.pct}% · {progress.done}/{progress.total} {lang === "fr" ? "tâches" : "tasks"}
+                  {progress.upcoming > 0 && ` (${progress.upcoming} ${lang === "fr" ? "pas encore créées" : "not created yet"})`}
+                </span>
+              </div>
+              <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-black/10" role="progressbar" aria-valuenow={progress.pct} aria-valuemin={0} aria-valuemax={100}>
+                <div className="h-full rounded-full bg-amo-lime transition-all" style={{ width: `${progress.pct}%` }} />
+              </div>
+            </div>
+
             <div className="grid gap-4 lg:grid-cols-3">
               <div>
                 <p className={LABEL_CLASS}>{t.projects.colStatus}</p>
@@ -609,6 +650,7 @@ export default async function ProjectDetailPage({
               <Card
                 key={ty}
                 color="general"
+                headerColor={typeColor(ty, template)}
                 title={`${typeLabels[ty] ?? ty} · ${lang === "fr" ? "Détails" : "Details"}`}
                 compact
                 actions={
@@ -702,7 +744,7 @@ export default async function ProjectDetailPage({
           <DomainsCard contact={project.contact} lang={lang} />
         </div>
 
-        <div className="min-w-0 space-y-3 sm:space-y-6">
+        <div className="flex min-w-0 flex-col gap-3 sm:gap-6">
           <CalendarEventsCard
             title={t.calendarApp.title}
             events={calendarEvents}
@@ -820,8 +862,13 @@ export default async function ProjectDetailPage({
             }))}
           />
 
-          {instalmentRows.length > 0 && <InstalmentsCard projectId={project.id} rows={instalmentRows} lang={lang} />}
+          {instalmentRows.length > 0 && (
+            <div style={{ order: onProposal ? 1 : -2 }}>
+              <InstalmentsCard projectId={project.id} rows={instalmentRows} lang={lang} />
+            </div>
+          )}
 
+          <div style={{ order: onProposal ? -1 : 2 }}>
           <ProposalsCard
             projectId={project.id}
             projectType={typesOfProject(project).join(",")}
@@ -834,8 +881,11 @@ export default async function ProjectDetailPage({
             statusLabels={t.proposals.statuses}
             lang={lang}
             emailing={emailing}
+            linkables={linkables}
           />
+          </div>
 
+          <div style={{ order: onProposal ? 1 : -1 }}>
           <InvoicesCard
             projectId={project.id}
             invoices={invoiceRows}
@@ -846,7 +896,9 @@ export default async function ProjectDetailPage({
             statusLabels={t.invoices.statuses}
             lang={lang}
             emailing={emailing}
+            linkables={linkables}
           />
+          </div>
         </div>
       </div>
     </div>

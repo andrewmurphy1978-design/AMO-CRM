@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import ColorPicker from "@/components/color-picker";
 import { isAppField } from "@/lib/project-subscriptions";
 import { useRouter } from "next/navigation";
 import { saveProjectTemplate, resetProjectTemplate, deleteProjectType } from "@/actions/project-types";
-import { PHASE_STAGES, isMulti, type PhaseStage, type Cond, type FieldTpl, type FieldType, type PhaseTpl, type TaskTpl, type TemplateConfig } from "@/lib/project-templates";
+import { typeColor, PHASE_STAGES, isMulti, type PhaseStage, type Cond, type FieldTpl, type FieldType, type PhaseTpl, type TaskTpl, type TemplateConfig } from "@/lib/project-templates";
 
 const INPUT = "w-full min-w-0 rounded-md border border-card-border bg-field-bg px-2 py-1.5 text-sm text-ink focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL = "block text-[11px] font-semibold uppercase tracking-wide text-soft";
@@ -300,6 +301,19 @@ export default function TemplateEditor({ type, isUserType, initial, typeLabels, 
           </button>
         </div>
       )}
+
+      <div className="flex items-center gap-3 rounded-xl border border-card-border bg-card-bg p-3 text-sm text-ink">
+        <span className="font-semibold">Details card colour</span>
+        <ColorPicker value={typeColor(type, config)} onChange={(hex) => setConfig((c) => ({ ...c, color: hex }))} label="Pick a colour" />
+        <span className="rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white" style={{ backgroundColor: typeColor(type, config) }}>
+          {typeLabels[type]} · Details
+        </span>
+        {config.color && (
+          <button type="button" className={SMALL_BTN} onClick={() => setConfig((c) => ({ ...c, color: undefined }))}>
+            Use the default
+          </button>
+        )}
+      </div>
 
       <label className="flex items-start gap-2 rounded-xl border border-card-border bg-card-bg p-3 text-sm text-ink">
         <input

@@ -21,6 +21,7 @@ import { createDraftInvoice, approveInvoice, unapproveInvoice, invoiceSendInfo, 
 import ProposalForm from "./proposals/proposal-form";
 import InvoiceLineItemsForm from "./invoices/invoice-line-items-form";
 import SendDocumentButton from "./send-document-button";
+import DocumentLinks, { type Linkables } from "./document-links";
 
 type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
 type Line = { description: string; details?: string | null; quantity: number; unitPrice: number };
@@ -168,6 +169,7 @@ export function ProposalsCard({
   statusLabels,
   lang,
   emailing,
+  linkables,
   projectType,
 }: {
   projectId: string;
@@ -181,10 +183,12 @@ export function ProposalsCard({
   statusLabels: Record<string, string>;
   lang: Lang;
   emailing: EmailingProps;
+  linkables: Linkables;
 }) {
   const fr = lang === "fr";
   const router = useRouter();
   const [dialog, setDialog] = useState<{ id: string | null; key: number } | null>(null);
+  const [linksFor, setLinksFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [pending, startTransition] = useTransition();
   const run = (fn: () => Promise<unknown>) =>
@@ -241,6 +245,9 @@ export function ProposalsCard({
                 <a href={`/api/projects/${projectId}/proposals/${p.id}/pdf`} target="_blank" rel="noreferrer" className={BTN}>
                   PDF
                 </a>
+                <button type="button" onClick={() => setLinksFor(p.id)} className={BTN}>
+                  🔗 {fr ? "Liens" : "Links"}
+                </button>
                 {p.status === "DRAFT" && (
                   <button type="button" onClick={() => setDialog({ id: p.id, key: Date.now() })} className={BTN}>
                     {fr ? "Modifier" : "Edit"}
@@ -347,8 +354,17 @@ export function ProposalsCard({
               router.refresh();
             }}
           />
+          {editing && <DocumentLinks kind="proposal" docId={editing.id} projectId={projectId} linkables={linkables} lang={lang} />}
         </Modal>
       )}
+      {linksFor && (() => {
+        const doc = proposals.find((d) => d.id === linksFor);
+        return doc ? (
+          <Modal title={`${doc.title} — ${fr ? "Liens" : "Links"}`} color={CARD_COLORS.proposals} onClose={() => setLinksFor(null)}>
+            <DocumentLinks kind="proposal" docId={doc.id} projectId={projectId} linkables={linkables} lang={lang} />
+          </Modal>
+        ) : null;
+      })()}
     </Card>
   );
 }
@@ -365,6 +381,7 @@ export function InvoicesCard({
   statusLabels,
   lang,
   emailing,
+  linkables,
 }: {
   projectId: string;
   invoices: InvoiceRowData[];
@@ -375,10 +392,12 @@ export function InvoicesCard({
   statusLabels: Record<string, string>;
   lang: Lang;
   emailing: EmailingProps;
+  linkables: Linkables;
 }) {
   const fr = lang === "fr";
   const router = useRouter();
   const [editId, setEditId] = useState<{ id: string; key: number } | null>(null);
+  const [linksFor, setLinksFor] = useState<string | null>(null);
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [pending, startTransition] = useTransition();
   const run = (fn: () => Promise<unknown>) =>
@@ -445,6 +464,9 @@ export function InvoicesCard({
                 <a href={`/api/projects/${projectId}/invoices/${inv.id}/pdf`} target="_blank" rel="noreferrer" className={BTN}>
                   PDF
                 </a>
+                <button type="button" onClick={() => setLinksFor(inv.id)} className={BTN}>
+                  🔗 {fr ? "Liens" : "Links"}
+                </button>
                 {inv.status === "DRAFT" && (
                   <button type="button" onClick={() => setEditId({ id: inv.id, key: Date.now() })} className={BTN}>
                     {fr ? "Modifier" : "Edit"}
@@ -521,8 +543,17 @@ export function InvoicesCard({
               router.refresh();
             }}
           />
+          <DocumentLinks kind="invoice" docId={editing.id} projectId={projectId} linkables={linkables} lang={lang} />
         </Modal>
       )}
+      {linksFor && (() => {
+        const doc = invoices.find((d) => d.id === linksFor);
+        return doc ? (
+          <Modal title={`${doc.number || (fr ? "Facture" : "Invoice")} — ${fr ? "Liens" : "Links"}`} color={CARD_COLORS.invoices} onClose={() => setLinksFor(null)}>
+            <DocumentLinks kind="invoice" docId={doc.id} projectId={projectId} linkables={linkables} lang={lang} />
+          </Modal>
+        ) : null;
+      })()}
     </Card>
   );
 }

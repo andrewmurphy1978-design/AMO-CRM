@@ -49,8 +49,11 @@ export default function Card({
   // for this today.
   compact,
   flushTop,
+  headerColor,
 }: {
   color: CardColor;
+  // A hex colour for the header bar (replaces the named colour), e.g. a project type's colour.
+  headerColor?: string;
   title: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
@@ -63,7 +66,8 @@ export default function Card({
   return (
     <section className="overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-sm">
       <div
-        className={`flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-white ${CARD_COLORS[color]} ${compact ? "px-2 py-1.5 sm:px-4 sm:py-2" : "px-4 py-2"}`}
+        style={headerColor ? { backgroundColor: headerColor } : undefined}
+        className={`flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-white ${headerColor ? "" : CARD_COLORS[color]} ${compact ? "px-2 py-1.5 sm:px-4 sm:py-2" : "px-4 py-2"}`}
       >
         <span className="flex items-center gap-2">{title}</span>
         {actions}
