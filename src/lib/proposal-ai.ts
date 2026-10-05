@@ -57,7 +57,7 @@ Write:
 2. A list of line items covering the work described, each with a short description (the item name), "details" (1-3 sentences saying exactly what is included, written for the client), a quantity, and a unit price in ${input.currency}. Prefer matching existing price list items where they fit; add new reasonably-priced items for anything not covered.
 3. "subscriptions": the third-party apps / services the client will pay the providers directly for this project (for example the website/funnel app, hosting, domain, automation tools), each with name, amount (best estimate, 0 if unknown), period ("month", "year" or "once") and a short note. Leave the list empty if none apply.
 
-Respond with ONLY a JSON object, no markdown fences, no other text, in exactly this shape:
+Keep it tight: details at most 2 short sentences, at most 12 line items, no repetition of the brief. Respond with ONLY a JSON object, no markdown fences, no other text, in exactly this shape:
 {"coverLetter": "...", "lineItems": [{"description": "...", "details": "...", "quantity": 1, "unitPrice": 0}], "subscriptions": [{"name": "...", "amount": 0, "period": "month", "note": ""}]}`;
 }
 
@@ -125,10 +125,10 @@ export async function draftProposalWithAI(
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 4096,
+        max_tokens: 12000,
         messages: [{ role: "user", content: buildPrompt(input) }],
       }),
-      signal: AbortSignal.timeout(55_000),
+      signal: AbortSignal.timeout(120_000),
     });
 
     if (!res.ok) {
