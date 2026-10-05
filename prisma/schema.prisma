@@ -1203,6 +1203,11 @@ model Invoice {
   amount       Float
   currency     String                       @default("CAD")
   notes        String?                      @db.Text
+  // Who the invoice goes to (defaults to the client's billing details): a linked contact,
+  // an email and the postal address shown under "Bill to".
+  recipientContactId String?
+  recipientEmail     String?
+  recipientAddress   String? @db.Text
 
   subtotal    Float @default(0)
   gstAmount   Float @default(0)

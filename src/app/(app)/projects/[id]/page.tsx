@@ -262,6 +262,8 @@ export default async function ProjectDetailPage({
     relation,
     emails: [...new Set([c.email, c.email2, ...c.extraEmails, c.billingEmail].filter((e): e is string => Boolean(e)))],
     address: contactAddress(c),
+    billingAddress: contactAddress(c, true),
+    billingEmail: c.billingEmail,
   });
   const recipients: RecipientOption[] = [
     toRecipient(project.contact, lang === "fr" ? "Client" : "Client"),
@@ -426,6 +428,9 @@ export default async function ProjectDetailPage({
       dueDate: iso(inv.dueDate),
       approvedAt: iso(inv.approvedAt),
       notes: inv.notes,
+      recipientContactId: inv.recipientContactId,
+      recipientEmail: inv.recipientEmail,
+      recipientAddress: inv.recipientAddress,
       instalmentLabel: inv.instalment ? `${lang === "fr" ? "Versement" : "Instalment"} ${ids.indexOf(inv.instalment.id) + 1}/${ids.length} · ${inv.instalment.label}` : null,
       lineItems: inv.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
     };
@@ -961,6 +966,7 @@ export default async function ProjectDetailPage({
             lang={lang}
             emailing={emailing}
             linkables={linkables}
+            recipients={recipients}
           />
           </div>
         </div>

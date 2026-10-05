@@ -59,6 +59,9 @@ export interface InvoiceRowData {
   approvedAt: string | null;
   notes: string | null;
   instalmentLabel: string | null;
+  recipientContactId: string | null;
+  recipientEmail: string | null;
+  recipientAddress: string | null;
   lineItems: Line[];
 }
 
@@ -409,6 +412,7 @@ export function InvoicesCard({
   lang,
   emailing,
   linkables,
+  recipients,
 }: {
   projectId: string;
   invoices: InvoiceRowData[];
@@ -420,6 +424,7 @@ export function InvoicesCard({
   lang: Lang;
   emailing: EmailingProps;
   linkables: Linkables;
+  recipients: RecipientOption[];
 }) {
   const fr = lang === "fr";
   const router = useRouter();
@@ -560,7 +565,8 @@ export function InvoicesCard({
             hideSubmit
             onPendingChange={setSavingInvoice}
             action={updateInvoiceLineItems.bind(null, editing.id)}
-            defaultValues={{ number: editing.number, status: editing.status, currency: editing.currency, dueDate: editing.dueDate, notes: editing.notes, lineItems: editing.lineItems }}
+            defaultValues={{ number: editing.number, status: editing.status, currency: editing.currency, dueDate: editing.dueDate, notes: editing.notes, recipientContactId: editing.recipientContactId, recipientEmail: editing.recipientEmail, recipientAddress: editing.recipientAddress, lineItems: editing.lineItems }}
+            recipients={recipients}
             catalog={catalog}
             taxLocation={taxLocation}
             chargeCanadianTax={chargeCanadianTax}

@@ -238,6 +238,9 @@ const InvoiceLineItemsSchema = z.object({
   dueDate: z.string().optional(),
   notes: z.string().trim().optional(),
   status: z.enum(["DRAFT", "APPROVED", "SENT", "OVERDUE", "PAID"]).default("DRAFT"),
+  recipientContactId: z.string().optional(),
+  recipientEmail: z.string().trim().optional(),
+  recipientAddress: z.string().trim().optional(),
 });
 
 export async function updateInvoiceLineItems(
@@ -257,6 +260,9 @@ export async function updateInvoiceLineItems(
       dueDate: String(formData.get("dueDate") ?? "") || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
       status: String(formData.get("status") ?? "DRAFT"),
+      recipientContactId: String(formData.get("recipientContactId") ?? "") || undefined,
+      recipientEmail: String(formData.get("recipientEmail") ?? "").trim() || undefined,
+      recipientAddress: String(formData.get("recipientAddress") ?? "").trim() || undefined,
     });
   } catch (error) {
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? t.actions.invalidInput };
@@ -287,6 +293,9 @@ export async function updateInvoiceLineItems(
         currency: data.currency,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         notes: data.notes,
+        recipientContactId: data.recipientContactId ?? null,
+        recipientEmail: data.recipientEmail ?? null,
+        recipientAddress: data.recipientAddress ?? null,
         status: data.status,
         approvedAt: data.status === "DRAFT" ? null : invoice.approvedAt ?? new Date(),
         sentAt: data.status === "SENT" || data.status === "OVERDUE" || data.status === "PAID" ? invoice.sentAt ?? new Date() : null,

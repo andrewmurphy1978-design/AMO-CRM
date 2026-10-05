@@ -26,4 +26,7 @@ export interface RecipientOption {
   relation: string | null; // "Client" or how the contact is linked to the client
   emails: string[];
   address: string;
+  // For invoices: the billing address / email come first.
+  billingAddress: string;
+  billingEmail: string | null;
 }

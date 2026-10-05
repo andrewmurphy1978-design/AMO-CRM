@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { clientFacingDescription } from "@/lib/catalog-text";
+import type { RecipientOption } from "@/lib/contact-address";
 
 type LineItemRow = { tempKey: number; description: string; details: string; quantity: number; unitPrice: number };
 
@@ -13,6 +14,9 @@ type InvoiceFormValues = {
   currency?: string;
   dueDate?: Date | string | null;
   notes?: string | null;
+  recipientContactId?: string | null;
+  recipientEmail?: string | null;
+  recipientAddress?: string | null;
   lineItems?: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
 };
 
@@ -33,6 +37,7 @@ export default function InvoiceLineItemsForm({
   action,
   defaultValues,
   catalog,
+  recipients,
   taxLocation,
   chargeCanadianTax,
   lang,
@@ -47,6 +52,7 @@ export default function InvoiceLineItemsForm({
   ) => Promise<{ error?: string; success?: string }>;
   defaultValues?: InvoiceFormValues;
   catalog: CatalogItem[];
+  recipients?: RecipientOption[];
   taxLocation: { country: string | null; province: string | null };
   chargeCanadianTax: boolean;
   lang: Lang;
@@ -71,6 +77,13 @@ export default function InvoiceLineItemsForm({
   );
   const nextLineKey = useRef(lineItems.length);
   const [currency, setCurrency] = useState(defaultValues?.currency ?? "CAD");
+  // Who the invoice goes to: the client's billing details by default; a linked contact,
+  // another email or address can be chosen.
+  const firstRecipient = recipients?.[0];
+  const emailsOf = (r?: RecipientOption) => [...new Set([r?.billingEmail, ...(r?.emails ?? [])].filter((e): e is string => Boolean(e)))];
+  const [recipientId, setRecipientId] = useState(defaultValues?.recipientContactId ?? firstRecipient?.id ?? "");
+  const [recipientEmail, setRecipientEmail] = useState(defaultValues?.recipientEmail ?? emailsOf(firstRecipient)[0] ?? "");
+  const [recipientAddress, setRecipientAddress] = useState(defaultValues?.recipientAddress ?? firstRecipient?.billingAddress ?? "");
   const STATUS_OPTIONS = ["DRAFT", "APPROVED", "SENT", "OVERDUE", "PAID"] as const;
 
   const totals = useMemo(
@@ -134,6 +147,49 @@ export default function InvoiceLineItemsForm({
           <input type="date" name="dueDate" defaultValue={toDateInput(defaultValues?.dueDate)} className={FIELD_CLASS} />
         </div>
       </div>
+
+      {recipients && recipients.length > 0 && (
+        <div className="rounded-lg border border-card-border p-4">
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Envoyer la facture à" : "Send the invoice to"}</label>
+          <div className="mt-1 grid gap-3 sm:grid-cols-2">
+            <div>
+              <span className="text-xs text-soft">Contact</span>
+              <select
+                name="recipientContactId"
+                value={recipientId}
+                onChange={(e) => {
+                  const r = recipients.find((x) => x.id === e.target.value);
+                  setRecipientId(e.target.value);
+                  setRecipientEmail(emailsOf(r)[0] ?? "");
+                  setRecipientAddress(r?.billingAddress ?? "");
+                }}
+                className={FIELD_CLASS}
+              >
+                {recipients.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                    {r.company ? ` — ${r.company}` : ""}
+                    {r.relation ? ` (${r.relation})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span className="text-xs text-soft">{lang === "fr" ? "Courriel" : "Email"}</span>
+              <input name="recipientEmail" type="email" list="invoice-recipient-emails" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} className={FIELD_CLASS} />
+              <datalist id="invoice-recipient-emails">
+                {emailsOf(recipients.find((r) => r.id === recipientId)).map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </div>
+            <div className="sm:col-span-2">
+              <span className="text-xs text-soft">{lang === "fr" ? "Adresse (affichée sous « Facturé à »)" : 'Address (shown under "Bill to")'}</span>
+              <textarea name="recipientAddress" rows={3} value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className={FIELD_CLASS} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div>
         <div className="flex items-center justify-between">

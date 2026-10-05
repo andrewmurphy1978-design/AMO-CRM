@@ -30,8 +30,9 @@ export async function buildInvoiceEmail(db: PrismaClient, invoiceId: string, pro
   const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
 
   const c = invoice.project.contact;
+  const rc = invoice.recipientContactId && invoice.recipientContactId !== c.id ? await db.contact.findUnique({ where: { id: invoice.recipientContactId } }) : null;
   const fr = (c.locale ?? "").toLowerCase().startsWith("fr");
-  const first = esc(c.firstName || "");
+  const first = esc((rc ?? c).firstName || "");
   const project = esc(invoice.project.name);
   const paid = invoice.status === "PAID";
   const money = new Intl.NumberFormat(fr ? "fr-CA" : "en-CA", { style: "currency", currency: invoice.currency }).format(invoice.totalAmount);
@@ -53,5 +54,5 @@ export async function buildInvoiceEmail(db: PrismaClient, invoiceId: string, pro
       ? `<p>Bonjour ${first},</p><p>Voici votre facture de <strong>${money}</strong> pour <strong>${project}</strong> (en pièce jointe), payable ${due ? `le ${due}` : "à réception"}.</p>${how}<p>Merci!</p>`
       : `<p>Hi ${first},</p><p>Here is your invoice for <strong>${money}</strong> for <strong>${project}</strong> (attached), due ${due ? `on ${due}` : "on receipt"}.</p>${how}<p>Thank you!</p>`;
   }
-  return { subject, html, to: c.billingEmail || c.email || c.email2 || c.extraEmails[0] || null, attachment: { filename: pdfData.fileName, mimeType: "application/pdf", base64: toBase64(pdf) } };
+  return { subject, html, to: invoice.recipientEmail || (rc ? rc.email || rc.email2 || rc.extraEmails[0] : null) || c.billingEmail || c.email || c.email2 || c.extraEmails[0] || null, attachment: { filename: pdfData.fileName, mimeType: "application/pdf", base64: toBase64(pdf) } };
 }

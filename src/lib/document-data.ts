@@ -155,6 +155,7 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
   });
   if (!invoice || invoice.projectId !== projectId) return null;
   const project = await db.project.findUnique({ where: { id: projectId }, include: { contact: true } });
+  const invoiceRecipient = invoice.recipientContactId && project && invoice.recipientContactId !== project.contactId ? await db.contact.findUnique({ where: { id: invoice.recipientContactId } }) : null;
   if (!project) return null;
   const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
   const lang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
@@ -179,7 +180,11 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     paidAt: invoice.paidAt,
     currency: invoice.currency,
     company: { ...COMPANY, gstNumber: settings.gstNumber, qstNumber: settings.qstNumber },
-    client: clientBlock(project.contact, true),
+    client: {
+      ...clientBlock(invoiceRecipient ?? project.contact, true),
+      ...(invoice.recipientEmail ? { email: invoice.recipientEmail } : {}),
+      ...(invoice.recipientAddress ? { address: invoice.recipientAddress } : {}),
+    },
     projectName: project.name,
     instalmentLabel,
     lineItems: invoice.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
