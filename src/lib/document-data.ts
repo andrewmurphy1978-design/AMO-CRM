@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { jurisdictionOf } from "@/lib/jurisdiction";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { displayValue, isFieldVisible, typesOfProject, valuesOfType } from "@/lib/project-templates";
@@ -166,6 +167,35 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     const idx = rows.findIndex((r) => r.id === invoice.instalmentId);
     instalmentLabel = `${lang === "fr" ? "Versement" : "Instalment"} ${idx + 1} ${lang === "fr" ? "de" : "of"} ${rows.length} — ${invoice.instalment.label}`;
   }
+  // Where this instalment sits in the contract: the invoices already issued for the earlier
+  // instalments, and what is left to invoice after this one.
+  let instalment: InvoicePdfData["instalment"] = null;
+  if (invoice.instalment) {
+    const rows = invoice.instalment.proposal.paymentSchedule;
+    const idx = rows.findIndex((r) => r.id === invoice.instalmentId);
+    const earlier = rows.slice(0, Math.max(0, idx)).map((r) => r.id);
+    const previous = earlier.length > 0 ? await db.invoice.findMany({ where: { instalmentId: { in: earlier } }, orderBy: { createdAt: "asc" } }) : [];
+    const prevRows = previous.map((p) => ({
+      number: p.number || `INV-${p.createdAt.toISOString().slice(0, 10).replace(/-/g, "")}-${p.id.slice(-4).toUpperCase()}`,
+      date: p.invoiceDate ?? p.sentAt ?? p.createdAt,
+      subtotal: p.subtotal,
+      tax: p.taxAmount,
+      total: p.totalAmount || p.amount,
+      paid: p.status === "PAID",
+    }));
+    const contractTotal = invoice.instalment.proposal.totalAmount;
+    const thisTotal = invoice.totalAmount || invoice.amount;
+    instalment = {
+      n: idx + 1,
+      of: rows.length,
+      final: idx === rows.length - 1,
+      contractTotal,
+      previous: prevRows,
+      thisTotal,
+      balance: contractTotal - prevRows.reduce((s, p) => s + p.total, 0) - thisTotal,
+    };
+  }
+  const jurisdiction = jurisdictionOf(((invoiceRecipient ?? project.contact).billingCountry && (invoiceRecipient ?? project.contact).billingCity ? (invoiceRecipient ?? project.contact).billingCountry : (invoiceRecipient ?? project.contact).country) ?? null);
   const billed = await db.projectSupplierInvoice.findMany({ where: { billedInvoiceId: invoice.id } });
   const attachments: PdfAttachment[] = billed
     .filter((c) => c.fileData && c.fileMime)
@@ -187,6 +217,8 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     },
     projectName: project.name,
     instalmentLabel,
+    instalment,
+    jurisdiction,
     lineItems: invoice.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
     attachments,
     totals: { subtotal: invoice.subtotal, gst: invoice.gstAmount, qst: invoice.qstAmount, hst: invoice.hstAmount, total: invoice.taxAmount },

@@ -760,6 +760,18 @@ export interface InvoicePdfData {
   client: ProposalPdfData["client"];
   projectName: string;
   instalmentLabel?: string | null; // e.g. "Instalment 2 of 3 — Approval"
+  // For an instalment invoice: where it sits in the contract and what was already billed.
+  instalment?: {
+    n: number;
+    of: number;
+    final: boolean;
+    contractTotal: number; // the accepted proposal, taxes included
+    previous: { number: string; date: Date; subtotal: number; tax: number; total: number; paid: boolean }[];
+    thisTotal: number;
+    balance: number; // left to invoice after this invoice
+  } | null;
+  // The client's country decides the wording and the legal notices: Canada, US, UK, France.
+  jurisdiction?: "CA" | "US" | "GB" | "FR" | "OTHER";
   lineItems: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
   attachments?: PdfAttachment[];
   totals: { subtotal: number; gst: number; qst: number; hst: number; total: number };
@@ -769,16 +781,28 @@ export interface InvoicePdfData {
 const LI = {
   en: { invoice: "INVOICE", billTo: "Billed to", from: "From", issued: "Issued", due: "Due", paid: "PAID", project: "Project", payment: "How to pay",
     paymentBody: "Please pay by the due date using the method agreed in your proposal (for example Interac e-Transfer or credit card). Payment details will be confirmed with this invoice; reply to this email if you need them again.",
-    thanks: "Thank you for your business.", amountDue: "Amount due", subtotal: "Subtotal", description: "Description", qty: "Qty", unit: "Unit price", amount: "Amount", notes: "Notes", gst: "GST", qst: "QST", hst: "HST", attachments: "Attachments", page: (n: number, t: number) => `Page ${n} of ${t}` },
+    thanks: "Thank you for your business.", amountDue: "Amount due", subtotal: "Subtotal", description: "Description", qty: "Qty", unit: "Unit price", amount: "Amount", notes: "Notes", gst: "GST", qst: "QST", hst: "HST", attachments: "Attachments", page: (n: number, t: number) => `Page ${n} of ${t}`,
+    instalmentInvoice: "INSTALMENT INVOICE", finalInvoice: "FINAL INVOICE", summary: "Payment schedule", contract: "Contract total (taxes included)", previously: "Already invoiced", thisInvoice: "This invoice", balanceAfter: "Balance left to invoice after this invoice", balanceDue: "Balance due on this invoice", beforeTax: "before tax", taxes: "taxes", paidWord: "paid", unpaidWord: "unpaid", instalmentWord: "Instalment",
+    frNotice: "Late-payment penalties: three times the legal interest rate, and a fixed recovery fee of EUR 40 (French Commercial Code, art. L441-10). No early-payment discount." },
   fr: { invoice: "FACTURE", billTo: "Facturé à", from: "De", issued: "Émise le", due: "Échéance", paid: "PAYÉE", project: "Projet", payment: "Comment payer",
     paymentBody: "Veuillez payer d'ici l'échéance selon le mode convenu dans votre soumission (par exemple virement Interac ou carte de crédit). Les détails de paiement seront confirmés avec cette facture; répondez à ce courriel si vous en avez besoin à nouveau.",
-    thanks: "Merci de votre confiance.", amountDue: "Montant dû", subtotal: "Sous-total", description: "Description", qty: "Qté", unit: "Prix unitaire", amount: "Montant", notes: "Notes", gst: "TPS", qst: "TVQ", hst: "TVH", attachments: "Pièces jointes", page: (n: number, t: number) => `Page ${n} de ${t}` },
+    thanks: "Merci de votre confiance.", amountDue: "Montant dû", subtotal: "Sous-total", description: "Description", qty: "Qté", unit: "Prix unitaire", amount: "Montant", notes: "Notes", gst: "TPS", qst: "TVQ", hst: "TVH", attachments: "Pièces jointes", page: (n: number, t: number) => `Page ${n} de ${t}`,
+    instalmentInvoice: "FACTURE DE VERSEMENT", finalInvoice: "FACTURE FINALE", summary: "Calendrier de paiement", contract: "Total du contrat (taxes incluses)", previously: "Déjà facturé", thisInvoice: "Cette facture", balanceAfter: "Solde restant à facturer après cette facture", balanceDue: "Solde dû sur cette facture", beforeTax: "avant taxes", taxes: "taxes", paidWord: "payée", unpaidWord: "impayée", instalmentWord: "Versement",
+    frNotice: "Pénalités de retard : trois fois le taux d'intérêt légal, et indemnité forfaitaire de 40 EUR pour frais de recouvrement (Code de commerce, art. L441-10). Pas d'escompte pour paiement anticipé." },
 };
+
+// France: an instalment before the last is a "facture d'acompte", the last a "facture de solde".
+function invoiceTitle(data: InvoicePdfData, t: (typeof LI)["en"]): string {
+  if (!data.instalment || data.instalment.of < 2) return t.invoice;
+  if (data.lang === "fr" && data.jurisdiction === "FR") return data.instalment.final ? "FACTURE DE SOLDE" : "FACTURE D'ACOMPTE";
+  return data.instalment.final ? t.finalInvoice : t.instalmentInvoice;
+}
 
 export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array> {
   const t = LI[data.lang];
+  const title = invoiceTitle(data, t);
   const doc = await PDFDocument.create();
-  doc.setTitle(`${t.invoice} ${data.number}`);
+  doc.setTitle(`${title} ${data.number}`);
   doc.setAuthor(data.company.name);
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -791,7 +815,7 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
       logo = null;
     }
   }
-  const asProposal = { title: `${t.invoice} ${data.number}`, number: data.number } as ProposalPdfData;
+  const asProposal = { title: `${title} ${data.number}`, number: data.number } as ProposalPdfData;
   const lo = new Layout(doc, regular, bold, italic, logo, asProposal);
   lo.newPage(true);
 
@@ -806,7 +830,8 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
     lo.text(data.company.name, MX, H - 52, { size: 16, font: bold, color: MIST, maxWidth: 250 });
     lo.text(data.company.website, MX, H - 68, { size: 9, color: MIST, maxWidth: 250 });
   }
-  lo.text(t.invoice, W - MX - bold.widthOfTextAtSize(t.invoice, 28), H - 66, { size: 28, font: bold, color: MIST });
+  const titleSize = bold.widthOfTextAtSize(title, 28) > 330 ? 18 : 28;
+  lo.text(title, W - MX - bold.widthOfTextAtSize(title, titleSize), H - 66, { size: titleSize, font: bold, color: MIST });
   const num = `#${data.number}`;
   lo.text(num, W - MX - bold.widthOfTextAtSize(safe(num), 11), H - 86, { size: 11, font: bold, color: GOLD });
   const issued = `${t.issued} ${fmtDate(data.date, data.lang)}`;
@@ -847,6 +872,31 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
     lo.gap(16);
   }
   lo.gap(4);
+  const ins = data.instalment;
+  if (ins && ins.of > 1) {
+    // Where this invoice sits in the contract: what was billed before, this one, and what is left.
+    lo.keep(() => {
+      const rowsOut: [string, string, boolean][] = [[t.contract, money(ins.contractTotal, data.currency), false]];
+      ins.previous.forEach((p, i) => {
+        const tax = p.tax > 0 ? ` (${money(p.subtotal, data.currency)} ${t.beforeTax} + ${money(p.tax, data.currency)} ${t.taxes})` : "";
+        rowsOut.push([`${t.instalmentWord} ${i + 1}/${ins.of} — #${p.number}, ${fmtDate(p.date, data.lang)}, ${p.paid ? t.paidWord : t.unpaidWord}${tax}`, money(p.total, data.currency), false]);
+      });
+      rowsOut.push([`${t.thisInvoice} — ${t.instalmentWord} ${ins.n}/${ins.of}`, money(ins.thisTotal, data.currency), true]);
+      rowsOut.push([ins.final ? t.balanceDue : t.balanceAfter, money(Math.max(0, ins.balance), data.currency), false]);
+      lo.heading(t.summary);
+      for (const [label, value, strong] of rowsOut) {
+        const f = strong ? bold : regular;
+        const lines = lo.wrap(label, CONTENT_W - 120, 9.5, f);
+        lines.forEach((ln, i) => {
+          lo.ensure(14);
+          lo.text(ln, MX, lo.y, { size: 9.5, font: f, color: strong ? GREEN : INK });
+          if (i === 0) lo.text(value, W - MX - f.widthOfTextAtSize(safe(value), 9.5), lo.y, { size: 9.5, font: f, color: strong ? GREEN : INK });
+          lo.gap(13);
+        });
+      }
+      lo.gap(16);
+    });
+  }
   lo.table(
     [
       { header: t.description, width: CONTENT_W - 8 - 40 - 100 - 100 },
@@ -884,6 +934,7 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
     lo.paragraph(data.notes);
   }
   lo.gap(8);
+  if (data.jurisdiction === "FR") lo.paragraph(t.frNotice, { size: 8.5, color: SOFT });
   lo.paragraph(t.thanks, { font: italic, color: SOFT });
 
   const pages = doc.getPages();
