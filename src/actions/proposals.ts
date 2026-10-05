@@ -42,6 +42,7 @@ function revalidateBoth(projectId: string, contactId: string) {
 // follow the proposal: approving completes the first, sending the second.
 const PREPARE_TASK = /^(prepare the proposal|préparer la soumission|préparer la proposition)/i;
 const SEND_TASK = /^(present \(send\) the proposal|présenter \(envoyer\) la soumission|présenter \(envoyer\) la proposition)/i;
+const AWAIT_TASK = /^(await the answer to the proposal|attendre la r)/i;
 async function setProposalTask(db: PrismaClient, projectId: string, which: RegExp, done: boolean) {
   const tasks = await db.task.findMany({ where: { projectId }, select: { id: true, title: true, status: true } });
   const ids = tasks.filter((t) => which.test(t.title) && (done ? t.status !== "DONE" : t.status === "DONE")).map((t) => t.id);
@@ -123,11 +124,43 @@ export async function updateProposalStatus(proposalId: string, projectId: string
         ...(status === "ACCEPTED" || status === "DECLINED" ? { respondedAt: now } : {}),
       },
     });
-    if (status === "ACCEPTED") await onProposalAccepted(db, projectId);
+    if (status === "ACCEPTED") {
+      await setProposalTask(db, projectId, AWAIT_TASK, true);
+      await onProposalAccepted(db, projectId);
+    }
     return contactIdForProject(db, projectId);
   });
 
   revalidateBoth(projectId, contactId);
+}
+
+// "Accepted": the proposal is accepted and the "Await the answer" task is done. If the signed copy
+// comes with it (base64 from the browser, 4 MB max) it is attached too, which shows "Accepted and Signed".
+export async function acceptProposal(proposalId: string, projectId: string, signed?: { base64: string; fileName: string; mime: string }): Promise<{ error?: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  let bytes: Uint8Array | null = null;
+  if (signed) {
+    bytes = Uint8Array.from(atob(signed.base64), (c) => c.charCodeAt(0));
+    if (bytes.length === 0) return { error: "Empty file." };
+    if (bytes.length > 4_000_000) return { error: "The file is over 4 MB." };
+  }
+  const now = new Date();
+  const contactId = await withScopedPrismaClient(async (db) => {
+    await db.proposal.update({
+      where: { id: proposalId },
+      data: {
+        status: "ACCEPTED",
+        respondedAt: now,
+        ...(signed && bytes ? { signedFileName: signed.fileName.slice(0, 200), signedFileMime: signed.mime || "application/octet-stream", signedFileData: bytes as never, signedAt: now } : {}),
+      },
+    });
+    await setProposalTask(db, projectId, AWAIT_TASK, true);
+    await onProposalAccepted(db, projectId);
+    return contactIdForProject(db, projectId);
+  });
+  revalidateBoth(projectId, contactId);
+  return {};
 }
 
 // Ticks (or unticks) an instalment of the accepted proposal's payment schedule.
@@ -463,7 +496,10 @@ export async function updateFullProposal(
         return;
       }
     }
-    if (data.status === "ACCEPTED") await onProposalAccepted(db, data.projectId);
+    if (data.status === "ACCEPTED") {
+      await setProposalTask(db, data.projectId, AWAIT_TASK, true);
+      await onProposalAccepted(db, data.projectId);
+    }
 
     revalidateBoth(data.projectId, project.contactId);
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import PayLinkButton from "./pay-link-button";
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Card, { CARD_COLORS } from "@/components/section-card";
 import type { EmailComposeLabels } from "../../email/email-compose-dialog";
@@ -16,6 +16,7 @@ import {
   createFullProposal,
   updateFullProposal,
   attachSignedProposal,
+  acceptProposal,
   removeSignedProposal,
 } from "@/actions/proposals";
 import { createDraftInvoice, approveInvoice, unapproveInvoice, invoiceSendInfo, markInvoiceSent, updateInvoiceStatus, deleteInvoice, updateInvoiceLineItems } from "@/actions/invoices";
@@ -165,6 +166,64 @@ function SignedCopy({ projectId, proposalId, fileName, fr }: { projectId: string
   );
 }
 
+// "Accepted": opens the file dialog to attach the signed copy. A file makes the status
+// "Accepted and Signed"; closing the dialog without one leaves it "Accepted".
+function AcceptButton({ projectId, proposalId, fr }: { projectId: string; proposalId: string; fr: boolean }) {
+  const router = useRouter();
+  const [busy, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+
+  function accept(file?: File) {
+    setError(null);
+    if (file && file.size > 4_000_000) return setError(fr ? "Le fichier dépasse 4 Mo." : "The file is over 4 MB.");
+    startTransition(async () => {
+      let signed: { base64: string; fileName: string; mime: string } | undefined;
+      if (file) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let bin = "";
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        signed = { base64: btoa(bin), fileName: file.name, mime: file.type };
+      }
+      const res = await acceptProposal(proposalId, projectId, signed);
+      if (res.error) setError(res.error);
+      router.refresh();
+    });
+  }
+
+  // Closing the file dialog without choosing a file still accepts the proposal (unsigned).
+  const acceptRef = useRef(accept);
+  useEffect(() => {
+    acceptRef.current = accept;
+  });
+  useEffect(() => {
+    const el = input.current;
+    const onCancel = () => acceptRef.current();
+    el?.addEventListener("cancel", onCancel);
+    return () => el?.removeEventListener("cancel", onCancel);
+  }, []);
+
+  return (
+    <>
+      <button type="button" disabled={busy} onClick={() => input.current?.click()} className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+        {busy ? "…" : fr ? "Acceptée" : "Accepted"}
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept="application/pdf,image/png,image/jpeg"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          accept(f);
+        }}
+      />
+      {error && <span className="text-xs text-red-600">{error}</span>}
+    </>
+  );
+}
+
 // ------------------------------------------------------------------ proposals
 
 export function ProposalsCard({
@@ -261,7 +320,9 @@ export function ProposalsCard({
                   {money(p.totalAmount, p.currency)}
                   {p.totalCad != null && <span className="block text-[10px]">≈ {money(p.totalCad, "CAD")}</span>}
                 </span>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[p.status] ?? PILL.DRAFT}`}>{statusLabels[p.status] ?? p.status}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${PILL[p.status] ?? PILL.DRAFT}`}>
+                  {p.status === "ACCEPTED" && p.signedFileName ? (fr ? "Acceptée et signée" : "Accepted and Signed") : (statusLabels[p.status] ?? p.status)}
+                </span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <a href={`/api/projects/${projectId}/proposals/${p.id}/pdf`} target="_blank" rel="noreferrer" className={BTN}>
@@ -304,9 +365,7 @@ export function ProposalsCard({
                 {p.status !== "DRAFT" && p.status !== "APPROVED" && <SignedCopy projectId={projectId} proposalId={p.id} fileName={p.signedFileName} fr={fr} />}
                 {p.status === "SENT" && (
                   <>
-                    <button type="button" disabled={pending} onClick={() => run(() => updateProposalStatus(p.id, projectId, "ACCEPTED"))} className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-                      {fr ? "Marquer acceptée" : "Mark accepted"}
-                    </button>
+                    <AcceptButton projectId={projectId} proposalId={p.id} fr={fr} />
                     <button type="button" disabled={pending} onClick={() => run(() => updateProposalStatus(p.id, projectId, "DECLINED"))} className={BTN}>
                       {fr ? "Refusée" : "Declined"}
                     </button>
