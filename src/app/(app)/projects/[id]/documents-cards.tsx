@@ -198,6 +198,16 @@ export function ProposalsCard({
   const fr = lang === "fr";
   const router = useRouter();
   const [dialog, setDialog] = useState<{ id: string | null; key: number } | null>(null);
+  // "Create the proposal with AI" (from a Proposal task) opens a new proposal that starts generating.
+  const [autoAi, setAutoAi] = useState(false);
+  useEffect(() => {
+    const open = () => {
+      setAutoAi(true);
+      setDialog({ id: null, key: Date.now() });
+    };
+    window.addEventListener("amo:new-proposal-ai", open);
+    return () => window.removeEventListener("amo:new-proposal-ai", open);
+  }, []);
   const [linksFor, setLinksFor] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<{ id: string; issues: string[] } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -322,7 +332,10 @@ export function ProposalsCard({
           key={dialog.key}
           title={editing ? editing.title : fr ? "Nouvelle proposition" : "New proposal"}
           color={CARD_COLORS.proposals}
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null);
+            setAutoAi(false);
+          }}
           headerExtra={
             <>
               <HeaderSave
@@ -380,8 +393,10 @@ export function ProposalsCard({
             lang={lang}
             inline
             projectType={projectType}
+            autoGenerate={autoAi && !editing}
             onSuccess={() => {
               setDialog(null);
+              setAutoAi(false);
               router.refresh();
             }}
           />

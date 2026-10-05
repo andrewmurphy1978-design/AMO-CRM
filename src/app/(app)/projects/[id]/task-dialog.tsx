@@ -276,6 +276,23 @@ export default function TaskDialog({
         </div>
         )}
 
+        {inProposalPhase && (
+          <div className="mt-3 rounded-lg border border-card-border bg-field-bg p-3">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                // The Proposals card on the project page opens a new proposal and starts the AI draft.
+                window.dispatchEvent(new CustomEvent("amo:new-proposal-ai"));
+              }}
+              className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold shadow-sm"
+            >
+              {fr ? "✨ Créer la soumission avec l'IA" : "✨ Create the proposal with AI"}
+            </button>
+            <p className="mt-1 text-xs text-soft">{fr ? "Ouvre une nouvelle soumission et lance la génération par l'IA." : "Opens a new proposal and starts the AI draft."}</p>
+          </div>
+        )}
+
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
         <div className="mt-5 flex items-center justify-end gap-3">

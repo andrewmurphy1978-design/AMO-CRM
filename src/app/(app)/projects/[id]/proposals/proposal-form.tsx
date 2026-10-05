@@ -44,6 +44,7 @@ export default function ProposalForm({
   defaultValues,
   catalog,
   recipients,
+  autoGenerate,
   taxLocation,
   chargeCanadianTax,
   submitLabel,
@@ -63,6 +64,8 @@ export default function ProposalForm({
   defaultValues?: ProposalFormValues;
   catalog: CatalogItem[];
   recipients?: RecipientOption[];
+  // Opens ready-made: the AI draft starts generating as soon as the form appears.
+  autoGenerate?: boolean;
   taxLocation: { country: string | null; province: string | null };
   chargeCanadianTax: boolean;
   submitLabel: string;
@@ -188,6 +191,15 @@ export default function ProposalForm({
       }
     });
   }
+
+  // "Create the proposal with AI" (from a Proposal task): generate the draft as soon as the form opens.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoGenerate || autoStarted.current) return;
+    autoStarted.current = true;
+    handleGenerateWithAI();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoGenerate]);
 
   const STATUSES = [
     { value: "DRAFT", label: t.proposals.statuses.DRAFT },
