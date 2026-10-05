@@ -557,18 +557,21 @@ export default async function ProjectDetailPage({
 
       <div className="grid grid-cols-1 gap-3 sm:gap-6 lg:grid-cols-3">
         <div className="min-w-0 space-y-3 sm:space-y-6 lg:col-span-2">
-      {activePhase && (
-        <Card
-          color="phases"
-          title={
-            <>
-              {lang === "fr" ? "Phase active" : "Active phase"}
-              <span className="truncate text-xs font-medium normal-case opacity-90">· {activePhase.name}</span>
-            </>
-          }
-          compact
-          actions={
-            selectedPhase?.id === activePhase.id ? (
+          <PhasesCard
+            projectId={project.id}
+            phases={phaseRows}
+            users={users}
+            defaultTeamMemberIds={project.teamMembers.map((tm) => tm.userId)}
+            selectedPhaseId={selectedPhaseId ?? null}
+            lang={lang}
+            summary={
+              activePhase ? (
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-soft">
+                      {lang === "fr" ? "Phase active" : "Active phase"} · <span className="normal-case text-ink">{activePhase.name}</span>
+                    </span>
+                    {selectedPhase?.id === activePhase.id ? (
               <Link href={`/projects/${project.id}?phase=all`} className="rounded border border-white/40 px-2 py-0.5 text-xs font-medium normal-case text-white hover:bg-white/15">
                 {lang === "fr" ? "Tout afficher" : "Show all phases"}
               </Link>
@@ -576,9 +579,8 @@ export default async function ProjectDetailPage({
               <Link href={`/projects/${project.id}`} className="rounded border border-white/40 px-2 py-0.5 text-xs font-medium normal-case text-white hover:bg-white/15">
                 {lang === "fr" ? "Revenir à la phase active" : "Back to active phase"}
               </Link>
-            )
-          }
-        >
+            )}
+                  </div>
           {(() => {
             const own = project.tasks.filter((tk) => tk.phaseId === activePhase.id);
             const done = own.filter((tk) => tk.status === "DONE").length;
@@ -618,8 +620,11 @@ export default async function ProjectDetailPage({
               </div>
             );
           })()}
-        </Card>
-      )}
+                </div>
+              ) : null
+            }
+          />
+
 
           <Card
             color="general"
@@ -783,16 +788,6 @@ export default async function ProjectDetailPage({
                 </div>
               </Card>
             ))}
-
-          <PhasesCard
-            projectId={project.id}
-            phases={phaseRows}
-            users={users}
-            defaultTeamMemberIds={project.teamMembers.map((tm) => tm.userId)}
-            selectedPhaseId={selectedPhaseId ?? null}
-            upcoming={(Array.isArray(project.pendingPhases) ? (project.pendingPhases as { name?: string }[]) : []).map((p) => String(p.name ?? "")).filter(Boolean)}
-            lang={lang}
-          />
 
           <Card
             color="notes"

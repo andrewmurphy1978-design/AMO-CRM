@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import Card, { CARD_COLORS } from "@/components/section-card";
@@ -25,17 +25,17 @@ export default function PhasesCard({
   users,
   defaultTeamMemberIds,
   selectedPhaseId,
-  upcoming,
   lang,
+  summary,
 }: {
   projectId: string;
   phases: PhaseRowData[];
   users: { id: string; name: string }[];
   defaultTeamMemberIds: string[];
   selectedPhaseId: string | null;
-  // Phases still waiting to be created (added automatically, one at a time).
-  upcoming: string[];
   lang: Lang;
+  // The active phase's summary (progress, open tasks), shown at the top of this card.
+  summary?: ReactNode;
 }) {
   const t = getDict(lang);
   const router = useRouter();
@@ -68,6 +68,7 @@ export default function PhasesCard({
       compact
       actions={<EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />}
     >
+      {summary && <div className="mb-3 border-b border-card-border pb-3">{summary}</div>}
       {selectedPhaseId && (
         <p className="mb-2 flex items-center gap-2 text-xs text-soft">
           {lang === "fr" ? "Page filtrée sur la phase sélectionnée." : "Page filtered to the selected phase."}
@@ -116,13 +117,6 @@ export default function PhasesCard({
             </tbody>
           </table>
         </div>
-      )}
-
-      {upcoming.length > 0 && (
-        <p className="mt-2 text-xs text-soft">
-          {lang === "fr" ? "À venir (ajoutées automatiquement une à la fois) : " : "Coming next (added automatically, one at a time): "}
-          <span className="text-ink">{upcoming.join(" → ")}</span>
-        </p>
       )}
 
       {open && (
