@@ -185,6 +185,19 @@ export default function InvoiceLineItemsForm({
             </div>
             <div className="sm:col-span-2">
               <span className="text-xs text-soft">{lang === "fr" ? "Adresse (affichée sous « Facturé à »)" : 'Address (shown under "Bill to")'}</span>
+              <select
+                value=""
+                onChange={(e) => {
+                  const r = recipients.find((x) => x.id === recipientId);
+                  const v = e.target.value === "main" ? r?.address : e.target.value === "billing" ? r?.billingAddress : "";
+                  if (v) setRecipientAddress(v);
+                }}
+                className={FIELD_CLASS}
+              >
+                <option value="">{lang === "fr" ? "Choisir une adresse du contact…" : "Pick one of the contact's addresses…"}</option>
+                {recipients.find((x) => x.id === recipientId)?.address && <option value="main">{lang === "fr" ? "Adresse principale" : "Main address"}</option>}
+                {recipients.find((x) => x.id === recipientId)?.billingAddress && <option value="billing">{lang === "fr" ? "Adresse de facturation" : "Billing address"}</option>}
+              </select>
               <textarea name="recipientAddress" rows={3} value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className={FIELD_CLASS} />
             </div>
           </div>
