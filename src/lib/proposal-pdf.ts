@@ -301,10 +301,16 @@ class Layout {
     fn();
   }
 
-  // A cover letter: the last paragraph and the signature after it never stand apart.
+  // A cover letter: it can start right under the overview and flow over the page break, but
+  // the last paragraph and the sign-off after it (short closing lines) always stay together.
   letter(text: string, size = 10) {
     const paras = text.split(/\n{2,}/).map((x) => x.trim()).filter(Boolean);
-    const tail = Math.max(0, paras.length - 2);
+    const lineCount = (x: string) => this.wrap(x, CONTENT_W, size, this.regular).length;
+    let tail = paras.length;
+    // trailing short paragraphs (the signature), then the paragraph before them
+    while (tail > 1 && paras.length - tail < 2 && paras[tail - 1].length < 100 && lineCount(paras[tail - 1]) <= 3) tail--;
+    if (tail > 1) tail--;
+    tail = Math.max(0, Math.min(tail, paras.length - 1));
     paras.slice(0, tail).forEach((x) => {
       this.paragraph(x, { size });
       this.gap(6);
@@ -340,11 +346,24 @@ class Layout {
     const leading = o.leading ?? size + 4;
     const indent = o.indent ?? 0;
     const font = o.font ?? this.regular;
-    for (const line of this.wrap(t, CONTENT_W - indent, size, font)) {
+    const lines = this.wrap(t, CONTENT_W - indent, size, font);
+    // Widows and orphans: never leave a single line of a paragraph alone at the bottom of a page
+    // or at the top of the next one (a short paragraph that can't be split moves whole).
+    let breakAt = -1;
+    if (!this.dry) {
+      const fit = Math.max(0, Math.floor((this.y - BOTTOM) / leading));
+      if (lines.length > fit) {
+        if (lines.length < 4) breakAt = 0;
+        else if (fit < 2) breakAt = 0;
+        else if (lines.length - fit < 2) breakAt = lines.length - 2;
+      }
+    }
+    lines.forEach((line, i) => {
+      if (i === breakAt) this.newPage();
       this.ensure(leading);
       this.text(line, MX + indent, this.y, { size, font, color: o.color });
       this.gap(leading);
-    }
+    });
   }
 
   bullet(t: string, indent = 10) {
