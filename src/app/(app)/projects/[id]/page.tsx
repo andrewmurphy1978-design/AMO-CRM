@@ -490,7 +490,10 @@ export default async function ProjectDetailPage({
   };
   // While the project is in Proposal status the Proposals card comes first in the right column; once
   // the proposal is accepted the payments (Instalments, Invoices) take over the top.
-  const onProposal = project.status === "PROPOSAL";
+  // Pending documents (not yet accepted / paid) sit right under the Tasks card; settled ones drop to the
+  // bottom of the right column.
+  const proposalsPending = project.proposals.some((p) => p.status !== "ACCEPTED" && p.status !== "DECLINED") || (project.proposals.length === 0 && project.status === "PROPOSAL");
+  const invoicesPending = project.invoices.some((i) => i.status !== "PAID");
   const upcomingTasks = (Array.isArray(project.pendingPhases) ? (project.pendingPhases as { tasks?: string[] }[]) : []).reduce((n, ph) => n + (Array.isArray(ph.tasks) ? ph.tasks.length : 0), 0);
   const doneTasks = project.tasks.filter((tk) => tk.status === "DONE").length;
   const totalTasks = project.tasks.length + upcomingTasks;
@@ -552,6 +555,8 @@ export default async function ProjectDetailPage({
         actions={<DeleteProjectButton projectId={project.id} lang={lang} />}
       />
 
+      <div className="grid grid-cols-1 gap-3 sm:gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-3 sm:space-y-6 lg:col-span-2">
       {activePhase && (
         <Card
           color="phases"
@@ -616,8 +621,6 @@ export default async function ProjectDetailPage({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:gap-6 lg:grid-cols-3">
-        <div className="min-w-0 space-y-3 sm:space-y-6 lg:col-span-2">
           <Card
             color="general"
             title={t.contactForm.cardGeneralInfo}
@@ -821,14 +824,6 @@ export default async function ProjectDetailPage({
             )}
           </Card>
 
-          <TasksCard
-            projectId={project.id}
-            tasks={taskItems}
-            users={users}
-            phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
-            lang={lang}
-          />
-
           <SubscriptionsCard
             key={project.subscriptions.map((x) => x.id).join(",")}
             projectId={project.id}
@@ -844,6 +839,17 @@ export default async function ProjectDetailPage({
         </div>
 
         <div className="flex min-w-0 flex-col gap-3 sm:gap-6">
+          <div style={{ order: 0 }}>
+          <TasksCard
+            projectId={project.id}
+            tasks={taskItems}
+            users={users}
+            phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
+            lang={lang}
+          />
+          </div>
+
+          <div style={{ order: 4 }}>
           <CalendarEventsCard
             title={t.calendarApp.title}
             events={calendarEvents}
@@ -863,7 +869,9 @@ export default async function ProjectDetailPage({
             linkPickerLabels={calendarLinkPickerLabels}
             newEventLinks={{ contactId: project.contactId, projectId: project.id, ...(selectedPhaseId ? { phaseId: selectedPhaseId } : {}) }}
           />
+          </div>
 
+          <div style={{ order: 5 }}>
           <Card
             color="linkedEmails"
             title={
@@ -916,7 +924,9 @@ export default async function ProjectDetailPage({
               emailComposeLabels={t.emailCompose}
             />
           </Card>
+          </div>
 
+          <div style={{ order: 6 }}>
           <CallsSmsCard
             title={t.contactDetail.callsEmails}
             contactId={project.contactId}
@@ -961,14 +971,15 @@ export default async function ProjectDetailPage({
               ),
             }))}
           />
+          </div>
 
           {instalmentRows.length > 0 && (
-            <div style={{ order: onProposal ? 1 : -2 }}>
+            <div style={{ order: 3 }}>
               <InstalmentsCard projectId={project.id} rows={instalmentRows} lang={lang} />
             </div>
           )}
 
-          <div style={{ order: onProposal ? -1 : 2 }}>
+          <div style={{ order: proposalsPending ? 1 : 7 }}>
           <ProposalsCard
             projectId={project.id}
             projectType={typesOfProject(project).join(",")}
@@ -986,7 +997,7 @@ export default async function ProjectDetailPage({
           />
           </div>
 
-          <div style={{ order: onProposal ? 1 : -1 }}>
+          <div style={{ order: invoicesPending ? 2 : 8 }}>
           <InvoicesCard
             projectId={project.id}
             invoices={invoiceRows}
