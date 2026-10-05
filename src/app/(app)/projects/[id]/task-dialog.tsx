@@ -45,6 +45,8 @@ export default function TaskDialog({
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const fr = lang === "fr";
+  // The Proposal phase's tasks have no AI prompt: the proposal builder already has its own AI draft.
+  const inProposalPhase = /^(proposal|soumission|proposition)$/i.test(phases.find((p) => p.id === phaseId)?.name.trim() ?? "");
   const [error, setError] = useState<string | undefined>();
   const [pending, startTransition] = useTransition();
 
@@ -224,6 +226,7 @@ export default function TaskDialog({
           />
         </div>
 
+        {!inProposalPhase && (
         <div className="mt-3">
           <div className="flex items-center justify-between gap-2">
             <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{fr ? "Prompt généré pour l'IA" : "AI generated prompt for AI"}</label>
@@ -271,6 +274,7 @@ export default function TaskDialog({
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           />
         </div>
+        )}
 
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
