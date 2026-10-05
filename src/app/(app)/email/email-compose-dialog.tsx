@@ -1,5 +1,6 @@
 "use client";
 
+import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "@/lib/clsx";
 import { format, type Locale } from "date-fns";
@@ -404,6 +405,8 @@ export default function EmailComposeDialog({
     ];
   }, [target, labels]);
 
+  const drop = useFileDrop((files) => void handleFilesSelected(files));
+
   if (!target) return null;
 
   async function handleFilesSelected(files: FileList | null) {
@@ -540,8 +543,9 @@ export default function EmailComposeDialog({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-2" onClick={onClose}>
       <div
-        className="flex h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
+        className={`flex h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl ${drop.dragging ? DROP_RING : ""}`}
         onClick={(e) => e.stopPropagation()}
+        {...drop.bind}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3" style={{ backgroundColor: color, color: fg }}>
           <h3 className="min-w-0 flex-1 truncate font-display text-lg font-semibold">{title}</h3>

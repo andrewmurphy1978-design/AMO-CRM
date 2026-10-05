@@ -1,5 +1,6 @@
 "use client";
 
+import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import PayLinkButton from "./pay-link-button";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -143,8 +144,10 @@ function SignedCopy({ projectId, proposalId, fileName, fr }: { projectId: string
     });
   }
 
+  const drop = useFileDrop((files) => void pick(files[0]), Boolean(fileName));
+
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs">
+    <div {...drop.bind} className={`flex flex-wrap items-center gap-2 rounded-md text-xs ${drop.dragging ? DROP_RING : ""}`}>
       {fileName ? (
         <>
           <span className="text-soft">📎 {fr ? "Copie signée" : "Signed copy"}:</span>
@@ -157,7 +160,7 @@ function SignedCopy({ projectId, proposalId, fileName, fr }: { projectId: string
         </>
       ) : (
         <label className="cursor-pointer rounded-md border border-card-border px-2 py-1 font-medium text-ink hover:bg-black/5">
-          {busy ? "…" : `📎 ${fr ? "Joindre la soumission signée" : "Attach signed proposal"}`}
+          {busy ? "…" : `📎 ${fr ? "Joindre la soumission signée (ou glisser-déposer)" : "Attach signed proposal (or drop it here)"}`}
           <input type="file" accept="application/pdf,image/png,image/jpeg" className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
         </label>
       )}
@@ -203,9 +206,11 @@ function AcceptButton({ projectId, proposalId, fr }: { projectId: string; propos
     return () => el?.removeEventListener("cancel", onCancel);
   }, []);
 
+  const drop = useFileDrop((files) => accept(files[0]), busy);
+
   return (
     <>
-      <button type="button" disabled={busy} onClick={() => input.current?.click()} className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+      <button type="button" disabled={busy} onClick={() => input.current?.click()} {...drop.bind} title={fr ? "Cliquez, ou glissez la soumission signée ici" : "Click, or drop the signed proposal here"} className={`${drop.dragging ? DROP_RING : ""} rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50`}>
         {busy ? "…" : fr ? "Acceptée" : "Accepted"}
       </button>
       <input

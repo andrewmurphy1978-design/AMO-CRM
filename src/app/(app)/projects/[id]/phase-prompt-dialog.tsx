@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { generatePhasePrompt } from "@/actions/phase-prompts";
+import BrandZipLink from "./brand-zip-link";
 import type { Lang } from "@/lib/i18n/dictionaries";
 
 // Shows the AI prompt for a phase (built from the client, project, brand and tasks) with a Copy button.
@@ -10,6 +11,7 @@ export default function PhasePromptDialog({ projectId, phaseId, onClose, lang }:
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [zip, setZip] = useState<{ url: string; count: number } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -17,7 +19,10 @@ export default function PhasePromptDialog({ projectId, phaseId, onClose, lang }:
       .then((res) => {
         if (!live) return;
         if (res.error) setError(res.error);
-        else setText(res.prompt ?? "");
+        else {
+          setText(res.prompt ?? "");
+          setZip(res.assetsZip ?? null);
+        }
       })
       .catch(() => live && setError(fr ? "Impossible de générer le prompt." : "Couldn't generate the prompt."));
     return () => {
@@ -59,6 +64,7 @@ export default function PhasePromptDialog({ projectId, phaseId, onClose, lang }:
                 {fr ? "Collez ce texte dans l'IA de votre choix. Vous pouvez le modifier avant de le copier." : "Paste this into the AI of your choice. You can edit it before copying."}
               </p>
               <textarea value={text} onChange={(e) => setText(e.target.value)} rows={22} className="w-full rounded-md border border-card-border bg-field-bg p-3 font-mono text-xs text-ink" />
+              {zip && <BrandZipLink url={zip.url} count={zip.count} fr={fr} />}
             </>
           )}
         </div>

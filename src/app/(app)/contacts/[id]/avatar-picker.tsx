@@ -1,5 +1,6 @@
 "use client";
 
+import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { useRef, useState } from "react";
 import { AVATAR_COLORS, initialsFor, initialsAvatarDataUri } from "@/lib/avatar";
 
@@ -51,11 +52,20 @@ export default function AvatarPicker({
   const [value, setValue] = useState(defaultValue ?? "");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const initials = initialsFor(firstName, lastName);
+  const drop = useFileDrop(async (files) => {
+    const file = files[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    try {
+      setValue(await resizeImageFile(file));
+    } catch {
+      /* unreadable file: keep the current avatar */
+    }
+  });
 
   return (
     <div>
       <input type="hidden" name={name} value={value} />
-      <div className="flex flex-col items-center gap-2">
+      <div {...drop.bind} className={`flex flex-col items-center gap-2 rounded-lg p-1 ${drop.dragging ? DROP_RING : ""}`}>
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element -- either an external Google-hosted URL or a locally-generated data URI, not a local/optimizable asset
           <img src={value} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />

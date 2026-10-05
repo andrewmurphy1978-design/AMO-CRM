@@ -1,5 +1,6 @@
 "use client";
 
+import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ColorPicker from "@/components/color-picker";
@@ -143,6 +144,7 @@ function FileOrLink({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const uploaded = isDataUri(value);
+  const drop = useFileDrop((files) => void pick(files));
 
   async function pick(list: FileList | null) {
     const files = list ? [...list] : [];
@@ -163,7 +165,7 @@ function FileOrLink({
   }
 
   return (
-    <div>
+    <div {...drop.bind} className={`rounded-md ${drop.dragging ? DROP_RING : ""}`}>
       <input ref={inputRef} type="file" multiple accept="image/*,.svg,.pdf,.ai,.eps,.psd" className="hidden" onChange={(e) => pick(e.target.files)} />
       <div className="flex items-center gap-1.5">
         {uploaded ? (

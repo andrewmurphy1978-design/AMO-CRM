@@ -3,6 +3,7 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { brandFileEntries } from "@/lib/brand-zip";
 import { BRAND_ITEMS } from "@/lib/brand-items";
 import { buildPhasePrompt, phaseKind, type PromptContext } from "@/lib/phase-prompts";
 import { getProjectTemplate } from "@/lib/project-template-store";
@@ -11,7 +12,7 @@ import { getTypeLabels } from "@/lib/project-type-store";
 
 // The AI prompt for a phase (shown on the phase's first task): everything the CRM knows about
 // the client, the project's details, the brand and the phase's tasks, ready to paste into an AI.
-export async function generatePhasePrompt(projectId: string, phaseId: string): Promise<{ prompt?: string; error?: string }> {
+export async function generatePhasePrompt(projectId: string, phaseId: string): Promise<{ prompt?: string; error?: string; assetsZip?: { url: string; count: number } }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient(async (db) => {
@@ -32,6 +33,10 @@ export async function generatePhasePrompt(projectId: string, phaseId: string): P
     const blocks = await Promise.all(types.map(async (t) => ({ type: t, template: await getProjectTemplate(db, t), values: valuesOfType(project, t) })));
     const pick = (key: string) => [...new Set(blocks.flatMap((b) => { const v = b.values[key]; return Array.isArray(v) ? v : v ? [v] : []; }))];
     const brandRows = await db.contactBrandItem.findMany({ where: { contactId: project.contactId }, orderBy: [{ category: "asc" }, { order: "asc" }] });
+
+    // Uploaded brand files are not pasted into the prompt (base64): they go in a zip to drag and drop.
+    const files = brandFileEntries(brandRows);
+    const fileName = new Map(files.map((f) => [f.id, f.name]));
 
     const ctx: PromptContext = {
       clientName: [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.company || project.contact.email || "the client",
@@ -58,8 +63,9 @@ export async function generatePhasePrompt(projectId: string, phaseId: string): P
       funnels: pick("funnels"),
       topics: pick("topics"),
       brandWanted: project.brandItems.map((k) => BRAND_ITEMS.find((b) => b.key === k)?.label ?? k),
-      brandExisting: brandRows.map((r) => `- ${r.category} | ${r.label}${r.value ? ` | ${r.value}` : ""}`),
+      brandExisting: brandRows.map((r) => `- ${r.category} | ${r.label}${r.value ? ` | ${fileName.has(r.id) ? `file in the attached zip: ${fileName.get(r.id)}` : r.value}` : ""}`),
+      brandZipAttached: files.length > 0,
     };
-    return { prompt: buildPhasePrompt(kind, ctx) };
+    return { prompt: buildPhasePrompt(kind, ctx), ...(files.length > 0 ? { assetsZip: { url: `/api/projects/${projectId}/brand-assets`, count: files.length } } : {}) };
   });
 }

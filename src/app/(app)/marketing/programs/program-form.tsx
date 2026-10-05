@@ -1,5 +1,6 @@
 "use client";
 
+import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -132,8 +133,12 @@ function IconUploadField({ name, defaultValue, label }: { name: string; defaultV
     reader.readAsDataURL(file);
   }
 
+  const drop = useFileDrop((files) => {
+    if (files[0]?.type.startsWith("image/")) handleFile(files[0]);
+  });
+
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div {...drop.bind} className={`flex flex-col items-center gap-1 rounded-lg p-1 ${drop.dragging ? DROP_RING : ""}`}>
       <button
         type="button"
         onClick={() => inputRef.current?.click()}

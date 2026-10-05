@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import type { TaskDialogValues } from "@/actions/tasks";
 import { generatePhasePrompt } from "@/actions/phase-prompts";
+import BrandZipLink from "./brand-zip-link";
 import { CARD_COLORS } from "@/components/section-card";
 
 export type { TaskDialogValues };
@@ -42,6 +43,7 @@ export default function TaskDialog({
   const [completedDate, setCompletedDate] = useState(initial.completedDate ?? "");
   const [description, setDescription] = useState(initial.description);
   const [aiPrompt, setAiPrompt] = useState(initial.aiPrompt ?? "");
+  const [assetsZip, setAssetsZip] = useState<{ url: string; count: number } | null>(null);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const fr = lang === "fr";
@@ -239,6 +241,7 @@ export default function TaskDialog({
                     setGenerating(true);
                     const res = await generatePhasePrompt(projectId, phaseId);
                     setGenerating(false);
+                    setAssetsZip(res.assetsZip ?? null);
                     if (res.prompt) setAiPrompt(res.prompt);
                     else setError(res.error ?? (fr ? "Aucun prompt disponible pour cette phase." : "No prompt is available for this phase."));
                   }}
@@ -273,6 +276,7 @@ export default function TaskDialog({
             placeholder={fr ? "Le prompt à copier-coller dans l'IA pour réaliser cette tâche…" : "The prompt to copy-paste into an AI to carry out this task…"}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           />
+          {assetsZip && <BrandZipLink url={assetsZip.url} count={assetsZip.count} fr={fr} />}
         </div>
         )}
 

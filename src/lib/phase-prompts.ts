@@ -23,6 +23,7 @@ export interface PromptContext {
   topics: string[];
   brandWanted: string[]; // what the brand should include
   brandExisting: string[]; // lines from the client's Brand card
+  brandZipAttached?: boolean; // the uploaded brand files come as a zip next to the prompt
 }
 
 // Which prompt (if any) a phase gets, from the phase name and the project type it belongs to.
@@ -61,7 +62,7 @@ function contextBlock(c: PromptContext): string {
 }
 
 const brandBlock = (c: PromptContext) =>
-  c.brandExisting.length > 0 ? `## The client's brand (use it exactly; do not invent a different one)\n${c.brandExisting.join("\n")}\n` : "## Brand\nNo brand elements are recorded yet: propose a coherent, modern palette and font pairing and state them as CSS variables.\n";
+  c.brandExisting.length > 0 ? `## The client's brand (use it exactly; do not invent a different one)\n${c.brandExisting.join("\n")}\n${c.brandZipAttached ? "\nThe brand files (logos, icons, photos...) are in the attached .zip: open them and use them as they are.\n" : ""}` : "## Brand\nNo brand elements are recorded yet: propose a coherent, modern palette and font pairing and state them as CSS variables.\n";
 
 const lang = (c: PromptContext) => (c.languages.length ? c.languages.join(" and ") : c.clientLanguage === "fr" ? "French" : "English");
 

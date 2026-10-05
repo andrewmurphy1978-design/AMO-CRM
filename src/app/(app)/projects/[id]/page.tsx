@@ -9,6 +9,7 @@ import ProjectGeneralDialog from "./project-general-dialog";
 import ProjectDetailsDialog from "./project-details-dialog";
 import ProjectNotesDialog from "./project-notes-dialog";
 import PhasesCard from "./phases-card";
+import { BrandCard } from "../../contacts/[id]/brand-card";
 import TasksCard, { type TaskCardItem } from "./tasks-card";
 import { ProposalsCard, InvoicesCard, type ProposalRowData, type InvoiceRowData } from "./documents-cards";
 import { contactTaxLocation } from "@/lib/billing-totals";
@@ -106,7 +107,7 @@ export default async function ProjectDetailPage({
     const project = await db.project.findUnique({
       where: { id },
       include: {
-        contact: { include: { messagingAccounts: { orderBy: { order: "asc" } }, techStackItems: { orderBy: { order: "asc" } }, domains: { orderBy: { order: "asc" } } } },
+        contact: { include: { brandItems: { orderBy: [{ category: "asc" }, { order: "asc" }] }, messagingAccounts: { orderBy: { order: "asc" } }, techStackItems: { orderBy: { order: "asc" } }, domains: { orderBy: { order: "asc" } } } },
         owner: true,
         supervisor: true,
         teamMembers: { include: { user: true } },
@@ -243,6 +244,15 @@ export default async function ProjectDetailPage({
     return ph.status === "COMPLETED" || (own.length > 0 && own.every((tk) => tk.status === "DONE"));
   };
   const activePhase = project.phases.find((ph) => !phaseDone(ph)) ?? project.phases[project.phases.length - 1] ?? null;
+  // The client's Brand card: at the bottom, but right under the Phases card while the Brand phase is the active one.
+  const brandActive = Boolean(activePhase && /(^|—\s*)brand$/i.test(activePhase.name.trim()));
+  const brandCard = (
+    <BrandCard
+      contactId={project.contactId}
+      lang={lang}
+      items={project.contact.brandItems.map((b) => ({ id: b.id, category: b.category, label: b.label, value: b.value ?? "", note: b.note ?? "" }))}
+    />
+  );
   const selectedPhase =
     phaseParam === "all" ? null : (project.phases.find((ph) => ph.id === phaseParam) ?? (phaseParam ? null : activePhase));
   const selectedPhaseId = selectedPhase?.id;
@@ -626,6 +636,8 @@ export default async function ProjectDetailPage({
           />
 
 
+          {brandActive && brandCard}
+
           <Card
             color="general"
             title={t.contactForm.cardGeneralInfo}
@@ -831,6 +843,8 @@ export default async function ProjectDetailPage({
           <TechStackCard contact={project.contact} lang={lang} />
 
           <DomainsCard contact={project.contact} lang={lang} />
+
+          {!brandActive && brandCard}
         </div>
 
         <div className="flex min-w-0 flex-col gap-3 sm:gap-6">

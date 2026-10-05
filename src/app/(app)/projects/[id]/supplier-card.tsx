@@ -1,5 +1,6 @@
 "use client";
 
+import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Card, { CARD_COLORS } from "@/components/section-card";
@@ -50,6 +51,7 @@ function SupplierDialog({ projectId, row, lang, onClose }: { projectId: string; 
   const [amounts, setAmounts] = useState({ subtotal: row?.subtotal ?? 0, gst: row?.gstAmount ?? 0, qst: row?.qstAmount ?? 0, hst: row?.hstAmount ?? 0 });
   const [reimbursable, setReimbursable] = useState(row?.reimbursable ?? true);
   const total = amounts.subtotal + amounts.gst + amounts.qst + amounts.hst;
+  const drop = useFileDrop((files) => void pick(files[0]));
 
   async function pick(f: File | undefined) {
     if (!f) return;
@@ -172,8 +174,9 @@ function SupplierDialog({ projectId, row, lang, onClose }: { projectId: string; 
         </label>
         <div className="sm:col-span-2">
           <label className={LABEL}>{fr ? "Fichier de la facture (PDF ou image, 4 Mo max)" : "Invoice file (PDF or image, 4 MB max)"}</label>
-          <div className="mt-1 flex flex-wrap items-center gap-3">
+          <div {...drop.bind} className={`mt-1 flex flex-wrap items-center gap-3 rounded-md p-1 ${drop.dragging ? DROP_RING : ""}`}>
             <input type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => pick(e.target.files?.[0])} className="text-sm" />
+            <span className="text-xs text-soft">{fr ? "ou glissez-déposez le fichier ici" : "or drag and drop the file here"}</span>
             {!file && row?.hasFile && !removeFile && (
               <span className="text-xs text-soft">
                 📎 {row.fileName}{" "}
