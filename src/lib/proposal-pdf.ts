@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage } from "pdf-lib";
+import { PDFDocument, PDFString, StandardFonts, rgb, type PDFFont, type PDFPage, type PDFImage } from "pdf-lib";
 
 // Builds the client-facing Proposal PDF (A4): AMO logo and brand colours,
 // project overview and detailed plan (current + upcoming phases), investment
@@ -526,7 +526,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   }
   });
   if (data.coverLetter) {
-    lo.gap(4);
+    lo.gap(34); // breathing room under the overview
     lo.letter(data.coverLetter, 10);
   }
   if (data.project.description) {
@@ -934,6 +934,20 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
   if (data.payUrl) {
     lo.gap(4);
     lo.paragraph(data.lang === "fr" ? "Payer en ligne par carte (lien sécurisé) :" : "Pay online by card (secure link):", { font: bold });
+    if (!lo.dry) {
+      // A real, clickable button (the printed URL below is only a fallback and is split across lines).
+      lo.ensure(34);
+      const label = data.lang === "fr" ? "Payer par carte" : "Pay by card";
+      const bw = bold.widthOfTextAtSize(safe(label), 11) + 28;
+      lo.page.drawRectangle({ x: MX, y: lo.y - 8, width: bw, height: 24, color: GREEN });
+      lo.text(label, MX + 14, lo.y, { size: 11, font: bold, color: rgb(1, 1, 1) });
+      const ctx = doc.context;
+      const annot = ctx.register(
+        ctx.obj({ Type: "Annot", Subtype: "Link", Rect: [MX, lo.y - 8, MX + bw, lo.y + 16], Border: [0, 0, 0], A: { Type: "Action", S: "URI", URI: PDFString.of(data.payUrl) } })
+      );
+      lo.page.node.addAnnot(annot);
+      lo.gap(30);
+    }
     for (let i = 0; i < data.payUrl.length; i += 78) {
       lo.ensure(10);
       lo.text(data.payUrl.slice(i, i + 78), MX, lo.y, { size: 7, color: SOFT });
