@@ -22,6 +22,7 @@ import ProposalForm from "./proposals/proposal-form";
 import InvoiceLineItemsForm from "./invoices/invoice-line-items-form";
 import SendDocumentButton from "./send-document-button";
 import DocumentLinks, { type Linkables } from "./document-links";
+import type { RecipientOption } from "@/lib/contact-address";
 
 type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
 type Line = { description: string; details?: string | null; quantity: number; unitPrice: number };
@@ -35,6 +36,9 @@ export interface ProposalRowData {
   totalAmount: number;
   totalCad?: number | null;
   approvedAt: string | null;
+  recipientContactId?: string | null;
+  recipientEmail?: string | null;
+  recipientAddress?: string | null;
   signedFileName?: string | null;
   sentAt: string | null;
   coverLetter: string | null;
@@ -170,6 +174,7 @@ export function ProposalsCard({
   lang,
   emailing,
   linkables,
+  recipients,
   projectType,
 }: {
   projectId: string;
@@ -184,6 +189,7 @@ export function ProposalsCard({
   lang: Lang;
   emailing: EmailingProps;
   linkables: Linkables;
+  recipients: RecipientOption[];
 }) {
   const fr = lang === "fr";
   const router = useRouter();
@@ -356,10 +362,14 @@ export function ProposalsCard({
                     lineItems: editing.lineItems,
                     subscriptions: editing.subscriptions,
                     paymentSchedule: editing.paymentSchedule,
+                    recipientContactId: editing.recipientContactId,
+                    recipientEmail: editing.recipientEmail,
+                    recipientAddress: editing.recipientAddress,
                   }
                 : { title: newDefaults.title, status: "DRAFT", currency: newDefaults.currency, coverLetter: newDefaults.coverLetter, subscriptions: newDefaults.subscriptions, paymentSchedule: newDefaults.paymentSchedule }
             }
             catalog={catalog}
+            recipients={recipients}
             taxLocation={taxLocation}
             chargeCanadianTax={chargeCanadianTax}
             submitLabel={editing ? (fr ? "Enregistrer" : "Save changes") : fr ? "Créer la proposition" : "Create proposal"}

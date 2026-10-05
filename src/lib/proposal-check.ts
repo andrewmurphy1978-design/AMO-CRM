@@ -49,6 +49,6 @@ export async function proposalIssues(db: PrismaClient, proposalId: string, lang:
   }
 
   const c = project.contact;
-  if (!(c.billingEmail || c.email || c.email2 || c.extraEmails[0])) issues.push(fr ? "Le client n'a pas de courriel." : "The client has no email address.");
+  if (!(proposal.recipientEmail || c.billingEmail || c.email || c.email2 || c.extraEmails[0])) issues.push(fr ? "Le client n'a pas de courriel." : "The client has no email address.");
   return issues;
 }

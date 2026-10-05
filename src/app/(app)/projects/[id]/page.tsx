@@ -15,6 +15,7 @@ import { contactTaxLocation } from "@/lib/billing-totals";
 import SupplierCard, { type SupplierRow } from "./supplier-card";
 import SubscriptionsCard from "./subscriptions-card";
 import type { Linkables } from "./document-links";
+import { contactAddress, type RecipientOption } from "@/lib/contact-address";
 import { defaultInstalments } from "@/lib/default-instalments";
 import InstalmentsCard, { type InstalmentRow } from "./instalments-card";
 import NewEmailButton from "../../contacts/[id]/new-email-button";
@@ -93,6 +94,7 @@ export default async function ProjectDetailPage({
     typeBlocks,
     eventLinkRows,
     projectEvents,
+    relationRows,
     rates,
     catalog,
     billingChargeTax,
@@ -163,6 +165,10 @@ export default async function ProjectDetailPage({
       }),
     ]);
 
+    // Who a proposal can be sent to: the client and the contacts linked to them.
+    const relationRows = project
+      ? await db.contactRelation.findMany({ where: { OR: [{ contactId: project.contactId }, { relatedContactId: project.contactId }] }, include: { contact: true, relatedContact: true } })
+      : [];
     // Everything linked to the project (not just the selected phase), with the proposal /
     // invoice each calendar event is linked to, for the document dialogs.
     const eventLinkRows = project ? await db.calendarEventLink.findMany({ where: { projectId: project.id }, select: { googleEventId: true, proposalId: true, invoiceId: true } }) : [];
@@ -213,6 +219,7 @@ export default async function ProjectDetailPage({
       typeBlocks,
       eventLinkRows,
       projectEvents,
+      relationRows,
       rates,
     };
   });
@@ -247,6 +254,22 @@ export default async function ProjectDetailPage({
       .filter((i) => i.type === "CALL" || i.type === "MEETING" || i.type === "SMS")
       .map((i) => ({ id: i.id, title: `${i.type === "SMS" ? "SMS" : i.type === "CALL" ? (lang === "fr" ? "Appel" : "Call") : lang === "fr" ? "Rencontre" : "Meeting"}${i.subject ? ` — ${i.subject}` : i.notes ? ` — ${i.notes.slice(0, 60)}` : ""}`, meta: fmtWhen(i.occurredAt), proposalId: i.proposalId, invoiceId: i.invoiceId })),
   };
+
+  const toRecipient = (c: typeof project.contact, relation: string): RecipientOption => ({
+    id: c.id,
+    name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || "—",
+    company: c.company,
+    relation,
+    emails: [...new Set([c.billingEmail, c.email, c.email2, ...c.extraEmails].filter((e): e is string => Boolean(e)))],
+    address: contactAddress(c),
+  });
+  const recipients: RecipientOption[] = [
+    toRecipient(project.contact, lang === "fr" ? "Client" : "Client"),
+    ...relationRows.map((r) => {
+      const other = r.contactId === project.contactId ? r.relatedContact : r.contact;
+      return toRecipient(other as typeof project.contact, r.relationType);
+    }),
+  ].filter((r, i, all) => all.findIndex((x) => x.id === r.id) === i);
 
   const calendarBookingLabelOptions = calendarBookingOptions.map((b) => ({
     id: b.id,
@@ -380,6 +403,9 @@ export default async function ProjectDetailPage({
     totalAmount: p.totalAmount,
     totalCad: cadOf(p.totalAmount, p.currency),
     approvedAt: iso(p.approvedAt),
+    recipientContactId: p.recipientContactId,
+    recipientEmail: p.recipientEmail,
+    recipientAddress: p.recipientAddress,
     signedFileName: p.signedFileName,
     sentAt: iso(p.sentAt),
     coverLetter: p.coverLetter,
@@ -921,6 +947,7 @@ export default async function ProjectDetailPage({
             lang={lang}
             emailing={emailing}
             linkables={linkables}
+            recipients={recipients}
           />
           </div>
 

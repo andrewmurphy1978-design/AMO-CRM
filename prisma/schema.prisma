@@ -1107,6 +1107,11 @@ model Proposal {
   subscriptions Json?
   // Internal sign-off before the document is sent to the client.
   approvedAt    DateTime?
+  // Who the proposal is sent to (defaults to the project's client): a linked contact, an email
+  // and the postal address shown under "Prepared for".
+  recipientContactId String?
+  recipientEmail     String?
+  recipientAddress   String? @db.Text
   // The copy signed and returned by the client (PDF or image, up to 4 MB).
   signedFileName String?
   signedFileMime String?

@@ -74,6 +74,13 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const lang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
   const dict = getDict(lang);
   const typeLabels = await getTypeLabels(db, dict.projectTypes as Record<string, string>, lang);
+  // "Prepared for": the chosen recipient (a linked contact, a specific email / address) or the client.
+  const recipient = proposal.recipientContactId && proposal.recipientContactId !== project.contactId ? await db.contact.findUnique({ where: { id: proposal.recipientContactId } }) : null;
+  const client = {
+    ...clientBlock(recipient ?? project.contact),
+    ...(proposal.recipientEmail ? { email: proposal.recipientEmail } : {}),
+    ...(proposal.recipientAddress ? { address: proposal.recipientAddress } : {}),
+  };
   const types = typesOfProject(project);
   const typeBlocks = await Promise.all(types.map(async (type) => ({ type, template: await getProjectTemplate(db, type), answers: valuesOfType(project, type) })));
 
@@ -110,7 +117,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     validDays: 30,
     currency: proposal.currency,
     company: { ...COMPANY, gstNumber: settings.gstNumber, qstNumber: settings.qstNumber },
-    client: clientBlock(project.contact),
+    client,
     project: {
       name: project.name,
       typeLabel: types.map((ty) => typeLabels[ty] ?? ty).join(" · "),

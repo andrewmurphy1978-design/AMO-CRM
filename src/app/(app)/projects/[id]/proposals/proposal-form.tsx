@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { draftProposalAI } from "@/actions/proposals";
+import type { RecipientOption } from "@/lib/contact-address";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { clientFacingDescription } from "@/lib/catalog-text";
@@ -19,6 +20,9 @@ type ProposalFormValues = {
   lineItems?: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
   subscriptions?: { name: string; amount: number; period: string; note: string }[];
   paymentSchedule?: { label: string; percentage: number | null; amount: number | null; dueDate: Date | string | null }[];
+  recipientContactId?: string | null;
+  recipientEmail?: string | null;
+  recipientAddress?: string | null;
 };
 
 type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
@@ -39,6 +43,7 @@ export default function ProposalForm({
   projectId,
   defaultValues,
   catalog,
+  recipients,
   taxLocation,
   chargeCanadianTax,
   submitLabel,
@@ -57,6 +62,7 @@ export default function ProposalForm({
   projectId: string;
   defaultValues?: ProposalFormValues;
   catalog: CatalogItem[];
+  recipients?: RecipientOption[];
   taxLocation: { country: string | null; province: string | null };
   chargeCanadianTax: boolean;
   submitLabel: string;
@@ -103,6 +109,11 @@ export default function ProposalForm({
   const [coverLetter, setCoverLetter] = useState(defaultValues?.coverLetter ?? "");
   const [currency, setCurrency] = useState(defaultValues?.currency ?? "CAD");
   const [brief, setBrief] = useState("");
+  // The recipient: the client by default; a linked contact, another email or address can be chosen.
+  const firstRecipient = recipients?.[0];
+  const [recipientId, setRecipientId] = useState(defaultValues?.recipientContactId ?? firstRecipient?.id ?? "");
+  const [recipientEmail, setRecipientEmail] = useState(defaultValues?.recipientEmail ?? firstRecipient?.emails[0] ?? "");
+  const [recipientAddress, setRecipientAddress] = useState(defaultValues?.recipientAddress ?? firstRecipient?.address ?? "");
   const [aiPending, startAiTransition] = useTransition();
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiDone, setAiDone] = useState<string | null>(null);
@@ -216,6 +227,50 @@ export default function ProposalForm({
           </select>
         </div>
       </div>
+
+      {/* Who the proposal goes to */}
+      {recipients && recipients.length > 0 && (
+        <div className="rounded-lg border border-card-border p-4">
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Envoyer la soumission à" : "Send the proposal to"}</label>
+          <div className="mt-1 grid gap-3 sm:grid-cols-2">
+            <div>
+              <span className="text-xs text-soft">{lang === "fr" ? "Contact" : "Contact"}</span>
+              <select
+                name="recipientContactId"
+                value={recipientId}
+                onChange={(e) => {
+                  const r = recipients.find((x) => x.id === e.target.value);
+                  setRecipientId(e.target.value);
+                  setRecipientEmail(r?.emails[0] ?? "");
+                  setRecipientAddress(r?.address ?? "");
+                }}
+                className={FIELD_CLASS}
+              >
+                {recipients.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                    {r.company ? ` — ${r.company}` : ""}
+                    {r.relation ? ` (${r.relation})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <span className="text-xs text-soft">{lang === "fr" ? "Courriel" : "Email"}</span>
+              <input name="recipientEmail" type="email" list="recipient-emails" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} className={FIELD_CLASS} />
+              <datalist id="recipient-emails">
+                {(recipients.find((r) => r.id === recipientId)?.emails ?? []).map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </div>
+            <div className="sm:col-span-2">
+              <span className="text-xs text-soft">{lang === "fr" ? "Adresse (affichée sous « Préparé pour »)" : 'Address (shown under "Prepared for")'}</span>
+              <textarea name="recipientAddress" rows={3} value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className={FIELD_CLASS} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI drafting */}
       <div className="rounded-lg border border-card-border bg-field-bg p-4">

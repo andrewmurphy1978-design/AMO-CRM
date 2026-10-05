@@ -71,6 +71,9 @@ export async function createProposal(
       amount: String(formData.get("amount") ?? "").trim() || undefined,
       currency: String(formData.get("currency") ?? "CAD").trim() || "CAD",
       notes: String(formData.get("notes") ?? "").trim() || undefined,
+      recipientContactId: String(formData.get("recipientContactId") ?? "") || undefined,
+      recipientEmail: String(formData.get("recipientEmail") ?? "").trim() || undefined,
+      recipientAddress: String(formData.get("recipientAddress") ?? "").trim() || undefined,
     });
   } catch (error) {
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? t.actions.invalidInput };
@@ -210,6 +213,9 @@ const FullProposalSchema = z.object({
   currency: z.enum(CURRENCIES),
   coverLetter: z.string().trim().optional(),
   notes: z.string().trim().optional(),
+  recipientContactId: z.string().optional(),
+  recipientEmail: z.string().trim().optional(),
+  recipientAddress: z.string().trim().optional(),
 });
 
 function readLineItems(formData: FormData): (LineItemInput & { description: string; details: string | null })[] {
@@ -298,6 +304,9 @@ export async function createFullProposal(
       currency: String(formData.get("currency") ?? "CAD"),
       coverLetter: String(formData.get("coverLetter") ?? "").trim() || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
+      recipientContactId: String(formData.get("recipientContactId") ?? "") || undefined,
+      recipientEmail: String(formData.get("recipientEmail") ?? "").trim() || undefined,
+      recipientAddress: String(formData.get("recipientAddress") ?? "").trim() || undefined,
     });
   } catch (error) {
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? t.actions.invalidInput };
@@ -319,6 +328,9 @@ export async function createFullProposal(
         currency: data.currency,
         coverLetter: data.coverLetter,
         notes: data.notes,
+        recipientContactId: data.recipientContactId ?? null,
+        recipientEmail: data.recipientEmail ?? null,
+        recipientAddress: data.recipientAddress ?? null,
         subscriptions: subscriptions as never,
         subtotal: totals.subtotal,
         gstAmount: totals.gst,
@@ -369,6 +381,9 @@ export async function updateFullProposal(
       currency: String(formData.get("currency") ?? "CAD"),
       coverLetter: String(formData.get("coverLetter") ?? "").trim() || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
+      recipientContactId: String(formData.get("recipientContactId") ?? "") || undefined,
+      recipientEmail: String(formData.get("recipientEmail") ?? "").trim() || undefined,
+      recipientAddress: String(formData.get("recipientAddress") ?? "").trim() || undefined,
     });
   } catch (error) {
     if (error instanceof z.ZodError) return { error: error.issues[0]?.message ?? t.actions.invalidInput };
@@ -398,6 +413,9 @@ export async function updateFullProposal(
         currency: data.currency,
         coverLetter: data.coverLetter,
         notes: data.notes,
+        recipientContactId: data.recipientContactId ?? null,
+        recipientEmail: data.recipientEmail ?? null,
+        recipientAddress: data.recipientAddress ?? null,
         subscriptions: subscriptions as never,
         subtotal: totals.subtotal,
         gstAmount: totals.gst,
@@ -569,6 +587,8 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
       include: { project: { include: { contact: true } }, paymentSchedule: { orderBy: { order: "asc" } } },
     });
     if (!proposal || proposal.projectId !== projectId) return { error: "Proposal not found." };
+    // The chosen recipient (a linked contact, an email), else the project's client.
+    const recipient = proposal.recipientContactId && proposal.recipientContactId !== proposal.project.contactId ? await db.contact.findUnique({ where: { id: proposal.recipientContactId } }) : null;
     if (!proposal.approvedAt) return { error: "Approve the proposal before sending it." };
     if (proposal.status !== "DRAFT" && proposal.status !== "APPROVED") return { error: "This proposal has already been sent." };
     const issues = await proposalIssues(db, proposalId, (proposal.project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en");
@@ -581,7 +601,7 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
     const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
     const c = proposal.project.contact;
     const fr = (c.locale ?? "").toLowerCase().startsWith("fr");
-    const first = c.firstName || "";
+    const first = (recipient ?? c).firstName || "";
     const grand = proposal.subtotal + proposal.taxAmount;
     const firstRow = proposal.paymentSchedule[0];
     const firstAmount = firstRow ? firstRow.amount ?? (firstRow.percentage != null ? Math.round((firstRow.percentage / 100) * grand * 100) / 100 : null) : null;
@@ -610,7 +630,7 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
     return {
       subject,
       html: letterHtml + callHtml + payHtml,
-      to: c.billingEmail || c.email || c.email2 || c.extraEmails[0] || null,
+      to: proposal.recipientEmail || (recipient ? recipient.email || recipient.email2 || recipient.extraEmails[0] : null) || c.billingEmail || c.email || c.email2 || c.extraEmails[0] || null,
       attachment: { filename: pdfData.fileName, mimeType: "application/pdf", base64: toBase64(pdf) },
     };
   });
