@@ -22,6 +22,11 @@ export async function proposalIssues(db: PrismaClient, proposalId: string, lang:
     if (!(li.unitPrice > 0)) issues.push(fr ? `La ligne « ${li.description || "sans nom"} » n'a pas de prix.` : `Line item "${li.description || "unnamed"}" has no price.`);
   }
 
+  // A brand project needs its own line in the Investment section.
+  if (project.createBrand && !proposal.lineItems.some((li) => /brand|marque/i.test(`${li.description} ${li.details ?? ""}`))) {
+    issues.push(fr ? "Le projet inclut une image de marque : ajoutez une ligne « Création de l'image de marque » avec son prix." : 'The project includes a brand: add a "Brand creation" line with its price.');
+  }
+
   // Apps & subscriptions: every app needs its fee.
   const subs = (Array.isArray(proposal.subscriptions) ? proposal.subscriptions : []) as { name?: string; amount?: number }[];
   for (const s of subs) {

@@ -508,6 +508,7 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
         `Project type${typesOfProject(project).length > 1 ? "s" : ""}: ${typesOfProject(project).join(", ")}`,
         project.description ? `Project description: ${project.description}` : "",
         details.length ? `Project details:\n${details.filter(Boolean).join("\n")}` : "",
+        project.createBrand ? "The project includes creating a brand for the client: include a separate priced line item \"Brand creation\" (logos, colours, fonts, etc.)." : "",
         project.contact.company ? `Client company: ${project.contact.company}` : "",
         project.contact.industry ? `Client industry: ${project.contact.industry}` : "",
         project.contact.aiDetails ? `Background about the client:\n${project.contact.aiDetails}` : "",

@@ -32,6 +32,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { loadTypeInfo } from "@/lib/project-type-store";
 
 import { frText, localizeText, localizeValue } from "@/lib/project-i18n";
+import { BRAND_ITEMS, DEFAULT_BRAND_ITEMS } from "@/lib/brand-items";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 import { typesOfProject, valuesOfType, typeColor } from "@/lib/project-templates";
 import { getExchangeRates, toCad, type Currency } from "@/lib/exchange-rates";
@@ -462,7 +463,22 @@ export default async function ProjectDetailPage({
   // The proposal's Apps & subscriptions come from the project's Apps & subscriptions card.
   const defaultSubscriptions = project.subscriptions.map((x) => ({ name: x.name, amount: x.amount, period: x.period, note: x.note }));
   // A new proposal starts with the usual 50 / 40 / 10 instalments.
+  // When the project includes a brand, the proposal starts with a "Brand creation" line (priced from
+  // the price list when it has a brand item) listing what the brand includes.
+  const brandCatalogItem = catalog.find((c) => /brand|marque/i.test(c.name));
+  const brandLabels = BRAND_ITEMS.filter((b) => (project.brandItems.length > 0 ? project.brandItems : DEFAULT_BRAND_ITEMS).includes(b.key)).map((b) => (docLang === "fr" ? b.labelFr : b.label));
+  const defaultLineItems = project.createBrand
+    ? [
+        {
+          description: docLang === "fr" ? "Création de l'image de marque" : "Brand creation",
+          details: `${docLang === "fr" ? "Comprend : " : "Includes: "}${brandLabels.join(", ")}.`,
+          quantity: 1,
+          unitPrice: brandCatalogItem?.unitPrice ?? 0,
+        },
+      ]
+    : [];
   const proposalDefaults = {
+    lineItems: defaultLineItems,
     title: `${docLang === "fr" ? "Soumission" : "Proposal"} — ${project.name}`,
     currency: project.contact.preferredCurrency || "CAD",
     coverLetter: defaultCoverLetter,

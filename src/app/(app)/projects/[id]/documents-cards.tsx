@@ -186,7 +186,7 @@ export function ProposalsCard({
   catalog: CatalogItem[];
   taxLocation: { country: string | null; province: string | null };
   chargeCanadianTax: boolean;
-  newDefaults: { title: string; currency: string; coverLetter: string; subscriptions: Sub[]; paymentSchedule: { label: string; percentage: number | null; amount: number | null; dueDate: string | null }[] };
+  newDefaults: { lineItems: Line[]; title: string; currency: string; coverLetter: string; subscriptions: Sub[]; paymentSchedule: { label: string; percentage: number | null; amount: number | null; dueDate: string | null }[] };
   title: string;
   statusLabels: Record<string, string>;
   lang: Lang;
@@ -369,7 +369,7 @@ export function ProposalsCard({
                     recipientEmail: editing.recipientEmail,
                     recipientAddress: editing.recipientAddress,
                   }
-                : { title: newDefaults.title, status: "DRAFT", currency: newDefaults.currency, coverLetter: newDefaults.coverLetter, subscriptions: newDefaults.subscriptions, paymentSchedule: newDefaults.paymentSchedule }
+                : { title: newDefaults.title, status: "DRAFT", currency: newDefaults.currency, coverLetter: newDefaults.coverLetter, lineItems: newDefaults.lineItems, subscriptions: newDefaults.subscriptions, paymentSchedule: newDefaults.paymentSchedule }
             }
             catalog={catalog}
             recipients={recipients}

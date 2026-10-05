@@ -234,7 +234,7 @@ export default function ProjectForm({
 
 
       <div className="grid gap-3 rounded-2xl border border-card-border bg-card-bg p-6 shadow-sm sm:grid-cols-2">
-          <BrandFields defaultChecked={defaultValues?.createBrand ?? false} defaultItems={defaultValues?.brandItems ?? []} lang={lang} />
+          <BrandFields defaultChecked={defaultValues?.createBrand ?? true} defaultItems={defaultValues?.brandItems ?? []} lang={lang} />
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{lang === "fr" ? "Comptes du client" : "Client accounts"}</label>
             <select name="accountMode" defaultValue={defaultValues?.accountMode ?? ""} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30">
