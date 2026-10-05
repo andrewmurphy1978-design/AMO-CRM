@@ -787,18 +787,10 @@ export function defaultTemplate(type: string): TemplateConfig {
 
 // ---- multi-type projects ----------------------------------------------------
 
-// "Create a brand for the client": a Yes/No in every type's details. Any Yes adds
-// the (shared) Brand phase to the project.
-export const BRAND_FIELD: FieldTpl = { key: "brand", label: "Create a brand for the client", type: "yesno" };
-
-for (const type of PROJECT_TYPE_ORDER) {
-  const template = DEFAULT_TEMPLATES[type];
-  if (template && !template.fields.some((f) => f.key === BRAND_FIELD.key)) template.fields.push({ ...BRAND_FIELD });
-}
-
-// Saved (customized) templates predate the Brand question: add it when missing.
-export function withBrandField(config: TemplateConfig): TemplateConfig {
-  return config.fields.some((f) => f.key === BRAND_FIELD.key) ? config : { ...config, fields: [...config.fields, { ...BRAND_FIELD }] };
+// The Brand question is a project setting (General Info), not part of a type's details:
+// earlier versions put a "brand" Yes/No in the details, which is dropped here.
+export function withoutBrandField(config: TemplateConfig): TemplateConfig {
+  return config.fields.some((f) => f.key === "brand") ? { ...config, fields: config.fields.filter((f) => f.key !== "brand") } : config;
 }
 
 export const BRAND_PHASE_TASKS = [
@@ -838,15 +830,28 @@ const SHARED_NAMES: Record<string, string> = {
 // Order: Proposal, planning (Research, Brand, Mock-up, then the types' own planning
 // phases), the types' building phases in the order of the types, Presenting,
 // Deploying, Final Payment.
-export function buildMultiPlan(inputs: TypeInput[]): ProjectPlan {
+export interface PlanOptions {
+  // Create a brand for the client (project setting): adds the Brand phase.
+  brand?: boolean;
+  // "CLIENT": the contact controls their own accounts, so a Training phase is added.
+  accountMode?: string | null;
+}
+
+export const TRAINING_PHASE_TASKS = [
+  "Train the client to manage their accounts",
+  "Hand over the account access (credentials)",
+  "Send the training materials and recordings",
+  "Confirm the client is comfortable managing it",
+];
+
+export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): ProjectPlan {
   const multi = inputs.length > 1;
   const shared = new Map<string, PlanPhase>();
   const own: PlanPhase[] = [];
-  let brand = false;
+  const brand = Boolean(options.brand);
 
   for (const input of inputs) {
     const values = cleanValues(input.template, input.values);
-    if (values[BRAND_FIELD.key] === "Y") brand = true;
     for (const phase of buildPlan(input.template, values).phases) {
       const key = SHARED_NAMES[phase.name.trim().toLowerCase()];
       if (key) {
@@ -874,6 +879,7 @@ export function buildMultiPlan(inputs: TypeInput[]): ProjectPlan {
     ...own.filter((p) => p.stage === "PROPOSAL" || p.stage === "FINAL"),
     ...pick("Presenting"),
     ...pick("Deploying"),
+    ...(options.accountMode === "CLIENT" ? [{ name: "Training", stage: "ACTIVE" as const, tasks: [...TRAINING_PHASE_TASKS] }] : []),
     ...pick("Final Payment"),
   ];
   return { phases };

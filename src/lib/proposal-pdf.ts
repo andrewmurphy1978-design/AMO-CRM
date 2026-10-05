@@ -21,7 +21,7 @@ export interface ProposalPdfData {
   currency: string;
   company: { name: string; website: string; email?: string | null; gstNumber?: string | null; qstNumber?: string | null };
   client: { name: string; company?: string | null; email?: string | null; phone?: string | null; address?: string | null };
-  project: { name: string; typeLabel: string; description?: string | null; startDate?: Date | null; dueDate?: Date | null };
+  project: { name: string; typeLabel: string; typeLabels?: string[]; description?: string | null; startDate?: Date | null; dueDate?: Date | null };
   details: { label: string; value: string; group?: string }[]; // custom-field answers (grouped by type)
   coverLetter?: string | null;
   plan: { name: string; tasks: string[] }[]; // phases to deliver, in order
@@ -60,6 +60,7 @@ const L = {
     overview: "Project overview",
     project: "Project",
     type: "Type",
+    types: "Types",
     start: "Start",
     due: "Target completion",
     details: "Project details",
@@ -121,6 +122,7 @@ const L = {
     overview: "Aperçu du projet",
     project: "Projet",
     type: "Type",
+    types: "Types",
     start: "Début",
     due: "Livraison prévue",
     details: "Détails du projet",
@@ -420,17 +422,21 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
 
   // ---- overview
   lo.heading(t.overview);
-  const facts: [string, string][] = [
-    [t.project, data.project.name],
-    [t.type, data.project.typeLabel],
-    ...(data.project.startDate ? ([[t.start, fmtDate(data.project.startDate, data.lang)]] as [string, string][]) : []),
-    ...(data.project.dueDate ? ([[t.due, fmtDate(data.project.dueDate, data.lang)]] as [string, string][]) : []),
+  const typeList = data.project.typeLabels && data.project.typeLabels.length > 0 ? data.project.typeLabels : [data.project.typeLabel];
+  const facts: [string, string[]][] = [
+    [t.project, [data.project.name]],
+    // Every type of work in the project, one per line ("Types" when there are several).
+    [typeList.length > 1 ? t.types : t.type, typeList],
+    ...(data.project.startDate ? ([[t.start, [fmtDate(data.project.startDate, data.lang)]]] as [string, string[]][]) : []),
+    ...(data.project.dueDate ? ([[t.due, [fmtDate(data.project.dueDate, data.lang)]]] as [string, string[]][]) : []),
   ];
-  for (const [k, v] of facts) {
-    lo.ensure(14);
+  for (const [k, values] of facts) {
+    lo.ensure(14 * values.length);
     lo.text(k, MX, lo.y, { size: 9.5, font: bold, color: SOFT });
-    lo.text(v, MX + 120, lo.y, { size: 9.5, maxWidth: CONTENT_W - 120 });
-    lo.gap(14);
+    for (const v of values) {
+      lo.text(v, MX + 120, lo.y, { size: 9.5, maxWidth: CONTENT_W - 120 });
+      lo.gap(14);
+    }
   }
   if (data.coverLetter) {
     lo.gap(4);

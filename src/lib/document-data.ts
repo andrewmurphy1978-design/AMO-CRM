@@ -114,6 +114,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     project: {
       name: project.name,
       typeLabel: types.map((ty) => typeLabels[ty] ?? ty).join(" · "),
+      typeLabels: types.map((ty) => typeLabels[ty] ?? ty),
       description: project.description,
       startDate: project.startDate,
       dueDate: project.dueDate,

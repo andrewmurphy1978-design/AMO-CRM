@@ -9,7 +9,7 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import type { PrismaClient } from "@/lib/prisma";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { getProjectTemplate } from "@/lib/project-template-store";
-import { buildMultiPlan, cleanValues, readFieldValues, typesOfProject, type FieldValues, type TypeInput } from "@/lib/project-templates";
+import { BRAND_PHASE_TASKS, TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, readFieldValues, typesOfProject, type FieldValues, type TypeInput } from "@/lib/project-templates";
 import { getTypeLabels } from "@/lib/project-type-store";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 
@@ -32,6 +32,12 @@ function readTypes(formData: FormData): string[] {
   if (list.length > 0) return list;
   const single = String(formData.get("type") ?? "").trim();
   return single ? [single] : [];
+}
+
+// Project-level choices: the Brand phase and who holds the accounts.
+function readSettings(formData: FormData) {
+  const mode = String(formData.get("accountMode") ?? "");
+  return { createBrand: formData.get("createBrand") === "on", accountMode: mode === "CLIENT" || mode === "MANAGED" ? mode : null };
 }
 
 function readProjectForm(formData: FormData) {
@@ -167,6 +173,8 @@ interface NewProjectInput {
   userName: string;
   // One entry per selected type, in order, with that type's template and answers.
   types: TypeInput[];
+  createBrand: boolean;
+  accountMode: string | null;
 }
 
 // Creates the project row, its team, an activity entry, and the phases and
@@ -189,6 +197,8 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
       dueDate: input.dueDate,
       typeFields: typeFields as never,
       lifecycleManaged: managed,
+      createBrand: input.createBrand,
+      accountMode: input.accountMode,
     },
   });
 
@@ -197,13 +207,14 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
   const subs = input.types
     .flatMap((t) => appSubscriptionsFrom(t.template, typeFields[t.type]))
     .filter((x) => (seen.has(x.name.toLowerCase()) ? false : (seen.add(x.name.toLowerCase()), true)));
+  if (input.accountMode === "MANAGED") subs.push(await managedFeeRow(db, input.contactId));
   if (subs.length > 0) await db.projectSubscription.createMany({ data: subs.map((x, order) => ({ ...x, projectId: project.id, order })) });
 
   if (input.teamMemberIds.length > 0) {
     await db.projectTeamMember.createMany({ data: input.teamMemberIds.map((userId) => ({ projectId: project.id, userId })) });
   }
 
-  const plan = buildMultiPlan(input.types.map((t) => ({ ...t, values: typeFields[t.type] })));
+  const plan = buildMultiPlan(input.types.map((t) => ({ ...t, values: typeFields[t.type] })), { brand: input.createBrand, accountMode: input.accountMode });
   // Progressive (default): only the first phase now — the rest are released as
   // each phase is completed. Phases that ended up with no tasks are dropped.
   const phases = managed ? plan.phases.filter((p) => p.tasks.length > 0) : plan.phases;
@@ -229,6 +240,48 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
     },
   });
   return project;
+}
+
+// The monthly fee for keeping the client's accounts as a sub-account (hosting, updates, support).
+async function managedFeeRow(db: PrismaClient, contactId: string) {
+  const c = await db.contact.findUnique({ where: { id: contactId }, select: { locale: true } });
+  const fr = (c?.locale ?? "").toLowerCase().startsWith("fr");
+  return {
+    name: fr ? "Hébergement, mises à jour et soutien (sous-compte géré)" : "Hosting, updates & support (managed sub-account)",
+    amount: 0,
+    period: "month",
+    note: fr ? "Frais mensuels — comptes gérés par Andrew Murphy Online" : "Monthly fee — accounts managed by Andrew Murphy Online",
+  };
+}
+
+// Brand / account-mode settings changed on an existing project: add what the new choice needs
+// (the Brand phase, a Training phase, the monthly managed-account fee). Phases of a stage the
+// project has already passed are created directly instead of waiting in the queue.
+async function applyProjectSettings(db: PrismaClient, projectId: string, next: { createBrand: boolean; accountMode: string | null }) {
+  const project = await db.project.findUnique({ where: { id: projectId }, include: { phases: { select: { name: true, order: true } } } });
+  if (!project) return;
+  const addPhase = async (name: string, tasks: string[], stage: "PLANNING" | "ACTIVE", beforeNames: RegExp) => {
+    if (project.phases.some((p) => p.name === name)) return;
+    const pending = (Array.isArray(project.pendingPhases) ? project.pendingPhases : []) as { name: string; tasks: string[]; stage?: string }[];
+    if (pending.some((p) => p.name === name)) return;
+    const passed = stage === "PLANNING" ? !["PROPOSAL", "PLANNING"].includes(project.status) : ["FINAL", "COMPLETED"].includes(project.status);
+    if (project.lifecycleManaged && !passed) {
+      const at = pending.findIndex((p) => beforeNames.test(p.name) || (stage === "PLANNING" && (p.stage ?? "ACTIVE") !== "PLANNING"));
+      const merged = at === -1 ? [...pending, { name, tasks, stage }] : [...pending.slice(0, at), { name, tasks, stage }, ...pending.slice(at)];
+      await db.project.update({ where: { id: projectId }, data: { pendingPhases: merged as never } });
+    } else {
+      const order = project.phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
+      const created = await db.projectPhase.create({ data: { projectId, name, order } });
+      if (tasks.length > 0) await db.task.createMany({ data: tasks.map((title) => ({ projectId, phaseId: created.id, title })) });
+    }
+  };
+  if (next.createBrand && !project.createBrand) await addPhase("Brand", [...BRAND_PHASE_TASKS], "PLANNING", /^mock-up$/i);
+  if (next.accountMode === "CLIENT" && project.accountMode !== "CLIENT") await addPhase("Training", [...TRAINING_PHASE_TASKS], "ACTIVE", /^final payment$/i);
+  if (next.accountMode === "MANAGED" && project.accountMode !== "MANAGED") {
+    const have = await db.projectSubscription.count({ where: { projectId } });
+    await db.projectSubscription.create({ data: { projectId, order: have, ...(await managedFeeRow(db, project.contactId)) } });
+  }
+  await db.project.update({ where: { id: projectId }, data: { createBrand: next.createBrand, accountMode: next.accountMode } });
 }
 
 // A project whose types changed: phases of newly added types are added too (as
@@ -309,6 +362,7 @@ export async function createProject(
       startDate: data.startDate ? new Date(data.startDate) : undefined,
       dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
       types,
+      ...readSettings(formData),
     });
   });
 
@@ -353,6 +407,7 @@ export async function updateProject(
       },
     });
     await applyTypeChanges(db, projectId, data.types);
+    await applyProjectSettings(db, projectId, readSettings(formData));
 
     // Full replace — simplest correct sync, same reasoning as
     // updateContact's social-links resync.
@@ -428,6 +483,7 @@ export async function updateProjectGeneral(
       },
     });
     await applyTypeChanges(db, projectId, data.types);
+    await applyProjectSettings(db, projectId, readSettings(formData));
     await db.projectTeamMember.deleteMany({ where: { projectId } });
     if (data.teamMemberIds.length > 0) {
       await db.projectTeamMember.createMany({ data: data.teamMemberIds.map((userId) => ({ projectId, userId })) });

@@ -24,6 +24,8 @@ export interface ProjectGeneralValues {
   dueDate: string; // YYYY-MM-DD
   completedAt: string; // YYYY-MM-DD
   subscriptionEmail: string;
+  createBrand: boolean;
+  accountMode: string;
   description: string;
 }
 
@@ -154,6 +156,22 @@ export default function ProjectGeneralDialog({
             <input type="date" name="completedAt" defaultValue={values.completedAt} className={FIELD_CLASS} />
           </div>
         </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input type="checkbox" name="createBrand" defaultChecked={values.createBrand} className="mt-1" />
+            <span>{lang === "fr" ? "Créer l'image de marque du client (ajoute la phase Marque)" : "Create a brand for the client (adds the Brand phase)"}</span>
+          </label>
+          <div>
+            <label className={LABEL_CLASS}>{lang === "fr" ? "Comptes du client" : "Client accounts"}</label>
+            <select name="accountMode" defaultValue={values.accountMode} className={FIELD_CLASS}>
+              <option value="">{lang === "fr" ? "— Non précisé —" : "— Not decided —"}</option>
+              <option value="CLIENT">{lang === "fr" ? "Le client gère ses propres accès (ajoute une phase de formation)" : "Client controls their own credentials (adds a Training phase)"}</option>
+              <option value="MANAGED">{lang === "fr" ? "Je gère un sous-compte (frais mensuels d'hébergement, mises à jour et soutien)" : "I manage a sub-account (monthly hosting, update & support fee)"}</option>
+            </select>
+          </div>
+        </div>
+
         <div>
           <label className={LABEL_CLASS}>{lang === "fr" ? "Courriel à utiliser pour les abonnements" : "Email to use for subscriptions"}</label>
           <input type="email" name="subscriptionEmail" defaultValue={values.subscriptionEmail} className={FIELD_CLASS} />

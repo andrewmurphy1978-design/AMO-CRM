@@ -564,6 +564,8 @@ export default async function ProjectDetailPage({
                   dueDate: toDateInput(project.dueDate),
                   completedAt: toDateInput(project.completedAt),
                   subscriptionEmail: project.subscriptionEmail ?? "",
+                  createBrand: project.createBrand,
+                  accountMode: project.accountMode ?? "",
                   description: project.description ?? "",
                 }}
               />
@@ -628,6 +630,23 @@ export default async function ProjectDetailPage({
               <div>
                 <p className={LABEL_CLASS}>{t.projectForm.completedDate}</p>
                 <p className="mt-1 text-sm text-ink">{project.completedAt ? longDate(project.completedAt, lang, dateLocale) : "—"}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+              <div>
+                <p className={LABEL_CLASS}>{lang === "fr" ? "Image de marque" : "Brand"}</p>
+                <p className="mt-1 text-sm text-ink">{project.createBrand ? (lang === "fr" ? "À créer" : "To be created") : "—"}</p>
+              </div>
+              <div className="lg:col-span-2">
+                <p className={LABEL_CLASS}>{lang === "fr" ? "Comptes du client" : "Client accounts"}</p>
+                <p className="mt-1 text-sm text-ink">
+                  {project.accountMode === "CLIENT"
+                    ? lang === "fr" ? "Le client gère ses propres accès" : "Client controls their own credentials"
+                    : project.accountMode === "MANAGED"
+                      ? lang === "fr" ? "Sous-compte géré (frais mensuels)" : "Managed sub-account (monthly fee)"
+                      : "—"}
+                </p>
               </div>
             </div>
 

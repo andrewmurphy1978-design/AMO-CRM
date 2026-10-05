@@ -913,6 +913,11 @@ model Project {
   completedAt      DateTime?
   // The email address used to sign up for the apps / subscriptions of this project.
   subscriptionEmail String?
+  // Create a brand (logo, colours, fonts, guide) for the client: adds the Brand phase.
+  createBrand       Boolean       @default(false)
+  // Who holds the accounts: "CLIENT" (the contact controls their own credentials; a Training
+  // phase is added) or "MANAGED" (kept as a sub-account with a monthly hosting / update / support fee).
+  accountMode       String?
   // A project spawned from another (Blog / Newsletter / ... answered Yes): the
   // parent handles the proposal and the payments; its proposal includes this
   // project's phases and tasks.
