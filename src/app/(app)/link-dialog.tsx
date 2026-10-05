@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import DocumentLinkFields, { langFromProjectLabel } from "@/components/document-link-fields";
+import type { LinkedItem } from "@/actions/document-links";
 
 export interface LinkOption {
   id: string;
@@ -84,6 +86,7 @@ export default function LinkDialog({
   initial,
   onSave,
   labels,
+  documentItem,
 }: {
   open: boolean;
   onClose: () => void;
@@ -95,6 +98,9 @@ export default function LinkDialog({
   initial: LinkValues;
   onSave: (values: LinkValues) => Promise<void>;
   labels: LinkDialogLabels;
+  // The email thread / event being linked: once linked to a project it can also be linked to one of
+  // that project's proposals or invoices.
+  documentItem?: LinkedItem;
 }) {
   const [search, setSearch] = useState("");
   const [contactId, setContactId] = useState(initial.contactId);
@@ -231,6 +237,12 @@ export default function LinkDialog({
             ))}
           </select>
         </div>
+
+        {documentItem && projectId && projectId === initial.projectId && (
+          <div className="mt-3">
+            <DocumentLinkFields projectId={projectId} item={documentItem} lang={langFromProjectLabel(labels.project)} />
+          </div>
+        )}
 
         {bookings && (
           <div className="mt-3">

@@ -1,5 +1,6 @@
 "use client";
 
+import DocumentLinkFields, { langFromProjectLabel } from "@/components/document-link-fields";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { format, type Locale } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -1219,6 +1220,9 @@ export default function EventDialog({
                   ))}
                 </select>
               </div>
+              {eventId && form.projectId && form.projectId === (initialLinks?.projectId ?? "") && (
+                <DocumentLinkFields projectId={form.projectId} item={{ type: "event", id: eventId }} lang={langFromProjectLabel(linkLabels.project)} />
+              )}
               <div>
                 <label className={LABEL_CLASS}>{linkLabels.booking}</label>
                 <select value={form.bookingId} onChange={(e) => update("bookingId", e.target.value)} disabled={!form.contactId} className={`${FIELD_CLASS} disabled:opacity-50`}>

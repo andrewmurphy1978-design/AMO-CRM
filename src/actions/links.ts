@@ -51,7 +51,8 @@ export async function saveEmailLink(
             : null;
       await db.emailLink.upsert({
         where: { gmailThreadId },
-        update: { contactId, projectId, phaseId, taskId, affiliateProgramId, ...snapshot },
+        // Moving the thread to another project drops its proposal / invoice link.
+        update: { contactId, projectId, phaseId, taskId, affiliateProgramId, ...snapshot, ...(existing && existing.projectId !== projectId ? { proposalId: null, invoiceId: null } : {}) },
         create: { gmailThreadId, contactId, projectId, phaseId, taskId, affiliateProgramId, ...snapshot },
       });
     }
@@ -88,9 +89,10 @@ export async function saveCalendarEventLink(
     if (!contactId && !projectId && !taskId && !bookingId) {
       await db.calendarEventLink.deleteMany({ where: { googleEventId } });
     } else {
+      const existing = await db.calendarEventLink.findUnique({ where: { googleEventId }, select: { projectId: true } });
       await db.calendarEventLink.upsert({
         where: { googleEventId },
-        update: { contactId, projectId, taskId, bookingId },
+        update: { contactId, projectId, taskId, bookingId, ...(existing && existing.projectId !== projectId ? { proposalId: null, invoiceId: null } : {}) },
         create: { googleEventId, contactId, projectId, taskId, bookingId },
       });
     }

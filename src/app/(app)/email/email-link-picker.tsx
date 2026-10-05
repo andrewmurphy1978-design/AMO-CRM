@@ -86,6 +86,7 @@ export default function EmailLinkPicker({
         projects={projects}
         tasks={tasks}
         affiliatePrograms={programs}
+        documentItem={{ type: "email", id: threadId }}
         initial={initial}
         onSave={handleSave}
         labels={labels}

@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { saveEmailLink } from "@/actions/links";
+import DocumentLinkFields, { langFromProjectLabel } from "@/components/document-link-fields";
 import type { LinkOption, LinkDialogLabels, LinkValues } from "../link-dialog";
 
 export interface EmailLinkTarget {
@@ -264,6 +265,8 @@ export function EmailLinkEditor({ config, onDone }: { config: EmailLinkConfig; o
           ))}
         </select>
       </div>
+
+      {config.threadId && projectId && projectId === config.initial.projectId && <DocumentLinkFields projectId={projectId} item={{ type: "email", id: config.threadId }} lang={langFromProjectLabel(labels.project)} />}
 
       <div>
         <label className={LABEL_CLASS}>{labels.affiliateProgram}</label>
