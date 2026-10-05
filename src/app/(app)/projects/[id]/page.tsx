@@ -95,6 +95,7 @@ export default async function ProjectDetailPage({
     eventLinkRows,
     projectEvents,
     relationRows,
+    extraAddressRows,
     rates,
     catalog,
     billingChargeTax,
@@ -169,6 +170,9 @@ export default async function ProjectDetailPage({
     const relationRows = project
       ? await db.contactRelation.findMany({ where: { OR: [{ contactId: project.contactId }, { relatedContactId: project.contactId }] }, include: { contact: true, relatedContact: true } })
       : [];
+    // Every extra address on file for those contacts (the main and billing ones are on the contact).
+    const recipientIds = [project?.contactId, ...relationRows.flatMap((r) => [r.contactId, r.relatedContactId])].filter((x): x is string => Boolean(x));
+    const extraAddressRows = recipientIds.length > 0 ? await db.contactAddress.findMany({ where: { contactId: { in: recipientIds } }, orderBy: { order: "asc" } }) : [];
     // Everything linked to the project (not just the selected phase), with the proposal /
     // invoice each calendar event is linked to, for the document dialogs.
     const eventLinkRows = project ? await db.calendarEventLink.findMany({ where: { projectId: project.id }, select: { googleEventId: true, proposalId: true, invoiceId: true } }) : [];
@@ -220,6 +224,7 @@ export default async function ProjectDetailPage({
       eventLinkRows,
       projectEvents,
       relationRows,
+      extraAddressRows,
       rates,
     };
   });
@@ -264,6 +269,13 @@ export default async function ProjectDetailPage({
     address: contactAddress(c),
     billingAddress: contactAddress(c, true),
     billingEmail: c.billingEmail,
+    addresses: [
+      { label: lang === "fr" ? "Adresse principale" : "Main address", text: contactAddress(c) },
+      { label: lang === "fr" ? "Adresse de facturation" : "Billing address", text: c.billingAddress || c.billingCity ? contactAddress(c, true) : "" },
+      ...extraAddressRows
+        .filter((a) => a.contactId === c.id)
+        .map((a) => ({ label: a.description || (lang === "fr" ? "Autre adresse" : "Other address"), text: [a.address, [a.city, a.state, a.zip].filter(Boolean).join(" "), a.country].filter(Boolean).join("\n") })),
+    ].filter((a) => a.text),
   });
   const recipients: RecipientOption[] = [
     toRecipient(project.contact, lang === "fr" ? "Client" : "Client"),

@@ -29,4 +29,6 @@ export interface RecipientOption {
   // For invoices: the billing address / email come first.
   billingAddress: string;
   billingEmail: string | null;
+  // Every address on file (main, billing, extra), labelled.
+  addresses: { label: string; text: string }[];
 }

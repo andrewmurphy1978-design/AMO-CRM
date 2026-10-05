@@ -188,15 +188,17 @@ export default function InvoiceLineItemsForm({
               <select
                 value=""
                 onChange={(e) => {
-                  const r = recipients.find((x) => x.id === recipientId);
-                  const v = e.target.value === "main" ? r?.address : e.target.value === "billing" ? r?.billingAddress : "";
+                  const v = recipients.find((x) => x.id === recipientId)?.addresses[Number(e.target.value)]?.text;
                   if (v) setRecipientAddress(v);
                 }}
                 className={FIELD_CLASS}
               >
-                <option value="">{lang === "fr" ? "Choisir une adresse du contact…" : "Pick one of the contact's addresses…"}</option>
-                {recipients.find((x) => x.id === recipientId)?.address && <option value="main">{lang === "fr" ? "Adresse principale" : "Main address"}</option>}
-                {recipients.find((x) => x.id === recipientId)?.billingAddress && <option value="billing">{lang === "fr" ? "Adresse de facturation" : "Billing address"}</option>}
+                <option value="">{lang === "fr" ? "Choisir parmi les adresses du contact…" : "Pick from this contact's addresses…"}</option>
+                {(recipients.find((x) => x.id === recipientId)?.addresses ?? []).map((a, i) => (
+                  <option key={i} value={i}>
+                    {a.label} — {a.text.replace(/\n/g, ", ")}
+                  </option>
+                ))}
               </select>
               <textarea name="recipientAddress" rows={3} value={recipientAddress} onChange={(e) => setRecipientAddress(e.target.value)} className={FIELD_CLASS} />
             </div>
