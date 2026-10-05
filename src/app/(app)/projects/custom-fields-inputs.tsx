@@ -14,10 +14,13 @@ export default function CustomFieldsInputs({
   fields,
   initial,
   lang,
+  prefix = "",
 }: {
   fields: FieldTpl[];
   initial?: FieldValues;
   lang: "en" | "fr";
+  // For a project with several types: `<TYPE>__` keeps each type's answers apart.
+  prefix?: string;
 }) {
   const [values, setValues] = useState<FieldValues>(initial ?? {});
   const [others, setOthers] = useState<Record<string, string>>({});
@@ -30,7 +33,7 @@ export default function CustomFieldsInputs({
         .filter((f) => isFieldVisible(f, values, fields) || f.keepSpace)
         .map((field) => {
           if (field.keepSpace && !isFieldVisible(field, values, fields)) return <div key={field.key} className="hidden md:block" aria-hidden />;
-          const name = `cf_${field.key}`;
+          const name = `cf_${prefix}${field.key}`;
           const v = values[field.key];
           if (field.type === "spacer") return <div key={field.key} className="hidden md:block" aria-hidden />;
           return (

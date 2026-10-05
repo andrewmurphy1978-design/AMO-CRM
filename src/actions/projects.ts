@@ -9,7 +9,8 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import type { PrismaClient } from "@/lib/prisma";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { getProjectTemplate } from "@/lib/project-template-store";
-import { buildPlan, cleanValues, readFieldValues, type FieldValues } from "@/lib/project-templates";
+import { buildMultiPlan, cleanValues, readFieldValues, typesOfProject, type FieldValues, type TypeInput } from "@/lib/project-templates";
+import { getTypeLabels } from "@/lib/project-type-store";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 
 const ProjectSchema = z.object({
@@ -17,7 +18,7 @@ const ProjectSchema = z.object({
   contactId: z.string().min(1, "Client is required"),
   description: z.string().trim().optional(),
   status: z.enum(["PROPOSAL", "PLANNING", "ACTIVE", "FINAL", "ON_HOLD", "COMPLETED", "CANCELLED"]),
-  type: z.string().min(1),
+  types: z.array(z.string().min(1)).min(1, "Choose at least one project type"),
   ownerId: z.string().optional(),
   supervisorId: z.string().optional(),
   startDate: z.string().optional(),
@@ -25,13 +26,21 @@ const ProjectSchema = z.object({
   teamMemberIds: z.array(z.string()),
 });
 
+// The chosen types, in order (the form posts one `types` entry per selected type).
+function readTypes(formData: FormData): string[] {
+  const list = [...new Set(formData.getAll("types").map(String).filter(Boolean))];
+  if (list.length > 0) return list;
+  const single = String(formData.get("type") ?? "").trim();
+  return single ? [single] : [];
+}
+
 function readProjectForm(formData: FormData) {
   const raw = {
     name: String(formData.get("name") ?? "").trim(),
     contactId: String(formData.get("contactId") ?? ""),
     description: String(formData.get("description") ?? "").trim() || undefined,
     status: String(formData.get("status") ?? "PROPOSAL"),
-    type: String(formData.get("type") ?? "OTHER"),
+    types: readTypes(formData),
     ownerId: String(formData.get("ownerId") ?? "") || undefined,
     supervisorId: String(formData.get("supervisorId") ?? "") || undefined,
     startDate: String(formData.get("startDate") ?? "") || undefined,
@@ -146,7 +155,6 @@ export async function deletePhase(phaseId: string, projectId: string) {
 
 interface NewProjectInput {
   name: string;
-  type: string;
   description?: string;
   contactId: string;
   status: "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
@@ -157,57 +165,58 @@ interface NewProjectInput {
   dueDate?: Date;
   userId: string;
   userName: string;
-  template: Parameters<typeof buildPlan>[0];
-  values: FieldValues;
-  // A project spawned from another: no Proposal phase (the parent handles it).
-  parentProjectId?: string;
+  // One entry per selected type, in order, with that type's template and answers.
+  types: TypeInput[];
 }
 
 // Creates the project row, its team, an activity entry, and the phases and
-// tasks its type's template calls for given the custom-field answers.
+// tasks the selected types' templates call for given each type's answers.
 async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInput) {
-  const values = cleanValues(input.template, input.values);
+  const typeFields: Record<string, FieldValues> = {};
+  for (const t of input.types) typeFields[t.type] = cleanValues(t.template, t.values);
+  const managed = input.types.every((t) => t.template.progressive !== false);
   const project = await db.project.create({
     data: {
       name: input.name,
       contactId: input.contactId,
       description: input.description,
       status: input.status,
-      type: input.type as never,
+      type: input.types[0].type,
+      types: input.types.map((t) => t.type),
       ownerId: input.ownerId,
       supervisorId: input.supervisorId,
       startDate: input.startDate,
       dueDate: input.dueDate,
-      customFields: Object.keys(values).length > 0 ? (values as never) : undefined,
-      lifecycleManaged: !input.parentProjectId && input.template.progressive !== false,
-      parentProjectId: input.parentProjectId,
+      typeFields: typeFields as never,
+      lifecycleManaged: managed,
     },
   });
 
   // The apps chosen in the details become the project's Apps & subscriptions.
-  const subs = appSubscriptionsFrom(input.template, values);
+  const seen = new Set<string>();
+  const subs = input.types
+    .flatMap((t) => appSubscriptionsFrom(t.template, typeFields[t.type]))
+    .filter((x) => (seen.has(x.name.toLowerCase()) ? false : (seen.add(x.name.toLowerCase()), true)));
   if (subs.length > 0) await db.projectSubscription.createMany({ data: subs.map((x, order) => ({ ...x, projectId: project.id, order })) });
 
   if (input.teamMemberIds.length > 0) {
     await db.projectTeamMember.createMany({ data: input.teamMemberIds.map((userId) => ({ projectId: project.id, userId })) });
   }
 
-  const plan = buildPlan(input.template, values, input.name);
-  if (input.parentProjectId) plan.phases = plan.phases.filter((p) => p.stage !== "PROPOSAL");
-  const progressive = !input.parentProjectId && input.template.progressive !== false;
+  const plan = buildMultiPlan(input.types.map((t) => ({ ...t, values: typeFields[t.type] })));
   // Progressive (default): only the first phase now — the rest are released as
   // each phase is completed. Phases that ended up with no tasks are dropped.
-  const phases = progressive ? plan.phases.filter((p) => p.tasks.length > 0) : plan.phases;
-  const now = progressive ? phases.slice(0, 1) : phases;
+  const phases = managed ? plan.phases.filter((p) => p.tasks.length > 0) : plan.phases;
+  const now = managed ? phases.slice(0, 1) : phases;
   for (const [index, phase] of now.entries()) {
     const created = await db.projectPhase.create({
-      data: { projectId: project.id, name: phase.name, order: index, ...(progressive ? { status: "ACTIVE" as const } : {}) },
+      data: { projectId: project.id, name: phase.name, order: index, ...(managed ? { status: "ACTIVE" as const } : {}) },
     });
     if (phase.tasks.length > 0) {
       await db.task.createMany({ data: phase.tasks.map((title) => ({ projectId: project.id, phaseId: created.id, title })) });
     }
   }
-  if (progressive && phases.length > 1) {
+  if (managed && phases.length > 1) {
     await db.project.update({ where: { id: project.id }, data: { pendingPhases: phases.slice(1).map((p) => ({ name: p.name, tasks: p.tasks, stage: p.stage })) as never } });
   }
 
@@ -220,6 +229,44 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
     },
   });
   return project;
+}
+
+// A project whose types changed: phases of newly added types are added too (as
+// pending phases for a lifecycle-managed project, directly otherwise). Types that
+// were removed leave their existing phases alone.
+async function applyTypeChanges(db: PrismaClient, projectId: string, newTypes: string[]) {
+  const project = await db.project.findUnique({ where: { id: projectId }, include: { phases: { select: { name: true, order: true } } } });
+  if (!project) return;
+  const oldTypes = typesOfProject(project);
+  const added = newTypes.filter((t) => !oldTypes.includes(t));
+  if (added.length > 0) {
+    const labels = await getTypeLabels(db, getDict("en").projectTypes as Record<string, string>, "en");
+    const addedPhases: { name: string; tasks: string[]; stage: "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL" }[] = [];
+    for (const type of added) {
+      const template = await getProjectTemplate(db, type);
+      const plan = buildMultiPlan([{ type, label: labels[type] ?? type, template, values: {} }]);
+      for (const ph of plan.phases) {
+        if (/^(proposal|research|mock-up|presenting|deploying|final payment)$/i.test(ph.name)) continue; // shared: already in the plan
+        addedPhases.push({ ...ph, name: `${labels[type] ?? type} — ${ph.name}` });
+      }
+    }
+    if (addedPhases.length > 0) {
+      if (project.lifecycleManaged) {
+        const pending = (Array.isArray(project.pendingPhases) ? project.pendingPhases : []) as { name: string; tasks: string[]; stage?: string }[];
+        const closing = /^(presenting|deploying|final payment)$/i;
+        const at = pending.findIndex((p) => closing.test(p.name));
+        const merged = at === -1 ? [...pending, ...addedPhases] : [...pending.slice(0, at), ...addedPhases, ...pending.slice(at)];
+        await db.project.update({ where: { id: projectId }, data: { pendingPhases: merged as never } });
+      } else {
+        let order = project.phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
+        for (const ph of addedPhases) {
+          const created = await db.projectPhase.create({ data: { projectId, name: ph.name, order: order++ } });
+          if (ph.tasks.length > 0) await db.task.createMany({ data: ph.tasks.map((title) => ({ projectId, phaseId: created.id, title })) });
+        }
+      }
+    }
+  }
+  await db.project.update({ where: { id: projectId }, data: { type: newTypes[0], types: newTypes } });
 }
 
 export async function createProject(
@@ -241,9 +288,15 @@ export async function createProject(
   }
 
   const project = await withScopedPrismaClient(async (db) => {
-    const template = await getProjectTemplate(db, data.type);
-    const values = readFieldValues(template, (name) => formData.getAll(name).map(String));
-    const common = {
+    const labels = await getTypeLabels(db, getDict("en").projectTypes as Record<string, string>, "en");
+    const types: TypeInput[] = [];
+    for (const type of data.types) {
+      const template = await getProjectTemplate(db, type);
+      // Each type's answers are posted as cf_<TYPE>__<field>.
+      const values = readFieldValues(template, (name) => formData.getAll(name.replace(/^cf_/, `cf_${type}__`)).map(String));
+      types.push({ type, label: labels[type] ?? type, template, values });
+    }
+    return createProjectFromTemplate(db, {
       contactId: data.contactId,
       status: data.status,
       ownerId: data.ownerId || session.user.id,
@@ -251,26 +304,12 @@ export async function createProject(
       teamMemberIds: data.teamMemberIds,
       userId: session.user.id,
       userName: session.user.name ?? "",
-    };
-    const project = await createProjectFromTemplate(db, {
-      ...common,
       name: data.name,
-      type: data.type,
       description: data.description,
       startDate: data.startDate ? new Date(data.startDate) : undefined,
       dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-      template,
-      values,
+      types,
     });
-
-    // "Blog", "Newsletters", "Post automation"... answered Yes: each becomes
-    // its own project for the same client.
-    const plan = buildPlan(template, values, data.name);
-    for (const spawn of plan.spawns) {
-      const spawnTemplate = await getProjectTemplate(db, spawn.type);
-      await createProjectFromTemplate(db, { ...common, name: spawn.name, type: spawn.type, template: spawnTemplate, values: {}, parentProjectId: project.id });
-    }
-    return project;
   });
 
   revalidatePath("/projects");
@@ -307,13 +346,13 @@ export async function updateProject(
         contactId: data.contactId,
         description: data.description,
         status: data.status,
-        type: data.type,
         ownerId: data.ownerId || null,
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
       },
     });
+    await applyTypeChanges(db, projectId, data.types);
 
     // Full replace — simplest correct sync, same reasoning as
     // updateContact's social-links resync.
@@ -357,7 +396,7 @@ export async function updateProjectGeneral(
       description: String(formData.get("description") ?? "").trim() || undefined,
       contactId: String(formData.get("contactId") ?? ""),
       status: String(formData.get("status") ?? "PROPOSAL"),
-      type: String(formData.get("type") ?? "OTHER"),
+      types: readTypes(formData),
       ownerId: String(formData.get("ownerId") ?? "") || undefined,
       supervisorId: String(formData.get("supervisorId") ?? "") || undefined,
       startDate: String(formData.get("startDate") ?? "") || undefined,
@@ -381,7 +420,6 @@ export async function updateProjectGeneral(
         description: data.description || null,
         contactId: data.contactId,
         status: data.status,
-        type: data.type,
         ownerId: data.ownerId || null,
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
@@ -389,6 +427,7 @@ export async function updateProjectGeneral(
         subscriptionEmail: String(formData.get("subscriptionEmail") ?? "").trim() || null,
       },
     });
+    await applyTypeChanges(db, projectId, data.types);
     await db.projectTeamMember.deleteMany({ where: { projectId } });
     if (data.teamMemberIds.length > 0) {
       await db.projectTeamMember.createMany({ data: data.teamMemberIds.map((userId) => ({ projectId, userId })) });
@@ -439,6 +478,7 @@ export async function updatePhaseNotes(
 // fields (phases and tasks already created are left alone).
 export async function updateProjectCustomFields(
   projectId: string,
+  type: string,
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
@@ -447,14 +487,16 @@ export async function updateProjectCustomFields(
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
   await withScopedPrismaClient(async (db) => {
-    const project = await db.project.findUnique({ where: { id: projectId }, select: { type: true } });
-    if (!project) return;
-    const template = await getProjectTemplate(db, project.type);
-    const values = readFieldValues(template, (name) => formData.getAll(name).map(String));
-    await db.project.update({
-      where: { id: projectId },
-      data: { customFields: Object.keys(values).length > 0 ? (values as never) : ({} as never) },
-    });
+    const project = await db.project.findUnique({ where: { id: projectId }, select: { type: true, types: true, typeFields: true, customFields: true } });
+    if (!project || !typesOfProject(project).includes(type)) return;
+    const template = await getProjectTemplate(db, type);
+    // This type's answers are posted as cf_<TYPE>__<field>.
+    const values = readFieldValues(template, (name) => formData.getAll(name.replace(/^cf_/, `cf_${type}__`)).map(String));
+    const all = { ...((project.typeFields ?? {}) as Record<string, FieldValues>) };
+    // A project that predates multiple types keeps its first type's answers in customFields.
+    if (!all[project.type] && project.customFields) all[project.type] = project.customFields as FieldValues;
+    all[type] = values;
+    await db.project.update({ where: { id: projectId }, data: { typeFields: all as never } });
     // Newly chosen apps join the Apps & subscriptions (existing rows are kept).
     const have = await db.projectSubscription.findMany({ where: { projectId }, select: { name: true } });
     const known = new Set(have.map((x) => x.name.trim().toLowerCase()));

@@ -20,7 +20,7 @@ import NewEmailButton from "../../contacts/[id]/new-email-button";
 import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
 import { updateProjectGeneral, updateProjectNotes, updatePhaseNotes, updateProjectCustomFields } from "@/actions/projects";
 import { getProjectTemplate } from "@/lib/project-template-store";
-import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
+import { displayValue, isFieldVisible } from "@/lib/project-templates";
 import { getTwilioConfig, contactPhoneOptions } from "@/lib/twilio";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken } from "@/lib/google";
@@ -31,6 +31,7 @@ import { loadTypeInfo } from "@/lib/project-type-store";
 
 import { frText, localizeText, localizeValue } from "@/lib/project-i18n";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
+import { typesOfProject, valuesOfType } from "@/lib/project-templates";
 import { getExchangeRates, toCad, type Currency } from "@/lib/exchange-rates";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -88,7 +89,7 @@ export default async function ProjectDetailPage({
     addressColors,
     defaultComposeSource,
     twilioReady,
-    template,
+    typeBlocks,
     rates,
     catalog,
     billingChargeTax,
@@ -114,8 +115,6 @@ export default async function ProjectDetailPage({
         emailLinks: { orderBy: { messageDate: "desc" } },
         supplierInvoices: { orderBy: { createdAt: "desc" }, omit: { fileData: true } },
         subscriptions: { orderBy: { order: "asc" } },
-        parentProject: { select: { id: true, name: true } },
-        linkedProjects: { orderBy: { createdAt: "asc" }, select: { id: true, name: true, type: true, status: true } },
         proposals: { orderBy: { createdAt: "desc" }, omit: { signedFileData: true }, include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { orderBy: { order: "asc" } } } },
         invoices: { orderBy: { createdAt: "desc" }, include: { lineItems: { orderBy: { order: "asc" } }, instalment: { include: { proposal: { select: { paymentSchedule: { select: { id: true }, orderBy: { order: "asc" } } } } } } } },
       },
@@ -163,11 +162,19 @@ export default async function ProjectDetailPage({
 
     // CAD equivalents for proposals / invoices issued in another currency.
     const rates = await getExchangeRates(db).catch(() => null);
-    const projectTemplate = project ? await getProjectTemplate(db, project.type) : null;
+    // One Details card per selected type, in the order of the types.
+    const typeBlocks = project
+      ? await Promise.all(
+          typesOfProject(project).map(async (type) => ({ type, template: await getProjectTemplate(db, type), values: valuesOfType(project, type) }))
+        )
+      : [];
     // Apps & subscriptions start from the apps chosen in the Project details: fill
     // them in for a project that has none yet (e.g. created before this card existed).
-    if (project && projectTemplate && project.subscriptions.length === 0) {
-      const subs = appSubscriptionsFrom(projectTemplate, (project.customFields ?? {}) as FieldValues);
+    if (project && project.subscriptions.length === 0) {
+      const seen = new Set<string>();
+      const subs = typeBlocks
+        .flatMap((tb) => appSubscriptionsFrom(tb.template, tb.values))
+        .filter((x) => (seen.has(x.name.toLowerCase()) ? false : (seen.add(x.name.toLowerCase()), true)));
       if (subs.length > 0) {
         await db.projectSubscription.createMany({ data: subs.map((x, order) => ({ ...x, projectId: project.id, order })) });
         project.subscriptions = await db.projectSubscription.findMany({ where: { projectId: project.id }, orderBy: { order: "asc" } });
@@ -196,7 +203,7 @@ export default async function ProjectDetailPage({
       twilioReady,
       catalog,
       billingChargeTax,
-      template: projectTemplate,
+      typeBlocks,
       rates,
     };
   });
@@ -521,6 +528,7 @@ export default async function ProjectDetailPage({
                   name: project.name,
                   status: project.status,
                   type: project.type,
+                  types: typesOfProject(project),
                   contactId: project.contactId,
                   ownerId: project.ownerId ?? "",
                   supervisorId: project.supervisorId ?? "",
@@ -544,7 +552,7 @@ export default async function ProjectDetailPage({
               </div>
               <div>
                 <p className={LABEL_CLASS}>{t.projects.colType}</p>
-                <p className="mt-1 text-sm text-ink">{typeLabels[project.type] ?? project.type}</p>
+                <p className="mt-1 text-sm text-ink">{typesOfProject(project).map((ty) => typeLabels[ty] ?? ty).join(" · ")}</p>
               </div>
               <div>
                 <p className={LABEL_CLASS}>{t.projects.colClient}</p>
@@ -595,38 +603,42 @@ export default async function ProjectDetailPage({
             )}
           </Card>
 
-          {template && template.fields.length > 0 && (
-            <Card
-              color="general"
-              title={`${typeLabels[project.type] ?? project.type} · ${lang === "fr" ? "Détails" : "Details"}`}
-              compact
-              actions={
-                <ProjectDetailsDialog
-                  action={updateProjectCustomFields.bind(null, project.id)}
-                  fields={template.fields}
-                  values={(project.customFields ?? {}) as FieldValues}
-                  title={`${typeLabels[project.type] ?? project.type} · ${lang === "fr" ? "Détails" : "Details"}`}
-                  lang={lang}
-                />
-              }
-            >
-              <div className="grid gap-4 lg:grid-cols-3">
-                {template.fields
-                  .filter((f) => isFieldVisible(f, (project.customFields ?? {}) as FieldValues, template.fields) || f.keepSpace)
-                  .map((f) => {
-                    if (f.keepSpace && !isFieldVisible(f, (project.customFields ?? {}) as FieldValues, template.fields)) return <div key={f.key} className="hidden lg:block" aria-hidden />;
-                    if (f.type === "spacer") return <div key={f.key} className="hidden lg:block" aria-hidden />;
-                    const v = localizeValue(displayValue(((project.customFields ?? {}) as FieldValues)[f.key]), lang);
-                    return (
-                      <div key={f.key} className="min-w-0">
-                        <p className={LABEL_CLASS}>{localizeText(f.label, lang)}</p>
-                        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{v || "—"}</p>
-                      </div>
-                    );
-                  })}
-              </div>
-            </Card>
-          )}
+          {typeBlocks
+            .filter((tb) => tb.template.fields.length > 0)
+            .map(({ type: ty, template, values }) => (
+              <Card
+                key={ty}
+                color="general"
+                title={`${typeLabels[ty] ?? ty} · ${lang === "fr" ? "Détails" : "Details"}`}
+                compact
+                actions={
+                  <ProjectDetailsDialog
+                    action={updateProjectCustomFields.bind(null, project.id, ty)}
+                    fields={template.fields}
+                    values={values}
+                    type={ty}
+                    title={`${typeLabels[ty] ?? ty} · ${lang === "fr" ? "Détails" : "Details"}`}
+                    lang={lang}
+                  />
+                }
+              >
+                <div className="grid gap-4 lg:grid-cols-3">
+                  {template.fields
+                    .filter((f) => isFieldVisible(f, values, template.fields) || f.keepSpace)
+                    .map((f) => {
+                      if (f.keepSpace && !isFieldVisible(f, values, template.fields)) return <div key={f.key} className="hidden lg:block" aria-hidden />;
+                      if (f.type === "spacer") return <div key={f.key} className="hidden lg:block" aria-hidden />;
+                      const v = localizeValue(displayValue(values[f.key]), lang);
+                      return (
+                        <div key={f.key} className="min-w-0">
+                          <p className={LABEL_CLASS}>{localizeText(f.label, lang)}</p>
+                          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{v || "—"}</p>
+                        </div>
+                      );
+                    })}
+                </div>
+              </Card>
+            ))}
 
           <PhasesCard
             projectId={project.id}
@@ -691,36 +703,6 @@ export default async function ProjectDetailPage({
         </div>
 
         <div className="min-w-0 space-y-3 sm:space-y-6">
-          {(project.parentProject || project.linkedProjects.length > 0) && (
-            <Card color="general" title={lang === "fr" ? "Projets liés" : "Linked projects"} compact>
-              <ul className="space-y-1.5 text-sm">
-                {project.parentProject && (
-                  <li>
-                    <span className="text-xs text-soft">{lang === "fr" ? "Projet principal : " : "Parent project: "}</span>
-                    <Link href={`/projects/${project.parentProject.id}`} className="text-amo-lime hover:underline">
-                      {project.parentProject.name}
-                    </Link>
-                  </li>
-                )}
-                {project.linkedProjects.map((lp) => (
-                  <li key={lp.id} className="flex items-center justify-between gap-2">
-                    <Link href={`/projects/${lp.id}`} className="min-w-0 truncate text-amo-lime hover:underline">
-                      {lp.name}
-                    </Link>
-                    <span className="shrink-0 text-xs text-soft">
-                      {typeLabels[lp.type] ?? lp.type} · {STATUS_LABELS[lp.status]}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {project.linkedProjects.length > 0 && (
-                <p className="mt-2 text-xs text-soft">
-                  {lang === "fr" ? "Leurs phases et tâches figurent dans la soumission de ce projet." : "Their phases and tasks are included in this project's proposal."}
-                </p>
-              )}
-            </Card>
-          )}
-
           <CalendarEventsCard
             title={t.calendarApp.title}
             events={calendarEvents}
@@ -842,7 +824,7 @@ export default async function ProjectDetailPage({
 
           <ProposalsCard
             projectId={project.id}
-            projectType={project.type}
+            projectType={typesOfProject(project).join(",")}
             proposals={proposalRows}
             catalog={catalog}
             taxLocation={contactTaxLocation(project.contact)}

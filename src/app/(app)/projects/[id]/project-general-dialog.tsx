@@ -4,6 +4,7 @@ import { useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { CARD_COLORS } from "@/components/section-card";
 import { projectTypeOptions } from "@/lib/project-templates";
+import ProjectTypesPicker from "@/components/project-types-picker";
 import SectionDialog, { EditCardButton } from "../../contacts/[id]/section-dialog";
 
 const FIELD_CLASS =
@@ -14,6 +15,7 @@ export interface ProjectGeneralValues {
   name: string;
   status: string;
   type: string;
+  types: string[];
   contactId: string;
   ownerId: string;
   supervisorId: string;
@@ -65,21 +67,18 @@ export default function ProjectGeneralDialog({
           <input name="name" defaultValue={values.name} required className={FIELD_CLASS} />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Types de projet (dans l'ordre)" : "Project types (in order)"}</label>
+          <div className="mt-1">
+            <ProjectTypesPicker options={projectTypeOptions(typeLabels, values.type, customTypeKeys)} initial={values.types.length > 0 ? values.types : [values.type]} lang={lang} />
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className={LABEL_CLASS}>{t.projectForm.status}</label>
             <select name="status" defaultValue={values.status} className={FIELD_CLASS}>
               {Object.entries(t.projectStatuses).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={LABEL_CLASS}>{t.projectForm.type}</label>
-            <select name="type" defaultValue={values.type} className={FIELD_CLASS}>
-              {projectTypeOptions(typeLabels, values.type, customTypeKeys).map(({ value, label }) => (
                 <option key={value} value={value}>
                   {label}
                 </option>

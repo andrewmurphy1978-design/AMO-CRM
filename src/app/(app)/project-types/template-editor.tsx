@@ -99,7 +99,7 @@ function CondEditor({ cond, onChange, fields, label }: { cond?: Cond; onChange: 
   );
 }
 
-export default function TemplateEditor({ type, typeKeys, isUserType, initial, typeLabels, isCustom }: { type: string; typeKeys: string[]; isUserType: boolean; initial: TemplateConfig; typeLabels: Record<string, string>; isCustom: boolean }) {
+export default function TemplateEditor({ type, isUserType, initial, typeLabels, isCustom }: { type: string; typeKeys?: string[]; isUserType: boolean; initial: TemplateConfig; typeLabels: Record<string, string>; isCustom: boolean }) {
   const router = useRouter();
   const [config, setConfig] = useState<TemplateConfig>(initial);
   const [auto, setAuto] = useState<Set<string>>(new Set());
@@ -395,19 +395,6 @@ export default function TemplateEditor({ type, typeKeys, isUserType, initial, ty
                   <input type="checkbox" checked={isAppField(f)} onChange={(e) => updateField(i, { app: e.target.checked })} />
                   The answer is an app / service (adds it to Apps &amp; subscriptions)
                 </label>
-              )}
-              {f.type === "yesno" && (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className={LABEL}>If Yes, also create a project of type</span>
-                  <select value={f.spawnType ?? ""} onChange={(e) => updateField(i, { spawnType: e.target.value || undefined })} className={`${INPUT} !w-auto`}>
-                    <option value="">— none —</option>
-                    {typeKeys.map((tp) => (
-                      <option key={tp} value={tp}>
-                        {typeLabels[tp]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               )}
               <div className="mt-2">
                 <CondEditor

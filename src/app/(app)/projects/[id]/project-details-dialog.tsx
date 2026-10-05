@@ -13,12 +13,14 @@ export default function ProjectDetailsDialog({
   action,
   fields,
   values,
+  type,
   title,
   lang,
 }: {
   action: (prevState: { error?: string; success?: string } | undefined, formData: FormData) => Promise<{ error?: string; success?: string }>;
   fields: FieldTpl[];
   values: FieldValues;
+  type: string;
   title: string;
   lang: Lang;
 }) {
@@ -28,7 +30,7 @@ export default function ProjectDetailsDialog({
     <>
       <EditCardButton onClick={() => setOpen(true)} label={t.contactDetail.edit} />
       <SectionDialog open={open} onOpenChange={setOpen} title={title} action={action} labels={t.phaseDialog} wide headerColorClassName={CARD_COLORS.general}>
-        <CustomFieldsInputs fields={fields} initial={values} lang={lang} />
+        <CustomFieldsInputs fields={fields} initial={values} lang={lang} prefix={`${type}__`} />
       </SectionDialog>
     </>
   );

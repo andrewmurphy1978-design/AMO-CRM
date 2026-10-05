@@ -137,6 +137,9 @@ export default function ProposalForm({
     setLineItems((rows) => rows.map((r) => (r.tempKey === tempKey ? { ...r, ...patch } : r)));
   }
 
+  // Services of the project's type(s) are offered first (projectType: comma-separated).
+  const inTypes = (c: CatalogItem) => Boolean(c.projectType) && (projectType ?? "").split(",").includes(c.projectType as string);
+
   function handleGenerateWithAI() {
     setAiError(null);
     setAiDone(null);
@@ -268,9 +271,9 @@ export default function ProposalForm({
               <option value="" disabled>
                 {t.proposals.pickFromPriceList}
               </option>
-              {[...catalog].sort((a, b) => Number(b.projectType === projectType && Boolean(projectType)) - Number(a.projectType === projectType && Boolean(projectType))).map((c) => (
+              {[...catalog].sort((a, b) => Number(inTypes(b)) - Number(inTypes(a))).map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.projectType && c.projectType === projectType ? "★ " : ""}
+                  {inTypes(c) ? "★ " : ""}
                   {c.name} ({c.unitPrice} {c.currency})
                 </option>
               ))}

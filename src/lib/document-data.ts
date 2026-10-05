@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getProjectTemplate } from "@/lib/project-template-store";
-import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
+import { displayValue, isFieldVisible, typesOfProject, valuesOfType } from "@/lib/project-templates";
 import type { InvoicePdfData, PdfAttachment, ProposalPdfData } from "@/lib/proposal-pdf";
 import { proposalSupplierCosts } from "@/lib/supplier-costs";
 import { getTypeLabels } from "@/lib/project-type-store";
@@ -67,7 +67,6 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     include: {
       contact: true,
       phases: { orderBy: { order: "asc" }, include: { tasks: { orderBy: { createdAt: "asc" } } } },
-      linkedProjects: { orderBy: { createdAt: "asc" }, include: { phases: { orderBy: { order: "asc" }, include: { tasks: { orderBy: { createdAt: "asc" } } } } } },
     },
   });
   if (!project) return null;
@@ -75,8 +74,8 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const lang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
   const dict = getDict(lang);
   const typeLabels = await getTypeLabels(db, dict.projectTypes as Record<string, string>, lang);
-  const template = await getProjectTemplate(db, project.type);
-  const answers = (project.customFields ?? {}) as FieldValues;
+  const types = typesOfProject(project);
+  const typeBlocks = await Promise.all(types.map(async (type) => ({ type, template: await getProjectTemplate(db, type), answers: valuesOfType(project, type) })));
 
   // The plan to present: phases already created (apart from the Proposal phase
   // itself) followed by the phases still to come.
@@ -84,13 +83,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const existing = project.phases
     .filter((p) => !/^(proposal|proposition)$/i.test(p.name))
     .map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.map((tk) => tk.title).filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }));
-  // Linked projects (Blog, Newsletters...) are part of this proposal: their phases and tasks follow.
-  const linked = project.linkedProjects.flatMap((lp) =>
-    lp.phases
-      .filter((p) => !/^(proposal|proposition)$/i.test(p.name))
-      .map((p) => ({ name: `${lp.name} — ${localizeText(p.name, lang)}`, tasks: p.tasks.map((tk) => tk.title).filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }))
-  );
-  const plan = [...existing, ...linked, ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }))];
+  const plan = [...existing, ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }))];
 
   const grand = proposal.subtotal + proposal.taxAmount;
   const instalments = proposal.paymentSchedule.map((r) => ({
@@ -120,16 +113,19 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     client: clientBlock(project.contact),
     project: {
       name: project.name,
-      typeLabel: typeLabels[project.type] ?? project.type,
+      typeLabel: types.map((ty) => typeLabels[ty] ?? ty).join(" · "),
       description: project.description,
       startDate: project.startDate,
       dueDate: project.dueDate,
     },
-    details: template.fields
-      .filter((f) => f.type !== "spacer")
-      .filter((f) => isFieldVisible(f, answers, template.fields))
-      .map((f) => ({ label: localizeText(f.label, lang), value: localizeValue(displayValue(answers[f.key]), lang) }))
-      .filter((d) => d.value),
+    // Each type's details, under the type's name when the project combines several.
+    details: typeBlocks.flatMap(({ type, template, answers }) =>
+      template.fields
+        .filter((f) => f.type !== "spacer")
+        .filter((f) => isFieldVisible(f, answers, template.fields))
+        .map((f) => ({ label: localizeText(f.label, lang), value: localizeValue(displayValue(answers[f.key]), lang), group: types.length > 1 ? typeLabels[type] ?? type : undefined }))
+        .filter((d) => d.value)
+    ),
     coverLetter: proposal.coverLetter,
     plan,
     lineItems: proposal.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),

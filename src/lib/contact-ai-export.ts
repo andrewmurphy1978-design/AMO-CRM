@@ -4,7 +4,7 @@ import { decryptSecret } from "@/lib/crypto";
 import { signPath } from "@/lib/signed-url";
 import { publicBaseUrl } from "@/lib/twilio";
 import { CREDENTIAL_LOGIN_METHODS } from "@/lib/contact-form-fields";
-import { displayValue, defaultTemplate, type FieldValues } from "@/lib/project-templates";
+import { displayValue, defaultTemplate, typesOfProject, valuesOfType } from "@/lib/project-templates";
 import { getProjectTemplate } from "@/lib/project-template-store";
 
 // Builds the Markdown files describing one contact, to hand to an AI
@@ -235,11 +235,13 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
   let projects = `# ${fullName} — Projects\n\n`;
   if (c.projects.length === 0) projects += "_No projects yet._\n";
   for (const p of c.projects) {
-    const template = await getProjectTemplate(db, p.type).catch(() => defaultTemplate(p.type));
-    const answers = (p.customFields ?? {}) as FieldValues;
+    const ptypes = typesOfProject(p);
+    const typeBlocks = await Promise.all(
+      ptypes.map(async (type) => ({ type, template: await getProjectTemplate(db, type).catch(() => defaultTemplate(type)), answers: valuesOfType(p, type) }))
+    );
     projects += `## ${p.name}\n\n${base ? `CRM page: ${base}/projects/${p.id}\n\n` : ""}`;
     projects += kv([
-      ["Type", p.type],
+      ["Types (in order)", ptypes.join(", ")],
       ["Status", p.status],
       ["Owner", p.owner?.name],
       ["Supervisor", p.supervisor?.name],
@@ -247,7 +249,9 @@ export async function buildContactMarkdownFiles(db: PrismaClient, contactId: str
       ["Due", day(p.dueDate)],
       ["Description", p.description],
       ["Notes", p.notes],
-      ...template.fields.filter((f) => f.type !== "spacer").map((f) => [f.label, displayValue(answers[f.key])] as [string, unknown]),
+      ...typeBlocks.flatMap(({ type, template, answers }) =>
+        template.fields.filter((f) => f.type !== "spacer").map((f) => [ptypes.length > 1 ? `${type}: ${f.label}` : f.label, displayValue(answers[f.key])] as [string, unknown])
+      ),
     ]);
     if (p.phases.length > 0) {
       projects += "\n**Phases & tasks**\n\n";

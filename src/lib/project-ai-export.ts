@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
-import { displayValue, defaultTemplate, type FieldValues } from "@/lib/project-templates";
+import { displayValue, defaultTemplate, typesOfProject, valuesOfType } from "@/lib/project-templates";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { publicBaseUrl } from "@/lib/twilio";
 import { buildContactMarkdownFiles } from "@/lib/contact-ai-export";
@@ -58,8 +58,10 @@ export async function buildProjectMarkdownFiles(
   });
   const contactName = contactPack?.contactName ?? "Client";
   const base = publicBaseUrl(options.origin);
-  const template = await getProjectTemplate(db, p.type).catch(() => defaultTemplate(p.type));
-  const answers = (p.customFields ?? {}) as FieldValues;
+  const types = typesOfProject(p);
+  const typeBlocks = await Promise.all(
+    types.map(async (type) => ({ type, template: await getProjectTemplate(db, type).catch(() => defaultTemplate(type)), answers: valuesOfType(p, type) }))
+  );
   const phaseName = (id: string | null) => p.phases.find((ph) => ph.id === id)?.name;
   const pending = Array.isArray(p.pendingPhases) ? (p.pendingPhases as { name?: string; tasks?: string[]; stage?: string }[]) : [];
 
@@ -70,7 +72,7 @@ export async function buildProjectMarkdownFiles(
     kv([
       ["Project", p.name],
       ["Client", `${contactName}${p.contact.email ? ` <${p.contact.email}>` : ""}`],
-      ["Type", p.type],
+      ["Types (in order)", types.join(", ")],
       ["Status", `${p.status}${p.lifecycleManaged ? " (managed by the project lifecycle)" : ""}`],
       ["Owner", p.owner?.name],
       ["Supervisor", p.supervisor?.name],
@@ -82,7 +84,9 @@ export async function buildProjectMarkdownFiles(
       ["Description", p.description],
     ])
   );
-  proj += section(`${p.type} details (custom fields)`, kv(template.fields.filter((f) => f.type !== "spacer").map((f) => [f.label, displayValue(answers[f.key])] as [string, unknown])));
+  for (const { type, template, answers } of typeBlocks) {
+    proj += section(`${type} details (custom fields)`, kv(template.fields.filter((f) => f.type !== "spacer").map((f) => [f.label, displayValue(answers[f.key])] as [string, unknown])));
+  }
   proj += section("Notes", clean(p.notes) || "_No notes._");
 
   proj += "## Phases & tasks (existing — do not duplicate)\n\n";

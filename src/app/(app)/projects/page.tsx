@@ -5,6 +5,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { typesOfProject } from "@/lib/project-templates";
 import { loadTypeInfo } from "@/lib/project-type-store";
 
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -166,7 +167,7 @@ export default async function ProjectsPage({
                   {[project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") ||
                     project.contact.email}
                 </p>
-                <p className="mt-2 text-xs text-soft">{typeLabels[project.type] ?? project.type}</p>
+                <p className="mt-2 text-xs text-soft">{typesOfProject(project).map((ty) => typeLabels[ty] ?? ty).join(" · ")}</p>
 
                 {project.tasks.length > 0 && (
                   <div className="mt-3">
@@ -235,7 +236,7 @@ export default async function ProjectsPage({
                       {[project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") ||
                         project.contact.email}
                     </td>
-                    <td className="px-4 py-3 text-ink/70">{typeLabels[project.type] ?? project.type}</td>
+                    <td className="px-4 py-3 text-ink/70">{typesOfProject(project).map((ty) => typeLabels[ty] ?? ty).join(" · ")}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[project.status]}`}>
                         {STATUS_LABELS[project.status]}

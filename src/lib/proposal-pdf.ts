@@ -22,7 +22,7 @@ export interface ProposalPdfData {
   company: { name: string; website: string; email?: string | null; gstNumber?: string | null; qstNumber?: string | null };
   client: { name: string; company?: string | null; email?: string | null; phone?: string | null; address?: string | null };
   project: { name: string; typeLabel: string; description?: string | null; startDate?: Date | null; dueDate?: Date | null };
-  details: { label: string; value: string }[]; // custom-field answers
+  details: { label: string; value: string; group?: string }[]; // custom-field answers (grouped by type)
   coverLetter?: string | null;
   plan: { name: string; tasks: string[] }[]; // phases to deliver, in order
   lineItems: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
@@ -444,7 +444,15 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   if (data.details.length > 0) {
     if (doc.getPageCount() === 1) lo.newPage(); // project details start on page 2
     lo.heading(t.details);
+    let lastGroup: string | undefined;
     for (const d of data.details) {
+      if (d.group && d.group !== lastGroup) {
+        lo.ensure(26);
+        lo.gap(4);
+        lo.text(d.group, MX, lo.y, { size: 10.5, font: bold, color: GREEN });
+        lo.gap(16);
+      }
+      lastGroup = d.group;
       const lines = lo.wrap(d.value, CONTENT_W - 150, 9.5, regular);
       lo.ensure(lines.length * 13 + 2);
       lo.text(d.label, MX, lo.y, { size: 9.5, font: bold, color: SOFT, maxWidth: 140 });

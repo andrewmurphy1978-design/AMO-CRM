@@ -12,6 +12,7 @@ import { getLinkedCalendarEvents, getEventLinkTargets } from "@/lib/calendar-lin
 import { getHour12 } from "@/lib/time-format";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import { typesOfProject } from "@/lib/project-templates";
 import { loadTypeInfo } from "@/lib/project-type-store";
 
 import { getDateLocale } from "@/lib/i18n/date-locale";
@@ -999,7 +1000,7 @@ export default async function ContactDetailPage({
                         <div className="min-w-0 space-y-0.5">
                           <p className="font-medium text-ink">{project.name}</p>
                           <p className="text-xs text-soft">
-                            <span className="uppercase tracking-wide text-ink">{t.projectForm.typeShort}:</span> {typeLabels[project.type] ?? project.type}
+                            <span className="uppercase tracking-wide text-ink">{t.projectForm.typeShort}:</span> {typesOfProject(project).map((ty) => typeLabels[ty] ?? ty).join(" · ")}
                           </p>
                           {project.owner && (
                             <p className="text-xs text-soft">

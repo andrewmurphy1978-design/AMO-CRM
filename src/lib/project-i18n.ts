@@ -6,6 +6,11 @@
 // Whole-string translations: field labels, option values, phase names, task titles.
 const EXACT: Record<string, string> = {
   // ---- answers
+  Brand: "Image de marque", "Mock-up approval by": "Maquette approuvée par",
+  "Create a brand for the client": "Créer l'image de marque du client", "Build mock-up": "Créer la maquette", "Present mock-up": "Présenter la maquette",
+  "Collect the client's existing brand assets": "Recueillir les éléments de marque existants du client", "Define the brand voice and style": "Définir la voix et le style de la marque",
+  "Create the logo": "Créer le logo", "Choose the colours and fonts": "Choisir les couleurs et les polices", "Create the brand guide": "Créer le guide de marque",
+  "Add the brand to the client's Brand card": "Ajouter la marque à la carte Marque du client",
   Yes: "Oui",
   No: "Non",
   // languages
@@ -75,7 +80,7 @@ const EXACT: Record<string, string> = {
 
   // ---- tasks without placeholders
   "Prepare the proposal": "Préparer la soumission", "Present (send) the proposal": "Présenter (envoyer) la soumission",
-  "Await the answer to the proposal": "Attendre la réponse à la soumission", "Receive the 1st instalment": "Recevoir le 1er versement",
+  "Await the answer to the proposal": "Attendre la réponse à la soumission", "Receive the 1st instalment": "Recevoir le 1er versement", "Receive the signed proposal and 1st instalment": "Recevoir la soumission signée et le 1er versement",
   "Find competitors": "Trouver les concurrents", "Take screenshots": "Prendre des captures d'écran", "Produce report": "Produire le rapport",
   "Build model": "Créer la maquette", "Present model": "Présenter la maquette", "Buy domain": "Acheter le domaine", "Migrate domain": "Migrer le domaine",
   "Present the work to the client": "Présenter le travail au client", "Collect feedback and approval": "Recueillir les commentaires et l'approbation",
@@ -122,6 +127,7 @@ const EXACT: Record<string, string> = {
 // Titles built from the answers: "{key}" stands for what was picked.
 const PATTERNS: [string, string][] = [
   ["Get model approval ({modelApprovalBy})", "Obtenir l'approbation de la maquette ({modelApprovalBy})"],
+  ["Get mock-up approval ({modelApprovalBy})", "Obtenir l'approbation de la maquette ({modelApprovalBy})"],
   ["Setup domain (DNS: {dnsProvider})", "Configurer le domaine (DNS : {dnsProvider})"],
   ["Create {app} account", "Créer le compte {app}"],
   ["Setup app ({app})", "Configurer l'application ({app})"],
@@ -203,9 +209,22 @@ export function frValue(text: string): string {
   return text.replace(TERM_RE, (m) => EXACT[m] ?? m);
 }
 
+import { getDict } from "@/lib/i18n/dictionaries";
+
+// "Website — Building Pages": translate each side (the left one is a project type name).
+const TYPE_EN_TO_FR: Record<string, string> = (() => {
+  const en = getDict("en").projectTypes as Record<string, string>;
+  const fr = getDict("fr").projectTypes as Record<string, string>;
+  const out: Record<string, string> = {};
+  for (const k of Object.keys(en)) if (fr[k]) out[en[k]] = fr[k];
+  return out;
+})();
+
 /** Translate a field label, option, phase name or task title. */
 export function frText(text: string): string {
   if (!text) return text;
+  const sep = text.indexOf(" — ");
+  if (sep > 0 && TYPE_EN_TO_FR[text.slice(0, sep)]) return `${TYPE_EN_TO_FR[text.slice(0, sep)]} — ${frText(text.slice(sep + 3))}`;
   const exact = EXACT[text];
   if (exact) return exact;
   for (const p of COMPILED) {

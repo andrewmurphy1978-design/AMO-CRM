@@ -11,7 +11,7 @@ import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { computeBillingTotals, contactTaxLocation, type LineItemInput } from "@/lib/billing-totals";
 import { getProjectTemplate } from "@/lib/project-template-store";
-import { displayValue, isFieldVisible, type FieldValues } from "@/lib/project-templates";
+import { displayValue, isFieldVisible, typesOfProject, valuesOfType } from "@/lib/project-templates";
 import { loadProposalPdfData } from "@/lib/document-data";
 import { buildProposalPdf } from "@/lib/proposal-pdf";
 import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
@@ -461,18 +461,23 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
     // the client (voice, preferences, background).
     let fullBrief = brief.trim();
     if (!fullBrief) {
-      const template = await getProjectTemplate(db, project.type);
-      const answers = (project.customFields ?? {}) as FieldValues;
-      const details = template.fields
-        .filter((f) => f.type !== "spacer")
-        .filter((f) => isFieldVisible(f, answers, template.fields))
-        .map((f) => `${f.label}: ${displayValue(answers[f.key])}`)
-        .filter((line) => !line.endsWith(": "));
+      const types = typesOfProject(project);
+      const details: string[] = [];
+      for (const type of types) {
+        const template = await getProjectTemplate(db, type);
+        const answers = valuesOfType(project, type);
+        const lines = template.fields
+          .filter((f) => f.type !== "spacer")
+          .filter((f) => isFieldVisible(f, answers, template.fields))
+          .map((f) => `${f.label}: ${displayValue(answers[f.key])}`)
+          .filter((line) => !line.endsWith(": "));
+        if (lines.length > 0) details.push(types.length > 1 ? `[${type}]` : "", ...lines);
+      }
       const voice = await db.contactBrandItem.findMany({ where: { contactId: project.contactId, category: "voice" }, select: { label: true, value: true } });
       fullBrief = [
-        `Project type: ${project.type}`,
+        `Project type${typesOfProject(project).length > 1 ? "s" : ""}: ${typesOfProject(project).join(", ")}`,
         project.description ? `Project description: ${project.description}` : "",
-        details.length ? `Project details:\n${details.join("\n")}` : "",
+        details.length ? `Project details:\n${details.filter(Boolean).join("\n")}` : "",
         project.contact.company ? `Client company: ${project.contact.company}` : "",
         project.contact.industry ? `Client industry: ${project.contact.industry}` : "",
         project.contact.aiDetails ? `Background about the client:\n${project.contact.aiDetails}` : "",

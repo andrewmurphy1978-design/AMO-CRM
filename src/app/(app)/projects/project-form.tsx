@@ -10,6 +10,7 @@ import PhaseList, { type PhaseRowData } from "./phase-list";
 import PageHeader from "../page-header";
 import CustomFieldsInputs from "./custom-fields-inputs";
 import { projectTypeOptions, type TemplateConfig } from "@/lib/project-templates";
+import ProjectTypesPicker from "@/components/project-types-picker";
 
 type ProjectFormValues = {
   id?: string;
@@ -18,6 +19,7 @@ type ProjectFormValues = {
   description?: string | null;
   status?: string;
   type?: string;
+  types?: string[];
   ownerId?: string | null;
   supervisorId?: string | null;
   startDate?: Date | string | null;
@@ -61,8 +63,7 @@ export default function ProjectForm({
   const t = getDict(lang);
   const router = useRouter();
 
-  const [type, setType] = useState(defaultValues?.type ?? "WEBSITE");
-  const typeFields = !defaultValues?.id ? (templates?.[type]?.fields ?? []) : [];
+  const [types, setTypes] = useState<string[]>(defaultValues?.types && defaultValues.types.length > 0 ? defaultValues.types : [defaultValues?.type ?? "WEBSITE"]);
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>(
     () => defaultValues?.teamMembers?.map((tm) => tm.userId) ?? []
   );
@@ -169,20 +170,11 @@ export default function ProjectForm({
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.type}</label>
-          <select
-            name="type"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-          >
-            {TYPES.map((ty) => (
-              <option key={ty.value} value={ty.value}>
-                {ty.label}
-              </option>
-            ))}
-          </select>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{lang === "fr" ? "Types de projet (dans l'ordre)" : "Project types (in order)"}</label>
+          <div className="mt-1">
+            <ProjectTypesPicker options={TYPES} initial={types} lang={lang} onChange={setTypes} />
+          </div>
         </div>
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.owner}</label>
@@ -233,17 +225,22 @@ export default function ProjectForm({
         <DateField label={t.projectForm.dueDate} name="dueDate" defaultValue={defaultValues?.dueDate} lang={lang} />
       </div>
 
-      {typeFields.length > 0 && (
-        <div className="space-y-3 rounded-xl border border-card-border p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-soft">{typeLabels[type] ?? type}</p>
-          <p className="text-xs text-soft">
-            {lang === "fr"
-              ? "Vos réponses créent automatiquement les phases et les tâches du projet."
-              : "Your answers automatically create the project's phases and tasks."}
-          </p>
-          <CustomFieldsInputs key={type} fields={typeFields} lang={lang} />
-        </div>
-      )}
+      {!defaultValues?.id &&
+        types.map((ty) => {
+          const fields = templates?.[ty]?.fields ?? [];
+          if (fields.length === 0) return null;
+          return (
+            <div key={ty} className="space-y-3 rounded-xl border border-card-border p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-soft">{typeLabels[ty] ?? ty}</p>
+              <p className="text-xs text-soft">
+                {lang === "fr"
+                  ? "Vos réponses créent automatiquement les phases et les tâches du projet."
+                  : "Your answers automatically create the project's phases and tasks."}
+              </p>
+              <CustomFieldsInputs fields={fields} lang={lang} prefix={`${ty}__`} />
+            </div>
+          );
+        })}
 
       {defaultValues?.id && defaultValues?.phases !== undefined && (
         <PhaseList

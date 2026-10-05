@@ -32,10 +32,6 @@ export interface FieldTpl {
   // While the field is hidden, leave its cell empty instead of letting the
   // next fields move up.
   keepSpace?: boolean;
-  // A Yes/No field that, when Yes, also creates a separate project of this
-  // type (e.g. Blog -> a "Blog building" project for the same client).
-  spawnType?: string;
-  spawnName?: string;
 }
 
 export interface TaskTpl {
@@ -223,20 +219,18 @@ export function planningPhase(): PhaseTpl {
       { title: "Prepare the proposal" },
       { title: "Present (send) the proposal" },
       { title: "Await the answer to the proposal" },
-      { title: "Receive the 1st instalment" },
+      { title: "Receive the signed proposal and 1st instalment" },
     ],
   };
 }
 
 export interface ProjectPlan {
   phases: { name: string; tasks: string[]; stage: PhaseStage }[];
-  spawns: { type: string; name: string }[];
 }
 
-// Turns a template + the answers into the phases/tasks to create, and the
-// extra projects to spawn. Phases with a false condition (or no tasks left
-// and a condition) are skipped.
-export function buildPlan(config: TemplateConfig, rawValues: FieldValues, projectName: string): ProjectPlan {
+// Turns a template + the answers into the phases/tasks to create. Phases with a
+// false condition are skipped.
+export function buildPlan(config: TemplateConfig, rawValues: FieldValues): ProjectPlan {
   const values = cleanValues(config, rawValues);
   const phases: ProjectPlan["phases"] = [];
   for (const phase of config.phases) {
@@ -248,13 +242,7 @@ export function buildPlan(config: TemplateConfig, rawValues: FieldValues, projec
     }
     phases.push({ name: tidy(phase.name), tasks: titles, stage: phase.stage ?? "ACTIVE" });
   }
-  const spawns: ProjectPlan["spawns"] = [];
-  for (const field of config.fields) {
-    if (field.spawnType && values[field.key] === "Y") {
-      spawns.push({ type: field.spawnType, name: field.spawnName?.trim() ? field.spawnName.replace("{project}", projectName) : `${projectName} – ${field.label}` });
-    }
-  }
-  return { phases, spawns };
+  return { phases };
 }
 
 // Defensive parse of a stored/submitted config.
@@ -286,7 +274,6 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
       ...(cond(f?.showIf) ? { showIf: cond(f?.showIf) } : {}),
       ...(f?.keepSpace && cond(f?.showIf) ? { keepSpace: true } : {}),
       ...(typeof f?.app === "boolean" ? { app: f.app } : {}),
-      ...(type === "yesno" && f?.spawnType ? { spawnType: str(f.spawnType), ...(f.spawnName ? { spawnName: str(f.spawnName) } : {}) } : {}),
     });
   }
   const phases: PhaseTpl[] = [];
@@ -328,9 +315,9 @@ function sharedBuildFields(domainLabel: string): FieldTpl[] {
     { key: "appSetup", label: "App setup", type: "yesno" },
     { key: "app", label: "App to use", type: "select", options: APPS, showIf: yes("appSetup") },
     { key: "research", label: "Research competition", type: "yesno" },
-    { key: "model", label: "Model", type: "yesno" },
-    { key: "modelApproval", label: "Model approval", type: "yesno", showIf: yes("model") },
-    { key: "modelApprovalBy", label: "Model approval by", type: "text", showIf: yes("modelApproval") },
+    { key: "model", label: "Mock-up", type: "yesno" },
+    { key: "modelApproval", label: "Mock-up approval", type: "yesno", showIf: yes("model") },
+    { key: "modelApprovalBy", label: "Mock-up approval by", type: "text", showIf: yes("modelApproval") },
     { key: "languages", label: "Languages", type: "languages", allowOther: true },
   ];
 }
@@ -343,12 +330,12 @@ function sharedPrepPhases(domainTask: string): PhaseTpl[] {
       tasks: [{ title: "Find competitors" }, { title: "Take screenshots" }, { title: "Produce report" }],
     },
     {
-      name: "Model",
+      name: "Mock-up",
       when: yes("model"),
       tasks: [
-        { title: "Build model" },
-        { title: "Present model", when: yes("modelApproval") },
-        { title: "Get model approval ({modelApprovalBy})", when: yes("modelApproval") },
+        { title: "Build mock-up" },
+        { title: "Present mock-up", when: yes("modelApproval") },
+        { title: "Get mock-up approval ({modelApprovalBy})", when: yes("modelApproval") },
       ],
     },
     {
@@ -379,8 +366,6 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
         options: ["Home Page", "Services Page", "Product Page", "About Page", "Contact Page", "Team Page"],
         allowOther: true,
       },
-      { key: "blog", label: "Blog", type: "yesno", spawnType: "BLOG", spawnName: "{project} – Blog" },
-      { key: "newsletters", label: "Newsletters", type: "yesno", spawnType: "NEWSLETTER", spawnName: "{project} – Newsletters" },
       { key: "forms", label: "Forms", type: "multiselect", options: ["Opt-In Forms", "Meeting Form", "Contact Form"], allowOther: true },
     ],
     phases: [
@@ -458,7 +443,6 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
         ],
         allowOther: true,
       },
-      { key: "postAutomation", label: "Post automation", type: "yesno", spawnType: "POST_AUTOMATION", spawnName: "{project} – Post automation" },
     ],
     phases: [
       { name: "Account Setup", when: filled("setup"), tasks: [{ title: "Set up {setup}", repeat: ["setup"] }] },
@@ -781,4 +765,106 @@ for (const template of Object.values(DEFAULT_TEMPLATES)) {
 
 export function defaultTemplate(type: string): TemplateConfig {
   return DEFAULT_TEMPLATES[type] ?? { fields: [], phases: [] };
+}
+
+// ---- multi-type projects ----------------------------------------------------
+
+// "Create a brand for the client": a Yes/No in every type's details. Any Yes adds
+// the (shared) Brand phase to the project.
+export const BRAND_FIELD: FieldTpl = { key: "brand", label: "Create a brand for the client", type: "yesno" };
+
+for (const type of PROJECT_TYPE_ORDER) {
+  const template = DEFAULT_TEMPLATES[type];
+  if (template && !template.fields.some((f) => f.key === BRAND_FIELD.key)) template.fields.push({ ...BRAND_FIELD });
+}
+
+// Saved (customized) templates predate the Brand question: add it when missing.
+export function withBrandField(config: TemplateConfig): TemplateConfig {
+  return config.fields.some((f) => f.key === BRAND_FIELD.key) ? config : { ...config, fields: [...config.fields, { ...BRAND_FIELD }] };
+}
+
+export const BRAND_PHASE_TASKS = [
+  "Collect the client's existing brand assets",
+  "Define the brand voice and style",
+  "Create the logo",
+  "Choose the colours and fonts",
+  "Create the brand guide",
+  "Add the brand to the client's Brand card",
+];
+
+export interface TypeInput {
+  type: string;
+  label: string;
+  template: TemplateConfig;
+  values: FieldValues;
+}
+
+type PlanPhase = ProjectPlan["phases"][number];
+
+const SHARED_NAMES: Record<string, string> = {
+  proposal: "Proposal",
+  research: "Research",
+  "mock-up": "Mock-up",
+  mockup: "Mock-up",
+  model: "Mock-up",
+  design: "Mock-up",
+  presenting: "Presenting",
+  deploying: "Deploying",
+  "final payment": "Final Payment",
+};
+
+// One project, several types of work: every type contributes its own phases, but
+// the shared ones — Proposal, Research, Brand, Mock-up, and the closing Presenting,
+// Deploying and Final Payment — appear once, with the tasks of every type merged.
+// Order: Proposal, planning (Research, Brand, Mock-up, then the types' own planning
+// phases), the types' building phases in the order of the types, Presenting,
+// Deploying, Final Payment.
+export function buildMultiPlan(inputs: TypeInput[]): ProjectPlan {
+  const multi = inputs.length > 1;
+  const shared = new Map<string, PlanPhase>();
+  const own: PlanPhase[] = [];
+  let brand = false;
+
+  for (const input of inputs) {
+    const values = cleanValues(input.template, input.values);
+    if (values[BRAND_FIELD.key] === "Y") brand = true;
+    for (const phase of buildPlan(input.template, values).phases) {
+      const key = SHARED_NAMES[phase.name.trim().toLowerCase()];
+      if (key) {
+        const existing = shared.get(key);
+        if (!existing) shared.set(key, { ...phase, name: key, tasks: [...phase.tasks] });
+        else for (const t of phase.tasks) if (!existing.tasks.includes(t)) existing.tasks.push(t);
+      } else {
+        own.push({ ...phase, name: multi ? `${input.label} — ${phase.name}` : phase.name });
+      }
+    }
+  }
+
+  const pick = (name: string) => (shared.has(name) ? [shared.get(name)!] : []);
+  const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: [...BRAND_PHASE_TASKS] }] : [];
+  const phases: PlanPhase[] = [
+    ...pick("Proposal"),
+    ...pick("Research"),
+    ...brandPhase,
+    ...pick("Mock-up"),
+    ...own.filter((p) => p.stage === "PLANNING"),
+    ...own.filter((p) => p.stage === "ACTIVE"),
+    ...own.filter((p) => p.stage === "PROPOSAL" || p.stage === "FINAL"),
+    ...pick("Presenting"),
+    ...pick("Deploying"),
+    ...pick("Final Payment"),
+  ];
+  return { phases };
+}
+
+/** The types of a project in order (falls back to the single legacy `type`). */
+export function typesOfProject(p: { type: string; types?: string[] | null }): string[] {
+  return p.types && p.types.length > 0 ? p.types : [p.type];
+}
+
+/** One type's answers from a project's `typeFields` (legacy `customFields` for its first type). */
+export function valuesOfType(p: { type: string; typeFields?: unknown; customFields?: unknown }, type: string): FieldValues {
+  const tf = (p.typeFields ?? null) as Record<string, FieldValues> | null;
+  if (tf && tf[type]) return tf[type];
+  return type === p.type ? ((p.customFields ?? {}) as FieldValues) : {};
 }

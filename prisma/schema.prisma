@@ -922,6 +922,10 @@ model Project {
   subscriptions    ProjectSubscription[]
   status           ProjectStatus @default(PLANNING)
   type             String        @default("OTHER")
+  // Every type of work in this project, in the order chosen (the first is also `type`).
+  types            String[]      @default([])
+  // The answers to each type's details: { TYPE: { fieldKey: value } }.
+  typeFields       Json?
 
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
