@@ -301,26 +301,45 @@ class Layout {
     fn();
   }
 
-  // A cover letter: it can start right under the overview and flow over the page break, but
-  // the last paragraph and the sign-off after it (short closing lines) always stay together.
+  // A cover letter (any language, any line-break style): it can start right under the overview and
+  // flow over the page break, but the last paragraph and the sign-off after it (the short closing
+  // lines: "Best regards, / Name / Company") always stay together on one page.
   letter(text: string, size = 10) {
-    const paras = text.replace(/\r\n?/g, "\n").split(/\n[ \t]*\n+/).map((x) => x.trim()).filter(Boolean);
-    const lineCount = (x: string) => this.wrap(x, CONTENT_W, size, this.regular).length;
-    let tail = paras.length;
-    // trailing short paragraphs (the signature), then the paragraph before them
-    while (tail > 1 && paras.length - tail < 3 && paras[tail - 1].length < 100 && lineCount(paras[tail - 1]) <= 3) tail--;
-    if (tail > 1) tail--;
-    tail = Math.max(0, Math.min(tail, paras.length - 1));
-    paras.slice(0, tail).forEach((x) => {
+    const lines = text.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ").split("\n").map((l) => l.replace(/\s+$/, ""));
+    while (lines.length > 0 && !lines[lines.length - 1].trim()) lines.pop();
+    // The sign-off: trailing short lines (at most 5 non-blank), blank lines in between allowed.
+    let sig = lines.length;
+    let filled = 0;
+    while (sig > 0) {
+      const l = lines[sig - 1];
+      if (!l.trim()) sig--;
+      else if (l.trim().length < 60 && filled < 5) {
+        filled++;
+        sig--;
+      } else break;
+    }
+    if (sig === 0) sig = lines.length; // nothing but short lines: treat it all as body
+    const signoff = lines.slice(sig);
+    // Body paragraphs: separated by blank lines; with no blank lines at all, one paragraph per line.
+    const bodyText = lines.slice(0, sig).join("\n").trim();
+    const blocks = bodyText ? bodyText.split(/\n[ \t]*\n+/).map((x) => x.trim()).filter(Boolean) : [];
+    const paras = blocks.length === 1 && blocks[0].includes("\n") ? blocks[0].split("\n").map((x) => x.trim()).filter(Boolean) : blocks;
+    const last = paras.length > 1 ? paras.length - 1 : 0;
+    paras.slice(0, last).forEach((x) => {
       this.paragraph(x, { size });
       this.gap(6);
     });
-    this.keep(() =>
-      paras.slice(tail).forEach((x) => {
+    this.keep(() => {
+      paras.slice(last).forEach((x) => {
         this.paragraph(x, { size });
         this.gap(6);
-      })
-    );
+      });
+      signoff.forEach((l) => {
+        if (l.trim()) this.paragraph(l.trim(), { size });
+        else this.gap(6);
+      });
+      this.gap(6);
+    });
   }
 
   ensure(h: number) {
