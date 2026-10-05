@@ -40,17 +40,18 @@ function clientBlock(c: {
   billingCountry: string | null;
   billingContactName: string | null;
   billingEmail: string | null;
-}) {
-  const useBilling = Boolean(c.billingAddress || c.billingCity);
+}, billing: boolean) {
+  // The billing address / contact / email are for invoices only; proposals use the main ones.
+  const useBilling = billing && Boolean(c.billingAddress || c.billingCity);
   const [street, city, state, zip, country] = useBilling
     ? [c.billingAddress, c.billingCity, c.billingState, c.billingZip, c.billingCountry]
     : [c.address, c.city, c.state, c.zip, c.country];
   // Street on the first line, "City Province Postal code" on the second, country third.
   const addr = [street, [city, state, zip].filter(Boolean).join(" "), country].filter(Boolean).join("\n");
   return {
-    name: c.billingContactName || [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || "",
+    name: (billing && c.billingContactName) || [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || "",
     company: c.company,
-    email: c.billingEmail || c.email,
+    email: (billing && c.billingEmail) || c.email,
     phone: c.phone,
     address: addr,
   };
@@ -77,7 +78,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   // "Prepared for": the chosen recipient (a linked contact, a specific email / address) or the client.
   const recipient = proposal.recipientContactId && proposal.recipientContactId !== project.contactId ? await db.contact.findUnique({ where: { id: proposal.recipientContactId } }) : null;
   const client = {
-    ...clientBlock(recipient ?? project.contact),
+    ...clientBlock(recipient ?? project.contact, false),
     ...(proposal.recipientEmail ? { email: proposal.recipientEmail } : {}),
     ...(proposal.recipientAddress ? { address: proposal.recipientAddress } : {}),
   };
@@ -178,7 +179,7 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     paidAt: invoice.paidAt,
     currency: invoice.currency,
     company: { ...COMPANY, gstNumber: settings.gstNumber, qstNumber: settings.qstNumber },
-    client: clientBlock(project.contact),
+    client: clientBlock(project.contact, true),
     projectName: project.name,
     instalmentLabel,
     lineItems: invoice.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),

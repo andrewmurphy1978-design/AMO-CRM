@@ -630,7 +630,7 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
     return {
       subject,
       html: letterHtml + callHtml + payHtml,
-      to: proposal.recipientEmail || (recipient ? recipient.email || recipient.email2 || recipient.extraEmails[0] : null) || c.billingEmail || c.email || c.email2 || c.extraEmails[0] || null,
+      to: proposal.recipientEmail || (recipient ? recipient.email || recipient.email2 || recipient.extraEmails[0] : null) || c.email || c.email2 || c.extraEmails[0] || c.billingEmail || null,
       attachment: { filename: pdfData.fileName, mimeType: "application/pdf", base64: toBase64(pdf) },
     };
   });

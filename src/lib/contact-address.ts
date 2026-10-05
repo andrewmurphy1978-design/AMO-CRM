@@ -11,10 +11,10 @@ export interface AddressFields {
   billingCountry: string | null;
 }
 
-// Street / "City Province Postal code" / country, one per line — the billing address when
-// the contact has one, else the main address.
-export function contactAddress(c: AddressFields): string {
-  const useBilling = Boolean(c.billingAddress || c.billingCity);
+// Street / "City Province Postal code" / country, one per line — the main address (the
+// billing address is for invoices only, so pass `billing: true` to prefer it).
+export function contactAddress(c: AddressFields, billing = false): string {
+  const useBilling = billing && Boolean(c.billingAddress || c.billingCity);
   const [street, city, state, zip, country] = useBilling ? [c.billingAddress, c.billingCity, c.billingState, c.billingZip, c.billingCountry] : [c.address, c.city, c.state, c.zip, c.country];
   return [street, [city, state, zip].filter(Boolean).join(" "), country].filter(Boolean).join("\n");
 }

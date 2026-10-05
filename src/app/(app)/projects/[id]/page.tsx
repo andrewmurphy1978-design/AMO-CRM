@@ -260,7 +260,7 @@ export default async function ProjectDetailPage({
     name: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.company || c.email || "—",
     company: c.company,
     relation,
-    emails: [...new Set([c.billingEmail, c.email, c.email2, ...c.extraEmails].filter((e): e is string => Boolean(e)))],
+    emails: [...new Set([c.email, c.email2, ...c.extraEmails, c.billingEmail].filter((e): e is string => Boolean(e)))],
     address: contactAddress(c),
   });
   const recipients: RecipientOption[] = [
