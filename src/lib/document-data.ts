@@ -1,4 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { getStripeConfig, payLinkFor } from "@/lib/stripe";
+import { publicBaseUrl } from "@/lib/twilio";
 import { jurisdictionOf } from "@/lib/jurisdiction";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getProjectTemplate } from "@/lib/project-template-store";
@@ -196,6 +198,8 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     };
   }
   const jurisdiction = jurisdictionOf(((invoiceRecipient ?? project.contact).billingCountry && (invoiceRecipient ?? project.contact).billingCity ? (invoiceRecipient ?? project.contact).billingCountry : (invoiceRecipient ?? project.contact).country) ?? null);
+  const payBase = publicBaseUrl();
+  const payUrl = payBase && invoice.status !== "PAID" && (await getStripeConfig(db)) ? await payLinkFor(payBase, invoice.id) : null;
   const billed = await db.projectSupplierInvoice.findMany({ where: { billedInvoiceId: invoice.id } });
   const attachments: PdfAttachment[] = billed
     .filter((c) => c.fileData && c.fileMime)
@@ -219,6 +223,7 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     instalmentLabel,
     instalment,
     jurisdiction,
+    payUrl,
     lineItems: invoice.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
     attachments,
     totals: { subtotal: invoice.subtotal, gst: invoice.gstAmount, qst: invoice.qstAmount, hst: invoice.hstAmount, total: invoice.taxAmount },

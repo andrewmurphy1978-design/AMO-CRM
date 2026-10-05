@@ -8,6 +8,7 @@ import ContactDataFixesForm from "./contact-data-fixes-form";
 import IonosMailboxForm from "./ionos-mailbox-form";
 import SystemeIoForm from "./systeme-io-form";
 import AnthropicKeyForm from "./anthropic-key-form";
+import StripeForm from "./stripe-form";
 import TwilioForm from "./twilio-form";
 import GoogleTasksControls from "./google-tasks-controls";
 import { getTwilioConfig, publicBaseUrl } from "@/lib/twilio";
@@ -85,6 +86,7 @@ export default async function SettingsPage({
     integration,
     makeIntegration,
     anthropicIntegration,
+    stripeIntegration,
     twilioConfig,
     shortioIntegration,
     bufferSettings,
@@ -138,6 +140,7 @@ export default async function SettingsPage({
       const anthropicIntegration = await db.integrationSetting.findUnique({
         where: { provider: "anthropic" },
       });
+      const stripeIntegration = isAdmin ? await db.integrationSetting.findUnique({ where: { provider: "stripe" } }) : null;
       const twilioConfig = isAdmin ? await getTwilioConfig(db) : null;
       const shortioIntegration = await db.integrationSetting.findUnique({
         where: { provider: "shortio" },
@@ -173,6 +176,7 @@ export default async function SettingsPage({
         integration,
         makeIntegration,
         anthropicIntegration,
+        stripeIntegration,
         twilioConfig,
         shortioIntegration,
         bufferSettings,
@@ -507,6 +511,19 @@ export default async function SettingsPage({
       <SettingsCard title={t.anthropicKey.title} description={t.anthropicKey.description}>
         <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} lang={lang} />
       </SettingsCard>
+      {isAdmin && (
+        <SettingsCard
+          title={lang === "fr" ? "Paiements par carte (Stripe)" : "Card payments (Stripe)"}
+          description={lang === "fr" ? "Page de paiement pour les versements : le client paie par carte et la facture est marquée payée automatiquement." : "A payment page for the instalments: the client pays by card and the invoice is marked paid automatically."}
+        >
+          <StripeForm
+            connected={Boolean(stripeIntegration?.apiKeyEncrypted)}
+            webhookSet={Boolean((stripeIntegration?.metadata as { webhookSecretEnc?: string } | null)?.webhookSecretEnc)}
+            webhookUrl={`${publicBaseUrl() ?? "https://your-crm-address"}/api/stripe/webhook`}
+            lang={lang}
+          />
+        </SettingsCard>
+      )}
       {isAdmin && (
         <SettingsCard title={t.twilioSettings.title} description={t.twilioSettings.description}>
           <TwilioForm

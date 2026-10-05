@@ -1,4 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { getStripeConfig, payLinkFor } from "@/lib/stripe";
+import { publicBaseUrl } from "@/lib/twilio";
 import { loadInvoicePdfData } from "@/lib/document-data";
 import { buildInvoicePdf } from "@/lib/proposal-pdf";
 
@@ -40,7 +42,13 @@ export async function buildInvoiceEmail(db: PrismaClient, invoiceId: string, pro
 
   const methods: string[] = [];
   if (settings.interacEmail) methods.push(fr ? `Virement Interac à <strong>${esc(settings.interacEmail)}</strong>` : `Interac e-Transfer to <strong>${esc(settings.interacEmail)}</strong>`);
-  if (settings.cardPaymentUrl) methods.push(fr ? `Carte de crédit : <a href="${esc(settings.cardPaymentUrl)}">payer en ligne</a>` : `Credit card: <a href="${esc(settings.cardPaymentUrl)}">pay online</a>`);
+  // Stripe connected: the card payment goes through the CRM's own pay page for this invoice.
+  const base = publicBaseUrl();
+  const stripeOn = !paid && base ? Boolean(await getStripeConfig(db)) : false;
+  if (stripeOn && base) {
+    const link = await payLinkFor(base, invoiceId);
+    methods.push(fr ? `Carte de crédit, Apple Pay ou Google Pay : <a href="${esc(link)}"><strong>payer en ligne de façon sécurisée</strong></a>` : `Credit card, Apple Pay or Google Pay: <a href="${esc(link)}"><strong>pay securely online</strong></a>`);
+  } else if (settings.cardPaymentUrl) methods.push(fr ? `Carte de crédit : <a href="${esc(settings.cardPaymentUrl)}">payer en ligne</a>` : `Credit card: <a href="${esc(settings.cardPaymentUrl)}">pay online</a>`);
 
   const subject = `${fr ? "Facture" : "Invoice"} ${invoice.number ?? ""} — ${invoice.project.name}${paid ? (fr ? " (payée)" : " (paid)") : ""}`.replace(/\s{2,}/g, " ");
   let html: string;

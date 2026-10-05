@@ -321,3 +321,32 @@ export async function disconnectTwilio(): Promise<void> {
   await withScopedPrismaClient((db) => db.integrationSetting.deleteMany({ where: { provider: "twilio" } }));
   revalidatePath("/settings");
 }
+
+// Stripe card payments: the secret key and the webhook signing secret, both encrypted. A field left
+// empty keeps what is already saved.
+export async function saveStripeSettings(
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
+  const session = await requireAdmin();
+  const fr = session.user.language === "FR";
+  const secretKey = String(formData.get("secretKey") ?? "").trim();
+  const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
+  if (secretKey && !/^(sk|rk)_(live|test)_/.test(secretKey)) return { error: fr ? "La clé secrète doit commencer par sk_live_ ou sk_test_." : "The secret key should start with sk_live_ or sk_test_." };
+  if (webhookSecret && !webhookSecret.startsWith("whsec_")) return { error: fr ? "Le secret du webhook doit commencer par whsec_." : "The webhook secret should start with whsec_." };
+
+  await withScopedPrismaClient(async (db) => {
+    const existing = await db.integrationSetting.findUnique({ where: { provider: "stripe" } });
+    if (!existing && !secretKey) return;
+    const meta = ((existing?.metadata ?? {}) as { webhookSecretEnc?: string });
+    const next = { ...meta, ...(webhookSecret ? { webhookSecretEnc: await encryptSecret(webhookSecret) } : {}) };
+    const apiKeyEncrypted = secretKey ? await encryptSecret(secretKey) : existing?.apiKeyEncrypted;
+    await db.integrationSetting.upsert({
+      where: { provider: "stripe" },
+      update: { apiKeyEncrypted, metadata: next },
+      create: { provider: "stripe", apiKeyEncrypted, metadata: next },
+    });
+  });
+  revalidatePath("/settings");
+  return { success: fr ? "Paramètres Stripe enregistrés." : "Stripe settings saved." };
+}

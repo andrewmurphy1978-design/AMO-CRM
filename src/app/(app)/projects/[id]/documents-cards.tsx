@@ -1,5 +1,6 @@
 "use client";
 
+import PayLinkButton from "./pay-link-button";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Card, { CARD_COLORS } from "@/components/section-card";
@@ -592,6 +593,7 @@ export function InvoicesCard({
               router.refresh();
             }}
           />
+          <PayLinkButton invoiceId={editing.id} lang={lang} />
           <DocumentLinks kind="invoice" docId={editing.id} projectId={projectId} linkables={linkables} lang={lang} />
         </Modal>
       )}

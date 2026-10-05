@@ -772,6 +772,8 @@ export interface InvoicePdfData {
   } | null;
   // The client's country decides the wording and the legal notices: Canada, US, UK, France.
   jurisdiction?: "CA" | "US" | "GB" | "FR" | "OTHER";
+  // The client's online card-payment page (when Stripe is connected and the invoice isn't paid).
+  payUrl?: string | null;
   lineItems: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
   attachments?: PdfAttachment[];
   totals: { subtotal: number; gst: number; qst: number; hst: number; total: number };
@@ -929,6 +931,15 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Uint8Array>
   }
   lo.heading(t.payment);
   lo.paragraph(t.paymentBody);
+  if (data.payUrl) {
+    lo.gap(4);
+    lo.paragraph(data.lang === "fr" ? "Payer en ligne par carte (lien sécurisé) :" : "Pay online by card (secure link):", { font: bold });
+    for (let i = 0; i < data.payUrl.length; i += 78) {
+      lo.ensure(10);
+      lo.text(data.payUrl.slice(i, i + 78), MX, lo.y, { size: 7, color: SOFT });
+      lo.gap(10);
+    }
+  }
   if (data.notes) {
     lo.heading(t.notes);
     lo.paragraph(data.notes);
