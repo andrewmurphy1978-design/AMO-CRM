@@ -172,6 +172,7 @@ interface NewProjectInput {
   teamMemberIds: string[];
   startDate?: Date;
   dueDate?: Date;
+  subscriptionEmail?: string | null;
   userId: string;
   userName: string;
   // One entry per selected type, in order, with that type's template and answers.
@@ -199,6 +200,7 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
       supervisorId: input.supervisorId,
       startDate: input.startDate,
       dueDate: input.dueDate,
+      subscriptionEmail: input.subscriptionEmail ?? null,
       typeFields: typeFields as never,
       lifecycleManaged: managed,
       createBrand: input.createBrand,
@@ -364,8 +366,10 @@ export async function createProject(
       userName: session.user.name ?? "",
       name: data.name,
       description: data.description,
-      startDate: data.startDate ? new Date(data.startDate) : undefined,
+      // The start date is today unless one was chosen.
+      startDate: data.startDate ? new Date(data.startDate) : new Date(),
       dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      subscriptionEmail: String(formData.get("subscriptionEmail") ?? "").trim() || null,
       types,
       ...readSettings(formData),
     });
@@ -409,6 +413,7 @@ export async function updateProject(
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        subscriptionEmail: String(formData.get("subscriptionEmail") ?? "").trim() || null,
       },
     });
     await applyTypeChanges(db, projectId, data.types);

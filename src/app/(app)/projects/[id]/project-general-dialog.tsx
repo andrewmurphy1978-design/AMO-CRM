@@ -6,6 +6,7 @@ import { CARD_COLORS } from "@/components/section-card";
 import { projectTypeOptions } from "@/lib/project-templates";
 import ProjectTypesPicker from "@/components/project-types-picker";
 import BrandFields from "@/components/brand-fields";
+import SubscriptionEmailField from "@/components/subscription-email-field";
 import SectionDialog, { EditCardButton } from "../../contacts/[id]/section-dialog";
 
 const FIELD_CLASS =
@@ -53,6 +54,7 @@ export default function ProjectGeneralDialog({
 }) {
   const t = getDict(lang);
   const [open, setOpen] = useState(false);
+  const [typeCount, setTypeCount] = useState(Math.max(values.types.length, 1));
 
   return (
     <>
@@ -72,9 +74,11 @@ export default function ProjectGeneralDialog({
         </div>
 
         <div>
-          <label className={LABEL_CLASS}>{lang === "fr" ? "Types de projet (dans l'ordre)" : "Project types (in order)"}</label>
+          <label className={LABEL_CLASS}>
+            {typeCount > 1 ? (lang === "fr" ? "Types de projet (dans l'ordre)" : "Project types (in order)") : lang === "fr" ? "Type de projet" : "Project type"}
+          </label>
           <div className="mt-1">
-            <ProjectTypesPicker options={projectTypeOptions(typeLabels, values.type, customTypeKeys)} initial={values.types.length > 0 ? values.types : [values.type]} lang={lang} />
+            <ProjectTypesPicker options={projectTypeOptions(typeLabels, values.type, customTypeKeys)} initial={values.types.length > 0 ? values.types : [values.type]} lang={lang} onChange={(ts) => setTypeCount(ts.length)} />
           </div>
         </div>
 
@@ -168,13 +172,12 @@ export default function ProjectGeneralDialog({
               <option value="CLIENT">{lang === "fr" ? "Le client gère ses propres accès (ajoute une phase de formation)" : "Client controls their own credentials (adds a Training phase)"}</option>
               <option value="MANAGED">{lang === "fr" ? "Je gère un sous-compte (frais mensuels d'hébergement, mises à jour et soutien)" : "I manage a sub-account (monthly hosting, update & support fee)"}</option>
             </select>
+            <div className="mt-3">
+              <SubscriptionEmailField contactId={values.contactId} defaultValue={values.subscriptionEmail} lang={lang} />
+            </div>
           </div>
         </div>
 
-        <div>
-          <label className={LABEL_CLASS}>{lang === "fr" ? "Courriel à utiliser pour les abonnements" : "Email to use for subscriptions"}</label>
-          <input type="email" name="subscriptionEmail" defaultValue={values.subscriptionEmail} className={FIELD_CLASS} />
-        </div>
         <div>
           <label className={LABEL_CLASS}>{t.projectForm.description}</label>
           <textarea name="description" rows={4} defaultValue={values.description} className={FIELD_CLASS} />

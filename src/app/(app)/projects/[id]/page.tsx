@@ -640,7 +640,7 @@ export default async function ProjectDetailPage({
                 <p className="mt-1 text-sm text-ink">{STATUS_LABELS[project.status]}</p>
               </div>
               <div>
-                <p className={LABEL_CLASS}>{t.projects.colType}</p>
+                <p className={LABEL_CLASS}>{typesOfProject(project).length > 1 ? "Types" : t.projects.colType}</p>
                 <p className="mt-1 text-sm text-ink">{typesOfProject(project).map((ty) => typeLabels[ty] ?? ty).join(" · ")}</p>
               </div>
               <div>
@@ -693,13 +693,11 @@ export default async function ProjectDetailPage({
                       ? lang === "fr" ? "Sous-compte géré (frais mensuels)" : "Managed sub-account (monthly fee)"
                       : "—"}
                 </p>
+                <p className={`${LABEL_CLASS} mt-3`}>{lang === "fr" ? "Courriel à utiliser pour les abonnements" : "Email to use for subscriptions"}</p>
+                <p className="mt-1 text-sm text-ink">{project.subscriptionEmail || "—"}</p>
               </div>
             </div>
 
-            <div className="mt-4">
-              <p className={LABEL_CLASS}>{lang === "fr" ? "Courriel à utiliser pour les abonnements" : "Email to use for subscriptions"}</p>
-              <p className="mt-1 text-sm text-ink">{project.subscriptionEmail || "—"}</p>
-            </div>
 
             {project.description && (
               <div className="mt-4">

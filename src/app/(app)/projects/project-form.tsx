@@ -12,6 +12,7 @@ import CustomFieldsInputs from "./custom-fields-inputs";
 import { projectTypeOptions, type TemplateConfig } from "@/lib/project-templates";
 import ProjectTypesPicker from "@/components/project-types-picker";
 import BrandFields from "@/components/brand-fields";
+import SubscriptionEmailField from "@/components/subscription-email-field";
 
 type ProjectFormValues = {
   id?: string;
@@ -67,6 +68,7 @@ export default function ProjectForm({
   const t = getDict(lang);
   const router = useRouter();
 
+  const [contactId, setContactId] = useState(defaultValues?.contactId ?? "");
   const [types, setTypes] = useState<string[]>(defaultValues?.types && defaultValues.types.length > 0 ? defaultValues.types : [defaultValues?.type ?? "WEBSITE"]);
   const [teamMemberIds, setTeamMemberIds] = useState<string[]>(
     () => defaultValues?.teamMembers?.map((tm) => tm.userId) ?? []
@@ -147,7 +149,8 @@ export default function ProjectForm({
           <select
             name="contactId"
             required
-            defaultValue={defaultValues?.contactId ?? ""}
+            value={contactId}
+            onChange={(e) => setContactId(e.target.value)}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           >
             <option value="" disabled>
@@ -175,7 +178,7 @@ export default function ProjectForm({
           </select>
         </div>
         <div className="sm:col-span-2">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{lang === "fr" ? "Types de projet (dans l'ordre)" : "Project types (in order)"}</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{types.length > 1 ? (lang === "fr" ? "Types de projet (dans l'ordre)" : "Project types (in order)") : lang === "fr" ? "Type de projet" : "Project type"}</label>
           <div className="mt-1">
             <ProjectTypesPicker options={TYPES} initial={types} lang={lang} onChange={setTypes} />
           </div>
@@ -239,6 +242,9 @@ export default function ProjectForm({
               <option value="CLIENT">{lang === "fr" ? "Le client gère ses propres accès (ajoute une phase de formation)" : "Client controls their own credentials (adds a Training phase)"}</option>
               <option value="MANAGED">{lang === "fr" ? "Je gère un sous-compte (frais mensuels d'hébergement, mises à jour et soutien)" : "I manage a sub-account (monthly hosting, update & support fee)"}</option>
             </select>
+            <div className="mt-3">
+              <SubscriptionEmailField contactId={contactId} defaultValue={(defaultValues as { subscriptionEmail?: string | null } | undefined)?.subscriptionEmail ?? ""} lang={lang} />
+            </div>
           </div>
         </div>
 
