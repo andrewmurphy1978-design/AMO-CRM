@@ -189,6 +189,7 @@ export function ProposalsCard({
   const router = useRouter();
   const [dialog, setDialog] = useState<{ id: string | null; key: number } | null>(null);
   const [linksFor, setLinksFor] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<{ id: string; issues: string[] } | null>(null);
   const [saving, setSaving] = useState(false);
   const [pending, startTransition] = useTransition();
   const run = (fn: () => Promise<unknown>) =>
@@ -254,7 +255,13 @@ export function ProposalsCard({
                   </button>
                 )}
                 {p.status === "DRAFT" && (
-                  <button type="button" disabled={pending} onClick={() => run(() => approveProposal(p.id, projectId))} className="rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
+                  <button type="button" disabled={pending} onClick={() =>
+                    run(async () => {
+                      setBlocked(null);
+                      const res = await approveProposal(p.id, projectId);
+                      if (res.error) setBlocked({ id: p.id, issues: res.issues ?? [res.error] });
+                    })
+                  } className="rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50">
                     {fr ? "Approuver" : "Approve"}
                   </button>
                 )}
@@ -285,6 +292,16 @@ export function ProposalsCard({
                   </>
                 )}
               </div>
+              {blocked && blocked.id === p.id && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                  <p className="font-semibold">{fr ? "Impossible d'approuver : il manque des informations" : "Can't approve: information is missing"}</p>
+                  <ul className="mt-1 list-disc pl-4">
+                    {blocked.issues.map((m) => (
+                      <li key={m}>{m}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </li>
           ))}
         </ul>

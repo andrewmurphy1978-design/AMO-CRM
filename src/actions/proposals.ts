@@ -14,6 +14,7 @@ import { getProjectTemplate } from "@/lib/project-template-store";
 import { displayValue, isFieldVisible, typesOfProject, valuesOfType } from "@/lib/project-templates";
 import { loadProposalPdfData } from "@/lib/document-data";
 import { buildProposalPdf } from "@/lib/proposal-pdf";
+import { proposalIssues } from "@/lib/proposal-check";
 import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
 
 const ProposalSchema = z.object({
@@ -379,6 +380,7 @@ export async function updateFullProposal(
   const subscriptions = readSubscriptions(formData);
 
   let locked = false;
+  let missing: string[] = [];
   await withScopedPrismaClient(async (db) => {
     const existing = await db.proposal.findUniqueOrThrow({ where: { id: proposalId } });
     // Once the proposal has gone to the client it can no longer be edited.
@@ -428,11 +430,21 @@ export async function updateFullProposal(
       });
     }
 
+    // A proposal can only be marked sent / accepted when nothing important is missing.
+    if (data.status === "SENT" || data.status === "ACCEPTED") {
+      missing = await proposalIssues(db, proposalId, session.user.language === "FR" ? "fr" : "en");
+      if (missing.length > 0) {
+        await db.proposal.update({ where: { id: proposalId }, data: { status: "DRAFT", approvedAt: null, sentAt: null, respondedAt: null } });
+        revalidateBoth(data.projectId, project.contactId);
+        return;
+      }
+    }
     if (data.status === "ACCEPTED") await onProposalAccepted(db, data.projectId);
 
     revalidateBoth(data.projectId, project.contactId);
   });
 
+  if (missing.length > 0) return { error: `${session.user.language === "FR" ? "Soumission enregistrée comme brouillon : il manque des informations — " : "Saved as a draft: information is missing — "}${missing.join(" ")}` };
   if (locked) return { error: "This proposal is approved or sent — return it to draft to edit it." };
   revalidatePath(`/projects/${data.projectId}/proposals/${proposalId}`);
   return { success: t.actions.proposalUpdated };
@@ -506,15 +518,21 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
 // ---- internal approval, then send
 
 // Sign-off before anything goes to the client.
-export async function approveProposal(proposalId: string, projectId: string) {
+// Refuses (with the list of what is missing) while important information is still blank.
+export async function approveProposal(proposalId: string, projectId: string): Promise<{ error?: string; issues?: string[] }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
-  const contactId = await withScopedPrismaClient(async (db) => {
+  const fr = session.user.language === "FR";
+  const result = await withScopedPrismaClient(async (db) => {
+    const issues = await proposalIssues(db, proposalId, fr ? "fr" : "en");
+    if (issues.length > 0) return { issues } as const;
     await db.proposal.update({ where: { id: proposalId }, data: { status: "APPROVED", approvedAt: new Date() } });
     await setProposalTask(db, projectId, PREPARE_TASK, true);
-    return contactIdForProject(db, projectId);
+    return { contactId: await contactIdForProject(db, projectId) } as const;
   });
-  revalidateBoth(projectId, contactId);
+  if ("issues" in result) return { error: fr ? "La soumission ne peut pas être approuvée : il manque des informations." : "The proposal can't be approved: information is missing.", issues: result.issues };
+  revalidateBoth(projectId, result.contactId);
+  return {};
 }
 
 export async function unapproveProposal(proposalId: string, projectId: string) {
@@ -553,6 +571,8 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
     if (!proposal || proposal.projectId !== projectId) return { error: "Proposal not found." };
     if (!proposal.approvedAt) return { error: "Approve the proposal before sending it." };
     if (proposal.status !== "DRAFT" && proposal.status !== "APPROVED") return { error: "This proposal has already been sent." };
+    const issues = await proposalIssues(db, proposalId, (proposal.project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en");
+    if (issues.length > 0) return { error: `Information is missing: ${issues.join(" ")}` };
 
     const pdfData = await loadProposalPdfData(db, projectId, proposalId);
     if (!pdfData) return { error: "Couldn't build the proposal PDF." };
