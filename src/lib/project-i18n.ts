@@ -6,6 +6,7 @@
 // Whole-string translations: field labels, option values, phase names, task titles.
 const EXACT: Record<string, string> = {
   // ---- answers
+  "2nd Instalment": "2e versement", "Send the 2nd instalment invoice": "Envoyer la facture du 2e versement", "Await the 2nd instalment payment": "Attendre le paiement du 2e versement",
   Brand: "Image de marque", "Mock-up approval by": "Maquette approuvée par",
   "Create a brand for the client": "Créer l'image de marque du client", "Build mock-up": "Créer la maquette", "Present mock-up": "Présenter la maquette",
   "Collect the client's existing brand assets": "Recueillir les éléments de marque existants du client", "Define the brand voice and style": "Définir la voix et le style de la marque",

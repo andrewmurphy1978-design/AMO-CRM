@@ -161,7 +161,9 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
   const lastFinished = !last || last.status === "COMPLETED" || (last.tasks.length > 0 && last.tasks.every((t) => t.status === "DONE"));
   const stageOf = (p?: PendingPhase) => p?.stage ?? "ACTIVE";
   const money = await instalmentState(db, pr.id);
-  const secondInstalmentTask = money.paid >= 2 ? undefined : SECOND_INSTALMENT_TASK;
+  // The "2nd Instalment" phase carries its own tasks; otherwise a reminder task is added to the first active phase.
+  const reminder = money.paid >= 2 ? undefined : SECOND_INSTALMENT_TASK;
+  const secondFor = (p?: PendingPhase) => (stageOf(p) === "ACTIVE" && !(p && /2nd instalment/i.test(p.name)) ? reminder : undefined);
 
   switch (pr.status) {
     case "PROPOSAL": {
@@ -177,7 +179,7 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
         // Nothing to research or mock up: straight to Active.
         await setStatus(db, pr.id, "ACTIVE");
         await ensureInstalmentInvoices(db, pr.id, "middle");
-        if (pending.length > 0) await release(db, pr, pending, stageOf(pending[0]) === "ACTIVE" ? secondInstalmentTask : undefined);
+        if (pending.length > 0) await release(db, pr, pending, secondFor(pending[0]));
       }
       return true;
     }
@@ -190,7 +192,7 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
         // 2nd instalment falls due.
         await setStatus(db, pr.id, "ACTIVE");
         await ensureInstalmentInvoices(db, pr.id, "middle");
-        if (pending.length > 0) await release(db, pr, pending, stageOf(pending[0]) === "ACTIVE" ? secondInstalmentTask : undefined);
+        if (pending.length > 0) await release(db, pr, pending, secondFor(pending[0]));
       }
       return true;
     }

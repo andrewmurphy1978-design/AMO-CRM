@@ -210,6 +210,16 @@ function expandTitle(task: TaskTpl, values: FieldValues): string[] {
   );
 }
 
+// Right after the Mock-up: the 2nd instalment is invoiced and its payment awaited
+// before the building starts.
+export function secondInstalmentPhase(): PhaseTpl {
+  return {
+    name: "2nd Instalment",
+    stage: "ACTIVE",
+    tasks: [{ title: "Send the 2nd instalment invoice" }, { title: "Await the 2nd instalment payment" }],
+  };
+}
+
 // Every project type starts with this phase: the proposal is prepared, sent,
 // answered, and the 1st instalment received. Only then does the project move
 // on to Planning.
@@ -754,6 +764,11 @@ function applyLifecycle(template: TemplateConfig): void {
     stage: "FINAL",
     tasks: [{ title: "Send the final invoice" }, { title: "Receive the final instalment" }],
   });
+  // After the Mock-up (the first building phase when there is none): invoice the 2nd instalment.
+  const mock = template.phases.findIndex((p) => p.name === "Mock-up" || p.name === "Model" || p.name === "Design");
+  const firstActive = template.phases.findIndex((p) => p.stage === "ACTIVE");
+  const at = mock !== -1 ? mock + 1 : firstActive !== -1 ? firstActive : template.phases.length;
+  template.phases.splice(at, 0, secondInstalmentPhase());
   template.phases.unshift(planningPhase());
 }
 
@@ -811,6 +826,7 @@ const SHARED_NAMES: Record<string, string> = {
   mockup: "Mock-up",
   model: "Mock-up",
   design: "Mock-up",
+  "2nd instalment": "2nd Instalment",
   presenting: "Presenting",
   deploying: "Deploying",
   "final payment": "Final Payment",
@@ -843,6 +859,8 @@ export function buildMultiPlan(inputs: TypeInput[]): ProjectPlan {
     }
   }
 
+  // Saved (customized) templates predate this phase: every project gets it once.
+  if (!shared.has("2nd Instalment")) shared.set("2nd Instalment", { ...secondInstalmentPhase(), tasks: secondInstalmentPhase().tasks.map((t) => t.title), stage: "ACTIVE" });
   const pick = (name: string) => (shared.has(name) ? [shared.get(name)!] : []);
   const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: [...BRAND_PHASE_TASKS] }] : [];
   const phases: PlanPhase[] = [
@@ -851,6 +869,7 @@ export function buildMultiPlan(inputs: TypeInput[]): ProjectPlan {
     ...brandPhase,
     ...pick("Mock-up"),
     ...own.filter((p) => p.stage === "PLANNING"),
+    ...pick("2nd Instalment"),
     ...own.filter((p) => p.stage === "ACTIVE"),
     ...own.filter((p) => p.stage === "PROPOSAL" || p.stage === "FINAL"),
     ...pick("Presenting"),
