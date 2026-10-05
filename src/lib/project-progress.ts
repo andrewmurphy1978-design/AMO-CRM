@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { phaseDates, taskRows } from "@/lib/task-schedule";
 import { billPendingSupplierCosts } from "@/lib/supplier-costs";
 import type { PhaseStage } from "@/lib/project-templates";
 
@@ -23,6 +24,9 @@ export interface PendingPhase {
   name: string;
   tasks: string[];
   stage?: PhaseStage;
+  // Deadline delays (days) from the template: the phase's, and each task's (parallel to `tasks`).
+  delayDays?: number | null;
+  delays?: (number | null)[];
 }
 
 const LIFECYCLE = ["PROPOSAL", "PLANNING", "ACTIVE", "FINAL"];
@@ -33,7 +37,7 @@ function asPending(value: unknown): PendingPhase[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((p): p is PendingPhase => Boolean(p) && typeof (p as PendingPhase).name === "string" && Array.isArray((p as PendingPhase).tasks))
-    .map((p) => ({ name: p.name, tasks: p.tasks.map(String), stage: p.stage }));
+    .map((p) => ({ name: p.name, tasks: p.tasks.map(String), stage: p.stage, delayDays: p.delayDays ?? null, delays: Array.isArray(p.delays) ? p.delays : undefined }));
 }
 
 // Moves a Contact up the pipeline, never down: Prospect only from Lead;
@@ -84,9 +88,12 @@ async function release(db: PrismaClient, pr: Loaded, pending: PendingPhase[], ex
   const [next, ...rest] = pending;
   const last = pr.phases[0];
   if (last && last.status !== "COMPLETED") await db.projectPhase.update({ where: { id: last.id }, data: { status: "COMPLETED", completedAt: new Date() } });
-  const created = await db.projectPhase.create({ data: { projectId: pr.id, name: next.name, order: (last?.order ?? -1) + 1, status: "ACTIVE" } });
+  const now = new Date();
+  const created = await db.projectPhase.create({ data: { projectId: pr.id, name: next.name, order: (last?.order ?? -1) + 1, status: "ACTIVE", ...phaseDates(now, next.delayDays) } });
   const titles = [...(extraFirstTask ? [extraFirstTask] : []), ...next.tasks];
-  if (titles.length > 0) await db.task.createMany({ data: titles.map((title) => ({ projectId: pr.id, phaseId: created.id, title })) });
+  const delays = [...(extraFirstTask ? [null] : []), ...(next.delays ?? [])];
+  // The phase starts now, and so does its first task.
+  if (titles.length > 0) await db.task.createMany({ data: taskRows(pr.id, created.id, titles, delays, now) });
   await db.project.update({ where: { id: pr.id }, data: { pendingPhases: rest.length > 0 ? (rest as never) : ([] as never) } });
 }
 

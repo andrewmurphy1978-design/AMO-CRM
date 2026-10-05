@@ -36,6 +36,8 @@ export interface FieldTpl {
 
 export interface TaskTpl {
   title: string;
+  // Days from the task's start to its deadline (used to work out the due date when the task starts).
+  delayDays?: number;
   when?: Cond;
   // Field keys (multiselect/languages) to repeat the task for — one task per
   // combination; {key} in the title is replaced by the current value.
@@ -51,6 +53,8 @@ export const PHASE_STAGES: PhaseStage[] = ["PROPOSAL", "PLANNING", "ACTIVE", "FI
 
 export interface PhaseTpl {
   name: string;
+  // Days from the phase's start to its deadline.
+  delayDays?: number;
   when?: Cond;
   stage?: PhaseStage;
   tasks: TaskTpl[];
@@ -228,16 +232,17 @@ export function planningPhase(): PhaseTpl {
     name: "Proposal",
     stage: "PROPOSAL",
     tasks: [
-      { title: "Prepare the proposal" },
-      { title: "Present (send) the proposal" },
-      { title: "Await the answer to the proposal" },
-      { title: "Receive the signed proposal and 1st instalment" },
+      { title: "Prepare the proposal", delayDays: 3 },
+      { title: "Present (send) the proposal", delayDays: 1 },
+      { title: "Await the answer to the proposal", delayDays: 7 },
+      { title: "Receive the signed proposal and 1st instalment", delayDays: 7 },
     ],
   };
 }
 
 export interface ProjectPlan {
-  phases: { name: string; tasks: string[]; stage: PhaseStage }[];
+  // `delays` runs parallel to `tasks`: each task's deadline delay in days.
+  phases: { name: string; tasks: string[]; stage: PhaseStage; delayDays?: number | null; delays?: (number | null)[] }[];
 }
 
 // Turns a template + the answers into the phases/tasks to create. Phases with a
@@ -248,13 +253,23 @@ export function buildPlan(config: TemplateConfig, rawValues: FieldValues): Proje
   for (const phase of config.phases) {
     if (!evalCond(phase.when, values)) continue;
     const titles: string[] = [];
+    const delays: (number | null)[] = [];
     for (const task of phase.tasks) {
       if (!evalCond(task.when, values)) continue;
-      for (const title of expandTitle(task, values)) if (title && !titles.includes(title)) titles.push(title);
+      for (const title of expandTitle(task, values)) {
+        if (!title || titles.includes(title)) continue;
+        titles.push(title);
+        delays.push(task.delayDays ?? null);
+      }
     }
-    phases.push({ name: tidy(phase.name), tasks: titles, stage: phase.stage ?? "ACTIVE" });
+    phases.push({ name: tidy(phase.name), tasks: titles, stage: phase.stage ?? "ACTIVE", delayDays: phase.delayDays ?? null, delays });
   }
   return { phases };
+}
+
+function days(v: unknown): number | undefined {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) && n >= 0 && n <= 3650 ? Math.round(n) : undefined;
 }
 
 // Defensive parse of a stored/submitted config.
@@ -298,12 +313,14 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
       if (!title) continue;
       tasks.push({
         title,
+        ...(days(tk?.delayDays) != null ? { delayDays: days(tk?.delayDays) } : {}),
         ...(cond(tk?.when) ? { when: cond(tk?.when) } : {}),
         ...(Array.isArray(tk?.repeat) && tk.repeat.length ? { repeat: tk.repeat.map(str).filter(Boolean) } : {}),
       });
     }
     phases.push({
       name,
+      ...(days(p?.delayDays) != null ? { delayDays: days(p?.delayDays) } : {}),
       ...(cond(p?.when) ? { when: cond(p?.when) } : {}),
       ...(PHASE_STAGES.includes(p?.stage as PhaseStage) ? { stage: p.stage as PhaseStage } : {}),
       tasks,
@@ -864,8 +881,13 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
       const key = SHARED_NAMES[phase.name.trim().toLowerCase()];
       if (key) {
         const existing = shared.get(key);
-        if (!existing) shared.set(key, { ...phase, name: key, tasks: [...phase.tasks] });
-        else for (const t of phase.tasks) if (!existing.tasks.includes(t)) existing.tasks.push(t);
+        if (!existing) shared.set(key, { ...phase, name: key, tasks: [...phase.tasks], delays: [...(phase.delays ?? [])] });
+        else
+          phase.tasks.forEach((t, i) => {
+            if (existing.tasks.includes(t)) return;
+            existing.tasks.push(t);
+            (existing.delays ??= []).push(phase.delays?.[i] ?? null);
+          });
       } else {
         own.push({ ...phase, name: multi ? `${input.label} — ${phase.name}` : phase.name });
       }
@@ -873,12 +895,13 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
   }
 
   // Saved (customized) templates predate this phase: every project gets it once.
-  if (!shared.has("2nd Instalment")) shared.set("2nd Instalment", { ...secondInstalmentPhase(), tasks: secondInstalmentPhase().tasks.map((t) => t.title), stage: "ACTIVE" });
+  if (!shared.has("2nd Instalment")) shared.set("2nd Instalment", { ...secondInstalmentPhase(), tasks: secondInstalmentPhase().tasks.map((t) => t.title), stage: "ACTIVE", delays: [] });
   const pick = (name: string) => (shared.has(name) ? [shared.get(name)!] : []);
   // The Brand phase only exists for projects that include a brand; its tasks follow the ticked items
   // (or the type's own Brand phase when none are ticked).
   const brandTasks = options.brandItems && options.brandItems.length > 0 ? brandPhaseTasks(options.brandItems) : shared.get("Brand")?.tasks ?? brandPhaseTasks(null);
-  const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: brandTasks }] : [];
+  const brandFromTemplate = !(options.brandItems && options.brandItems.length > 0) ? shared.get("Brand") : undefined;
+  const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: brandTasks, delayDays: brandFromTemplate?.delayDays ?? null, delays: brandFromTemplate?.delays }] : [];
   const phases: PlanPhase[] = [
     ...pick("Proposal"),
     ...pick("Research"),

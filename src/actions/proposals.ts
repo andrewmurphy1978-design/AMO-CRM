@@ -1,5 +1,6 @@
 "use server";
 
+import { onTaskDone } from "@/lib/task-schedule";
 import { onProposalAccepted, ensureInstalmentInvoices } from "@/lib/project-progress";
 import { buildInvoiceEmail } from "@/lib/invoice-email";
 import { sendEmailAction } from "@/actions/email-messages";
@@ -45,6 +46,8 @@ async function setProposalTask(db: PrismaClient, projectId: string, which: RegEx
   const tasks = await db.task.findMany({ where: { projectId }, select: { id: true, title: true, status: true } });
   const ids = tasks.filter((t) => which.test(t.title) && (done ? t.status !== "DONE" : t.status === "DONE")).map((t) => t.id);
   if (ids.length > 0) await db.task.updateMany({ where: { id: { in: ids } }, data: { status: done ? "DONE" : "TODO", completedAt: done ? new Date() : null } });
+  // Finishing a task starts the next one of its phase.
+  if (done) for (const id of ids) await onTaskDone(db, id);
 }
 
 function toBase64(bytes: Uint8Array): string {

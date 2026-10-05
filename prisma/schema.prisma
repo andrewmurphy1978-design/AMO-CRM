@@ -1296,6 +1296,10 @@ model Task {
   startDate   DateTime?
   dueDate     DateTime?
   completedAt DateTime?
+  // Days from the task's start to its deadline (from the project type's template): the due
+  // date is worked out when the task starts. And the prompt to copy-paste into an AI for this task.
+  delayDays Int?
+  aiPrompt  String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

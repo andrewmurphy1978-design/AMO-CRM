@@ -32,6 +32,7 @@ const BLANK: TaskDialogValues = {
   startDate: "",
   dueDate: "",
   description: "",
+  aiPrompt: "",
 };
 
 // The project page's Tasks card: a + in the header adds a task, clicking a
@@ -121,6 +122,7 @@ export default function TasksCard({
           lang={lang}
           users={users}
           phases={phases}
+          projectId={projectId}
           initial={dialog.task ? dialog.task.values : BLANK}
           onSave={async (values) => {
             const result = dialog.task ? await updateTaskViaDialog(dialog.task.id, projectId, values) : await createTaskViaDialog(projectId, values);

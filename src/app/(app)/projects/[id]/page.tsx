@@ -112,7 +112,8 @@ export default async function ProjectDetailPage({
         teamMembers: { include: { user: true } },
         phases: { orderBy: { order: "asc" } },
         tasks: {
-          orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+          // The template's order: phases in the order they were created, each phase's tasks in sequence.
+          orderBy: { createdAt: "asc" },
           include: { assignee: true },
         },
         interactions: {
@@ -355,6 +356,7 @@ export default async function ProjectDetailPage({
       dueDate: toDateInput(task.dueDate),
       completedDate: toDateInput(task.completedAt),
       description: task.description ?? "",
+      aiPrompt: task.aiPrompt ?? "",
     },
   }));
 

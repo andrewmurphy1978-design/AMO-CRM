@@ -472,6 +472,10 @@ export default function TemplateEditor({ type, isUserType, initial, typeLabels, 
                     ))}
                   </select>
                 </div>
+                <div className="w-24">
+                  <label className={LABEL} title="Days from the phase's start to its deadline">Delay (days)</label>
+                  <input type="number" min={0} max={3650} value={p.delayDays ?? ""} onChange={(e) => updatePhase(pi, { delayDays: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) })} className={INPUT} placeholder="—" />
+                </div>
                 <button
                   type="button"
                   title={collapsed.has(pi) ? "Show tasks" : "Hide tasks"}
@@ -506,6 +510,7 @@ export default function TemplateEditor({ type, isUserType, initial, typeLabels, 
                     <div className="flex items-center gap-1.5">
                       {handle(`t${pi}.${ti}`)}
                       <input value={tk.title} onChange={(e) => updateTask(pi, ti, { title: e.target.value })} className={INPUT} placeholder="Task title" />
+                      <input type="number" min={0} max={3650} value={tk.delayDays ?? ""} onChange={(e) => updateTask(pi, ti, { delayDays: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) })} className={`${INPUT} !w-20 shrink-0`} placeholder="Days" title="Deadline delay: days from the task's start to its due date" aria-label="Deadline delay in days" />
                       <button type="button" className={SMALL_BTN} onClick={() => updatePhase(pi, { tasks: move(p.tasks, ti, -1) })} disabled={ti === 0}>
                         ↑
                       </button>

@@ -1,5 +1,6 @@
 "use server";
 
+import { phaseDates, taskRows } from "@/lib/task-schedule";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -226,16 +227,19 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
   // each phase is completed. Phases that ended up with no tasks are dropped.
   const phases = managed ? plan.phases.filter((p) => p.tasks.length > 0) : plan.phases;
   const now = managed ? phases.slice(0, 1) : phases;
+  // The first phase starts with the project: its first task (Prepare the proposal) starts on the
+  // project's start date.
+  const projectStart = input.startDate ?? new Date();
   for (const [index, phase] of now.entries()) {
     const created = await db.projectPhase.create({
-      data: { projectId: project.id, name: phase.name, order: index, ...(managed ? { status: "ACTIVE" as const } : {}) },
+      data: { projectId: project.id, name: phase.name, order: index, ...phaseDates(projectStart, phase.delayDays), ...(managed ? { status: "ACTIVE" as const } : {}) },
     });
     if (phase.tasks.length > 0) {
-      await db.task.createMany({ data: phase.tasks.map((title) => ({ projectId: project.id, phaseId: created.id, title })) });
+      await db.task.createMany({ data: taskRows(project.id, created.id, phase.tasks, phase.delays, index === 0 ? projectStart : null) });
     }
   }
   if (managed && phases.length > 1) {
-    await db.project.update({ where: { id: project.id }, data: { pendingPhases: phases.slice(1).map((p) => ({ name: p.name, tasks: p.tasks, stage: p.stage })) as never } });
+    await db.project.update({ where: { id: project.id }, data: { pendingPhases: phases.slice(1).map((p) => ({ name: p.name, tasks: p.tasks, stage: p.stage, delays: p.delays, delayDays: p.delayDays })) as never } });
   }
 
   await db.activityLogEntry.create({
@@ -279,7 +283,7 @@ async function applyProjectSettings(db: PrismaClient, projectId: string, next: {
     } else {
       const order = project.phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
       const created = await db.projectPhase.create({ data: { projectId, name, order } });
-      if (tasks.length > 0) await db.task.createMany({ data: tasks.map((title) => ({ projectId, phaseId: created.id, title })) });
+      if (tasks.length > 0) await db.task.createMany({ data: taskRows(projectId, created.id, tasks) });
     }
   };
   if (next.createBrand) await addPhase("Brand", brandPhaseTasks(next.brandItems), "PLANNING", /^mock-up$/i);
@@ -301,7 +305,7 @@ async function applyTypeChanges(db: PrismaClient, projectId: string, newTypes: s
   const added = newTypes.filter((t) => !oldTypes.includes(t));
   if (added.length > 0) {
     const labels = await getTypeLabels(db, getDict("en").projectTypes as Record<string, string>, "en");
-    const addedPhases: { name: string; tasks: string[]; stage: "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL" }[] = [];
+    const addedPhases: { name: string; tasks: string[]; stage: "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL"; delayDays?: number | null; delays?: (number | null)[] }[] = [];
     for (const type of added) {
       const template = await getProjectTemplate(db, type);
       const plan = buildMultiPlan([{ type, label: labels[type] ?? type, template, values: {} }]);
@@ -321,7 +325,7 @@ async function applyTypeChanges(db: PrismaClient, projectId: string, newTypes: s
         let order = project.phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
         for (const ph of addedPhases) {
           const created = await db.projectPhase.create({ data: { projectId, name: ph.name, order: order++ } });
-          if (ph.tasks.length > 0) await db.task.createMany({ data: ph.tasks.map((title) => ({ projectId, phaseId: created.id, title })) });
+          if (ph.tasks.length > 0) await db.task.createMany({ data: taskRows(projectId, created.id, ph.tasks, ph.delays) });
         }
       }
     }
@@ -440,7 +444,8 @@ export async function deleteProject(projectId: string) {
 
   await withScopedPrismaClient((db) => db.project.delete({ where: { id: projectId } }));
   revalidatePath("/projects");
-  redirect("/projects");
+  // The caller shows "Deleted" and then goes back to the projects list.
+  return { ok: true as const };
 }
 
 // The General Info dialog on the project page: everything about the project

@@ -16,6 +16,7 @@ const BLANK: TaskDialogValues = {
   startDate: "",
   dueDate: "",
   description: "",
+  aiPrompt: "",
 };
 
 // Replaces the old always-visible QuickAddTask inline form — same
@@ -58,6 +59,7 @@ export default function AddTaskButton({
           lang={lang}
           users={users}
           phases={phases}
+          projectId={projectId}
           initial={BLANK}
           onSave={async (values) => {
             const result = await createTaskViaDialog(projectId, values);

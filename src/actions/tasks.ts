@@ -1,5 +1,6 @@
 "use server";
 
+import { onTaskDone } from "@/lib/task-schedule";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -21,6 +22,7 @@ const TaskSchema = z.object({
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
   completedDate: z.string().optional(),
+  aiPrompt: z.string().trim().optional(),
 });
 
 function readTaskForm(formData: FormData) {
@@ -36,6 +38,7 @@ function readTaskForm(formData: FormData) {
     startDate: String(formData.get("startDate") ?? "") || undefined,
     dueDate: String(formData.get("dueDate") ?? "") || undefined,
     completedDate: String(formData.get("completedDate") ?? "") || undefined,
+    aiPrompt: String(formData.get("aiPrompt") ?? "").trim() || undefined,
   };
   return TaskSchema.parse(raw);
 }
@@ -51,6 +54,7 @@ export interface TaskDialogValues {
   dueDate: string;
   completedDate?: string;
   description: string;
+  aiPrompt?: string;
 }
 
 // Used by TaskDialog (project-info page's "Add task" button) — same shape
@@ -78,6 +82,7 @@ export async function createTaskViaDialog(
         projectId,
         phaseId: data.phaseId || null,
         description: data.description,
+        aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
         assigneeId: data.assigneeId || null,
@@ -121,6 +126,7 @@ export async function updateTaskViaDialog(
         title: data.title,
         phaseId: data.phaseId || null,
         description: data.description,
+        aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
         assigneeId: data.assigneeId || null,
@@ -130,7 +136,10 @@ export async function updateTaskViaDialog(
         completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
       },
     });
-    if (data.status === "DONE") await advanceProjectPlan(db, projectId);
+    if (data.status === "DONE") {
+      if (existing?.status !== "DONE") await onTaskDone(db, taskId);
+      await advanceProjectPlan(db, projectId);
+    }
   });
 
   revalidatePath(`/projects/${projectId}`);
@@ -165,6 +174,7 @@ export async function createTask(
         projectId: data.projectId,
         phaseId: data.phaseId || null,
         description: data.description,
+        aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
         assigneeId: data.assigneeId || null,
@@ -210,6 +220,7 @@ export async function createTaskAndRedirect(
         projectId: data.projectId,
         phaseId: data.phaseId || null,
         description: data.description,
+        aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
         assigneeId: data.assigneeId || null,
@@ -260,6 +271,7 @@ export async function updateTask(
         projectId: data.projectId,
         phaseId: data.phaseId || null,
         description: data.description,
+        aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
         assigneeId: data.assigneeId || null,
@@ -269,7 +281,10 @@ export async function updateTask(
         completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? (existing?.status === "DONE" ? undefined : new Date()) : null,
       },
     });
-    if (data.status === "DONE") await advanceProjectPlan(db, data.projectId);
+    if (data.status === "DONE") {
+      if (existing?.status !== "DONE") await onTaskDone(db, taskId);
+      await advanceProjectPlan(db, data.projectId);
+    }
 
     return existing?.projectId;
   });
@@ -297,7 +312,10 @@ export async function toggleTaskStatus(taskId: string, projectId: string, done: 
       },
     });
     // Finishing the last task of the latest phase releases the next phase.
-    if (done) await advanceProjectPlan(db, projectId);
+    if (done) {
+      await onTaskDone(db, taskId);
+      await advanceProjectPlan(db, projectId);
+    }
   });
 
   revalidatePath(`/projects/${projectId}`);
