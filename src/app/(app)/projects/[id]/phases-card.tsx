@@ -41,6 +41,8 @@ export default function PhasesCard({
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  // The full phases table stays folded away under the progress bar; open it to see or pick a phase.
+  const [showTable, setShowTable] = useState(false);
   const fmt = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { dateStyle: "medium" }) : "—");
   const names = (ids: string[]) => ids.map((id) => users.find((u) => u.id === id)?.name).filter(Boolean).join(", ") || "—";
 
@@ -79,6 +81,10 @@ export default function PhasesCard({
       )}
       {phases.length === 0 ? (
         <p className="text-sm text-soft">{t.projectForm.noPhasesYet}</p>
+      ) : !showTable ? (
+        <button type="button" onClick={() => setShowTable(true)} className="text-xs font-semibold text-emerald-700 hover:underline">
+          {lang === "fr" ? `▸ Afficher les ${phases.length} phases` : `▸ Show all ${phases.length} phases`}
+        </button>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-card-border">
           <table className="w-full text-sm">
@@ -116,6 +122,9 @@ export default function PhasesCard({
               ))}
             </tbody>
           </table>
+          <button type="button" onClick={() => setShowTable(false)} className="m-2 text-xs font-semibold text-soft hover:underline">
+            {lang === "fr" ? "▾ Masquer les phases" : "▾ Hide the phases"}
+          </button>
         </div>
       )}
 

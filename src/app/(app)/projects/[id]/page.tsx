@@ -601,7 +601,7 @@ export default async function ProjectDetailPage({
                       </span>
                     )}
                     {nextUp && (
-                      <span className="text-soft">
+                      <span className="ml-auto text-right text-soft">
                         {lang === "fr" ? "Ensuite" : "Next"}: <span className="text-ink">{nextUp}</span>
                       </span>
                     )}
