@@ -189,26 +189,6 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
   const typeFields: Record<string, FieldValues> = {};
   for (const t of input.types) typeFields[t.type] = cleanValues(t.template, t.values);
   const managed = input.types.every((t) => t.template.progressive !== false);
-  const project = await db.project.create({
-    data: {
-      name: input.name,
-      contactId: input.contactId,
-      description: input.description,
-      status: input.status,
-      type: input.types[0].type,
-      types: input.types.map((t) => t.type),
-      ownerId: input.ownerId,
-      supervisorId: input.supervisorId,
-      startDate: input.startDate,
-      dueDate: input.dueDate,
-      subscriptionEmail: input.subscriptionEmail ?? null,
-      typeFields: typeFields as never,
-      lifecycleManaged: managed,
-      createBrand: input.createBrand,
-      brandItems: input.brandItems,
-      accountMode: input.accountMode,
-    },
-  });
 
   // The apps chosen in the details become the project's Apps & subscriptions.
   const seen = new Set<string>();
@@ -216,11 +196,6 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
     .flatMap((t) => appSubscriptionsFrom(t.template, typeFields[t.type]))
     .filter((x) => (seen.has(x.name.toLowerCase()) ? false : (seen.add(x.name.toLowerCase()), true)));
   if (input.accountMode === "MANAGED") subs.push(await managedFeeRow(db, input.contactId));
-  if (subs.length > 0) await db.projectSubscription.createMany({ data: subs.map((x, order) => ({ ...x, projectId: project.id, order })) });
-
-  if (input.teamMemberIds.length > 0) {
-    await db.projectTeamMember.createMany({ data: input.teamMemberIds.map((userId) => ({ projectId: project.id, userId })) });
-  }
 
   const plan = buildMultiPlan(input.types.map((t) => ({ ...t, values: typeFields[t.type] })), { brand: input.createBrand, brandItems: input.brandItems, accountMode: input.accountMode });
   // Progressive (default): only the first phase now — the rest are released as
@@ -230,27 +205,56 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
   // The first phase starts with the project: its first task (Prepare the proposal) starts on the
   // project's start date.
   const projectStart = input.startDate ?? new Date();
-  for (const [index, phase] of now.entries()) {
-    const created = await db.projectPhase.create({
-      data: { projectId: project.id, name: phase.name, order: index, ...phaseDates(projectStart, phase.delayDays), ...(managed ? { status: "ACTIVE" as const } : {}) },
-    });
-    if (phase.tasks.length > 0) {
-      await db.task.createMany({ data: taskRows(project.id, created.id, phase.tasks, phase.delays, index === 0 ? projectStart : null) });
-    }
-  }
-  if (managed && phases.length > 1) {
-    await db.project.update({ where: { id: project.id }, data: { pendingPhases: phases.slice(1).map((p) => ({ name: p.name, tasks: p.tasks, stage: p.stage, delays: p.delays, delayDays: p.delayDays })) as never } });
-  }
 
-  await db.activityLogEntry.create({
-    data: {
-      projectId: project.id,
-      contactId: input.contactId,
-      userId: input.userId,
-      message: getDict("en").actions.createdProject(input.userName, project.name),
-    },
-  });
-  return project;
+  // Everything goes in one batched transaction (few round trips: a project with several types used
+  // to make dozens of sequential writes, which risked the Workers time budget — see updateContact).
+  const projectId = crypto.randomUUID();
+  const phaseRows = now.map((phase, index) => ({ phase, id: crypto.randomUUID(), index }));
+  await db.$transaction([
+    db.project.create({
+      data: {
+        id: projectId,
+        name: input.name,
+        contactId: input.contactId,
+        description: input.description,
+        status: input.status,
+        type: input.types[0].type,
+        types: input.types.map((t) => t.type),
+        ownerId: input.ownerId,
+        supervisorId: input.supervisorId,
+        startDate: input.startDate,
+        dueDate: input.dueDate,
+        subscriptionEmail: input.subscriptionEmail ?? null,
+        typeFields: typeFields as never,
+        lifecycleManaged: managed,
+        createBrand: input.createBrand,
+        brandItems: input.brandItems,
+        accountMode: input.accountMode,
+        ...(managed && phases.length > 1
+          ? { pendingPhases: phases.slice(1).map((p) => ({ name: p.name, tasks: p.tasks, stage: p.stage, delays: p.delays, delayDays: p.delayDays })) as never }
+          : {}),
+      },
+    }),
+    ...(subs.length > 0 ? [db.projectSubscription.createMany({ data: subs.map((x, order) => ({ ...x, projectId, order })) })] : []),
+    ...(input.teamMemberIds.length > 0 ? [db.projectTeamMember.createMany({ data: input.teamMemberIds.map((userId) => ({ projectId, userId })) })] : []),
+    ...phaseRows.map(({ phase, id, index }) =>
+      db.projectPhase.create({
+        data: { id, projectId, name: phase.name, order: index, ...phaseDates(projectStart, phase.delayDays), ...(managed ? { status: "ACTIVE" as const } : {}) },
+      })
+    ),
+    ...phaseRows
+      .filter(({ phase }) => phase.tasks.length > 0)
+      .map(({ phase, id, index }) => db.task.createMany({ data: taskRows(projectId, id, phase.tasks, phase.delays, index === 0 ? projectStart : null) })),
+    db.activityLogEntry.create({
+      data: {
+        projectId,
+        contactId: input.contactId,
+        userId: input.userId,
+        message: getDict("en").actions.createdProject(input.userName, input.name),
+      },
+    }),
+  ]);
+  return { id: projectId, name: input.name };
 }
 
 // The monthly fee for keeping the client's accounts as a sub-account (hosting, updates, support).
@@ -353,13 +357,13 @@ export async function createProject(
 
   const project = await withScopedPrismaClient(async (db) => {
     const labels = await getTypeLabels(db, getDict("en").projectTypes as Record<string, string>, "en");
-    const types: TypeInput[] = [];
-    for (const type of data.types) {
-      const template = await getProjectTemplate(db, type);
+    const templates = await Promise.all(data.types.map((type) => getProjectTemplate(db, type)));
+    const types: TypeInput[] = data.types.map((type, i) => {
+      const template = templates[i];
       // Each type's answers are posted as cf_<TYPE>__<field>.
       const values = readFieldValues(template, (name) => formData.getAll(name.replace(/^cf_/, `cf_${type}__`)).map(String));
-      types.push({ type, label: labels[type] ?? type, template, values });
-    }
+      return { type, label: labels[type] ?? type, template, values };
+    });
     return createProjectFromTemplate(db, {
       contactId: data.contactId,
       status: data.status,
