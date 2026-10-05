@@ -194,7 +194,8 @@ export async function setInstalmentPaid(rowId: string, projectId: string, paid: 
   return { invoiceEmail };
 }
 
-export async function deleteProposal(proposalId: string, projectId: string) {
+// `clientRefreshes`: the caller refreshes the project page itself, so it isn't also re-rendered here.
+export async function deleteProposal(proposalId: string, projectId: string, clientRefreshes = false) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -203,7 +204,8 @@ export async function deleteProposal(proposalId: string, projectId: string) {
     await db.proposal.delete({ where: { id: proposalId } });
     return contactId;
   });
-  revalidateBoth(projectId, contactId);
+  if (clientRefreshes) revalidatePath(`/contacts/${contactId}`);
+  else revalidateBoth(projectId, contactId);
 }
 
 // --- Full proposal builder (line items, tax, payment schedule, AI draft) ---

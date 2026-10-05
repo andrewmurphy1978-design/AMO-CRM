@@ -338,9 +338,9 @@ async function applyTypeChanges(db: PrismaClient, projectId: string, newTypes: s
 }
 
 export async function createProject(
-  _prevState: { error?: string } | undefined,
+  _prevState: { error?: string; createdId?: string } | undefined,
   formData: FormData
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; createdId?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -385,7 +385,9 @@ export async function createProject(
 
   revalidatePath("/projects");
   revalidatePath(`/contacts/${data.contactId}`);
-  redirect(`/projects/${project.id}`);
+  // The form sends the user on with a normal navigation. A server-side redirect would render the
+  // (heavy) project page inside this same request, which can run out of the Workers time budget.
+  return { createdId: project.id };
 }
 
 export async function updateProject(

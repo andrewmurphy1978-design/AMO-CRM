@@ -337,7 +337,7 @@ export function ProposalsCard({
                 onClick={() => {
                   if (!confirm(fr ? "Supprimer cette proposition ?" : "Delete this proposal?")) return;
                   run(async () => {
-                    await deleteProposal(editing.id, projectId);
+                    await deleteProposal(editing.id, projectId, true);
                     setDialog(null);
                   });
                 }}
@@ -550,7 +550,7 @@ export function InvoicesCard({
               onClick={() => {
                 if (!confirm(fr ? "Supprimer cette facture ?" : "Delete this invoice?")) return;
                 run(async () => {
-                  await deleteInvoice(editing.id, projectId);
+                  await deleteInvoice(editing.id, projectId, true);
                   setEditId(null);
                 });
               }}

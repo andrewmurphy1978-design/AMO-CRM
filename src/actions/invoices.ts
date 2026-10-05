@@ -130,7 +130,9 @@ export async function updateInvoiceStatus(invoiceId: string, projectId: string, 
   revalidateBoth(projectId, contactId);
 }
 
-export async function deleteInvoice(invoiceId: string, projectId: string) {
+// `clientRefreshes`: the caller refreshes the project page itself (router.refresh()), so the heavy
+// project page isn't also re-rendered inside this request.
+export async function deleteInvoice(invoiceId: string, projectId: string, clientRefreshes = false) {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -139,7 +141,8 @@ export async function deleteInvoice(invoiceId: string, projectId: string) {
     await db.invoice.delete({ where: { id: invoiceId } });
     return contactId;
   });
-  revalidateBoth(projectId, contactId);
+  if (clientRefreshes) revalidatePath(`/contacts/${contactId}`);
+  else revalidateBoth(projectId, contactId);
 }
 
 // Builds an Invoice from an already-accepted Proposal — copies its line

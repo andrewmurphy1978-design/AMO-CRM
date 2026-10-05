@@ -48,9 +48,9 @@ export default function ProjectForm({
   customTypeKeys = [],
 }: {
   action: (
-    prevState: { error?: string; success?: string } | undefined,
+    prevState: { error?: string; success?: string; createdId?: string } | undefined,
     formData: FormData
-  ) => Promise<{ error?: string; success?: string }>;
+  ) => Promise<{ error?: string; success?: string; createdId?: string }>;
   defaultValues?: ProjectFormValues;
   contacts: { id: string; label: string }[];
   users: { id: string; name: string }[];
@@ -85,6 +85,12 @@ export default function ProjectForm({
     setDismissed(false);
   }
   const toast = state?.success && !dismissed ? state.success : null;
+
+  // A new project: go to its page with a normal navigation (see createProject).
+  const createdId = state?.createdId;
+  useEffect(() => {
+    if (createdId) router.push(`/projects/${createdId}`);
+  }, [createdId, router]);
 
   useEffect(() => {
     if (!toast) return;
