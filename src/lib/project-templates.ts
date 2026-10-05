@@ -23,6 +23,9 @@ export interface FieldTpl {
   // "counts" fields: the key of the multiselect field this asks a number for, per selected choice
   // (e.g. posts per week for each platform). Answers are stored as "Choice: N".
   of?: string;
+  // The choices depend on another field's answer (e.g. the platforms an app type can target):
+  // `map[answer]` replaces `options`; `*` is used while that field is empty or unlisted.
+  optionsBy?: { field: string; map: Record<string, string[]> };
   // select / multiselect choices ("languages" uses LANGUAGE_OPTIONS).
   options?: string[];
   // Lets the user type extra choices beyond `options` ("others").
@@ -110,7 +113,13 @@ export function projectTypeOptions(labels: Record<string, string>, current?: str
 
 export const LANGUAGE_OPTIONS = ["English", "French", "Spanish", "German", "Italian", "Portuguese", "Dutch", "Arabic", "Mandarin"];
 
-export function optionsFor(field: FieldTpl): string[] {
+export function optionsFor(field: FieldTpl, values?: FieldValues): string[] {
+  if (field.optionsBy) {
+    const answer = values?.[field.optionsBy.field];
+    const key = typeof answer === "string" ? answer : "";
+    const picked = field.optionsBy.map[key] ?? field.optionsBy.map["*"];
+    if (picked) return picked;
+  }
   return field.type === "languages" ? (field.options?.length ? field.options : LANGUAGE_OPTIONS) : (field.options ?? []);
 }
 
@@ -302,6 +311,14 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
       ...(Array.isArray(f?.options) ? { options: f.options.map(str).map((o: string) => o.trim()).filter(Boolean) } : {}),
       ...(f?.allowOther ? { allowOther: true } : {}),
       ...(type === "counts" && typeof f?.of === "string" && f.of ? { of: str(f.of) } : {}),
+      ...(f?.optionsBy && typeof f.optionsBy.field === "string" && f.optionsBy.map && typeof f.optionsBy.map === "object"
+        ? {
+            optionsBy: {
+              field: str(f.optionsBy.field),
+              map: Object.fromEntries(Object.entries(f.optionsBy.map as Record<string, unknown>).map(([k, v]) => [k, Array.isArray(v) ? v.map(str).filter(Boolean) : []])),
+            },
+          }
+        : {}),
       ...(cond(f?.showIf) ? { showIf: cond(f?.showIf) } : {}),
       ...(f?.keepSpace && cond(f?.showIf) ? { keepSpace: true } : {}),
       ...(typeof f?.app === "boolean" ? { app: f.app } : {}),
@@ -567,7 +584,24 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
     fields: [
       // Kind of app and where it runs
       { key: "appKind", label: "App type", type: "select", options: ["Native", "Cross-platform", "Progressive Web App (PWA)", "Hybrid (web in a native shell)", "Web app"] },
-      { key: "platforms", label: "Platforms", type: "multiselect", options: ["iOS", "Android", "Web", "Windows", "macOS", "Tablet", "Wearable"], allowOther: true },
+      {
+        key: "platforms",
+        label: "Platforms",
+        type: "multiselect",
+        options: ["iOS", "Android", "Web", "Windows", "macOS", "Wearable"],
+        // Each app type can only target some platforms; a web-only type has just one, so nothing to choose.
+        optionsBy: {
+          field: "appKind",
+          map: {
+            Native: ["iOS", "Android", "macOS", "Windows", "Wearable"],
+            "Cross-platform": ["iOS", "Android", "Web", "macOS", "Windows"],
+            "Progressive Web App (PWA)": ["Web"],
+            "Hybrid (web in a native shell)": ["iOS", "Android", "Web"],
+            "Web app": ["Web"],
+            "*": ["iOS", "Android", "Web", "Windows", "macOS", "Wearable"],
+          },
+        },
+      },
       { key: "minOs", label: "Minimum OS versions", type: "text" },
       // Front end
       {

@@ -94,18 +94,19 @@ export default function CustomFieldsInputs({
               {field.type === "select" && (
                 <select name={name} value={typeof v === "string" ? v : ""} onChange={(e) => set(field.key, e.target.value)} className={FIELD_CLASS}>
                   <option value="">—</option>
-                  {optionsFor(field).map((o) => (
+                  {optionsFor(field, values).map((o) => (
                     <option key={o} value={o}>
                       {o}
                     </option>
                   ))}
-                  {typeof v === "string" && v && !optionsFor(field).includes(v) && <option value={v}>{v}</option>}
+                  {typeof v === "string" && v && !optionsFor(field, values).includes(v) && <option value={v}>{v}</option>}
                 </select>
               )}
 
               {isMulti(field) && field.type !== "counts" && (
                 <MultiChoice
                   field={field}
+                  options={optionsFor(field, values)}
                   selected={Array.isArray(v) ? v : []}
                   onChange={(next) => set(field.key, next)}
                   otherText={others[field.key] ?? ""}
@@ -161,7 +162,9 @@ function CountsInput({ name, choices, value, onChange, fr }: { name: string; cho
 
 function MultiChoice({
   field,
-  selected,
+  options: allowed,
+  selected: picked,
+
   onChange,
   otherText,
   onOtherText,
@@ -169,6 +172,7 @@ function MultiChoice({
   fr,
 }: {
   field: FieldTpl;
+  options: string[];
   selected: string[];
   onChange: (next: string[]) => void;
   otherText: string;
@@ -176,7 +180,10 @@ function MultiChoice({
   name: string;
   fr: boolean;
 }) {
-  const options = optionsFor(field);
+  const options = allowed;
+  // Choices that depend on another field: drop answers the current options no longer offer.
+  const selected = field.optionsBy ? picked.filter((s) => options.includes(s)) : picked;
+  const onlyOne = Boolean(field.optionsBy) && options.length === 1;
   const extras = selected.filter((s) => !options.includes(s));
   const all = [...options, ...extras];
   const toggle = (o: string) => onChange(selected.includes(o) ? selected.filter((s) => s !== o) : [...selected, o]);
@@ -185,6 +192,15 @@ function MultiChoice({
     if (!text) return;
     if (!selected.includes(text)) onChange([...selected, text]);
     onOtherText("");
+  }
+  // A single possible choice (e.g. Web for a web app): nothing to pick, it is simply the answer.
+  if (onlyOne) {
+    return (
+      <div className="mt-1">
+        <input type="hidden" name={name} value={options[0]} />
+        <span className="inline-block rounded-full border border-emerald-600 bg-emerald-600 px-3 py-1 text-xs font-medium text-white">{options[0]}</span>
+      </div>
+    );
   }
   return (
     <div className="mt-1">
