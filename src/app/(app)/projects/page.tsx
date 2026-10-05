@@ -13,6 +13,7 @@ import { getHour12 } from "@/lib/time-format";
 import PageHeader from "../page-header";
 import ProjectsIcon from "../projects-icon";
 import StatusFilter from "./status-filter";
+import DeletedBanner from "./deleted-banner";
 
 const STATUS_COLORS: Record<string, string> = {
   PROPOSAL: "bg-violet-50 text-violet-700",
@@ -51,9 +52,9 @@ function TeamAvatars({ names }: { names: string[] }) {
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; view?: string }>;
+  searchParams: Promise<{ status?: string; view?: string; deleted?: string }>;
 }) {
-  const { status, view } = await searchParams;
+  const { status, view, deleted } = await searchParams;
   const activeView = view === "table" ? "table" : "cards";
   const session = await auth();
   const lang = await getLang();
@@ -92,6 +93,7 @@ export default async function ProjectsPage({
 
   return (
     <div className="space-y-6">
+      {deleted && <DeletedBanner message={lang === "fr" ? "Projet supprimé" : "Deleted"} />}
       <PageHeader
         title={
           <span className="flex min-w-0 items-center gap-2">

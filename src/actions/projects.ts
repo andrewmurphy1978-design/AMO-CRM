@@ -444,8 +444,8 @@ export async function deleteProject(projectId: string) {
 
   await withScopedPrismaClient((db) => db.project.delete({ where: { id: projectId } }));
   revalidatePath("/projects");
-  // The caller shows "Deleted" and then goes back to the projects list.
-  return { ok: true as const };
+  // Straight to the list (re-rendering the deleted project's own page would 404); the list says "Deleted".
+  redirect("/projects?deleted=1");
 }
 
 // The General Info dialog on the project page: everything about the project
