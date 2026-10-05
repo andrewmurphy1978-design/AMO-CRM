@@ -15,6 +15,7 @@ import { displayValue, isFieldVisible, typesOfProject, valuesOfType } from "@/li
 import { loadProposalPdfData } from "@/lib/document-data";
 import { buildProposalPdf } from "@/lib/proposal-pdf";
 import { proposalIssues } from "@/lib/proposal-check";
+import { BRAND_ITEMS, DEFAULT_BRAND_ITEMS } from "@/lib/brand-items";
 import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
 
 const ProposalSchema = z.object({
@@ -508,7 +509,6 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
         `Project type${typesOfProject(project).length > 1 ? "s" : ""}: ${typesOfProject(project).join(", ")}`,
         project.description ? `Project description: ${project.description}` : "",
         details.length ? `Project details:\n${details.filter(Boolean).join("\n")}` : "",
-        project.createBrand ? "The project includes creating a brand for the client: include a separate priced line item \"Brand creation\" (logos, colours, fonts, etc.)." : "",
         project.contact.company ? `Client company: ${project.contact.company}` : "",
         project.contact.industry ? `Client industry: ${project.contact.industry}` : "",
         project.contact.aiDetails ? `Background about the client:\n${project.contact.aiDetails}` : "",
@@ -519,7 +519,11 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
         .join("\n\n");
     }
 
-    return draftProposalWithAI(db, {
+    // The brand is part of the project whatever the brief says: the AI is told, and a priced
+    // "Brand creation" line is added afterwards if the draft still left it out.
+    const brandNames = BRAND_ITEMS.filter((b) => (project.brandItems.length > 0 ? project.brandItems : DEFAULT_BRAND_ITEMS).includes(b.key)).map((b) => (language === "fr" ? b.labelFr : b.label));
+    if (project.createBrand) fullBrief += `\n\nThe project includes creating a brand for the client (${brandNames.join(", ")}): include a separate priced line item "Brand creation".`;
+    const draft = await draftProposalWithAI(db, {
       clientLabel,
       projectName: project.name,
       currency: project.contact.preferredCurrency || "CAD",
@@ -527,6 +531,17 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
       brief: fullBrief,
       language,
     });
+    if ("error" in draft || !project.createBrand) return draft;
+    if (!draft.lineItems.some((li) => /brand|marque/i.test(`${li.description} ${li.details ?? ""}`))) {
+      const priced = servicesCatalog.find((c) => /brand|marque/i.test(c.name));
+      draft.lineItems.unshift({
+        description: language === "fr" ? "Création de l'image de marque" : "Brand creation",
+        details: `${language === "fr" ? "Comprend : " : "Includes: "}${brandNames.join(", ")}.`,
+        quantity: 1,
+        unitPrice: priced?.unitPrice ?? 0,
+      });
+    }
+    return draft;
   });
   } catch (error) {
     console.error("draftProposalAI failed", error);

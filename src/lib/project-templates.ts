@@ -797,6 +797,17 @@ export function withoutBrandField(config: TemplateConfig): TemplateConfig {
 
 
 
+// Every project type has a Brand phase (Planning, after Research): it shows on the customization
+// page and is created for the projects that include a brand. Saved templates that predate it get it here.
+export function withBrandPhase(config: TemplateConfig): TemplateConfig {
+  if (config.phases.some((p) => /^brand$/i.test(p.name.trim()))) return config;
+  const phase: PhaseTpl = { name: "Brand", stage: "PLANNING", tasks: brandPhaseTasks(null).map((title) => ({ title })) };
+  const at = config.phases.findIndex((p) => /^(mock-?up|model|design)$/i.test(p.name.trim()));
+  const research = config.phases.findIndex((p) => /^research$/i.test(p.name.trim()));
+  const index = at !== -1 ? at : research !== -1 ? research + 1 : Math.min(1, config.phases.length);
+  return { ...config, phases: [...config.phases.slice(0, index), phase, ...config.phases.slice(index)] };
+}
+
 export interface TypeInput {
   type: string;
   label: string;
@@ -809,6 +820,7 @@ type PlanPhase = ProjectPlan["phases"][number];
 const SHARED_NAMES: Record<string, string> = {
   proposal: "Proposal",
   research: "Research",
+  brand: "Brand",
   "mock-up": "Mock-up",
   mockup: "Mock-up",
   model: "Mock-up",
@@ -863,7 +875,10 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
   // Saved (customized) templates predate this phase: every project gets it once.
   if (!shared.has("2nd Instalment")) shared.set("2nd Instalment", { ...secondInstalmentPhase(), tasks: secondInstalmentPhase().tasks.map((t) => t.title), stage: "ACTIVE" });
   const pick = (name: string) => (shared.has(name) ? [shared.get(name)!] : []);
-  const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: brandPhaseTasks(options.brandItems) }] : [];
+  // The Brand phase only exists for projects that include a brand; its tasks follow the ticked items
+  // (or the type's own Brand phase when none are ticked).
+  const brandTasks = options.brandItems && options.brandItems.length > 0 ? brandPhaseTasks(options.brandItems) : shared.get("Brand")?.tasks ?? brandPhaseTasks(null);
+  const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: brandTasks }] : [];
   const phases: PlanPhase[] = [
     ...pick("Proposal"),
     ...pick("Research"),

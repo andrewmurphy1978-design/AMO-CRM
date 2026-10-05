@@ -1,11 +1,11 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { allTypeKeys } from "@/lib/project-type-store";
-import { defaultTemplate, sanitizeConfig, withoutBrandField, type TemplateConfig } from "@/lib/project-templates";
+import { defaultTemplate, sanitizeConfig, withBrandPhase, withoutBrandField, type TemplateConfig } from "@/lib/project-templates";
 
 // The saved template for a project type, or the built-in default.
 export async function getProjectTemplate(db: PrismaClient, type: string): Promise<TemplateConfig> {
   const row = await db.projectTypeTemplate.findUnique({ where: { type } });
-  return withoutBrandField(row ? sanitizeConfig(row.config) : defaultTemplate(type));
+  return withBrandPhase(withoutBrandField(row ? sanitizeConfig(row.config) : defaultTemplate(type)));
 }
 
 export async function getAllProjectTemplates(db: PrismaClient): Promise<Record<string, TemplateConfig>> {
@@ -13,7 +13,7 @@ export async function getAllProjectTemplates(db: PrismaClient): Promise<Record<s
   const saved = new Map(rows.map((r) => [r.type as string, withoutBrandField(sanitizeConfig(r.config))]));
   const out: Record<string, TemplateConfig> = {};
   const custom = await db.customProjectType.findMany({ select: { key: true }, orderBy: [{ order: "asc" }, { createdAt: "asc" }] });
-  for (const type of allTypeKeys(custom)) out[type] = saved.get(type) ?? withoutBrandField(defaultTemplate(type));
+  for (const type of allTypeKeys(custom)) out[type] = withBrandPhase(saved.get(type) ?? withoutBrandField(defaultTemplate(type)));
   return out;
 }
 

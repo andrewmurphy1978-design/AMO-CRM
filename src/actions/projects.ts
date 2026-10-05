@@ -282,8 +282,8 @@ async function applyProjectSettings(db: PrismaClient, projectId: string, next: {
       if (tasks.length > 0) await db.task.createMany({ data: tasks.map((title) => ({ projectId, phaseId: created.id, title })) });
     }
   };
-  if (next.createBrand && !project.createBrand) await addPhase("Brand", brandPhaseTasks(next.brandItems), "PLANNING", /^mock-up$/i);
-  if (next.accountMode === "CLIENT" && project.accountMode !== "CLIENT") await addPhase("Training", [...TRAINING_PHASE_TASKS], "ACTIVE", /^final payment$/i);
+  if (next.createBrand) await addPhase("Brand", brandPhaseTasks(next.brandItems), "PLANNING", /^mock-up$/i);
+  if (next.accountMode === "CLIENT") await addPhase("Training", [...TRAINING_PHASE_TASKS], "ACTIVE", /^final payment$/i);
   if (next.accountMode === "MANAGED" && project.accountMode !== "MANAGED") {
     const have = await db.projectSubscription.count({ where: { projectId } });
     await db.projectSubscription.create({ data: { projectId, order: have, ...(await managedFeeRow(db, project.contactId)) } });
@@ -306,7 +306,7 @@ async function applyTypeChanges(db: PrismaClient, projectId: string, newTypes: s
       const template = await getProjectTemplate(db, type);
       const plan = buildMultiPlan([{ type, label: labels[type] ?? type, template, values: {} }]);
       for (const ph of plan.phases) {
-        if (/^(proposal|research|mock-up|presenting|deploying|final payment)$/i.test(ph.name)) continue; // shared: already in the plan
+        if (/^(proposal|research|brand|mock-up|2nd instalment|presenting|deploying|final payment)$/i.test(ph.name)) continue; // shared: already in the plan
         addedPhases.push({ ...ph, name: `${labels[type] ?? type} — ${ph.name}` });
       }
     }
