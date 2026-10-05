@@ -15,11 +15,13 @@ const SMALL_BTN = "rounded-md border border-card-border px-2 py-1 text-xs font-m
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "yesno", label: "Yes / No" },
   { value: "text", label: "Short text" },
+  { value: "number", label: "Number (spin box)" },
   { value: "textarea", label: "Long text" },
   { value: "url", label: "Link / file URL" },
   { value: "select", label: "Choose one" },
   { value: "multiselect", label: "Choose several" },
   { value: "languages", label: "Languages" },
+  { value: "counts", label: "A number per choice (of another field)" },
 ];
 
 const STAGE_LABELS: Record<PhaseStage, string> = {
@@ -402,6 +404,19 @@ export default function TemplateEditor({ type, isUserType, initial, typeLabels, 
                     <input type="checkbox" checked={Boolean(f.allowOther)} onChange={(e) => updateField(i, { allowOther: e.target.checked })} />
                     Allow typing other choices
                   </label>
+                </div>
+              )}
+              {f.type === "counts" && (
+                <div className="mt-1">
+                  <label className={LABEL}>For each choice of</label>
+                  <select value={f.of ?? ""} onChange={(e) => updateField(i, { of: e.target.value || undefined })} className={INPUT}>
+                    <option value="">—</option>
+                    {fields.filter((x) => (x.type === "multiselect" || x.type === "languages") && x.key !== f.key).map((x) => (
+                      <option key={x.key} value={x.key}>
+                        {x.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
               {(f.type === "select" || f.type === "multiselect" || f.type === "text") && (

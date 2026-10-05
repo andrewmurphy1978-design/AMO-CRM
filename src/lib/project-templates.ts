@@ -8,7 +8,7 @@
 
 // "spacer" is a blank cell ("Free space"): it asks nothing and just pushes the next
 // field along in the 3-column layout, e.g. to start a new line.
-export type FieldType = "yesno" | "text" | "textarea" | "url" | "select" | "multiselect" | "languages" | "spacer";
+export type FieldType = "yesno" | "text" | "number" | "textarea" | "url" | "select" | "multiselect" | "languages" | "counts" | "spacer";
 
 export interface Cond {
   field: string;
@@ -20,6 +20,9 @@ export interface FieldTpl {
   key: string;
   label: string;
   type: FieldType;
+  // "counts" fields: the key of the multiselect field this asks a number for, per selected choice
+  // (e.g. posts per week for each platform). Answers are stored as "Choice: N".
+  of?: string;
   // select / multiselect choices ("languages" uses LANGUAGE_OPTIONS).
   options?: string[];
   // Lets the user type extra choices beyond `options` ("others").
@@ -112,7 +115,7 @@ export function optionsFor(field: FieldTpl): string[] {
 }
 
 export function isMulti(field: FieldTpl): boolean {
-  return field.type === "multiselect" || field.type === "languages";
+  return field.type === "multiselect" || field.type === "languages" || field.type === "counts";
 }
 
 function isEmpty(v: string | string[] | undefined): boolean {
@@ -291,13 +294,14 @@ export function sanitizeConfig(input: unknown): TemplateConfig {
     let key = str(f?.key).trim() || (isSpacer ? "space" : "") || label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "field";
     while (seen.has(key)) key += "_2";
     seen.add(key);
-    const type = (["yesno", "text", "textarea", "url", "select", "multiselect", "languages", "spacer"] as const).includes(f?.type as FieldType) ? (f.type as FieldType) : "text";
+    const type = (["yesno", "text", "number", "textarea", "url", "select", "multiselect", "languages", "counts", "spacer"] as const).includes(f?.type as FieldType) ? (f.type as FieldType) : "text";
     fields.push({
       key,
       label,
       type,
       ...(Array.isArray(f?.options) ? { options: f.options.map(str).map((o: string) => o.trim()).filter(Boolean) } : {}),
       ...(f?.allowOther ? { allowOther: true } : {}),
+      ...(type === "counts" && typeof f?.of === "string" && f.of ? { of: str(f.of) } : {}),
       ...(cond(f?.showIf) ? { showIf: cond(f?.showIf) } : {}),
       ...(f?.keepSpace && cond(f?.showIf) ? { keepSpace: true } : {}),
       ...(typeof f?.app === "boolean" ? { app: f.app } : {}),
@@ -489,7 +493,7 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
       { key: "app", label: "Blog platform", type: "select", options: ["WordPress", "Systeme.io", "GoHighLevel", "ClickFunnels", "Wix", "Squarespace"], allowOther: true },
       { key: "languages", label: "Languages", type: "languages", allowOther: true },
       { key: "topics", label: "Topics / categories", type: "multiselect", options: [], allowOther: true },
-      { key: "articles", label: "Number of articles to write", type: "text" },
+      { key: "articles", label: "Number of articles to write", type: "number" },
       { key: "research", label: "Keyword & competition research", type: "yesno" },
       { key: "seo", label: "SEO optimization", type: "yesno" },
       { key: "optIn", label: "Newsletter opt-in form on the blog", type: "yesno" },
@@ -540,18 +544,18 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
   POST_AUTOMATION: {
     fields: [
       { key: "platforms", label: "Platforms", type: "multiselect", options: ["Facebook", "Instagram", "LinkedIn", "TikTok", "X", "YouTube"], allowOther: true },
-      { key: "tool", label: "Automation tool", type: "select", options: ["Buffer", "Make", "Zapier", "Hootsuite", "Later", "Metricool"], allowOther: true },
+      { key: "tool", label: "Automation tools", type: "multiselect", options: ["Buffer", "Make", "Zapier", "Hootsuite", "Later", "Metricool", "n8n"], allowOther: true },
       { key: "languages", label: "Languages", type: "languages", allowOther: true },
-      { key: "postsPerWeek", label: "Posts per week", type: "text" },
+      { key: "postsPerWeek", label: "Posts per week", type: "counts", of: "platforms" },
       { key: "contentSource", label: "Who creates the content", type: "select", options: ["Client provides it", "We create it", "AI-assisted"] },
     ],
     phases: [
-      { name: "Tool Setup", tasks: [{ title: "Create {tool} account" }, { title: "Connect {platforms} account", repeat: ["platforms"] }] },
+      { name: "Tool Setup", tasks: [{ title: "Create {tool} account", repeat: ["tool"] }, { title: "Connect {platforms} account", repeat: ["platforms"] }] },
       {
         name: "Content Calendar",
         tasks: [
           { title: "Create content calendar" },
-          { title: "Plan {postsPerWeek} posts per week", when: filled("postsPerWeek") },
+          { title: "Plan posts per week: {postsPerWeek}", when: filled("postsPerWeek") },
           { title: "Prepare {languages} content for {platforms}", repeat: ["languages", "platforms"] },
         ],
       },
@@ -622,7 +626,7 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
       { key: "domainSetup", label: "Domain setup", type: "yesno" },
       { key: "registrar", label: "Registrar", type: "text", showIf: yes("domainSetup") },
       { key: "dnsProvider", label: "DNS Provider", type: "text", showIf: yes("domainSetup") },
-      { key: "products", label: "Number of products", type: "text" },
+      { key: "products", label: "Number of products", type: "number" },
       { key: "payments", label: "Payment gateways", type: "multiselect", options: ["Stripe", "PayPal", "Square"], allowOther: true },
       { key: "shipping", label: "Shipping setup", type: "yesno" },
       { key: "taxes", label: "Tax setup", type: "yesno" },
@@ -673,7 +677,7 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
   },
   AUTOMATION: {
     fields: [
-      { key: "tool", label: "Automation tool", type: "select", options: ["Make", "Zapier", "n8n", "Systeme.io", "GoHighLevel"], allowOther: true },
+      { key: "tool", label: "Automation tools", type: "multiselect", options: ["Make", "Zapier", "n8n", "Systeme.io", "GoHighLevel"], allowOther: true },
       { key: "complexity", label: "Complexity", type: "select", options: ["Simple", "Standard", "Advanced"] },
       { key: "apps", label: "Apps to connect", type: "multiselect", options: [], allowOther: true },
       { key: "workflows", label: "Workflows to build", type: "multiselect", options: [], allowOther: true },
@@ -731,7 +735,7 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
     fields: [
       { key: "topics", label: "Topics", type: "multiselect", options: [], allowOther: true },
       { key: "format", label: "Format", type: "select", options: ["One-on-one", "Group", "Workshop"], allowOther: true },
-      { key: "sessions", label: "Number of sessions", type: "text" },
+      { key: "sessions", label: "Number of sessions", type: "number" },
       { key: "languages", label: "Languages", type: "languages", allowOther: true },
       { key: "materials", label: "Training materials needed", type: "yesno" },
       { key: "recordings", label: "Record sessions", type: "yesno" },
