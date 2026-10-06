@@ -33,6 +33,7 @@ import EmailComposePreferencesForm from "./email-compose-preferences-form";
 import EmailSignaturesForm from "./email-signatures-form";
 import BuildVersion from "./build-version";
 import SettingsCard, { SettingsGroupLabel } from "./settings-card";
+import LocalFilesForm from "./local-files-form";
 import SettingsTabs from "./settings-tabs";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -437,6 +438,9 @@ export default async function SettingsPage({
           />
         </SettingsCard>
       )}
+      <SettingsCard title={lang === "fr" ? "Fichiers locaux" : "Local files"} description={lang === "fr" ? "Où sont rangés les dossiers de vos clients et projets sur votre ordinateur." : "Where your client and project folders are kept on your computer."}>
+        <LocalFilesForm root={billingSettings?.localFilesRoot ?? null} lang={lang} />
+      </SettingsCard>
       <SettingsCard>
         <ServicePriceListForm items={serviceItems} lang={lang} customTypes={(await loadTypeInfo(lang)).custom.map((c) => ({ key: c.key, label: lang === "fr" && c.labelFr ? c.labelFr : c.label }))} />
       </SettingsCard>

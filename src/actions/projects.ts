@@ -1,5 +1,6 @@
 "use server";
 
+import { ensureProjectFolder } from "@/lib/local-folders";
 import { phaseDates, taskRows } from "@/lib/task-schedule";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -364,7 +365,7 @@ export async function createProject(
       const values = readFieldValues(template, (name) => formData.getAll(name.replace(/^cf_/, `cf_${type}__`)).map(String));
       return { type, label: labels[type] ?? type, template, values };
     });
-    return createProjectFromTemplate(db, {
+    const created = await createProjectFromTemplate(db, {
       contactId: data.contactId,
       status: data.status,
       ownerId: data.ownerId || session.user.id,
@@ -381,6 +382,9 @@ export async function createProject(
       types,
       ...readSettings(formData),
     });
+    // The project's folder, inside its client's folder (a path; the browser creates the folder).
+    await ensureProjectFolder(db, created.id);
+    return created;
   });
 
   revalidatePath("/projects");

@@ -13,6 +13,8 @@ import { BrandCard } from "../../contacts/[id]/brand-card";
 import { loadBrandRows } from "@/lib/brand-rows";
 import { loadBrandReports, loadProjectFileRows } from "@/lib/file-rows";
 import FilesCard from "@/components/files-card";
+import FolderField from "@/components/folder-field";
+import { ensureProjectFolder } from "@/lib/local-folders";
 import TasksCard, { type TaskCardItem } from "./tasks-card";
 import { ProposalsCard, InvoicesCard, type ProposalRowData, type InvoiceRowData } from "./documents-cards";
 import { contactTaxLocation } from "@/lib/billing-totals";
@@ -110,6 +112,7 @@ export default async function ProjectDetailPage({
   } = await withScopedPrismaClient(async (db) => {
     const googleAccessToken = session ? await getValidAccessToken(session.user.id, db) : null;
     const hour12 = await getHour12(session, db);
+    await ensureProjectFolder(db, id); // the project's folder path (when a local files folder is set)
     const project = await db.project.findUnique({
       where: { id },
       include: {
@@ -703,6 +706,8 @@ export default async function ProjectDetailPage({
                 <div className="h-full rounded-full bg-amo-lime transition-all" style={{ width: `${progress.pct}%` }} />
               </div>
             </div>
+
+            <FolderField kind="project" id={project.id} path={project.folderPath} created={Boolean(project.folderCreatedAt)} lang={lang} />
 
             <div className="grid gap-4 lg:grid-cols-3">
               <div>

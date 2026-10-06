@@ -47,6 +47,8 @@ import { BrandCard } from "./brand-card";
 import { loadBrandRows } from "@/lib/brand-rows";
 import { loadBrandReports, loadContactFileRows } from "@/lib/file-rows";
 import FilesCard from "@/components/files-card";
+import FolderField from "@/components/folder-field";
+import { ensureContactFolder } from "@/lib/local-folders";
 import { AvatarThumb, AppIdChip, ContactInfoCard, TechStackCard, DomainsCard } from "./contact-cards";
 import RelationsDialog from "./relations-dialog";
 import OtherInfoDialog from "./other-info-dialog";
@@ -237,6 +239,7 @@ export default async function ContactDetailPage({
     const composePrefs = session
       ? await db.user.findUnique({ where: { id: session.user.id }, select: { defaultComposeSource: true } })
       : null;
+    await ensureContactFolder(db, id); // the client's folder path (when a local files folder is set)
     const contact = await db.contact.findUnique({
       where: { id },
       include: {
@@ -586,6 +589,8 @@ export default async function ContactDetailPage({
               />
             }
           >
+            <FolderField kind="contact" id={contact.id} path={contact.folderPath} created={Boolean(contact.folderCreatedAt)} lang={lang} />
+
             {/* Desktop: explicit 4-row grid (Language has no row of its own in
                 this layout — it rides at the end of row 2 rather than being
                 dropped, since it's still real contact data). */}

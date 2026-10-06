@@ -1,5 +1,6 @@
 "use server";
 
+import { ensureContactFolder } from "@/lib/local-folders";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
@@ -48,6 +49,7 @@ export async function createContactFromSms(number: string, firstName: string, la
       select: { id: true },
     });
     await attachSmsNumberToContact(db, number, contact.id);
+    await ensureContactFolder(db, contact.id);
     return contact.id;
   });
   refresh(id);

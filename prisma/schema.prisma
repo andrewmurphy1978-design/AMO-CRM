@@ -355,6 +355,9 @@ model Contact {
   credentials               ContactCredential[]
   brandItems                ContactBrandItem[]
   files                     AttachedFile[]
+  // Client folder: <local files root>/<client>, created on the computer by the CRM's folder sync.
+  folderPath                String?
+  folderCreatedAt           DateTime?
   appSyncSettings           ContactAppSync[]
   relationsFrom             ContactRelation[]         @relation("ContactRelationsFrom")
   relationsTo               ContactRelation[]         @relation("ContactRelationsTo")
@@ -961,6 +964,9 @@ model Project {
   calendarEventLinks CalendarEventLink[]
   supplierInvoices   ProjectSupplierInvoice[]
   files              AttachedFile[]
+  // Project folder: <client folder>/<project>.
+  folderPath         String?
+  folderCreatedAt    DateTime?
 
   @@index([status])
   @@index([contactId])
@@ -1930,6 +1936,8 @@ model BillingSettings {
   cardPaymentUrl    String?
   bookingUrl        String?
   chargeCanadianTax Boolean  @default(false)
+  // Where the local client files live on the team's computer (e.g. C:\Users\Andrew\Clients).
+  localFilesRoot    String?
   gstNumber         String?
   qstNumber         String?
   updatedAt         DateTime @updatedAt

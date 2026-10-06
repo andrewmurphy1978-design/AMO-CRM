@@ -1,5 +1,6 @@
 "use server";
 
+import { ensureContactFolder } from "@/lib/local-folders";
 import { z } from "zod";
 import type { Contact } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -310,6 +311,8 @@ export async function createContact(
     const contact = await db.contact.create({
       data: { ...data, source: "manual", ownerId: session.user.id },
     });
+    // The client's folder (a path; the browser creates the folder on the computer).
+    await ensureContactFolder(db, contact.id);
 
     const socialLinks = readSocialLinks(formData);
     if (socialLinks.length > 0) {
