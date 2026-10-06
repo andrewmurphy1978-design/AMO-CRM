@@ -288,8 +288,17 @@ export default function TaskDialog({
               disabled={guide.busy}
               onClick={async () => {
                 setGuide({ busy: true, progress: fr ? "Vérification…" : "Checking…" });
-                const call = async (payload: object) => (await (await fetch(`/api/projects/${projectId}/brand-guide`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })).json()) as { error?: string; parts?: number; content?: Record<string, unknown>; fileNames?: string[] };
-                const start = await call({ step: "start" }).catch(() => ({ error: fr ? "Connexion interrompue." : "Connection interrupted." } as { error?: string; parts?: number }));
+                const call = async (payload: object) => {
+                  const res = await fetch(`/api/projects/${projectId}/brand-guide`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+                  const text = await res.text();
+                  try {
+                    return JSON.parse(text) as { error?: string; parts?: number; content?: Record<string, unknown>; fileNames?: string[] };
+                  } catch {
+                    // Not our JSON: the web connection was cut (e.g. HTTP 524 after 100 s) or the server failed.
+                    return { error: `${fr ? "Réponse inattendue du serveur" : "Unexpected server response"} (HTTP ${res.status}${text ? `: ${text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)}` : ""})` };
+                  }
+                };
+                const start = await call({ step: "start" }).catch((e: unknown) => ({ error: `${fr ? "Connexion interrompue" : "Connection interrupted"} (${e instanceof Error ? e.message : "network"})`, parts: undefined as number | undefined }));
                 if (start.error || !start.parts) return setGuide({ busy: false, error: start.error ?? "Error" });
                 // 4 parts x 2 languages, written in parallel (each is a short request); a failed part is tried once more.
                 const total = start.parts * 2;
@@ -305,17 +314,25 @@ export default function TaskDialog({
                         return null;
                       }
                       if (attempt === 1) return r.error ?? "Error";
-                    } catch {
-                      if (attempt === 1) return fr ? "Connexion interrompue." : "Connection interrupted.";
+                    } catch (e) {
+                      if (attempt === 1) return `${fr ? "Connexion interrompue" : "Connection interrupted"} (${e instanceof Error ? e.message : "network"})`;
                     }
                   }
                   return "Error";
                 };
                 setGuide({ busy: true, progress: `${fr ? "Rédaction par l'IA" : "Writing with AI"} 0/${total}` });
-                const errors = (await Promise.all((["en", "fr"] as const).flatMap((lang) => Array.from({ length: start.parts! }, (_, p) => run(lang, p))))).filter(Boolean);
+                // Four at a time (all eight at once would load the server's memory eight times over).
+                const queue = (["en", "fr"] as const).flatMap((lang) => Array.from({ length: start.parts! }, (_, p) => ({ lang, p })));
+                const errors: (string | null)[] = [];
+                await Promise.all(
+                  Array.from({ length: 4 }, async () => {
+                    for (let job = queue.shift(); job; job = queue.shift()) errors.push(await run(job.lang, job.p));
+                  })
+                );
+                errors.splice(0, errors.length, ...errors.filter(Boolean));
                 if (errors.length > 0) return setGuide({ busy: false, error: `${fr ? "L'IA n'a pas pu rédiger toutes les parties" : "The AI couldn't write every part"}: ${errors[0]}` });
                 setGuide({ busy: true, progress: fr ? "Mise en page des PDF…" : "Laying out the PDFs…" });
-                const res = await call({ step: "finish", guides: results }).catch(() => ({ error: fr ? "Connexion interrompue." : "Connection interrupted." } as { error?: string; fileNames?: string[] }));
+                const res = await call({ step: "finish", guides: results }).catch((e: unknown) => ({ error: `${fr ? "Connexion interrompue" : "Connection interrupted"} (${e instanceof Error ? e.message : "network"})`, fileNames: undefined as string[] | undefined }));
                 if (res.error) setGuide({ busy: false, error: res.error });
                 else {
                   setGuide({ busy: false, message: fr ? `Guides PDF créés en anglais et en français (${(res.fileNames ?? []).join(", ")}) et ajoutés aux fichiers et à la carte Marque. La tâche est terminée.` : `English and French PDF guides created (${(res.fileNames ?? []).join(", ")}) and added to the Files and Brand cards. The task is completed.` });

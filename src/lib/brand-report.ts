@@ -3,6 +3,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { BRAND_FONTS, MAX_BRAND_FILE_BYTES } from "@/lib/brand";
 import { readZip } from "@/lib/zip-read";
 import { decryptSecret } from "@/lib/crypto";
+import { loadBrandRows } from "@/lib/brand-rows";
 import { normaliseGuide, renderGuidePdf, type GuideAssets, type GuideDoc } from "@/lib/brand-guide";
 import { onTaskDone } from "@/lib/task-schedule";
 import { syncProjectLifecycle } from "@/lib/project-progress";
@@ -432,15 +433,21 @@ export interface GuideSources {
 }
 
 export async function loadGuideSources(db: PrismaClient, contactId: string): Promise<GuideSources | { error: string }> {
-  const files = await db.attachedFile.findMany({ where: { contactId, kind: "BRAND_REPORT" }, orderBy: { createdAt: "asc" }, select: { name: true, data: true } });
-  const reports = files.filter((f) => /\.(md|markdown|txt)$/i.test(f.name)).map((f) => new TextDecoder("utf-8").decode(f.data as unknown as Uint8Array));
+  // Only the Markdown reports are read (the images zip next to them can be several MB).
+  const files = await db.attachedFile.findMany({
+    where: { contactId, kind: "BRAND_REPORT", OR: [{ name: { endsWith: ".md", mode: "insensitive" } }, { name: { endsWith: ".markdown", mode: "insensitive" } }, { name: { endsWith: ".txt", mode: "insensitive" } }] },
+    orderBy: { createdAt: "asc" },
+    select: { name: true, data: true },
+  });
+  const reports = files.map((f) => new TextDecoder("utf-8").decode(f.data as unknown as Uint8Array));
   if (reports.length === 0) return { error: "Drop the AI's brand report (a Markdown .md file) on the Brand card first." };
   const setting = await db.integrationSetting.findUnique({ where: { provider: "anthropic" } });
   if (!setting?.apiKeyEncrypted) return { error: "No Anthropic API key configured: add one in Settings first." };
   const contact = await db.contact.findUnique({ where: { id: contactId }, select: { firstName: true, lastName: true, company: true, industry: true } });
   const clientName = contact?.company || [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "Client";
-  const items = await db.contactBrandItem.findMany({ where: { contactId }, orderBy: [{ category: "asc" }, { order: "asc" }] });
-  const cardLines = items.map((i) => `- card | ${i.category} | ${i.label}${i.value && !i.value.startsWith("data:") ? ` | ${i.value}` : i.value ? " | (file)" : ""}${i.note ? ` | ${i.note}` : ""}`);
+  // (Without the uploaded files' bytes: they would be loaded again by every request.)
+  const items = await loadBrandRows(db, contactId);
+  const cardLines = items.map((i) => `- card | ${i.category} | ${i.label}${i.value && !i.value.startsWith("kept:") ? ` | ${i.value}` : i.value ? " | (file)" : ""}${i.note ? ` | ${i.note}` : ""}`);
   return { apiKey: await decryptSecret(setting.apiKeyEncrypted), clientName, industry: contact?.industry ?? null, reports, cardLines };
 }
 

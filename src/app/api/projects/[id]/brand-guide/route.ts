@@ -10,6 +10,15 @@ import { GUIDE_PARTS, writeGuidePart, type GuideDoc } from "@/lib/brand-guide";
 //   { step: "part", lang, part }            one part of the guide, written by AI (a short request)
 //   { step: "finish", guides: {en, fr} }    draws and saves the two PDFs, ticks the task
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    return await handle(request, params);
+  } catch (err) {
+    console.error("brand guide step failed", err);
+    return Response.json({ error: `Server error: ${err instanceof Error ? err.message.slice(0, 200) : "unknown"}` });
+  }
+}
+
+async function handle(request: Request, params: Promise<{ id: string }>) {
   const session = await auth();
   if (!session) return new Response("Unauthorized", { status: 401 });
   const { id } = await params;
