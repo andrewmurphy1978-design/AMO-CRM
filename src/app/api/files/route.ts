@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { processBrandReport, type BrandReportResult } from "@/lib/brand-report";
+import { importBrandZip, processBrandReport, type BrandReportResult } from "@/lib/brand-report";
 import { revalidatePath } from "next/cache";
 
 export const MAX_FILE_BYTES = 10_000_000;
@@ -22,6 +22,7 @@ export async function POST(request: Request) {
   const problems: string[] = [];
   let brand: BrandReportResult | null = null;
   let brandNote = "";
+  let zipResult: { added: number; skipped: string[] } | null = null;
   await withScopedPrismaClient(async (db) => {
     for (const f of files) {
       if (f.size === 0) {
@@ -47,10 +48,19 @@ export async function POST(request: Request) {
             console.error("brand report not processed", err);
             problems.push(`${f.name}: could not be read`);
           }
-        } else brandNote = "Only a Markdown (.md) report can be checked and turned into the PDF guide.";
+        } else if (/\.zip$/i.test(f.name)) {
+          // The AI's brand-assets.zip: its images join the Brand card.
+          try {
+            const z = await importBrandZip(db, contactId, bytes);
+            zipResult = { added: (zipResult?.added ?? 0) + z.added, skipped: [...(zipResult?.skipped ?? []), ...z.skipped] };
+          } catch (err) {
+            console.error("brand zip not read", err);
+            problems.push(`${f.name}: could not be opened as a zip`);
+          }
+        } else brandNote = "Only a Markdown (.md) report can be checked, and only a .zip's images are added to the Brand card.";
       }
     }
   });
-  if (brand && contactId) revalidatePath(`/contacts/${contactId}`);
-  return Response.json({ saved: saved.length, problems, brand, brandNote });
+  if ((brand || zipResult) && contactId) revalidatePath(`/contacts/${contactId}`);
+  return Response.json({ saved: saved.length, problems, brand, brandNote, zip: zipResult });
 }

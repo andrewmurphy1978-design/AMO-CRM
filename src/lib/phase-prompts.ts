@@ -99,16 +99,15 @@ ${brandBlock(c)}
 ## The brand must include
 ${list(c.brandWanted, "- logos, colour palette, fonts, brand voice and a brand guide")}
 
-## Deliver (in ${lang(c)}), one section per item above
-- Logos: 3 concepts described in words, then the best one as clean inline SVG (main, horizontal, icon-only; light and dark versions)
-- Colours: primary, secondary, accent, neutrals with HEX/RGB, usage rules and WCAG AA contrast checks
-- Fonts: heading + body pairing (free Google Fonts), sizes and line-height scale
-- Icons: style rules and 6 sample icons as inline SVG
-- Components: buttons, forms, cards, navigation as CSS using CSS variables
-- Graphics and patterns, photo style, chart style: short rules with examples
-- Voice and tone: 5 attributes, do/don't list, 3 sample sentences
-- Brand guide: the table of contents of a one-page-per-topic PDF guide
-Finish with a "Brand card entries" list (category | label | value) that I can paste into the CRM, e.g. "Colour | Primary | #0F766E".`;
+## Deliver (in ${lang(c)}) as TWO downloadable files. Do NOT answer with an artifact, canvas or a long chat reply: create real files I can download.
+1. brand-report.md: ONE Markdown file. Use exactly these level-2 headings (only for the items above): "## Logos", "## Colours", "## Fonts", "## Icons", "## Graphics and patterns", "## Photos", "## Components", "## Charts", "## Voice and tone".
+   - Logos / Icons / Graphics and patterns / Photos / Components / Charts: a bullet list, one bullet per asset, written as "- Name: short description (file name in the zip)". Describe them in words; do NOT paste SVG or code blocks in this file.
+   - Colours: a Markdown table with the columns Name | HEX | RGB | Usage (primary, secondary, accent, neutrals), HEX written as #RRGGBB, plus usage rules and WCAG AA contrast checks under the table.
+   - Fonts: one bullet per font as "- Font name: where it is used" (free Google Fonts, heading + body pairing), then the sizes and line-height scale.
+   - Voice and tone: bullets such as "- Tone: ..." and "- Audience: ...", 5 attributes, a do/don't list and 3 sample sentences.
+   - Start with a short summary and end with a "Brand guide contents" list (one topic per page of the PDF guide).
+2. brand-assets.zip: ONE zip with every image as a real file (SVG or PNG, each under 500 KB), in folders named logos/, icons/, graphics/, photos/, components/, charts/. Logos: the 3 concepts and the best one in main, horizontal and icon-only versions, light and dark. Icons: 6 sample icons. Use clear file names (for example logos/logo-horizontal-light.svg).
+Give me the two files to download, nothing else to copy and paste.`;
     case "mockup":
       return `${intro}
 You are a senior UX/UI designer. Produce the MOCK-UP REPORT (design brief the client approves before building).

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import type { TaskDialogValues } from "@/actions/tasks";
 import { generatePhasePrompt } from "@/actions/phase-prompts";
+import { createBrandGuidePdf } from "@/actions/brand-guide";
 import BrandZipLink from "./brand-zip-link";
 import { CARD_COLORS } from "@/components/section-card";
 
@@ -45,6 +46,7 @@ export default function TaskDialog({
   const [aiPrompt, setAiPrompt] = useState(initial.aiPrompt ?? "");
   const [assetsZip, setAssetsZip] = useState<{ url: string; count: number } | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [guide, setGuide] = useState<{ busy: boolean; message?: string; error?: string }>({ busy: false });
   const [copied, setCopied] = useState(false);
   const fr = lang === "fr";
   // The Proposal phase's tasks have no AI prompt: the proposal builder already has its own AI draft.
@@ -278,6 +280,30 @@ export default function TaskDialog({
           />
           {assetsZip && <BrandZipLink url={assetsZip.url} count={assetsZip.count} fr={fr} />}
         </div>
+        )}
+
+        {/\b(create the brand guide|créer le guide de marque)/i.test(title) && projectId && (
+          <div className="mt-3 rounded-lg border border-card-border bg-field-bg p-3">
+            <button
+              type="button"
+              disabled={guide.busy}
+              onClick={async () => {
+                setGuide({ busy: true });
+                const res = await createBrandGuidePdf(projectId);
+                if (res.error) setGuide({ busy: false, error: res.error });
+                else {
+                  setGuide({ busy: false, message: fr ? `Guide PDF créé (${res.fileName}) et ajouté aux fichiers et à la carte Marque. La tâche est terminée.` : `PDF guide created (${res.fileName}) and added to the Files and Brand cards. The task is completed.` });
+                  setStatus("DONE");
+                }
+              }}
+              className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold shadow-sm disabled:opacity-60"
+            >
+              {guide.busy ? (fr ? "Création…" : "Creating…") : fr ? "📄 Créer le guide de marque PDF" : "📄 Create the brand guide PDF"}
+            </button>
+            <p className="mt-1 text-xs text-soft">{fr ? "Génère le PDF à partir des rapports de l'IA déposés sur la carte Marque." : "Builds the PDF from the AI reports dropped on the Brand card."}</p>
+            {guide.message && <p className="mt-1 text-xs text-emerald-700">{guide.message}</p>}
+            {guide.error && <p className="mt-1 text-xs text-red-600">{guide.error}</p>}
+          </div>
         )}
 
         {inProposalPhase && (

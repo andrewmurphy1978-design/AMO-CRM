@@ -34,14 +34,17 @@ export default function BrandReportDrop({ contactId, reports, fr }: { contactId:
         const res = await fetch("/api/files", { method: "POST", body: form });
         if (!res.ok) problems.push(`${f.name}: ${fr ? "échec du téléversement" : "upload failed"}`);
         else {
-          const json = (await res.json()) as { problems?: string[]; brandNote?: string; brand?: { added: number; verified: string[]; missing: string[]; pdf: boolean } | null };
+          const json = (await res.json()) as { problems?: string[]; brandNote?: string; brand?: { added: number; verified: string[]; missing: string[] } | null; zip?: { added: number; skipped: string[] } | null };
           problems.push(...(json.problems ?? []));
           if (json.brandNote) notes.push(json.brandNote);
           if (json.brand) {
             if (json.brand.added > 0) notes.push(fr ? `${json.brand.added} élément(s) ajouté(s) à la carte Marque.` : `${json.brand.added} item(s) added to the Brand card.`);
             if (json.brand.verified.length > 0) notes.push(`${fr ? "Vérifié et terminé" : "Verified and completed"}: ${json.brand.verified.join(", ")}.`);
             if (json.brand.missing.length > 0) notes.push(`${fr ? "Non terminé" : "Not completed"}: ${json.brand.missing.join("; ")}.`);
-            if (json.brand.pdf) notes.push(fr ? "Le guide PDF a été généré et ajouté aux fichiers." : "The PDF guide was generated and added to the files.");
+          }
+          if (json.zip) {
+            notes.push(fr ? `${json.zip.added} image(s) du zip ajoutée(s) à la carte Marque.` : `${json.zip.added} image(s) from the zip added to the Brand card.`);
+            if (json.zip.skipped.length > 0) notes.push(`${fr ? "Ignoré" : "Skipped"}: ${json.zip.skipped.slice(0, 6).join(", ")}${json.zip.skipped.length > 6 ? "…" : ""}.`);
           }
         }
       } catch {
@@ -65,7 +68,7 @@ export default function BrandReportDrop({ contactId, reports, fr }: { contactId:
           fr ? "Téléversement…" : "Uploading…"
         ) : (
           <>
-            {fr ? "Glissez-déposez ici le rapport de l'IA (PDF, Markdown, Word, zip…) ou " : "Drag and drop the AI report here (PDF, Markdown, Word, zip…) or "}
+            {fr ? "Glissez-déposez ici les fichiers de l'IA : le rapport (.md) et le zip d'images, ou " : "Drag and drop the AI's files here: the report (.md) and the images zip, or "}
             <button type="button" onClick={() => input.current?.click()} className="font-semibold text-emerald-700 hover:underline">
               {fr ? "choisissez un fichier" : "choose a file"}
             </button>

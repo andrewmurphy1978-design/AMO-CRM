@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { PrismaClient } from "@/lib/prisma";
-import { BRAND_FONTS } from "@/lib/brand";
+import { BRAND_FONTS, MAX_BRAND_FILE_BYTES } from "@/lib/brand";
+import { readZip } from "@/lib/zip-read";
 import { onTaskDone } from "@/lib/task-schedule";
 import { syncProjectLifecycle } from "@/lib/project-progress";
 
@@ -14,13 +15,17 @@ export interface BrandAnalysis {
   icons: boolean;
   graphics: boolean;
   voice: boolean;
+  photos: boolean;
+  charts: boolean;
 }
 
 const HEX = /#(?:[0-9a-f]{6}|[0-9a-f]{3})\b/gi;
 
 export function analyseBrandReport(md: string): BrandAnalysis {
   const text = md.toLowerCase();
-  const colours = [...new Set((md.match(HEX) ?? []).map((h) => (h.length === 4 ? `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}` : h).toUpperCase()))];
+  // Colours come from the report's colour sections (code blocks and contrast tables don't count).
+  const fromItems = [...new Set(extractBrandItems(md).filter((i) => i.category === "colours").map((i) => i.value))];
+  const colours = fromItems.length > 0 ? fromItems : [...new Set((md.match(HEX) ?? []).map((h) => (h.length === 4 ? `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}` : h).toUpperCase()))];
 
   // Fonts: the items under a "Fonts / Typography" heading, plus any well-known font named anywhere.
   const fonts = new Set<string>();
@@ -45,6 +50,8 @@ export function analyseBrandReport(md: string): BrandAnalysis {
     icons: /\bicon|icône|icone/.test(text),
     graphics: /graphic|pattern|illustration|graphique|motif/.test(text),
     voice: /\bvoice\b|\btone\b|\bvoix\b|\bton\b/.test(text),
+    photos: /\bphoto|photograph/.test(text),
+    charts: /\bchart|data.?vis|diagramme/.test(text),
   };
 }
 
@@ -67,6 +74,7 @@ const strip = (s: string) =>
 export function extractBrandItems(md: string): BrandCardItem[] {
   const items: BrandCardItem[] = [];
   let section: "colours" | "fonts" | "voice" | "logos" | "icons" | "graphics" | null = null;
+  let fenced = false;
   const add = (it: BrandCardItem) => {
     const label = it.label.trim().slice(0, 80);
     if (!label && !it.value) return;
@@ -75,37 +83,107 @@ export function extractBrandItems(md: string): BrandCardItem[] {
   };
   for (const raw of md.replace(/\r\n?/g, "\n").split("\n")) {
     const line = raw.trim();
-    if (!line) continue;
+    if (/^(```|~~~)/.test(line)) {
+      fenced = !fenced; // code (SVG, CSS...) is never brand data
+      continue;
+    }
+    if (fenced || !line || line.startsWith("<")) continue;
     const h = /^#{1,6}\s+(.*)$/.exec(line);
     if (h) {
       const t = h[1].toLowerCase();
-      section = /colou?r|couleur|palette/.test(t) ? "colours" : /font|typograph|police|typo/.test(t) ? "fonts" : /voice|tone|voix|\bton\b/.test(t) ? "voice" : /logo/.test(t) ? "logos" : /icon|icône/.test(t) ? "icons" : /graphic|pattern|illustration|graphique|motif/.test(t) ? "graphics" : null;
+      // Level-3+ headings inside a recognised section keep that section (e.g. "### Primary palette").
+      const next = /colou?r|couleur|palette/.test(t) ? "colours" : /font|typograph|police|typo/.test(t) ? "fonts" : /voice|tone|voix|\bton\b/.test(t) ? "voice" : /logo/.test(t) ? "logos" : /icon|icône/.test(t) ? "icons" : /graphic|pattern|illustration|graphique|motif/.test(t) ? "graphics" : null;
+      const level = h[1] ? (/^#+/.exec(line)?.[0].length ?? 2) : 2;
+      section = next ?? (level >= 3 && section && !/contrast|access|wcag|usage|rule|guideline/.test(t) ? section : null);
+      if (/contrast|access|wcag/.test(t)) section = null;
       continue;
     }
     if (/^\|[\s:|-]+\|$/.test(line)) continue;
-    const text = strip(line.startsWith("|") ? line.replace(/^\||\|$/g, "").split("|").map((c) => c.trim()).join(" - ") : line);
+    const isRow = line.startsWith("|");
+    const cells = isRow ? line.replace(/^\||\|$/g, "").split("|").map((c) => strip(c)) : [];
+    const text = isRow ? cells.join(" - ") : strip(line);
     if (!text) continue;
-    const hex = text.match(HEX);
-    if (hex && (section === "colours" || section === null || /colou?r|couleur|primary|secondary|accent|primaire|secondaire/i.test(text))) {
-      for (const code of hex.slice(0, 1)) {
-        const full = code.length === 4 ? `#${code[1]}${code[1]}${code[2]}${code[2]}${code[3]}${code[3]}` : code;
-        const label = text.replace(HEX, "").replace(/[()[\]:|—–-]+\s*$/g, "").replace(/^[\s:|—–-]+|[\s:|—–-]+$/g, "").replace(/\s{2,}/g, " ");
-        add({ category: "colours", label: label || "Colour", value: full.toUpperCase(), note: "" });
+
+    if (section === "colours") {
+      const hex = text.match(HEX);
+      if (!hex) continue;
+      const code = hex[0];
+      const full = (code.length === 4 ? `#${code[1]}${code[1]}${code[2]}${code[2]}${code[3]}${code[3]}` : code).toUpperCase();
+      let label: string;
+      let note = "";
+      if (isRow) {
+        const named = cells.filter((c) => c && !HEX.test(c) && !/^[\d\s,.%]+$/.test(c));
+        HEX.lastIndex = 0;
+        const [first, second, ...rest] = named;
+        label = second && second.length < 30 && first.length < 30 ? `${first} - ${second}` : first ?? "Colour";
+        note = (second && label === first ? [second, ...rest] : rest).join(" - ");
+      } else {
+        label = text.replace(HEX, "").replace(/\(\s*\)/g, "").replace(/^[\s:|—–-]+|[\s:|—–-]+$/g, "").replace(/\s{2,}/g, " ");
       }
+      HEX.lastIndex = 0;
+      add({ category: "colours", label: label || "Colour", value: full, note });
       continue;
     }
-    if (!section || section === "colours") continue; // a colour needs its #code
+    if (!section) continue;
     const kv = /^([^:—–]{1,50}?)\s*[:—–]\s+(.+)$/.exec(text);
     if (section === "fonts") {
       const name = (kv ? kv[1] : text).trim();
-      if (name.length > 1 && name.length < 50) add({ category: "fonts", label: name, value: kv ? kv[2].trim().slice(0, 120) : "", note: "" });
+      if (name.length > 1 && name.length < 50 && !/^(size|scale|line|body|heading)s?\b/i.test(name) || BRAND_FONTS.includes(name)) add({ category: "fonts", label: name, value: kv ? kv[2].trim().slice(0, 120) : "", note: "" });
     } else if (section === "voice") {
-      add(kv ? { category: "voice", label: kv[1].trim(), value: kv[2].trim(), note: "" } : { category: "voice", label: "Voice", value: text, note: "" });
-    } else {
+      if (!/^(do|don't|dont|sample|example)/i.test(text) && line.length > 2) add(kv ? { category: "voice", label: kv[1].trim(), value: kv[2].trim(), note: "" } : { category: "voice", label: "Voice", value: text, note: "" });
+    } else if (/^[-*+]\s/.test(line)) {
       add({ category: section, label: (kv ? kv[1] : text).trim().slice(0, 60), value: "", note: kv ? kv[2].trim() : text });
     }
   }
   return items;
+}
+
+// The images of the AI's brand-assets.zip become files on the Brand card (by folder / file name).
+const IMAGE_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
+const ZIP_CATEGORIES: [RegExp, string][] = [
+  [/logo/i, "logos"],
+  [/icon|favicon/i, "icons"],
+  [/pattern|graphic|illustration|banner/i, "graphics"],
+  [/photo|portrait|headshot/i, "photos"],
+  [/component|button|card|header|form/i, "components"],
+  [/chart/i, "charts"],
+];
+
+export async function importBrandZip(db: PrismaClient, contactId: string, zip: Uint8Array): Promise<{ added: number; skipped: string[] }> {
+  const { entries, skipped } = await readZip(zip);
+  const existing = await db.contactBrandItem.findMany({ where: { contactId }, select: { category: true, label: true } });
+  const known = new Set(existing.map((e) => `${e.category}|${e.label.toLowerCase()}`));
+  const order = new Map<string, number>();
+  for (const e of existing) order.set(e.category, (order.get(e.category) ?? 0) + 1);
+  const rows: { contactId: string; category: string; label: string; value: string; order: number }[] = [];
+  for (const e of entries) {
+    const ext = (e.name.split(".").pop() ?? "").toLowerCase();
+    const mime = IMAGE_TYPES[ext];
+    if (!mime) continue; // the Markdown report and other files are not brand images
+    const category = ZIP_CATEGORIES.find(([re]) => re.test(e.name))?.[1];
+    if (!category) {
+      skipped.push(`${e.name} (no logos/icons/graphics... folder or name)`);
+      continue;
+    }
+    if (e.data.length > MAX_BRAND_FILE_BYTES) {
+      skipped.push(`${e.name} (over ${Math.round(MAX_BRAND_FILE_BYTES / 1000)} KB)`);
+      continue;
+    }
+    if (rows.length >= 60) {
+      skipped.push(`${e.name} (more than 60 images)`);
+      continue;
+    }
+    const label = (e.name.split("/").pop() ?? e.name).replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim().slice(0, 80);
+    if (known.has(`${category}|${label.toLowerCase()}`)) continue;
+    known.add(`${category}|${label.toLowerCase()}`);
+    let bin = "";
+    for (let i = 0; i < e.data.length; i += 0x8000) bin += String.fromCharCode(...e.data.subarray(i, i + 0x8000));
+    const n = order.get(category) ?? 0;
+    order.set(category, n + 1);
+    rows.push({ contactId, category, label, value: `data:${mime};base64,${btoa(bin)}`, order: n });
+  }
+  if (rows.length > 0) await db.contactBrandItem.createMany({ data: rows });
+  return { added: rows.length, skipped };
 }
 
 // Which Brand-phase tasks the report covers (null: nothing to check it against).
@@ -115,6 +193,9 @@ const CHECKS: { match: RegExp; label: string; ok: (a: BrandAnalysis) => boolean;
   { match: /^choose the colou?r palette/i, label: "Choose the colour palette", ok: (a) => a.colours.length >= 2, why: "the report has fewer than 2 colour codes (#RRGGBB)" },
   { match: /^choose the fonts/i, label: "Choose the fonts", ok: (a) => a.fonts.length > 0, why: "the report names no fonts" },
   { match: /^create the icon set/i, label: "Create the icon set", ok: (a) => a.icons, why: "the report doesn't describe icons" },
+  { match: /^define the brand voice/i, label: "Define the brand voice and tone", ok: (a) => a.voice, why: "the report doesn't describe the voice and tone" },
+  { match: /^define the photo style/i, label: "Define the photo style", ok: (a) => a.photos, why: "the report doesn't describe the photo style" },
+  { match: /^define the chart/i, label: "Define the chart style", ok: (a) => a.charts, why: "the report doesn't describe the chart style" },
   { match: /^create the graphics/i, label: "Create the graphics and patterns", ok: (a) => a.graphics, why: "the report doesn't describe graphics or patterns" },
 ];
 
@@ -264,14 +345,11 @@ export interface BrandReportResult {
   added: number;
   verified: string[];
   missing: string[];
-  pdf: boolean;
   projects: number;
 }
 
 export async function processBrandReport(db: PrismaClient, contactId: string, markdown: string): Promise<BrandReportResult> {
   const analysis = analyseBrandReport(markdown);
-  const contact = await db.contact.findUnique({ where: { id: contactId }, select: { firstName: true, lastName: true, company: true } });
-  const clientName = contact?.company || [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "Client";
 
   // Everything the report describes goes on the Brand card (what is already there is kept).
   let added = 0;
@@ -294,20 +372,8 @@ export async function processBrandReport(db: PrismaClient, contactId: string, ma
     }
   }
 
-  // The PDF guide (replaces the previous one).
-  let pdf = false;
-  try {
-    const bytes = await buildBrandReportPdf({ clientName, markdown, analysis });
-    await db.attachedFile.deleteMany({ where: { contactId, kind: "BRAND_PDF" } });
-    await db.attachedFile.create({
-      data: { contactId, kind: "BRAND_PDF", name: `Brand-guide-${clientName.replace(/[^\w.-]+/g, "-")}.pdf`, mimeType: "application/pdf", size: bytes.length, data: bytes as never, uploadedByName: "AMO CRM", note: "Generated from the AI brand report" },
-    });
-    pdf = true;
-  } catch (err) {
-    console.error("brand guide PDF not generated", err);
-  }
-
-  // Tick the Brand-phase tasks the report covers (and the PDF task once the PDF exists).
+  // Tick the Brand-phase tasks the report covers. (The PDF guide is made later, by the button of the
+  // "Create the brand guide (PDF)" task.)
   const verified: string[] = [];
   const missing: string[] = [];
   const projects = await db.project.findMany({
@@ -328,10 +394,6 @@ export async function processBrandReport(db: PrismaClient, contactId: string, ma
           ok = check.ok(analysis);
           label = check.label;
           why = check.why;
-        } else if (/^create the brand guide/i.test(title)) {
-          ok = pdf;
-          label = "Create the brand guide (PDF)";
-          why = "the PDF could not be generated";
         }
         if (ok === null) continue;
         if (task.status === "DONE") continue;
@@ -351,5 +413,37 @@ export async function processBrandReport(db: PrismaClient, contactId: string, ma
       touched++;
     }
   }
-  return { added, verified, missing, pdf, projects: touched };
+  return { added, verified, missing, projects: touched };
+}
+
+// The button of the "Create the brand guide (PDF)" task: one PDF from every AI report (Markdown) on the
+// Brand card, saved as a file on the Brand card and in the Files card; the task is ticked.
+export async function generateBrandGuide(db: PrismaClient, contactId: string, projectId?: string): Promise<{ error?: string; fileName?: string; reports?: number }> {
+  const files = await db.attachedFile.findMany({ where: { contactId, kind: "BRAND_REPORT" }, orderBy: { createdAt: "asc" }, select: { name: true, data: true } });
+  const texts = files.filter((f) => /\.(md|markdown|txt)$/i.test(f.name)).map((f) => new TextDecoder("utf-8").decode(f.data as unknown as Uint8Array));
+  if (texts.length === 0) return { error: "Drop the AI's brand report (a Markdown .md file) on the Brand card first." };
+  const markdown = texts.join("\n\n---\n\n");
+  const contact = await db.contact.findUnique({ where: { id: contactId }, select: { firstName: true, lastName: true, company: true } });
+  const clientName = contact?.company || [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "Client";
+  const bytes = await buildBrandReportPdf({ clientName, markdown, analysis: analyseBrandReport(markdown) });
+  const fileName = `Brand-guide-${clientName.replace(/[^\w.-]+/g, "-")}.pdf`;
+  await db.attachedFile.deleteMany({ where: { contactId, kind: "BRAND_PDF" } });
+  await db.attachedFile.create({ data: { contactId, kind: "BRAND_PDF", name: fileName, mimeType: "application/pdf", size: bytes.length, data: bytes as never, uploadedByName: "AMO CRM", note: `Generated from ${texts.length} AI brand report${texts.length > 1 ? "s" : ""}` } });
+
+  // Tick the guide task (in this project, or every project of the client that has a Brand phase).
+  const projects = await db.project.findMany({ where: { contactId, createBrand: true, ...(projectId ? { id: projectId } : {}) }, select: { id: true, phases: { select: { name: true, tasks: { select: { id: true, title: true, status: true } } } } } });
+  for (const p of projects) {
+    let changed = false;
+    for (const phase of p.phases.filter((ph) => BRAND_PHASE.test(ph.name.trim()))) {
+      for (const task of phase.tasks) {
+        if (/^create the brand guide/i.test(task.title.trim()) && task.status !== "DONE") {
+          await db.task.update({ where: { id: task.id }, data: { status: "DONE", completedAt: new Date() } });
+          await onTaskDone(db, task.id);
+          changed = true;
+        }
+      }
+    }
+    if (changed) await syncProjectLifecycle(db, p.id);
+  }
+  return { fileName, reports: texts.length };
 }
