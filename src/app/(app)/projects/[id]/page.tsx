@@ -854,8 +854,6 @@ export default async function ProjectDetailPage({
 
           <DomainsCard contact={project.contact} lang={lang} />
 
-          <FilesCard scope={{ projectId: project.id }} files={fileRows} lang={lang} />
-
           {!brandActive && brandCard}
         </div>
 
@@ -1032,6 +1030,10 @@ export default async function ProjectDetailPage({
             linkables={linkables}
             recipients={recipients}
           />
+          </div>
+
+          <div style={{ order: 9 }}>
+            <FilesCard scope={{ projectId: project.id }} files={fileRows} lang={lang} />
           </div>
         </div>
       </div>

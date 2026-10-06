@@ -830,8 +830,6 @@ export default async function ContactDetailPage({
             items={brandRows}
           />
 
-          <FilesCard scope={{ contactId: contact.id }} files={fileRows} lang={lang} />
-
           {isAdmin && <ContactCredentialsCard contactId={contact.id} entries={credentialEntries} lang={lang} />}
 
           {otherContactsForRelations.length > 0 && (
@@ -1300,6 +1298,8 @@ export default async function ContactDetailPage({
               ))}
             </ul>
           </Card>
+
+          <FilesCard scope={{ contactId: contact.id }} files={fileRows} lang={lang} />
         </div>
       </div>
     </div>
