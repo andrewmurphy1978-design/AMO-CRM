@@ -354,6 +354,7 @@ model Contact {
   domains                   ContactDomain[]
   credentials               ContactCredential[]
   brandItems                ContactBrandItem[]
+  files                     AttachedFile[]
   appSyncSettings           ContactAppSync[]
   relationsFrom             ContactRelation[]         @relation("ContactRelationsFrom")
   relationsTo               ContactRelation[]         @relation("ContactRelationsTo")
@@ -959,6 +960,7 @@ model Project {
   emailLinks         EmailLink[]
   calendarEventLinks CalendarEventLink[]
   supplierInvoices   ProjectSupplierInvoice[]
+  files              AttachedFile[]
 
   @@index([status])
   @@index([contactId])
@@ -1933,4 +1935,25 @@ model BillingSettings {
   updatedAt         DateTime @updatedAt
 
   @@map("billing_settings")
+}
+
+// A file kept on a Contact or on a Project (contracts, briefs, screenshots, exports...). The bytes
+// live in the database like the other uploads; lists never select `data`.
+model AttachedFile {
+  id             String   @id @default(cuid())
+  contactId      String?
+  contact        Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  mimeType       String
+  size           Int
+  data           Bytes
+  note           String?  @db.Text
+  uploadedByName String?
+  createdAt      DateTime @default(now())
+
+  @@index([contactId])
+  @@index([projectId])
+  @@map("attached_files")
 }

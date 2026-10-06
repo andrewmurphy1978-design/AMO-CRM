@@ -11,6 +11,8 @@ import ProjectNotesDialog from "./project-notes-dialog";
 import PhasesCard from "./phases-card";
 import { BrandCard } from "../../contacts/[id]/brand-card";
 import { loadBrandRows } from "@/lib/brand-rows";
+import { loadProjectFileRows } from "@/lib/file-rows";
+import FilesCard from "@/components/files-card";
 import TasksCard, { type TaskCardItem } from "./tasks-card";
 import { ProposalsCard, InvoicesCard, type ProposalRowData, type InvoiceRowData } from "./documents-cards";
 import { contactTaxLocation } from "@/lib/billing-totals";
@@ -82,6 +84,7 @@ export default async function ProjectDetailPage({
   const {
     project,
     brandRows,
+    fileRows,
     hour12,
     users,
     calendarEvents,
@@ -204,10 +207,12 @@ export default async function ProjectDetailPage({
     }
 
     const brandRows = project ? await loadBrandRows(db, project.contactId) : [];
+    const fileRows = project ? await loadProjectFileRows(db, { id: project.id, name: project.name }) : [];
 
     return {
       project,
       brandRows,
+      fileRows,
       hour12,
       users,
       calendarEvents,
@@ -848,6 +853,8 @@ export default async function ProjectDetailPage({
           <TechStackCard contact={project.contact} lang={lang} />
 
           <DomainsCard contact={project.contact} lang={lang} />
+
+          <FilesCard scope={{ projectId: project.id }} files={fileRows} lang={lang} />
 
           {!brandActive && brandCard}
         </div>
