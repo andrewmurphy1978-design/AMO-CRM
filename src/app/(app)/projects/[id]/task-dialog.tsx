@@ -292,15 +292,15 @@ export default function TaskDialog({
                 const res = await createBrandGuidePdf(projectId);
                 if (res.error) setGuide({ busy: false, error: res.error });
                 else {
-                  setGuide({ busy: false, message: fr ? `Guide PDF créé (${res.fileName}) et ajouté aux fichiers et à la carte Marque. La tâche est terminée.` : `PDF guide created (${res.fileName}) and added to the Files and Brand cards. The task is completed.` });
+                  setGuide({ busy: false, message: fr ? `Guides PDF créés en anglais et en français (${(res.fileNames ?? []).join(", ")}) et ajoutés aux fichiers et à la carte Marque. La tâche est terminée.` : `English and French PDF guides created (${(res.fileNames ?? []).join(", ")}) and added to the Files and Brand cards. The task is completed.` });
                   setStatus("DONE");
                 }
               }}
               className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold shadow-sm disabled:opacity-60"
             >
-              {guide.busy ? (fr ? "Création…" : "Creating…") : fr ? "📄 Créer le guide de marque PDF" : "📄 Create the brand guide PDF"}
+              {guide.busy ? (fr ? "Création…" : "Creating…") : fr ? "📄 Créer les guides de marque PDF (EN + FR)" : "📄 Create the brand guide PDFs (EN + FR)"}
             </button>
-            <p className="mt-1 text-xs text-soft">{fr ? "Génère le PDF à partir des rapports de l'IA déposés sur la carte Marque." : "Builds the PDF from the AI reports dropped on the Brand card."}</p>
+            <p className="mt-1 text-xs text-soft">{fr ? "L'IA fusionne les rapports déposés sur la carte Marque et rédige un guide complet, en anglais et en français (environ 1 minute)." : "The AI merges the reports dropped on the Brand card into one complete guide, in English and in French (about a minute)."}</p>
             {guide.message && <p className="mt-1 text-xs text-emerald-700">{guide.message}</p>}
             {guide.error && <p className="mt-1 text-xs text-red-600">{guide.error}</p>}
           </div>
