@@ -11,7 +11,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { brandPhaseTasks } from "@/lib/brand-items";
-import { TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, readFieldValues, typesOfProject, type FieldValues, type TypeInput } from "@/lib/project-templates";
+import { TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, isGeneralField, readFieldValues, typesOfProject, type FieldValues, type TypeInput } from "@/lib/project-templates";
 import { getTypeLabels } from "@/lib/project-type-store";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 
@@ -426,6 +426,7 @@ export async function updateProject(
         subscriptionEmail: String(formData.get("subscriptionEmail") ?? "").trim() || null,
       },
     });
+    await saveGeneralFields(db, projectId, formData);
     await applyTypeChanges(db, projectId, data.types);
     await applyProjectSettings(db, projectId, readSettings(formData));
 
@@ -551,6 +552,30 @@ export async function updatePhaseNotes(
   return { success: t.actions.projectUpdated };
 }
 
+// The Research / Mock-up answers posted by the General Info dialog (cf_<TYPE>__<field>) go into
+// the answers of each of the project's existing types; everything else in them is left alone.
+async function saveGeneralFields(db: PrismaClient, projectId: string, formData: FormData) {
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { type: true, types: true, typeFields: true, customFields: true } });
+  if (!project) return;
+  const all = { ...((project.typeFields ?? {}) as Record<string, FieldValues>) };
+  if (!all[project.type] && project.customFields) all[project.type] = project.customFields as FieldValues;
+  let changed = false;
+  for (const type of typesOfProject(project)) {
+    if (formData.get(`general_${type}`) !== "1") continue; // this type's block wasn't in the dialog
+    const template = await getProjectTemplate(db, type);
+    const values = readFieldValues(template, (name) => formData.getAll(name.replace(/^cf_/, `cf_${type}__`)).map(String));
+    const next = { ...(all[type] ?? {}) };
+    for (const f of template.fields) {
+      if (!isGeneralField(f.key)) continue;
+      if (values[f.key] === undefined || values[f.key] === "" || (Array.isArray(values[f.key]) && (values[f.key] as string[]).length === 0)) delete next[f.key];
+      else next[f.key] = values[f.key];
+    }
+    all[type] = next;
+    changed = true;
+  }
+  if (changed) await db.project.update({ where: { id: projectId }, data: { typeFields: all as never } });
+}
+
 // The Project Details card's dialog: just the answers to this type's custom
 // fields (phases and tasks already created are left alone).
 export async function updateProjectCustomFields(
@@ -572,6 +597,13 @@ export async function updateProjectCustomFields(
     const all = { ...((project.typeFields ?? {}) as Record<string, FieldValues>) };
     // A project that predates multiple types keeps its first type's answers in customFields.
     if (!all[project.type] && project.customFields) all[project.type] = project.customFields as FieldValues;
+    // The Research / Mock-up answers are edited in the General Info card: keep them as they are.
+    for (const f of template.fields) {
+      if (!isGeneralField(f.key)) continue;
+      const kept = all[type]?.[f.key];
+      if (kept === undefined) delete values[f.key];
+      else values[f.key] = kept;
+    }
     all[type] = values;
     await db.project.update({ where: { id: projectId }, data: { typeFields: all as never } });
     // Newly chosen apps join the Apps & subscriptions (existing rows are kept).

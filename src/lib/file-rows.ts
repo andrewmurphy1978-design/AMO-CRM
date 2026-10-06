@@ -26,11 +26,16 @@ async function projectDocuments(db: PrismaClient, project: { id: string; name: s
   return rows;
 }
 
-const attachedSelect = { id: true, name: true, mimeType: true, size: true, note: true, createdAt: true, uploadedByName: true } as const;
-const toRow = (f: { id: string; name: string; mimeType: string; size: number; note: string | null; createdAt: Date; uploadedByName: string | null }, from?: FileRow["from"]): FileRow => ({
-  ...f,
+const attachedSelect = { id: true, name: true, mimeType: true, size: true, note: true, createdAt: true, uploadedByName: true, kind: true } as const;
+const toRow = (f: { id: string; name: string; mimeType: string; size: number; note: string | null; createdAt: Date; uploadedByName: string | null; kind: string | null }, from?: FileRow["from"]): FileRow => ({
+  id: f.id,
+  name: f.name,
+  mimeType: f.mimeType,
+  size: f.size,
+  note: f.note,
+  uploadedByName: f.uploadedByName,
   createdAt: f.createdAt.toISOString(),
-  kind: f.uploadedByName === "Stripe" ? "Payment confirmation" : undefined,
+  kind: f.kind === "BRAND_REPORT" ? "Brand report" : f.uploadedByName === "Stripe" ? "Payment confirmation" : undefined,
   from,
 });
 
@@ -54,4 +59,10 @@ export async function loadContactFileRows(db: PrismaClient, contactId: string): 
     rows.push(...files.map((f) => toRow(f, label)), ...(await projectDocuments(db, p, label)));
   }
   return rows.sort(byDate);
+}
+
+// The AI brand reports dropped on a client's Brand card.
+export async function loadBrandReports(db: PrismaClient, contactId: string): Promise<FileRow[]> {
+  const rows = await db.attachedFile.findMany({ where: { contactId, kind: "BRAND_REPORT" }, orderBy: { createdAt: "desc" }, select: attachedSelect });
+  return rows.map((f) => toRow(f));
 }

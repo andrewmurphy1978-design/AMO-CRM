@@ -7,11 +7,20 @@ import { projectTypeOptions } from "@/lib/project-templates";
 import ProjectTypesPicker from "@/components/project-types-picker";
 import BrandFields from "@/components/brand-fields";
 import SubscriptionEmailField from "@/components/subscription-email-field";
+import CustomFieldsInputs from "../custom-fields-inputs";
+import type { FieldTpl, FieldValues } from "@/lib/project-templates";
 import SectionDialog, { EditCardButton } from "../../contacts/[id]/section-dialog";
 
 const FIELD_CLASS =
   "mt-1 w-full min-w-0 rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
+
+export interface ResearchBlock {
+  type: string;
+  label: string;
+  fields: FieldTpl[];
+  values: FieldValues;
+}
 
 export interface ProjectGeneralValues {
   name: string;
@@ -43,6 +52,7 @@ export default function ProjectGeneralDialog({
   lang,
   typeLabels,
   customTypeKeys,
+  researchBlocks = [],
 }: {
   action: (prevState: { error?: string; success?: string } | undefined, formData: FormData) => Promise<{ error?: string; success?: string }>;
   values: ProjectGeneralValues;
@@ -51,6 +61,8 @@ export default function ProjectGeneralDialog({
   lang: Lang;
   typeLabels: Record<string, string>;
   customTypeKeys: string[];
+  // The Research / Mock-up questions of each of the project's types.
+  researchBlocks?: ResearchBlock[];
 }) {
   const t = getDict(lang);
   const [open, setOpen] = useState(false);
@@ -177,6 +189,19 @@ export default function ProjectGeneralDialog({
             </div>
           </div>
         </div>
+
+        {researchBlocks.length > 0 && (
+          <div className="space-y-3 rounded-lg border border-card-border p-3">
+            <p className={LABEL_CLASS}>{lang === "fr" ? "Recherche et maquette" : "Research & Mock-up"}</p>
+            {researchBlocks.map((b) => (
+              <div key={b.type}>
+                <input type="hidden" name={`general_${b.type}`} value="1" />
+                {researchBlocks.length > 1 && <p className="mb-1 text-xs font-medium text-ink">{b.label}</p>}
+                <CustomFieldsInputs fields={b.fields} initial={b.values} lang={lang} prefix={`${b.type}__`} />
+              </div>
+            ))}
+          </div>
+        )}
 
         <div>
           <label className={LABEL_CLASS}>{t.projectForm.description}</label>

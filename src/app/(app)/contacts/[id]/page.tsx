@@ -45,7 +45,7 @@ import AiDetailsDialog from "./ai-details-dialog";
 import { saveContactAiDetails } from "@/actions/contact-brand";
 import { BrandCard } from "./brand-card";
 import { loadBrandRows } from "@/lib/brand-rows";
-import { loadContactFileRows } from "@/lib/file-rows";
+import { loadBrandReports, loadContactFileRows } from "@/lib/file-rows";
 import FilesCard from "@/components/files-card";
 import { AvatarThumb, AppIdChip, ContactInfoCard, TechStackCard, DomainsCard } from "./contact-cards";
 import RelationsDialog from "./relations-dialog";
@@ -215,6 +215,7 @@ export default async function ContactDetailPage({
     contact,
     brandRows,
     fileRows,
+    brandReports,
     hour12,
     defaultComposeSource,
     addressColors,
@@ -338,11 +339,13 @@ export default async function ContactDetailPage({
 
     const brandRows = await loadBrandRows(db, id);
     const fileRows = await loadContactFileRows(db, id);
+    const brandReports = await loadBrandReports(db, id);
 
     return {
       contact,
       brandRows,
       fileRows,
+      brandReports,
       hour12,
       defaultComposeSource: composePrefs?.defaultComposeSource ?? null,
       calendarEvents,
@@ -828,6 +831,7 @@ export default async function ContactDetailPage({
             contactId={contact.id}
             lang={lang}
             items={brandRows}
+            reports={brandReports}
           />
 
           {isAdmin && <ContactCredentialsCard contactId={contact.id} entries={credentialEntries} lang={lang} />}

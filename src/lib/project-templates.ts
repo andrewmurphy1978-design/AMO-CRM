@@ -1062,6 +1062,9 @@ export function typesOfProject(p: { type: string; types?: string[] | null }): st
   return p.types && p.types.length > 0 ? p.types : [p.type];
 }
 
+/** The Research and Mock-up questions: shown (and edited) in the project's General Info card, not in each type's Details card. */
+export const isGeneralField = (key: string): boolean => /^(research|model|modelApproval|modelApprovalBy|mockups|mockupApproval)$/.test(key);
+
 /** One type's answers from a project's `typeFields` (legacy `customFields` for its first type). */
 export function valuesOfType(p: { type: string; typeFields?: unknown; customFields?: unknown }, type: string): FieldValues {
   const tf = (p.typeFields ?? null) as Record<string, FieldValues> | null;

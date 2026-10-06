@@ -1950,6 +1950,8 @@ model AttachedFile {
   size           Int
   data           Bytes
   note           String?  @db.Text
+  // BRAND_REPORT: the AI's brand report dropped on the Brand card.
+  kind           String?
   uploadedByName String?
   createdAt      DateTime @default(now())
 

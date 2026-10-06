@@ -11,6 +11,7 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const contactId = String(form.get("contactId") ?? "") || null;
   const projectId = String(form.get("projectId") ?? "") || null;
+  const kind = form.get("kind") === "BRAND_REPORT" ? "BRAND_REPORT" : null; // the AI brand report (Brand card)
   if (!contactId === !projectId) return Response.json({ error: "Give either a contact or a project." }, { status: 400 });
   const files = form.getAll("file").filter((f): f is File => typeof f !== "string");
   if (files.length === 0) return Response.json({ error: "No file." }, { status: 400 });
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
       }
       const bytes = new Uint8Array(await f.arrayBuffer());
       const row = await db.attachedFile.create({
-        data: { contactId, projectId, name: f.name.slice(0, 200) || "file", mimeType: f.type || "application/octet-stream", size: bytes.length, data: bytes as never, uploadedByName: session.user.name ?? null },
+        data: { contactId, projectId, name: f.name.slice(0, 200) || "file", mimeType: f.type || "application/octet-stream", size: bytes.length, data: bytes as never, uploadedByName: session.user.name ?? null, kind },
         select: { id: true },
       });
       saved.push(row.id);
