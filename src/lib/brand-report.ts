@@ -3,7 +3,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { BRAND_FONTS, MAX_BRAND_FILE_BYTES } from "@/lib/brand";
 import { readZip } from "@/lib/zip-read";
 import { decryptSecret } from "@/lib/crypto";
-import { renderGuidePdf, writeGuide, type GuideAssets } from "@/lib/brand-guide";
+import { normaliseGuide, renderGuidePdf, type GuideAssets, type GuideDoc } from "@/lib/brand-guide";
 import { onTaskDone } from "@/lib/task-schedule";
 import { syncProjectLifecycle } from "@/lib/project-progress";
 
@@ -418,46 +418,55 @@ export async function processBrandReport(db: PrismaClient, contactId: string, ma
   return { added, verified, missing, projects: touched };
 }
 
-// The button of the "Create the brand guide (PDF)" task: Claude merges every AI report on the Brand card
-// (and the card itself) into one guide, written in English and in French; two designed PDFs are made
-// (Files card + Brand card) and the task is ticked.
-export async function generateBrandGuide(db: PrismaClient, contactId: string, projectId?: string): Promise<{ error?: string; fileNames?: string[]; reports?: number }> {
-  const files = await db.attachedFile.findMany({ where: { contactId, kind: "BRAND_REPORT" }, orderBy: { createdAt: "asc" }, select: { name: true, data: true } });
-  const texts = files.filter((f) => /\.(md|markdown|txt)$/i.test(f.name)).map((f) => new TextDecoder("utf-8").decode(f.data as unknown as Uint8Array));
-  if (texts.length === 0) return { error: "Drop the AI's brand report (a Markdown .md file) on the Brand card first." };
+// The button of the "Create the brand guide (PDF)" task. The browser drives it in small steps (the whole
+// guide in one request would outlast the 100 s a web connection can stay open):
+//   1. loadGuideSources: what the AI needs (checked first, so a missing report or key shows at once)
+//   2. writeGuidePart x 8 (4 parts x English / French), in parallel
+//   3. finishBrandGuide: Claude's parts are merged, drawn as two designed PDFs, saved, and the task ticked
+export interface GuideSources {
+  apiKey: string;
+  clientName: string;
+  industry: string | null;
+  reports: string[];
+  cardLines: string[];
+}
 
+export async function loadGuideSources(db: PrismaClient, contactId: string): Promise<GuideSources | { error: string }> {
+  const files = await db.attachedFile.findMany({ where: { contactId, kind: "BRAND_REPORT" }, orderBy: { createdAt: "asc" }, select: { name: true, data: true } });
+  const reports = files.filter((f) => /\.(md|markdown|txt)$/i.test(f.name)).map((f) => new TextDecoder("utf-8").decode(f.data as unknown as Uint8Array));
+  if (reports.length === 0) return { error: "Drop the AI's brand report (a Markdown .md file) on the Brand card first." };
   const setting = await db.integrationSetting.findUnique({ where: { provider: "anthropic" } });
   if (!setting?.apiKeyEncrypted) return { error: "No Anthropic API key configured: add one in Settings first." };
-  const apiKey = await decryptSecret(setting.apiKeyEncrypted);
-
   const contact = await db.contact.findUnique({ where: { id: contactId }, select: { firstName: true, lastName: true, company: true, industry: true } });
   const clientName = contact?.company || [contact?.firstName, contact?.lastName].filter(Boolean).join(" ") || "Client";
-
-  // The Brand card: text lines for the AI, and the logos that can be drawn in the PDF (PNG / JPG).
   const items = await db.contactBrandItem.findMany({ where: { contactId }, orderBy: [{ category: "asc" }, { order: "asc" }] });
   const cardLines = items.map((i) => `- card | ${i.category} | ${i.label}${i.value && !i.value.startsWith("data:") ? ` | ${i.value}` : i.value ? " | (file)" : ""}${i.note ? ` | ${i.note}` : ""}`);
+  return { apiKey: await decryptSecret(setting.apiKeyEncrypted), clientName, industry: contact?.industry ?? null, reports, cardLines };
+}
+
+export async function finishBrandGuide(db: PrismaClient, contactId: string, projectId: string | undefined, guides: { en: Partial<GuideDoc>[]; fr: Partial<GuideDoc>[] }): Promise<{ error?: string; fileNames?: string[] }> {
+  const clientName = (await db.contact.findUnique({ where: { id: contactId }, select: { firstName: true, lastName: true, company: true } }).then((c) => c?.company || [c?.firstName, c?.lastName].filter(Boolean).join(" "))) || "Client";
+  // The Brand card's logos that can be drawn in the PDF (PNG / JPG).
+  const items = await db.contactBrandItem.findMany({ where: { contactId, category: "logos" }, orderBy: { order: "asc" } });
   const assets: GuideAssets = { logos: [], otherLogoFiles: [] };
   for (const i of items) {
-    if (i.category !== "logos" || !i.value?.startsWith("data:")) continue;
+    if (!i.value?.startsWith("data:")) continue;
     const m = /^data:image\/(png|jpe?g);base64,([\s\S]*)$/i.exec(i.value);
     if (m && assets.logos.length < 6) assets.logos.push({ label: i.label, kind: m[1].toLowerCase() === "png" ? "png" : "jpg", bytes: Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0)) });
     else assets.otherLogoFiles.push(i.label);
   }
 
-  // One guide per language, written in parallel.
-  const [en, fr] = await Promise.all((["en", "fr"] as const).map((lang) => writeGuide({ apiKey, lang, clientName, industry: contact?.industry, reports: texts, cardLines })));
-  if ("error" in en) return { error: `English guide: ${en.error}` };
-  if ("error" in fr) return { error: `French guide: ${fr.error}` };
-
   const base = clientName.replace(/[^\w.-]+/g, "-");
-  const made: { name: string; bytes: Uint8Array; lang: string }[] = [];
-  for (const [lang, guide] of [["en", en], ["fr", fr]] as const) {
+  const made: { name: string; bytes: Uint8Array; lang: "en" | "fr" }[] = [];
+  for (const lang of ["en", "fr"] as const) {
+    const guide = normaliseGuide(Object.assign({}, ...guides[lang]));
     made.push({ lang, name: `Brand-guide-${base}-${lang === "en" ? "EN" : "FR"}.pdf`, bytes: await renderGuidePdf({ guide, lang, clientName, assets }) });
   }
+  const reports = await db.attachedFile.count({ where: { contactId, kind: "BRAND_REPORT" } });
   await db.attachedFile.deleteMany({ where: { contactId, kind: "BRAND_PDF" } });
   for (const m of made) {
     await db.attachedFile.create({
-      data: { contactId, kind: "BRAND_PDF", name: m.name, mimeType: "application/pdf", size: m.bytes.length, data: m.bytes as never, uploadedByName: "AMO CRM", note: `${m.lang === "en" ? "English" : "French"} brand guide, generated with AI from ${texts.length} brand report${texts.length > 1 ? "s" : ""} and the Brand card` },
+      data: { contactId, kind: "BRAND_PDF", name: m.name, mimeType: "application/pdf", size: m.bytes.length, data: m.bytes as never, uploadedByName: "AMO CRM", note: `${m.lang === "en" ? "English" : "French"} brand guide, generated with AI from the brand reports (${reports} file${reports > 1 ? "s" : ""}) and the Brand card` },
     });
   }
 
@@ -476,5 +485,5 @@ export async function generateBrandGuide(db: PrismaClient, contactId: string, pr
     }
     if (changed) await syncProjectLifecycle(db, p.id);
   }
-  return { fileNames: made.map((m) => m.name), reports: texts.length };
+  return { fileNames: made.map((m) => m.name) };
 }

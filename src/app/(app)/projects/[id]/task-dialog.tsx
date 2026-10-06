@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import type { TaskDialogValues } from "@/actions/tasks";
 import { generatePhasePrompt } from "@/actions/phase-prompts";
-import { createBrandGuidePdf } from "@/actions/brand-guide";
 import BrandZipLink from "./brand-zip-link";
 import { CARD_COLORS } from "@/components/section-card";
 
@@ -46,7 +45,7 @@ export default function TaskDialog({
   const [aiPrompt, setAiPrompt] = useState(initial.aiPrompt ?? "");
   const [assetsZip, setAssetsZip] = useState<{ url: string; count: number } | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [guide, setGuide] = useState<{ busy: boolean; message?: string; error?: string }>({ busy: false });
+  const [guide, setGuide] = useState<{ busy: boolean; message?: string; error?: string; progress?: string }>({ busy: false });
   const [copied, setCopied] = useState(false);
   const fr = lang === "fr";
   // The Proposal phase's tasks have no AI prompt: the proposal builder already has its own AI draft.
@@ -288,8 +287,35 @@ export default function TaskDialog({
               type="button"
               disabled={guide.busy}
               onClick={async () => {
-                setGuide({ busy: true });
-                const res = await createBrandGuidePdf(projectId);
+                setGuide({ busy: true, progress: fr ? "Vérification…" : "Checking…" });
+                const call = async (payload: object) => (await (await fetch(`/api/projects/${projectId}/brand-guide`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) })).json()) as { error?: string; parts?: number; content?: Record<string, unknown>; fileNames?: string[] };
+                const start = await call({ step: "start" }).catch(() => ({ error: fr ? "Connexion interrompue." : "Connection interrupted." } as { error?: string; parts?: number }));
+                if (start.error || !start.parts) return setGuide({ busy: false, error: start.error ?? "Error" });
+                // 4 parts x 2 languages, written in parallel (each is a short request); a failed part is tried once more.
+                const total = start.parts * 2;
+                let done = 0;
+                const results: { en: Record<string, unknown>[]; fr: Record<string, unknown>[] } = { en: [], fr: [] };
+                const run = async (lang: "en" | "fr", part: number) => {
+                  for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                      const r = await call({ step: "part", lang, part });
+                      if (r.content) {
+                        results[lang][part] = r.content as Record<string, unknown>;
+                        setGuide({ busy: true, progress: `${fr ? "Rédaction par l'IA" : "Writing with AI"} ${++done}/${total}` });
+                        return null;
+                      }
+                      if (attempt === 1) return r.error ?? "Error";
+                    } catch {
+                      if (attempt === 1) return fr ? "Connexion interrompue." : "Connection interrupted.";
+                    }
+                  }
+                  return "Error";
+                };
+                setGuide({ busy: true, progress: `${fr ? "Rédaction par l'IA" : "Writing with AI"} 0/${total}` });
+                const errors = (await Promise.all((["en", "fr"] as const).flatMap((lang) => Array.from({ length: start.parts! }, (_, p) => run(lang, p))))).filter(Boolean);
+                if (errors.length > 0) return setGuide({ busy: false, error: `${fr ? "L'IA n'a pas pu rédiger toutes les parties" : "The AI couldn't write every part"}: ${errors[0]}` });
+                setGuide({ busy: true, progress: fr ? "Mise en page des PDF…" : "Laying out the PDFs…" });
+                const res = await call({ step: "finish", guides: results }).catch(() => ({ error: fr ? "Connexion interrompue." : "Connection interrupted." } as { error?: string; fileNames?: string[] }));
                 if (res.error) setGuide({ busy: false, error: res.error });
                 else {
                   setGuide({ busy: false, message: fr ? `Guides PDF créés en anglais et en français (${(res.fileNames ?? []).join(", ")}) et ajoutés aux fichiers et à la carte Marque. La tâche est terminée.` : `English and French PDF guides created (${(res.fileNames ?? []).join(", ")}) and added to the Files and Brand cards. The task is completed.` });
@@ -298,7 +324,7 @@ export default function TaskDialog({
               }}
               className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold shadow-sm disabled:opacity-60"
             >
-              {guide.busy ? (fr ? "Création…" : "Creating…") : fr ? "📄 Créer les guides de marque PDF (EN + FR)" : "📄 Create the brand guide PDFs (EN + FR)"}
+              {guide.busy ? (guide.progress ?? (fr ? "Création…" : "Creating…")) : fr ? "📄 Créer les guides de marque PDF (EN + FR)" : "📄 Create the brand guide PDFs (EN + FR)"}
             </button>
             <p className="mt-1 text-xs text-soft">{fr ? "L'IA fusionne les rapports déposés sur la carte Marque et rédige un guide complet, en anglais et en français (environ 1 minute)." : "The AI merges the reports dropped on the Brand card into one complete guide, in English and in French (about a minute)."}</p>
             {guide.message && <p className="mt-1 text-xs text-emerald-700">{guide.message}</p>}

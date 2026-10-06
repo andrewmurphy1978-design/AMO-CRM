@@ -374,17 +374,30 @@ export async function renderGuidePdf(input: { guide: GuideDoc; lang: "en" | "fr"
 
 const MODEL = "claude-sonnet-5-5";
 
-export async function writeGuide(input: {
+// The guide is written in small parts (each one a short request): a single request for the whole guide
+// takes minutes, longer than the 100 s the web connection can stay open. The browser asks for the parts
+// in parallel, then sends them together to be drawn.
+export const GUIDE_PARTS: { id: string; shape: string }[] = [
+  { id: "intro", shape: '{"tagline": "", "introduction": "2 short paragraphs separated by a blank line", "logos": {"intro": "", "versions": [{"name": "", "description": ""}], "clearSpace": "", "minimumSize": "", "misuse": [""]}}' },
+  { id: "colours-type", shape: '{"colours": {"intro": "", "palette": [{"name": "", "hex": "#RRGGBB", "role": "Primary/Secondary/Accent/Neutral", "usage": ""}]}, "typography": {"intro": "", "fonts": [{"name": "", "role": "", "usage": ""}], "scale": [{"style": "H1", "size": "40 px", "lineHeight": "1.2", "weight": "Bold"}]}}' },
+  { id: "visuals", shape: '{"iconography": {"intro": "", "rules": [""]}, "graphics": {"intro": "", "rules": [""]}, "photography": {"intro": "", "rules": [""]}, "components": {"intro": "", "rules": [""]}, "charts": {"intro": "", "rules": [""]}}' },
+  { id: "voice", shape: '{"voice": {"intro": "", "attributes": [{"name": "", "description": ""}], "dos": [""], "donts": [""], "samples": [""]}, "closing": ""}' },
+];
+
+export async function writeGuidePart(input: {
   apiKey: string;
   lang: "en" | "fr";
+  part: number;
   clientName: string;
   industry?: string | null;
   reports: string[];
   cardLines: string[];
-}): Promise<GuideDoc | { error: string }> {
+}): Promise<Partial<GuideDoc> | { error: string }> {
+  const spec = GUIDE_PARTS[input.part];
+  if (!spec) return { error: "Unknown part." };
   const language = input.lang === "fr" ? "Canadian French (français du Québec, professional, with proper accents)" : "English";
-  const reports = input.reports.map((r, i) => `=== BRAND REPORT ${i + 1} ===\n${r.slice(0, 45_000)}`).join("\n\n");
-  const prompt = `You are writing the final BRAND GUIDE of a client, to be laid out as a designed PDF.
+  const reports = input.reports.map((r, i) => `=== BRAND REPORT ${i + 1} ===\n${r.slice(0, 22_000)}`).join("\n\n");
+  const prompt = `You are writing part of the final BRAND GUIDE of a client, to be laid out as a designed PDF.
 
 Client: ${input.clientName}${input.industry ? ` (${input.industry})` : ""}
 
@@ -393,10 +406,10 @@ Several brand reports were written for this client by different AI assistants, a
 - Never mention the reports, the AIs or their differences. Write as the brand's own guide.
 - Colours: only #RRGGBB values that appear in the sources. Do not invent colours.
 - Ignore code, SVG markup and file lists: describe assets in words.
-- Write all text in ${language}. Be concrete and complete (a real guide, not a summary), but keep each paragraph short.
+- Write all text in ${language}. Be concrete and complete, but keep each paragraph short.
 
-Respond with ONLY one JSON object (no markdown fences) in exactly this shape; use [] or omit a field when the sources say nothing about it:
-{"tagline": "", "introduction": "2 short paragraphs separated by a blank line", "logos": {"intro": "", "versions": [{"name": "", "description": ""}], "clearSpace": "", "minimumSize": "", "misuse": [""]}, "colours": {"intro": "", "palette": [{"name": "", "hex": "#RRGGBB", "role": "Primary/Secondary/Accent/Neutral", "usage": ""}]}, "typography": {"intro": "", "fonts": [{"name": "", "role": "", "usage": ""}], "scale": [{"style": "H1", "size": "40 px", "lineHeight": "1.2", "weight": "Bold"}]}, "iconography": {"intro": "", "rules": [""]}, "graphics": {"intro": "", "rules": [""]}, "photography": {"intro": "", "rules": [""]}, "components": {"intro": "", "rules": [""]}, "charts": {"intro": "", "rules": [""]}, "voice": {"intro": "", "attributes": [{"name": "", "description": ""}], "dos": [""], "donts": [""], "samples": [""]}, "closing": ""}
+Respond with ONLY one JSON object (no markdown fences) in exactly this shape; use [] or "" when the sources say nothing about a field:
+${spec.shape}
 
 BRAND CARD:
 ${input.cardLines.join("\n") || "(empty)"}
@@ -406,18 +419,63 @@ ${reports}`;
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": input.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 12_000, messages: [{ role: "user", content: prompt }] }),
-      signal: AbortSignal.timeout(150_000),
+      body: JSON.stringify({ model: MODEL, max_tokens: 4_000, messages: [{ role: "user", content: prompt }] }),
+      signal: AbortSignal.timeout(85_000),
     });
     if (!res.ok) return { error: `The AI request failed (HTTP ${res.status}: ${(await res.text()).slice(0, 140)}).` };
     const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
-    if (data.stop_reason === "max_tokens") return { error: "The AI's reply was cut off: try again." };
+    if (data.stop_reason === "max_tokens") return { error: "The AI's reply was cut off." };
     const text = data.content?.find((c) => c.type === "text")?.text ?? "";
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
-    if (start < 0 || end <= start) return { error: "The AI didn't return a usable guide: try again." };
-    return JSON.parse(text.slice(start, end + 1)) as GuideDoc;
+    if (start < 0 || end <= start) return { error: "The AI didn't return usable content." };
+    return JSON.parse(text.slice(start, end + 1)) as Partial<GuideDoc>;
   } catch (err) {
-    return { error: `The AI request failed (${err instanceof Error ? err.message : "error"}): try again.` };
+    return { error: `The AI request failed (${err instanceof Error ? err.message : "error"}).` };
   }
+}
+
+// Whatever the AI returned, make every list a list and every text a text, so the PDF can always be drawn.
+export function normaliseGuide(raw: Partial<GuideDoc>): GuideDoc {
+  const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+  const arr = <T,>(v: unknown, f: (x: unknown) => T | null): T[] => (Array.isArray(v) ? v.map(f).filter((x): x is T => x !== null) : []);
+  const strs = (v: unknown) => arr<string>(v, (x) => (typeof x === "string" && x.trim() ? x : null));
+  const rules = (v: unknown): Rules | undefined => {
+    const o = (v ?? {}) as { intro?: unknown; rules?: unknown };
+    return { intro: str(o.intro), rules: strs(o.rules) };
+  };
+  const r = raw as Record<string, Record<string, unknown> | undefined>;
+  return {
+    tagline: str(raw.tagline),
+    introduction: str(raw.introduction),
+    logos: {
+      intro: str(r.logos?.intro),
+      versions: arr(r.logos?.versions, (x) => { const o = x as { name?: unknown; description?: unknown }; return str(o?.name) ? { name: str(o.name)!, description: str(o.description) ?? "" } : null; }),
+      clearSpace: str(r.logos?.clearSpace),
+      minimumSize: str(r.logos?.minimumSize),
+      misuse: strs(r.logos?.misuse),
+    },
+    colours: {
+      intro: str(r.colours?.intro),
+      palette: arr(r.colours?.palette, (x) => { const o = x as { name?: unknown; hex?: unknown; role?: unknown; usage?: unknown }; return str(o?.hex) ? { name: str(o.name) ?? str(o.hex)!, hex: str(o.hex)!, role: str(o.role), usage: str(o.usage) } : null; }),
+    },
+    typography: {
+      intro: str(r.typography?.intro),
+      fonts: arr(r.typography?.fonts, (x) => { const o = x as { name?: unknown; role?: unknown; usage?: unknown }; return str(o?.name) ? { name: str(o.name)!, role: str(o.role), usage: str(o.usage) } : null; }),
+      scale: arr(r.typography?.scale, (x) => { const o = x as { style?: unknown; size?: unknown; lineHeight?: unknown; weight?: unknown }; return str(o?.style) ? { style: str(o.style)!, size: str(o.size) ?? "", lineHeight: str(o.lineHeight), weight: str(o.weight) } : null; }),
+    },
+    iconography: rules(raw.iconography),
+    graphics: rules(raw.graphics),
+    photography: rules(raw.photography),
+    components: rules(raw.components),
+    charts: rules(raw.charts),
+    voice: {
+      intro: str(r.voice?.intro),
+      attributes: arr(r.voice?.attributes, (x) => { const o = x as { name?: unknown; description?: unknown }; return str(o?.name) ? { name: str(o.name)!, description: str(o.description) ?? "" } : null; }),
+      dos: strs(r.voice?.dos),
+      donts: strs(r.voice?.donts),
+      samples: strs(r.voice?.samples),
+    },
+    closing: str(raw.closing),
+  };
 }
