@@ -13,12 +13,14 @@ export default function BrandReportDrop({ contactId, reports, fr }: { contactId:
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [info, setInfo] = useState("");
   const [pending, startTransition] = useTransition();
 
   async function upload(list: FileList | File[]) {
     setBusy(true);
     setMessage(null);
     const problems: string[] = [];
+    const notes: string[] = [];
     for (const f of [...list]) {
       if (f.size > 10_000_000) {
         problems.push(`${f.name}: ${fr ? "plus de 10 Mo" : "over 10 MB"}`);
@@ -31,12 +33,24 @@ export default function BrandReportDrop({ contactId, reports, fr }: { contactId:
       try {
         const res = await fetch("/api/files", { method: "POST", body: form });
         if (!res.ok) problems.push(`${f.name}: ${fr ? "échec du téléversement" : "upload failed"}`);
+        else {
+          const json = (await res.json()) as { problems?: string[]; brandNote?: string; brand?: { added: number; verified: string[]; missing: string[]; pdf: boolean } | null };
+          problems.push(...(json.problems ?? []));
+          if (json.brandNote) notes.push(json.brandNote);
+          if (json.brand) {
+            if (json.brand.added > 0) notes.push(fr ? `${json.brand.added} élément(s) ajouté(s) à la carte Marque.` : `${json.brand.added} item(s) added to the Brand card.`);
+            if (json.brand.verified.length > 0) notes.push(`${fr ? "Vérifié et terminé" : "Verified and completed"}: ${json.brand.verified.join(", ")}.`);
+            if (json.brand.missing.length > 0) notes.push(`${fr ? "Non terminé" : "Not completed"}: ${json.brand.missing.join("; ")}.`);
+            if (json.brand.pdf) notes.push(fr ? "Le guide PDF a été généré et ajouté aux fichiers." : "The PDF guide was generated and added to the files.");
+          }
+        }
       } catch {
         problems.push(`${f.name}: ${fr ? "échec du téléversement" : "upload failed"}`);
       }
     }
     setBusy(false);
-    if (problems.length > 0) setMessage(problems.join(" · "));
+    setMessage(problems.length > 0 ? problems.join(" · ") : null);
+    setInfo(notes.join(" "));
     if (input.current) input.current.value = "";
     router.refresh();
   }
@@ -60,6 +74,7 @@ export default function BrandReportDrop({ contactId, reports, fr }: { contactId:
         <input ref={input} type="file" multiple className="hidden" onChange={(e) => e.target.files && void upload(e.target.files)} />
       </div>
       {message && <p className="mt-1 text-xs text-red-600">{message}</p>}
+      {info && <p className="mt-1 text-xs text-emerald-700">{info}</p>}
       {reports.length > 0 && (
         <ul className="mt-2 space-y-1">
           {reports.map((r) => (

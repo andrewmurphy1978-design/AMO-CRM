@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { processBrandReport, type BrandReportResult } from "@/lib/brand-report";
+import { revalidatePath } from "next/cache";
 
 export const MAX_FILE_BYTES = 10_000_000;
 
@@ -18,6 +20,8 @@ export async function POST(request: Request) {
 
   const saved: string[] = [];
   const problems: string[] = [];
+  let brand: BrandReportResult | null = null;
+  let brandNote = "";
   await withScopedPrismaClient(async (db) => {
     for (const f of files) {
       if (f.size === 0) {
@@ -34,7 +38,19 @@ export async function POST(request: Request) {
         select: { id: true },
       });
       saved.push(row.id);
+      // An AI brand report in Markdown: check it, tick the Brand tasks it covers, make the PDF guide.
+      if (kind === "BRAND_REPORT" && contactId) {
+        if (/\.(md|markdown|txt)$/i.test(f.name)) {
+          try {
+            brand = await processBrandReport(db, contactId, new TextDecoder("utf-8").decode(bytes));
+          } catch (err) {
+            console.error("brand report not processed", err);
+            problems.push(`${f.name}: could not be read`);
+          }
+        } else brandNote = "Only a Markdown (.md) report can be checked and turned into the PDF guide.";
+      }
     }
   });
-  return Response.json({ saved: saved.length, problems });
+  if (brand && contactId) revalidatePath(`/contacts/${contactId}`);
+  return Response.json({ saved: saved.length, problems, brand, brandNote });
 }

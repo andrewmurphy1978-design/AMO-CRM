@@ -26,7 +26,7 @@ import NewEmailButton from "../../contacts/[id]/new-email-button";
 import CallsSmsCard from "../../contacts/[id]/calls-sms-card";
 import { updateProjectGeneral, updateProjectNotes, updatePhaseNotes, updateProjectCustomFields } from "@/actions/projects";
 import { getProjectTemplate } from "@/lib/project-template-store";
-import { displayValue, isFieldVisible, isGeneralField } from "@/lib/project-templates";
+import { displayValue, isFieldVisible } from "@/lib/project-templates";
 import { getTwilioConfig, contactPhoneOptions } from "@/lib/twilio";
 import { auth } from "@/lib/auth";
 import { getValidAccessToken } from "@/lib/google";
@@ -267,10 +267,6 @@ export default async function ProjectDetailPage({
       reports={brandReports}
     />
   );
-  // Research and Mock-up questions live in the General Info card.
-  const researchBlocks = typeBlocks
-    .map((tb) => ({ type: tb.type, label: typeLabels[tb.type] ?? tb.type, fields: tb.template.fields.filter((f) => isGeneralField(f.key)), values: tb.values }))
-    .filter((b) => b.fields.length > 0);
   const selectedPhase =
     phaseParam === "all" ? null : (project.phases.find((ph) => ph.id === phaseParam) ?? (phaseParam ? null : activePhase));
   const selectedPhaseId = selectedPhase?.id;
@@ -668,7 +664,6 @@ export default async function ProjectDetailPage({
                 lang={lang}
                 typeLabels={typeLabels}
                 customTypeKeys={customTypeKeys}
-                researchBlocks={researchBlocks}
                 contacts={clientOptions}
                 users={users}
                 values={{
@@ -774,27 +769,6 @@ export default async function ProjectDetailPage({
             </div>
 
 
-            {researchBlocks.some((b) => b.fields.some((f) => isFieldVisible(f, b.values, b.fields))) && (
-              <div className="mt-4 space-y-3">
-                <p className={LABEL_CLASS}>{lang === "fr" ? "Recherche et maquette" : "Research & Mock-up"}</p>
-                {researchBlocks.map((b) => (
-                  <div key={b.type}>
-                    {researchBlocks.length > 1 && <p className="mb-1 text-xs font-medium text-ink">{b.label}</p>}
-                    <div className="grid gap-4 lg:grid-cols-3">
-                      {b.fields
-                        .filter((f) => isFieldVisible(f, b.values, b.fields))
-                        .map((f) => (
-                          <div key={f.key} className="min-w-0">
-                            <p className={LABEL_CLASS}>{localizeText(f.label, lang)}</p>
-                            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-ink">{localizeValue(displayValue(b.values[f.key]), lang) || "—"}</p>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {project.description && (
               <div className="mt-4">
                 <p className={LABEL_CLASS}>{t.projectForm.description}</p>
@@ -804,7 +778,6 @@ export default async function ProjectDetailPage({
           </Card>
 
           {typeBlocks
-            .map((tb) => ({ ...tb, template: { ...tb.template, fields: tb.template.fields.filter((f) => !isGeneralField(f.key)) } }))
             .filter((tb) => tb.template.fields.length > 0)
             .map(({ type: ty, template, values }) => (
               <Card

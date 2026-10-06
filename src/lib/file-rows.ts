@@ -35,7 +35,7 @@ const toRow = (f: { id: string; name: string; mimeType: string; size: number; no
   note: f.note,
   uploadedByName: f.uploadedByName,
   createdAt: f.createdAt.toISOString(),
-  kind: f.kind === "BRAND_REPORT" ? "Brand report" : f.uploadedByName === "Stripe" ? "Payment confirmation" : undefined,
+  kind: f.kind === "BRAND_REPORT" ? "Brand report" : f.kind === "BRAND_PDF" ? "Brand guide (PDF)" : f.uploadedByName === "Stripe" ? "Payment confirmation" : undefined,
   from,
 });
 
@@ -43,7 +43,11 @@ const byDate = (a: FileRow, b: FileRow) => b.createdAt.localeCompare(a.createdAt
 
 export async function loadProjectFileRows(db: PrismaClient, project: { id: string; name: string }): Promise<FileRow[]> {
   const own = await db.attachedFile.findMany({ where: { projectId: project.id }, orderBy: { createdAt: "desc" }, select: attachedSelect });
-  return [...own.map((f) => toRow(f)), ...(await projectDocuments(db, project))].sort(byDate);
+  // The client's brand report and PDF guide (kept on the Brand card) belong with the project's files too.
+  const owner = await db.project.findUnique({ where: { id: project.id }, select: { contactId: true } });
+  const brand = owner ? await db.attachedFile.findMany({ where: { contactId: owner.contactId, kind: { in: ["BRAND_REPORT", "BRAND_PDF"] } }, orderBy: { createdAt: "desc" }, select: attachedSelect }) : [];
+  const brandFrom = owner ? { label: "Brand", href: `/contacts/${owner.contactId}` } : undefined;
+  return [...own.map((f) => toRow(f)), ...brand.map((f) => toRow(f, brandFrom)), ...(await projectDocuments(db, project))].sort(byDate);
 }
 
 // The contact's own files plus everything from its projects (each tagged with its project).
@@ -63,6 +67,6 @@ export async function loadContactFileRows(db: PrismaClient, contactId: string): 
 
 // The AI brand reports dropped on a client's Brand card.
 export async function loadBrandReports(db: PrismaClient, contactId: string): Promise<FileRow[]> {
-  const rows = await db.attachedFile.findMany({ where: { contactId, kind: "BRAND_REPORT" }, orderBy: { createdAt: "desc" }, select: attachedSelect });
+  const rows = await db.attachedFile.findMany({ where: { contactId, kind: { in: ["BRAND_REPORT", "BRAND_PDF"] } }, orderBy: { createdAt: "desc" }, select: attachedSelect });
   return rows.map((f) => toRow(f));
 }
