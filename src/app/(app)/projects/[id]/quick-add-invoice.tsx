@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useActionState, useRef, useEffect } from "react";
 import { createInvoice } from "@/actions/invoices";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -37,7 +38,7 @@ export default function QuickAddInvoice({ projectId, lang }: { projectId: string
         <option value="USD">USD</option>
         <option value="EUR">EUR</option>
       </select>
-      <input name="dueDate" type="date" className={FIELD_CLASS} title={t.invoices.dueDate} />
+      <DateInput name="dueDate" className={FIELD_CLASS} title={t.invoices.dueDate} />
       <button
         type="submit"
         disabled={pending}

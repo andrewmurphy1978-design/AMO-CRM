@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { draftProposalAI } from "@/actions/proposals";
 import type { RecipientOption } from "@/lib/contact-address";
@@ -567,8 +568,8 @@ export default function ProposalForm({
                 placeholder={t.proposals.fixedAmount}
                 className={`${FIELD_CLASS} mt-0 px-2`}
               />
-              <input
-                type="date"
+              <DateInput
+               
                 value={row.dueDate}
                 onChange={(e) =>
                   setSchedule((rows) => rows.map((r) => (r.tempKey === row.tempKey ? { ...r, dueDate: e.target.value } : r)))

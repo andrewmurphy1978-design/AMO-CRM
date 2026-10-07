@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useState, useTransition } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import type { PhaseValues } from "@/actions/projects";
@@ -139,8 +140,8 @@ export default function PhaseDialog({
         <div className="mt-3 grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.startDate}</label>
-            <input
-              type="date"
+            <DateInput
+             
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
@@ -148,8 +149,8 @@ export default function PhaseDialog({
           </div>
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.dueDate}</label>
-            <input
-              type="date"
+            <DateInput
+             
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
               className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
@@ -160,7 +161,7 @@ export default function PhaseDialog({
         <div className="mt-3 grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.completedDate}</label>
-            <input type="date" value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30" />
+            <DateInput value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30" />
           </div>
         </div>
 

@@ -1,10 +1,9 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 import MultiSelect from "@/components/multi-select";
 import PhaseList, { type PhaseRowData } from "./phase-list";
 import PageHeader from "../page-header";
@@ -312,50 +311,20 @@ function DateField({
   label,
   name,
   defaultValue,
-  lang,
 }: {
   label: string;
   name: string;
   defaultValue?: Date | string | null;
-  lang: Lang;
+  lang?: Lang;
 }) {
-  const [value, setValue] = useState(() => toDateInput(defaultValue));
-  const [focused, setFocused] = useState(false);
-  const dateLocale = getDateLocale(lang);
-
-  const longFormat = lang === "fr" ? "d MMMM, yyyy" : "MMMM d, yyyy";
-  const displayValue = (() => {
-    if (!value) return "";
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return value;
-    return format(date, longFormat, { locale: dateLocale });
-  })();
-
   return (
     <div>
       <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{label}</label>
-      {focused ? (
-        // Native date input while editing — gives a calendar-icon picker
-        // as well as typed manual entry, without building either one from
-        // scratch. Swaps back to the plain formatted-text display on blur.
-        <input
-          type="date"
-          autoFocus
-          value={value}
-          onBlur={() => setFocused(false)}
-          onChange={(e) => setValue(e.target.value)}
-          className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-        />
-      ) : (
-        <input
-          type="text"
-          value={displayValue}
-          onFocus={() => setFocused(true)}
-          readOnly
-          className="mt-1 w-full cursor-pointer rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-        />
-      )}
-      <input type="hidden" name={name} value={value} />
+      <DateInput
+        name={name}
+        defaultValue={toDateInput(defaultValue)}
+        className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
+      />
     </div>
   );
 }

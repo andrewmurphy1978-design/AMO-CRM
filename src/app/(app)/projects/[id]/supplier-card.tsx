@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -117,11 +118,11 @@ function SupplierDialog({ projectId, row, lang, onClose }: { projectId: string; 
         </div>
         <div>
           <label className={LABEL}>{fr ? "Date de la facture" : "Invoice date"}</label>
-          <input type="date" name="invoiceDate" defaultValue={row?.invoiceDate ?? ""} className={FIELD} />
+          <DateInput name="invoiceDate" defaultValue={row?.invoiceDate ?? ""} className={FIELD} />
         </div>
         <div>
           <label className={LABEL}>{fr ? "Date de paiement" : "Date paid"}</label>
-          <input type="date" name="paidDate" defaultValue={row?.paidDate ?? ""} className={FIELD} />
+          <DateInput name="paidDate" defaultValue={row?.paidDate ?? ""} className={FIELD} />
         </div>
         <div>
           <label className={LABEL}>{fr ? "Montant avant taxes" : "Amount before tax"}</label>

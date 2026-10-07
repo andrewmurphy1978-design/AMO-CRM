@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { CARD_COLORS } from "@/components/section-card";
@@ -151,15 +152,15 @@ export default function ProjectGeneralDialog({
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <label className={LABEL_CLASS}>{t.projectForm.startDate}</label>
-            <input type="date" name="startDate" defaultValue={values.startDate} className={FIELD_CLASS} />
+            <DateInput name="startDate" defaultValue={values.startDate} className={FIELD_CLASS} />
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.projectForm.dueDate}</label>
-            <input type="date" name="dueDate" defaultValue={values.dueDate} className={FIELD_CLASS} />
+            <DateInput name="dueDate" defaultValue={values.dueDate} className={FIELD_CLASS} />
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.projectForm.completedDate}</label>
-            <input type="date" name="completedAt" defaultValue={values.completedAt} className={FIELD_CLASS} />
+            <DateInput name="completedAt" defaultValue={values.completedAt} className={FIELD_CLASS} />
           </div>
         </div>
 

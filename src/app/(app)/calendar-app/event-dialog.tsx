@@ -1,8 +1,9 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import DocumentLinkFields, { langFromProjectLabel } from "@/components/document-link-fields";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { format, type Locale } from "date-fns";
+import type { Locale } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { EVENT_COLOR_OPTIONS, GOOGLE_EVENT_COLORS, DEFAULT_EVENT_COLOR, eventColor } from "@/lib/calendar-colors";
 import { formatClockTime } from "@/lib/calendar-time";
@@ -279,51 +280,9 @@ const FIELD_CLASS =
 const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-soft";
 const COMPACT_FIELD_CLASS = "rounded-md border border-card-border bg-field-bg px-2.5 py-1.5 text-sm text-ink shadow-sm";
 
-// Shows a long-form formatted date ("September 22, 2026" / "22 septembre
-// 2026") while unfocused; swaps to a native date input (calendar-icon
-// picker + typed entry) on focus, same pattern as the Project edit form's
-// own DateField.
-function DateDisplayField({
-  value,
-  onChange,
-  lang,
-  dateLocale,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  lang: Lang;
-  dateLocale: Locale | undefined;
-}) {
-  const [focused, setFocused] = useState(false);
-  const longFormat = lang === "fr" ? "d MMMM yyyy" : "MMMM d, yyyy";
-  const displayValue = (() => {
-    if (!value) return "";
-    const d = new Date(`${value}T00:00:00`);
-    return Number.isNaN(d.getTime()) ? value : format(d, longFormat, { locale: dateLocale });
-  })();
-
-  // Fixed width on both variants — a native <input type="date"> is
-  // intrinsically narrower than the long formatted text it replaces on
-  // focus, which without this made the field visibly shrink the moment
-  // you clicked into it.
-  return focused ? (
-    <input
-      type="date"
-      autoFocus
-      value={value}
-      onBlur={() => setFocused(false)}
-      onChange={(e) => onChange(e.target.value)}
-      className={`${COMPACT_FIELD_CLASS} w-40`}
-    />
-  ) : (
-    <input
-      type="text"
-      readOnly
-      value={displayValue}
-      onFocus={() => setFocused(true)}
-      className={`${COMPACT_FIELD_CLASS} w-40 cursor-pointer`}
-    />
-  );
+// The event's date: written out ("September 22, 2026") until you click it, then the yyyy-mm-dd mask.
+function DateDisplayField({ value, onChange }: { value: string; onChange: (value: string) => void; lang?: Lang; dateLocale?: Locale | undefined }) {
+  return <DateInput value={value} onChange={(e) => onChange(e.target.value)} className={`${COMPACT_FIELD_CLASS} w-44`} />;
 }
 
 // Native <input type="time"> can't be forced into a fixed 12h/24h display —

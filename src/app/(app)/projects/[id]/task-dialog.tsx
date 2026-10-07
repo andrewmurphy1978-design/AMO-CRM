@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useState, useTransition } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import type { TaskDialogValues } from "@/actions/tasks";
@@ -189,15 +190,15 @@ export default function TaskDialog({
             {/* Line 4: the three dates */}
             <div>
               <label className={LABEL}>{t.taskForm.startDate}</label>
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={FIELD} />
+              <DateInput value={startDate} onChange={(e) => setStartDate(e.target.value)} className={FIELD} />
             </div>
             <div>
               <label className={LABEL}>{t.taskForm.dueDate}</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
+              <DateInput value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
             </div>
             <div>
               <label className={LABEL}>{t.taskForm.completedDate}</label>
-              <input type="date" value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} className={FIELD} />
+              <DateInput value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} className={FIELD} />
             </div>
 
             {/* Line 5: description */}

@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useActionState, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
@@ -140,11 +141,11 @@ export default function TaskForm({
         </div>
         <div>
           <label className={LABEL_CLASS}>{t.taskForm.startDate}</label>
-          <input type="date" name="startDate" defaultValue={toDateInput(defaultValues?.startDate)} className={FIELD_CLASS} />
+          <DateInput name="startDate" defaultValue={toDateInput(defaultValues?.startDate)} className={FIELD_CLASS} />
         </div>
         <div>
           <label className={LABEL_CLASS}>{t.taskForm.dueDate}</label>
-          <input type="date" name="dueDate" defaultValue={toDateInput(defaultValues?.dueDate)} className={FIELD_CLASS} />
+          <DateInput name="dueDate" defaultValue={toDateInput(defaultValues?.dueDate)} className={FIELD_CLASS} />
         </div>
       </div>
 

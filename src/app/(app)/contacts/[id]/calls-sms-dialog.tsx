@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteInteraction, generateInteractionSummary, saveContactInteraction } from "@/actions/interactions";
@@ -270,13 +271,24 @@ export function CallsSmsDialog({
           <label className={LABEL_CLASS}>
             {isSms ? (entry?.direction === "INBOUND" ? t.callsSms.receivedAt : t.callsSms.sentAt) : t.callsSms.dateTime}
           </label>
-          <input
-            type="datetime-local"
-            value={when}
-            readOnly={dateLocked}
-            onChange={(e) => setWhen(e.target.value)}
-            className={`${FIELD_CLASS} ${dateLocked ? "cursor-not-allowed bg-black/[0.04] text-soft" : ""}`}
-          />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <DateInput
+                value={when.slice(0, 10)}
+                disabled={dateLocked}
+                onChange={(e) => setWhen(e.target.value ? `${e.target.value}T${when.slice(11, 16) || "09:00"}` : "")}
+                className={`${FIELD_CLASS} ${dateLocked ? "cursor-not-allowed bg-black/[0.04] text-soft" : ""}`}
+              />
+            </div>
+            <input
+              type="time"
+              value={when.slice(11, 16)}
+              readOnly={dateLocked}
+              disabled={!when}
+              onChange={(e) => setWhen(`${when.slice(0, 10)}T${e.target.value}`)}
+              className={`${FIELD_CLASS} w-28 shrink-0 ${dateLocked ? "cursor-not-allowed bg-black/[0.04] text-soft" : ""}`}
+            />
+          </div>
           {/* The browser's own timezone is the only one that knows what the
               typed wall-clock time means, so it's converted here. */}
           <input type="hidden" name="occurredAt" value={when ? new Date(when).toISOString() : ""} readOnly />

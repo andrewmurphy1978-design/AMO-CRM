@@ -1,11 +1,10 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { getDateLocale } from "@/lib/i18n/date-locale";
 import { saveAffiliateProgramApiKey, revealAffiliateProgramApiKey } from "@/actions/affiliate-programs";
 import PageHeader from "../../page-header";
 import { AFFILIATE_STATUS_VALUES, AFFILIATE_TYPE_OPTIONS } from "@/lib/affiliate-status";
@@ -56,46 +55,24 @@ function DateField({
   label,
   name,
   defaultValue,
-  lang,
   leading,
 }: {
   label: string;
   name: string;
   defaultValue?: Date | string | null;
-  lang: Lang;
+  lang?: Lang;
   // An optional control (e.g. a checkbox) rendered to the left of the
   // label, on the same line — for a date that's conditional on something
   // else (Follow-up date on whether follow-up is needed at all).
   leading?: React.ReactNode;
 }) {
-  const [value, setValue] = useState(() => toDateInputValue(defaultValue));
-  const [focused, setFocused] = useState(false);
-  const dateLocale = getDateLocale(lang);
-
-  const longFormat = lang === "fr" ? "d MMMM, yyyy" : "MMMM d, yyyy";
-  const displayValue = (() => {
-    if (!value) return "";
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return value;
-    return format(date, longFormat, { locale: dateLocale });
-  })();
-
   return (
     <div>
       <div className="flex items-center gap-2">
         {leading}
         <label className={LABEL_CLASS}>{label}</label>
       </div>
-      <input
-        type="text"
-        value={focused ? value : displayValue}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={focused ? "yyyy-mm-dd" : undefined}
-        className={FIELD_CLASS}
-      />
-      <input type="hidden" name={name} value={value} />
+      <DateInput name={name} defaultValue={toDateInputValue(defaultValue)} className={FIELD_CLASS} />
     </div>
   );
 }

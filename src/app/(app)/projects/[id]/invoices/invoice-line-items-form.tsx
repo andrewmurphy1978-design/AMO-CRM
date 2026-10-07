@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -145,11 +146,11 @@ export default function InvoiceLineItemsForm({
         </div>
         <div>
           <label className={LABEL_CLASS}>{lang === "fr" ? "Date de la facture" : "Invoice date"}</label>
-          <input type="date" name="invoiceDate" defaultValue={toDateInput(defaultValues?.invoiceDate) || new Date().toISOString().slice(0, 10)} className={FIELD_CLASS} />
+          <DateInput name="invoiceDate" defaultValue={toDateInput(defaultValues?.invoiceDate) || new Date().toISOString().slice(0, 10)} className={FIELD_CLASS} />
         </div>
         <div>
           <label className={LABEL_CLASS}>{t.invoices.dueDate}</label>
-          <input type="date" name="dueDate" defaultValue={toDateInput(defaultValues?.dueDate)} className={FIELD_CLASS} />
+          <DateInput name="dueDate" defaultValue={toDateInput(defaultValues?.dueDate)} className={FIELD_CLASS} />
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { isPersonalSectionUser } from "@/lib/personal-watch";
 import AppShell from "./app-shell";
+import { LangProvider } from "@/components/lang-context";
 import LocalFolderSync from "@/components/local-folder-sync";
 
 async function handleSignOut() {
@@ -54,7 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       signOutLabel={t.nav.signOut}
       signOutAction={handleSignOut}
     >
-      {children}
+      <LangProvider lang={lang}>{children}</LangProvider>
       <LocalFolderSync lang={lang} />
     </AppShell>
   );

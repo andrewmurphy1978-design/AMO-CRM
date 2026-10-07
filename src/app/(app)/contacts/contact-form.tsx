@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
@@ -629,8 +630,8 @@ export default function ContactForm({
             <Field
               label={t.contactForm.birthday}
               name="birthday"
+              type="date"
               defaultValue={defaultValues?.birthday ?? ""}
-              placeholder="YYYY-MM-DD"
             />
           </div>
         </div>
@@ -978,7 +979,7 @@ export default function ContactForm({
                     <input name="domainDnsProvider" defaultValue={row.dnsProvider ?? ""} className={TABLE_INPUT_CLASS} />
                   </td>
                   <td className="px-3 py-2">
-                    <input type="date" name="domainExpiryDate" defaultValue={row.expiryDate ?? ""} className={TABLE_INPUT_CLASS} />
+                    <DateInput name="domainExpiryDate" defaultValue={row.expiryDate ?? ""} className={TABLE_INPUT_CLASS} />
                   </td>
                   <td className="px-3 py-2">
                     <select name="domainAutoRenew" defaultValue={row.autoRenew ? "on" : "off"} className={TABLE_INPUT_CLASS}>
@@ -1489,6 +1490,8 @@ export function Field({
             </option>
           ))}
         </select>
+      ) : type === "date" ? (
+        <DateInput id={name} name={name} required={required} defaultValue={defaultValue ?? ""} className={FIELD_CLASS} />
       ) : (
         <input
           id={name}

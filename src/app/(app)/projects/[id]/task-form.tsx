@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useActionState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
@@ -127,8 +128,8 @@ export default function TaskForm({
         </div>
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.startDate}</label>
-          <input
-            type="date"
+          <DateInput
+           
             name="startDate"
             defaultValue={toDateInput(defaultValues?.startDate)}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
@@ -136,8 +137,8 @@ export default function TaskForm({
         </div>
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.dueDate}</label>
-          <input
-            type="date"
+          <DateInput
+           
             name="dueDate"
             defaultValue={toDateInput(defaultValues?.dueDate)}
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
@@ -145,7 +146,7 @@ export default function TaskForm({
         </div>
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.taskForm.completedDate}</label>
-          <input type="date" name="completedDate" defaultValue={toDateInput(defaultValues?.completedAt)} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30" />
+          <DateInput name="completedDate" defaultValue={toDateInput(defaultValues?.completedAt)} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30" />
         </div>
         {phases && phases.length > 0 && (
           <div>

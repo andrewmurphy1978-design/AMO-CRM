@@ -1,5 +1,6 @@
 "use client";
 
+import DateInput from "@/components/date-input";
 import { useRef, useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { FIELD_CLASS, LABEL_CLASS, type DomainRow } from "../contact-form";
@@ -143,7 +144,7 @@ export default function DomainsDialog({
             />
             <div>
               <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.expiryDate}</label>
-              <input type="date" name="domainExpiryDate" defaultValue={row.expiryDate ?? ""} className={`${FIELD_CLASS} lg:mt-0`} />
+              <DateInput name="domainExpiryDate" defaultValue={row.expiryDate ?? ""} className={`${FIELD_CLASS} lg:mt-0`} />
             </div>
             <div>
               <label className={`${LABEL_CLASS} lg:hidden`}>{t.contactForm.autoRenew}</label>
