@@ -4,6 +4,7 @@ import { brandFileEntries } from "@/lib/brand-zip";
 import { isDataUri } from "@/lib/brand";
 import { createZip } from "@/lib/zip";
 import { mockupInputFiles } from "@/lib/mockup-inputs";
+import { generatePhasePrompt } from "@/actions/phase-prompts";
 
 // GET /api/projects/<id>/mockup-inputs: everything gathered in the Brand and Research phases, as one .zip
 // to drag and drop into an AI chat together with the Mock-up prompt.
@@ -21,12 +22,17 @@ async function build(params: Promise<{ id: string }>) {
   if (!session) return new Response("Unauthorized", { status: 401 });
   const { id } = await params;
   const built = await withScopedPrismaClient(async (db) => {
-    const project = await db.project.findUnique({ where: { id }, select: { name: true, contactId: true } });
+    const project = await db.project.findUnique({ where: { id }, select: { name: true, contactId: true, phases: { select: { id: true, name: true }, orderBy: { order: "asc" } } } });
     if (!project) return null;
     const rows = await db.contactBrandItem.findMany({ where: { contactId: project.contactId }, orderBy: [{ category: "asc" }, { order: "asc" }] });
     return { project, rows, files: await mockupInputFiles(db, id, project.contactId, true) };
   });
   if (!built) return new Response("Not found", { status: 404 });
+
+  // The full task (the Mock-up phase's prompt) goes INSIDE the zip as TASK.md: chats that get the prompt and the
+  // zip as separate attachments then know what to do from a one-line message.
+  const phase = built.project.phases.find((p) => /(^|—\s*)mock-?up$/i.test(p.name.trim()));
+  const task = phase ? await generatePhasePrompt(id, phase.id).catch(() => null) : null;
 
   const entries = brandFileEntries(built.rows);
   const byId = new Map(entries.map((e) => [e.id, e.name]));
@@ -35,13 +41,14 @@ async function build(params: Promise<{ id: string }>) {
     built.rows.map((r) => `- ${r.category} | ${r.label}${r.value ? ` | ${isDataUri(r.value) ? `file: ${byId.get(r.id) ?? "(attached)"}` : r.value}` : ""}${r.note ? ` - ${r.note}` : ""}`).join("\n") +
     "\n";
   const readme =
-    "# Inputs for the mock-ups\n\nThese files are INPUT material for the task given in the chat message: they are not the task. Do not ask what to do with them; read them and carry out that task.\n\n" +
-    "- brand/brand-card.md: the client's Brand card (colours, fonts, voice...), with brand/files/ holding the uploaded logos, icons and images\n" +
+    "# Inputs for the mock-ups\n\nTASK.md is the full task: read it first and carry it out. Every other file is INPUT material for that task. Do not ask what to do with these files.\n\n" +
+    "- TASK.md: the full task, with the client and project details\n- brand/brand-card.md: the client's Brand card (colours, fonts, voice...), with brand/files/ holding the uploaded logos, icons and images\n" +
     "- brand/reports/: the brand reports\n" +
     "- research/reports/: the research reports: competitors, keywords, competitor blogs, content plan, recommendations\n" +
     "- research/screenshots/: some screenshots of the competitors' pages\n\n" +
     "Read ALL of it before designing: the mock-ups must follow the brand exactly and answer what the research found.\n";
   const zip = createZip([
+    ...(task?.prompt ? [{ name: "TASK.md", content: task.prompt }] : []),
     { name: "README.md", content: readme },
     { name: "brand/brand-card.md", content: card },
     ...entries.map((e) => ({ name: `brand/files/${e.name.replace(/^brand-files\//, "")}`, data: e.data })),

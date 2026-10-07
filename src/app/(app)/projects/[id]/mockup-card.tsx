@@ -98,7 +98,7 @@ export default function MockupCard({ projectId, reports, shots, pdfs, lang }: { 
         <a href={`/api/projects/${projectId}/mockup-inputs`} download className="rounded-lg border border-card-border bg-field-bg px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-black/5">
           ⬇ {fr ? "Télécharger le zip pour l'IA (marque + recherche)" : "Download the zip for the AI (brand + research)"}
         </a>
-        <span className="text-xs text-soft">{fr ? "À glisser dans l'IA avec le prompt de la tâche « Construire la maquette »." : "Drag it into the AI with the prompt of the first mock-up task."}</span>
+        <span className="text-xs text-soft">{fr ? "La tâche complète est dedans (TASK.md) : joignez-le à l'IA et collez le court message affiché sur la première tâche de maquette." : "The full task is inside (TASK.md): attach it to the AI and paste the short message shown on the first mock-up task."}</span>
       </div>
       {message && <p className="text-xs text-red-600">{message}</p>}
       {info && <p className="text-xs text-emerald-700">{info}</p>}
