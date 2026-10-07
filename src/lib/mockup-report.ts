@@ -74,7 +74,7 @@ export async function writeMockupPart(input: MockupSources & { lang: "en" | "fr"
 
 Client: ${input.clientName}. Project: ${input.projectName}.
 
-Write ${what}, based on the report(s) below. If several reports exist, merge them into one coherent version and keep every useful decision. Never mention the reports or the AIs, and do not invent content that is not in the sources. Write all text in ${language}. Keep each text short and concrete.
+Write ${what}, based on the report(s) below. If several reports exist, merge them into one coherent version and keep every useful decision. Never mention the reports or the AIs, and do not invent content that is not in the sources. Write all text in ${language}. Keep each text short and concrete: at most 8 screens or pages per mock-up, each field under 30 words, at most 6 sections per screen and 5 flows.
 
 Respond with ONLY one JSON object (no markdown fences) in exactly this shape; use [] or "" when the sources say nothing:
 ${shape}
@@ -84,20 +84,53 @@ ${reports}`;
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": input.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 4_500, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 6_500, messages: [{ role: "user", content: prompt }] }),
       signal: AbortSignal.timeout(85_000),
     });
     if (!res.ok) return { error: `The AI request failed (HTTP ${res.status}: ${(await res.text()).slice(0, 140)}).` };
     const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
-    if (data.stop_reason === "max_tokens") return { error: "The AI's reply was cut off." };
     const text = data.content?.find((c) => c.type === "text")?.text ?? "";
     const s = text.indexOf("{");
+    if (s < 0) return { error: "The AI didn't return usable content." };
+    if (data.stop_reason === "max_tokens") {
+      // Cut off: keep everything that was complete (the screens written so far) instead of failing.
+      const fixed = closeTruncatedJson(text.slice(s));
+      return fixed ? (fixed as Partial<MockupDoc>) : { error: "The AI's reply was cut off." };
+    }
     const e = text.lastIndexOf("}");
-    if (s < 0 || e <= s) return { error: "The AI didn't return usable content." };
+    if (e <= s) return { error: "The AI didn't return usable content." };
     return JSON.parse(text.slice(s, e + 1)) as Partial<MockupDoc>;
   } catch (err) {
     return { error: `The AI request failed (${err instanceof Error ? err.message : "error"}).` };
   }
+}
+
+// A JSON object that was cut off mid-way: cut back to the last complete value and close the open brackets.
+function closeTruncatedJson(text: string): unknown | null {
+  for (let cut = text.length; cut > 1; cut--) {
+    const ch = text[cut - 1];
+    if (ch !== "}" && ch !== "]" && ch !== '"' && !/[0-9el]/.test(ch)) continue;
+    const head = text.slice(0, cut);
+    const stack: string[] = [];
+    let inStr = false;
+    for (let i = 0; i < head.length; i++) {
+      const c = head[i];
+      if (inStr) {
+        if (c === "\\") i++;
+        else if (c === '"') inStr = false;
+      } else if (c === '"') inStr = true;
+      else if (c === "{") stack.push("}");
+      else if (c === "[") stack.push("]");
+      else if (c === "}" || c === "]") stack.pop();
+    }
+    if (inStr) continue;
+    try {
+      return JSON.parse(head + stack.reverse().join(""));
+    } catch {
+      /* keep cutting back */
+    }
+  }
+  return null;
 }
 
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
