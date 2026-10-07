@@ -25,6 +25,8 @@ interface Rules {
 
 export interface GuideAssets {
   logos: { label: string; bytes: Uint8Array; kind: "png" | "jpg" }[];
+  // Images of the other sections (icons, graphics, photos, components, charts), PNG / JPG only.
+  images: Record<string, { label: string; bytes: Uint8Array; kind: "png" | "jpg" }[]>;
   otherLogoFiles: string[]; // logos that can't be drawn here (SVG, WebP...): listed by name
 }
 
@@ -163,6 +165,32 @@ export async function renderGuidePdf(input: { guide: GuideDoc; lang: "en" | "fr"
     y -= 4;
   };
 
+  // A grid of the section's images (3 per row), each with its caption.
+  const gallery = async (items: { label: string; bytes: Uint8Array; kind: "png" | "jpg" }[] | undefined) => {
+    if (!items?.length) return;
+    const cw = (CW - 24) / 3;
+    for (let i = 0; i < items.length; i += 3) {
+      ensure(cw * 0.75 + 30);
+      let rowH = 0;
+      for (const [k, it] of items.slice(i, i + 3).entries()) {
+        try {
+          const img = it.kind === "png" ? await doc.embedPng(it.bytes) : await doc.embedJpg(it.bytes);
+          const boxH = cw * 0.75;
+          const sc = Math.min((cw - 12) / img.width, (boxH - 12) / img.height);
+          const x = MX + k * (cw + 12);
+          page.drawRectangle({ x, y: y - boxH, width: cw, height: boxH, color: rgb(0.97, 0.98, 0.97), borderColor: LINE, borderWidth: 0.5 });
+          page.drawImage(img, { x: x + (cw - img.width * sc) / 2, y: y - boxH / 2 - (img.height * sc) / 2, width: img.width * sc, height: img.height * sc });
+          page.drawText(ok(it.label).slice(0, 40), { x, y: y - boxH - 11, size: 8, font: regular, color: SOFT });
+          rowH = boxH + 22;
+        } catch {
+          /* an image that can't be drawn is skipped */
+        }
+      }
+      y -= rowH || 4;
+    }
+    y -= 6;
+  };
+
   // ---- cover
   page = doc.addPage([W, H]);
   pages.push(page);
@@ -298,13 +326,15 @@ export async function renderGuidePdf(input: { guide: GuideDoc; lang: "en" | "fr"
     }
   }
 
-  // ---- rule sections
-  for (const [key, title] of [["iconography", t.iconography], ["graphics", t.graphics], ["photography", t.photography], ["components", t.components], ["charts", t.charts]] as const) {
+  // ---- rule sections (with the section's images)
+  for (const [key, title, imgKey] of [["iconography", t.iconography, "icons"], ["graphics", t.graphics, "graphics"], ["photography", t.photography, "photos"], ["components", t.components, "components"], ["charts", t.charts, "charts"]] as const) {
     const r = g[key];
-    if (!r || (!r.intro && !r.rules?.length)) continue;
+    const imgs = input.assets.images[imgKey];
+    if ((!r || (!r.intro && !r.rules?.length)) && !imgs?.length) continue;
     section(title);
-    para(r.intro);
-    bullets(r.rules);
+    para(r?.intro);
+    await gallery(imgs);
+    bullets(r?.rules);
   }
 
   // ---- voice

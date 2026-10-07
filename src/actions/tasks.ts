@@ -18,6 +18,7 @@ const TaskSchema = z.object({
   status: z.enum(["TODO", "IN_PROGRESS", "BLOCKED", "DONE"]),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]),
   assigneeId: z.string().optional(),
+  assigneeIds: z.array(z.string()).optional(),
   supervisorId: z.string().optional(),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
@@ -49,6 +50,7 @@ export interface TaskDialogValues {
   status: "TODO" | "IN_PROGRESS" | "BLOCKED" | "DONE";
   priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
   assigneeId: string;
+  assigneeIds?: string[]; // everyone assigned (assigneeId is the first)
   supervisorId: string;
   startDate: string;
   dueDate: string;
@@ -85,7 +87,8 @@ export async function createTaskViaDialog(
         aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
-        assigneeId: data.assigneeId || null,
+        assigneeId: (data.assigneeIds?.[0] ?? data.assigneeId) || null,
+        assigneeIds: data.assigneeIds ?? (data.assigneeId ? [data.assigneeId] : []),
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
@@ -129,7 +132,8 @@ export async function updateTaskViaDialog(
         aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
-        assigneeId: data.assigneeId || null,
+        assigneeId: (data.assigneeIds?.[0] ?? data.assigneeId) || null,
+        assigneeIds: data.assigneeIds ?? (data.assigneeId ? [data.assigneeId] : []),
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
@@ -177,7 +181,8 @@ export async function createTask(
         aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
-        assigneeId: data.assigneeId || null,
+        assigneeId: (data.assigneeIds?.[0] ?? data.assigneeId) || null,
+        assigneeIds: data.assigneeIds ?? (data.assigneeId ? [data.assigneeId] : []),
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
@@ -223,7 +228,8 @@ export async function createTaskAndRedirect(
         aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
-        assigneeId: data.assigneeId || null,
+        assigneeId: (data.assigneeIds?.[0] ?? data.assigneeId) || null,
+        assigneeIds: data.assigneeIds ?? (data.assigneeId ? [data.assigneeId] : []),
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
@@ -274,7 +280,8 @@ export async function updateTask(
         aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
-        assigneeId: data.assigneeId || null,
+        assigneeId: (data.assigneeIds?.[0] ?? data.assigneeId) || null,
+        assigneeIds: data.assigneeIds ?? (data.assigneeId ? [data.assigneeId] : []),
         supervisorId: data.supervisorId || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,

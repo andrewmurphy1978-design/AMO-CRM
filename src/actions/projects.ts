@@ -291,7 +291,7 @@ async function applyProjectSettings(db: PrismaClient, projectId: string, next: {
       if (tasks.length > 0) await db.task.createMany({ data: taskRows(projectId, created.id, tasks) });
     }
   };
-  if (next.createBrand) await addPhase("Brand", brandPhaseTasks(next.brandItems), "PLANNING", /^mock-up$/i);
+  if (next.createBrand) await addPhase("Brand", brandPhaseTasks(next.brandItems), "PLANNING", /^(research|mock-up)$/i);
   if (next.accountMode === "CLIENT") await addPhase("Training", [...TRAINING_PHASE_TASKS], "ACTIVE", /^final payment$/i);
   if (next.accountMode === "MANAGED" && project.accountMode !== "MANAGED") {
     const have = await db.projectSubscription.count({ where: { projectId } });

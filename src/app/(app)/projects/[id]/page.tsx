@@ -371,13 +371,18 @@ export default async function ProjectDetailPage({
     status: task.status,
     priority: task.priority,
     dueDate: task.dueDate ? task.dueDate.toISOString() : null,
-    assignee: task.assignee ? { name: task.assignee.name } : null,
+    assignee: (() => {
+      const ids = task.assigneeIds.length > 0 ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [];
+      const names = ids.map((uid) => users.find((u) => u.id === uid)?.name).filter(Boolean);
+      return names.length > 0 ? { name: names.join(", ") } : task.assignee ? { name: task.assignee.name } : null;
+    })(),
     values: {
       title: task.title,
       phaseId: task.phaseId ?? "",
       status: task.status,
       priority: task.priority,
       assigneeId: task.assigneeId ?? "",
+      assigneeIds: task.assigneeIds.length > 0 ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [],
       supervisorId: task.supervisorId ?? "",
       startDate: toDateInput(task.startDate),
       dueDate: toDateInput(task.dueDate),

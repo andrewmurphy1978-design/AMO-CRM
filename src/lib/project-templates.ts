@@ -902,7 +902,8 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
 // Lifecycle for the built-in templates: Proposal first; research / mock-up
 // style phases belong to Planning; everything else to Active (with Presenting
 // and Deploying added if missing); Final Payment last.
-const PLANNING_STAGE_NAMES = /^(research|mock-?up|model|design|discovery|scoping|catalog planning|preparation)$/i;
+// (A Training project's "Preparation" is not here: it runs in the Active stage, right before its Sessions.)
+const PLANNING_STAGE_NAMES = /^(research|mock-?up|model|design|discovery|scoping|catalog planning)$/i;
 
 function applyLifecycle(template: TemplateConfig): void {
   for (const phase of template.phases) phase.stage = PLANNING_STAGE_NAMES.test(phase.name) ? "PLANNING" : "ACTIVE";
@@ -957,9 +958,10 @@ export function withoutBrandField(config: TemplateConfig): TemplateConfig {
 export function withBrandPhase(config: TemplateConfig): TemplateConfig {
   if (config.phases.some((p) => /^brand$/i.test(p.name.trim()))) return config;
   const phase: PhaseTpl = { name: "Brand", stage: "PLANNING", tasks: brandPhaseTasks(null).map((title) => ({ title })) };
-  const at = config.phases.findIndex((p) => /^(mock-?up|model|design)$/i.test(p.name.trim()));
+  // Brand comes first of the planning phases: before Research and the Mock-up.
   const research = config.phases.findIndex((p) => /^research$/i.test(p.name.trim()));
-  const index = at !== -1 ? at : research !== -1 ? research + 1 : Math.min(1, config.phases.length);
+  const at = config.phases.findIndex((p) => /^(mock-?up|model|design)$/i.test(p.name.trim()));
+  const index = research !== -1 ? research : at !== -1 ? at : Math.min(1, config.phases.length);
   return { ...config, phases: [...config.phases.slice(0, index), phase, ...config.phases.slice(index)] };
 }
 
@@ -1027,7 +1029,8 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
             (existing.delays ??= []).push(phase.delays?.[i] ?? null);
           });
       } else {
-        own.push({ ...phase, name: multi ? `${input.label} — ${phase.name}` : phase.name });
+        // A Training project's Preparation runs right before its Sessions (Active), not with the planning phases.
+        own.push({ ...phase, stage: /^preparation$/i.test(phase.name.trim()) ? "ACTIVE" : phase.stage, name: multi ? `${input.label} — ${phase.name}` : phase.name });
       }
     }
   }
@@ -1042,8 +1045,8 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
   const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: brandTasks, delayDays: brandFromTemplate?.delayDays ?? null, delays: brandFromTemplate?.delays }] : [];
   const phases: PlanPhase[] = [
     ...pick("Proposal"),
-    ...pick("Research"),
     ...brandPhase,
+    ...pick("Research"),
     ...pick("Mock-up"),
     ...own.filter((p) => p.stage === "PLANNING"),
     ...pick("2nd Instalment"),

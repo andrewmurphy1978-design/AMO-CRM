@@ -12,6 +12,7 @@ const BLANK: TaskDialogValues = {
   status: "TODO",
   priority: "MEDIUM",
   assigneeId: "",
+  assigneeIds: [],
   supervisorId: "",
   startDate: "",
   dueDate: "",

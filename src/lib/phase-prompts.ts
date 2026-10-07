@@ -106,7 +106,19 @@ ${list(c.brandWanted, "- logos, colour palette, fonts, brand voice and a brand g
    - Fonts: one bullet per font as "- Font name: where it is used" (free Google Fonts, heading + body pairing), then the sizes and line-height scale.
    - Voice and tone: bullets such as "- Tone: ..." and "- Audience: ...", 5 attributes, a do/don't list and 3 sample sentences.
    - Start with a short summary and end with a "Brand guide contents" list (one topic per page of the PDF guide).
-2. brand-assets.zip: ONE zip with every image as a real file (SVG or PNG, each under 500 KB), in folders named logos/, icons/, graphics/, photos/, components/, charts/. Logos: the 3 concepts and the best one in main, horizontal and icon-only versions, light and dark. Icons: 6 sample icons. Use clear file names (for example logos/logo-horizontal-light.svg).
+2. brand-assets.zip: ONE zip with image FILES for EVERY section of the report, so that every section of the brand guide can show its own images. Real image files, not code and not links.
+   - File types: PNG for everything (the PDF guide can only use PNG or JPG): at least 1200 px wide for logos, banners and mock-ups, 256 x 256 px for icons, each file under 500 KB, transparent background where it makes sense. Also add the SVG version of every logo and icon.
+   - Folders and files (use exactly these folder names; every file is named in the matching section of brand-report.md):
+     logos/ : logo-main-light.png, logo-main-dark.png, logo-horizontal-light.png, logo-horizontal-dark.png, logo-icon-light.png, logo-icon-dark.png (+ the .svg of each) and concept-a.png, concept-b.png, concept-c.png for the 3 concepts
+     colours/ : palette.png, a swatch sheet showing every colour with its name and HEX code
+     fonts/ : typography-specimen.png, the heading and body fonts set in sample text, with the type scale
+     icons/ : 6 to 12 icons, one file each (icon-home.png, icon-search.png...) + the .svg of each
+     graphics/ : banner-*.png (social covers), pattern-*.png (patterns and textures), illustration-*.png
+     photos/ : photo-style-1.png, photo-style-2.png, photo-style-3.png (example images or mood boards showing the photo style)
+     components/ : buttons.png (all states), form.png, card.png, navigation.png (rendered examples)
+     charts/ : chart-bar.png, chart-line.png, chart-pie.png (example charts in the brand colours)
+     voice/ : voice-sample.png (optional: a quote card with a sample sentence)
+   - Skip a folder only if the client's brand does not include that item.
 Give me the two files to download, nothing else to copy and paste.`;
     case "mockup":
       return `${intro}

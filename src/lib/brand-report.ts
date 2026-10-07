@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { Prisma } from "@prisma/client";
 import type { PrismaClient } from "@/lib/prisma";
 import { BRAND_FONTS, MAX_BRAND_FILE_BYTES } from "@/lib/brand";
 import { readZip } from "@/lib/zip-read";
@@ -150,6 +151,7 @@ const ZIP_CATEGORIES: [RegExp, string][] = [
   [/photo|portrait|headshot/i, "photos"],
   [/component|button|card|header|form/i, "components"],
   [/chart/i, "charts"],
+  [/colou?r|palette|swatch|font|typograph|specimen|voice/i, "graphics"], // sheets that illustrate a section: shown with the graphics
 ];
 
 export async function importBrandZip(db: PrismaClient, contactId: string, zip: Uint8Array): Promise<{ added: number; skipped: string[] }> {
@@ -159,6 +161,8 @@ export async function importBrandZip(db: PrismaClient, contactId: string, zip: U
   const order = new Map<string, number>();
   for (const e of existing) order.set(e.category, (order.get(e.category) ?? 0) + 1);
   const rows: { contactId: string; category: string; label: string; value: string; order: number }[] = [];
+  // PNG / JPG first: when a PNG and its SVG share a name, the PNG is the one kept (the PDF can draw it).
+  entries.sort((a, b) => Number(/\.svg$/i.test(a.name)) - Number(/\.svg$/i.test(b.name)));
   for (const e of entries) {
     const ext = (e.name.split(".").pop() ?? "").toLowerCase();
     const mime = IMAGE_TYPES[ext];
@@ -453,14 +457,23 @@ export async function loadGuideSources(db: PrismaClient, contactId: string): Pro
 
 export async function finishBrandGuide(db: PrismaClient, contactId: string, projectId: string | undefined, guides: { en: Partial<GuideDoc>[]; fr: Partial<GuideDoc>[] }): Promise<{ error?: string; fileNames?: string[] }> {
   const clientName = (await db.contact.findUnique({ where: { id: contactId }, select: { firstName: true, lastName: true, company: true } }).then((c) => c?.company || [c?.firstName, c?.lastName].filter(Boolean).join(" "))) || "Client";
-  // The Brand card's logos that can be drawn in the PDF (PNG / JPG).
-  const items = await db.contactBrandItem.findMany({ where: { contactId, category: "logos" }, orderBy: { order: "asc" } });
-  const assets: GuideAssets = { logos: [], otherLogoFiles: [] };
-  for (const i of items) {
-    if (!i.value?.startsWith("data:")) continue;
-    const m = /^data:image\/(png|jpe?g);base64,([\s\S]*)$/i.exec(i.value);
-    if (m && assets.logos.length < 6) assets.logos.push({ label: i.label, kind: m[1].toLowerCase() === "png" ? "png" : "jpg", bytes: Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0)) });
-    else assets.otherLogoFiles.push(i.label);
+  // The Brand card's images that can be drawn in the PDF (PNG / JPG, each under ~400 KB), by section.
+  const imgRows = await db.$queryRaw<{ category: string; label: string; value: string }[]>(Prisma.sql`
+    SELECT category, label, value FROM contact_brand_items
+    WHERE "contactId" = ${contactId} AND (value LIKE 'data:image/png%' OR value LIKE 'data:image/jpeg%') AND length(value) < 550000
+    ORDER BY category, "order"`);
+  const svgs = await db.contactBrandItem.findMany({ where: { contactId, category: "logos", value: { startsWith: "data:image/svg" } }, select: { label: true } });
+  const assets: GuideAssets = { logos: [], images: {}, otherLogoFiles: svgs.map((x) => x.label) };
+  for (const r of imgRows) {
+    const m = /^data:image\/(png|jpe?g);base64,([\s\S]*)$/i.exec(r.value);
+    if (!m) continue;
+    const item = { label: r.label, kind: (m[1].toLowerCase() === "png" ? "png" : "jpg") as "png" | "jpg", bytes: Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0)) };
+    if (r.category === "logos") {
+      if (assets.logos.length < 6) assets.logos.push(item);
+    } else {
+      const list = (assets.images[r.category] ??= []);
+      if (list.length < 9) list.push(item);
+    }
   }
 
   const base = clientName.replace(/[^\w.-]+/g, "-");

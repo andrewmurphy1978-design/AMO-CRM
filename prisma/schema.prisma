@@ -1296,6 +1296,8 @@ model Task {
 
   assigneeId String?
   assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  // Everyone the task is assigned to (assigneeId stays the first of them).
+  assigneeIds String[] @default([])
 
   supervisorId String?
   supervisor   User?   @relation("TaskSupervisor", fields: [supervisorId], references: [id])
