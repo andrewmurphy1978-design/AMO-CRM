@@ -75,7 +75,7 @@ export function buildPhasePrompt(kind: PhaseKind, c: PromptContext): string {
 You are a senior market and competitor researcher. Produce the RESEARCH REPORT for this project.
 
 ${ctx}
-## Deliver (in ${lang(c)}) as downloadable FILES, not as an artifact, canvas or long chat reply
+## Deliver in ENGLISH ONLY (one single language: my CRM writes the French version itself, so do NOT translate or duplicate anything) as downloadable FILES, not as an artifact, canvas or long chat reply
 1. research-report.md: ONE Markdown file. Use EXACTLY these level-2 headings, in this order, with these names in English even if the text is in another language (my CRM reads them and merges several reports):
    ## Executive summary
    5 short bullets.
@@ -115,7 +115,7 @@ ${brandBlock(c)}
 ## The brand must include
 ${list(c.brandWanted, "- logos, colour palette, fonts, brand voice and a brand guide")}
 
-## Deliver (in ${lang(c)}) as TWO downloadable files. Do NOT answer with an artifact, canvas or a long chat reply: create real files I can download.
+## Deliver in ENGLISH ONLY (one single language: my CRM writes the French version itself, so do NOT translate or duplicate anything) as TWO downloadable files. Do NOT answer with an artifact, canvas or a long chat reply: create real files I can download.
 1. brand-report.md: ONE Markdown file. Use exactly these level-2 headings (only for the items above): "## Logos", "## Colours", "## Fonts", "## Icons", "## Graphics and patterns", "## Photos", "## Components", "## Charts", "## Voice and tone".
    - Logos / Icons / Graphics and patterns / Photos / Components / Charts: a bullet list, one bullet per asset, written as "- Name: short description (file name in the zip)". Describe them in words; do NOT paste SVG or code blocks in this file.
    - Colours: a Markdown table with the columns Name | HEX | RGB | Usage (primary, secondary, accent, neutrals), HEX written as #RRGGBB, plus usage rules and WCAG AA contrast checks under the table.
