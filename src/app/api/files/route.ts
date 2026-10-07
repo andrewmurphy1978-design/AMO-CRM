@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { importBrandZip, processBrandReport, tickBrandPhaseTasks, type BrandReportResult } from "@/lib/brand-report";
 import { importResearchZip, processResearchReport, type ResearchResult } from "@/lib/research-report";
+import { importMockupZip, processMockupReport, tickMockupTasks, type MockupResult } from "@/lib/mockup-files";
 import { revalidatePath } from "next/cache";
 
 export const MAX_FILE_BYTES = 10_000_000;
@@ -15,7 +16,9 @@ export async function POST(request: Request) {
   const contactId = String(form.get("contactId") ?? "") || null;
   const projectId = String(form.get("projectId") ?? "") || null;
   // BRAND_REPORT: the AI brand report (Brand card); RESEARCH_REPORT: an AI research report (Research card)
-  const kind = form.get("kind") === "BRAND_REPORT" ? "BRAND_REPORT" : form.get("kind") === "RESEARCH_REPORT" ? "RESEARCH_REPORT" : null;
+  // MOCKUP_REPORT: an AI mock-up report or its images zip (Mock-ups card)
+  const rawKind = form.get("kind");
+  const kind = rawKind === "BRAND_REPORT" ? "BRAND_REPORT" : rawKind === "RESEARCH_REPORT" ? "RESEARCH_REPORT" : rawKind === "MOCKUP_REPORT" ? "MOCKUP_REPORT" : null;
   if (!contactId === !projectId) return Response.json({ error: "Give either a contact or a project." }, { status: 400 });
   const files = form.getAll("file").filter((f): f is File => typeof f !== "string");
   if (files.length === 0) return Response.json({ error: "No file." }, { status: 400 });
@@ -26,6 +29,7 @@ export async function POST(request: Request) {
   let brandNote = "";
   let zipResult: { added: number; skipped: string[] } | null = null;
   let research: ResearchResult | null = null;
+  let mockup: MockupResult | null = null;
   await withScopedPrismaClient(async (db) => {
     for (const f of files) {
       if (f.size === 0) {
@@ -64,6 +68,30 @@ export async function POST(request: Request) {
           }
         } else brandNote = "Only a Markdown (.md) report can be checked, and only a .zip's PNG / JPG screenshots are kept.";
       }
+      // An AI mock-up report (Markdown) or its images zip, on the project's Mock-ups card.
+      if (kind === "MOCKUP_REPORT" && projectId) {
+        if (/\.(md|markdown|txt)$/i.test(f.name)) {
+          try {
+            const r = await processMockupReport(db, projectId, new TextDecoder("utf-8").decode(bytes));
+            mockup = { sections: [...new Set([...(mockup?.sections ?? []), ...r.sections])], verified: [...(mockup?.verified ?? []), ...r.verified] };
+          } catch (err) {
+            console.error("mockup report not processed", err);
+            problems.push(`${f.name}: could not be read`);
+          }
+        } else if (/\.zip$/i.test(f.name)) {
+          try {
+            const z = await importMockupZip(db, projectId, bytes);
+            zipResult = { added: (zipResult?.added ?? 0) + z.added, skipped: [...(zipResult?.skipped ?? []), ...z.skipped] };
+            const verified = await tickMockupTasks(db, projectId, z.types);
+            mockup = { sections: mockup?.sections ?? [], verified: [...(mockup?.verified ?? []), ...verified] };
+            await db.attachedFile.delete({ where: { id: row.id } }); // the images are kept one by one
+            saved.pop();
+          } catch (err) {
+            console.error("mockup zip not read", err);
+            problems.push(`${f.name}: could not be opened as a zip`);
+          }
+        } else brandNote = "Only a Markdown (.md) report and a .zip of PNG / JPG images are used.";
+      }
       if (kind === "BRAND_REPORT" && contactId) {
         if (/\.(md|markdown|txt)$/i.test(f.name)) {
           try {
@@ -88,6 +116,6 @@ export async function POST(request: Request) {
     }
   });
   if ((brand || zipResult) && contactId) revalidatePath(`/contacts/${contactId}`);
-  if ((research || zipResult) && projectId) revalidatePath(`/projects/${projectId}`);
-  return Response.json({ saved: saved.length, problems, brand, brandNote, zip: zipResult, research });
+  if ((research || mockup || zipResult) && projectId) revalidatePath(`/projects/${projectId}`);
+  return Response.json({ saved: saved.length, problems, brand, brandNote, zip: zipResult, research, mockup });
 }
