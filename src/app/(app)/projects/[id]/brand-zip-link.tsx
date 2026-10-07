@@ -18,7 +18,8 @@ export default function BrandZipLink({
   fr: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-  const isMockup = url.endsWith("mockup-inputs");
+  const isMockup = /(mockup-inputs|phase-zip)/.test(url);
+  const base = url.split("?")[0].split("/").pop();
   return (
     <>
       <a
@@ -27,7 +28,7 @@ export default function BrandZipLink({
         draggable
         onDragStart={(e) => {
           const abs = new URL(url, window.location.origin).toString();
-          const zipName = `${url.split("/").pop()}.zip`;
+          const zipName = `${base}.zip`;
           e.dataTransfer.setData(
             "DownloadURL",
             `application/zip:${zipName}:${abs}`,
@@ -41,7 +42,7 @@ export default function BrandZipLink({
             : "Drag and drop this file into the AI together with the prompt"
         }
       >
-        📦 {url.split("/").pop()}.zip ({count}{" "}
+        📦 {base}.zip ({count}{" "}
         {fr
           ? count > 1
             ? "fichiers"

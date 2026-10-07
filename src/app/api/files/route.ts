@@ -3,6 +3,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { importBrandZip, processBrandReport, tickBrandPhaseTasks, type BrandReportResult } from "@/lib/brand-report";
 import { importResearchZip, processResearchReport, type ResearchResult } from "@/lib/research-report";
 import { importMockupZip, processMockupReport, tickMockupTasks, type MockupResult } from "@/lib/mockup-files";
+import { htmlToMarkdown } from "@/lib/html-to-md";
 import { revalidatePath } from "next/cache";
 
 export const MAX_FILE_BYTES = 10_000_000;
@@ -40,23 +41,29 @@ export async function POST(request: Request) {
         problems.push(`${f.name}: over ${MAX_FILE_BYTES / 1_000_000} MB`);
         continue;
       }
-      const bytes = new Uint8Array(await f.arrayBuffer());
+      let bytes = new Uint8Array(await f.arrayBuffer());
+      let fileName = f.name;
+      // An AI report given as an HTML page is turned into the Markdown report that was asked for.
+      if (kind && /\.html?$/i.test(fileName)) {
+        bytes = new TextEncoder().encode(htmlToMarkdown(new TextDecoder("utf-8").decode(bytes)));
+        fileName = fileName.replace(/\.html?$/i, ".md");
+      }
       const row = await db.attachedFile.create({
-        data: { contactId, projectId, name: f.name.slice(0, 200) || "file", mimeType: f.type || "application/octet-stream", size: bytes.length, data: bytes as never, uploadedByName: session.user.name ?? null, kind },
+        data: { contactId, projectId, name: fileName.slice(0, 200) || "file", mimeType: fileName !== f.name ? "text/markdown" : f.type || "application/octet-stream", size: bytes.length, data: bytes as never, uploadedByName: session.user.name ?? null, kind },
         select: { id: true },
       });
       saved.push(row.id);
       // An AI brand report in Markdown: check it, tick the Brand tasks it covers, make the PDF guide.
       // An AI research report (Markdown) or its screenshots zip, on the project's Research card.
       if (kind === "RESEARCH_REPORT" && projectId) {
-        if (/\.(md|markdown|txt)$/i.test(f.name)) {
+        if (/\.(md|markdown|txt)$/i.test(fileName)) {
           try {
             research = await processResearchReport(db, projectId, new TextDecoder("utf-8").decode(bytes));
           } catch (err) {
             console.error("research report not processed", err);
-            problems.push(`${f.name}: could not be read`);
+            problems.push(`${fileName}: could not be read`);
           }
-        } else if (/\.zip$/i.test(f.name)) {
+        } else if (/\.zip$/i.test(fileName)) {
           try {
             const z = await importResearchZip(db, projectId, bytes);
             zipResult = { added: (zipResult?.added ?? 0) + z.added, skipped: [...(zipResult?.skipped ?? []), ...z.skipped] };
@@ -64,21 +71,21 @@ export async function POST(request: Request) {
             saved.pop();
           } catch (err) {
             console.error("research zip not read", err);
-            problems.push(`${f.name}: could not be opened as a zip`);
+            problems.push(`${fileName}: could not be opened as a zip`);
           }
         } else brandNote = "Only a Markdown (.md) report can be checked, and only a .zip's PNG / JPG screenshots are kept.";
       }
       // An AI mock-up report (Markdown) or its images zip, on the project's Mock-ups card.
       if (kind === "MOCKUP_REPORT" && projectId) {
-        if (/\.(md|markdown|txt)$/i.test(f.name)) {
+        if (/\.(md|markdown|txt)$/i.test(fileName)) {
           try {
             const r = await processMockupReport(db, projectId, new TextDecoder("utf-8").decode(bytes));
             mockup = { sections: [...new Set([...(mockup?.sections ?? []), ...r.sections])], verified: [...(mockup?.verified ?? []), ...r.verified] };
           } catch (err) {
             console.error("mockup report not processed", err);
-            problems.push(`${f.name}: could not be read`);
+            problems.push(`${fileName}: could not be read`);
           }
-        } else if (/\.zip$/i.test(f.name)) {
+        } else if (/\.zip$/i.test(fileName)) {
           try {
             const z = await importMockupZip(db, projectId, bytes);
             zipResult = { added: (zipResult?.added ?? 0) + z.added, skipped: [...(zipResult?.skipped ?? []), ...z.skipped] };
@@ -88,19 +95,19 @@ export async function POST(request: Request) {
             saved.pop();
           } catch (err) {
             console.error("mockup zip not read", err);
-            problems.push(`${f.name}: could not be opened as a zip`);
+            problems.push(`${fileName}: could not be opened as a zip`);
           }
         } else brandNote = "Only a Markdown (.md) report and a .zip of PNG / JPG images are used.";
       }
       if (kind === "BRAND_REPORT" && contactId) {
-        if (/\.(md|markdown|txt)$/i.test(f.name)) {
+        if (/\.(md|markdown|txt)$/i.test(fileName)) {
           try {
             brand = await processBrandReport(db, contactId, new TextDecoder("utf-8").decode(bytes));
           } catch (err) {
             console.error("brand report not processed", err);
-            problems.push(`${f.name}: could not be read`);
+            problems.push(`${fileName}: could not be read`);
           }
-        } else if (/\.zip$/i.test(f.name)) {
+        } else if (/\.zip$/i.test(fileName)) {
           // The AI's brand-assets.zip: its images join the Brand card.
           try {
             const z = await importBrandZip(db, contactId, bytes);
@@ -109,7 +116,7 @@ export async function POST(request: Request) {
             if (z.added > 0) await tickBrandPhaseTasks(db, contactId, /^add the brand to the client's brand card/i);
           } catch (err) {
             console.error("brand zip not read", err);
-            problems.push(`${f.name}: could not be opened as a zip`);
+            problems.push(`${fileName}: could not be opened as a zip`);
           }
         } else brandNote = "Only a Markdown (.md) report can be checked, and only a .zip's images are added to the Brand card.";
       }

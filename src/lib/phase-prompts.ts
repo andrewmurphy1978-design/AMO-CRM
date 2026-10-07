@@ -78,7 +78,7 @@ You are a senior market and competitor researcher. Produce the RESEARCH REPORT f
 
 ${ctx}
 ## Deliver in ENGLISH ONLY (one single language: my CRM writes the French version itself, so do NOT translate or duplicate anything) as downloadable FILES, not as an artifact, canvas or long chat reply
-1. research-report.md: ONE Markdown file. Use EXACTLY these level-2 headings, in this order, with these names in English even if the text is in another language (my CRM reads them and merges several reports):
+1. research-report.md: ONE plain Markdown text file (the file extension must be .md; NOT an HTML file, NOT a web page or canvas). Use EXACTLY these level-2 headings, in this order, with these names in English even if the text is in another language (my CRM reads them and merges several reports):
    ## Executive summary
    5 short bullets.
    ## Offer and positioning
@@ -125,7 +125,7 @@ ${brandBlock(c)}
 ${list(c.brandWanted, "- logos, colour palette, fonts, brand voice and a brand guide")}
 
 ## Deliver in ENGLISH ONLY (one single language: my CRM writes the French version itself, so do NOT translate or duplicate anything) as TWO downloadable files. Do NOT answer with an artifact, canvas or a long chat reply: create real files I can download.
-1. brand-report.md: ONE Markdown file. Use exactly these level-2 headings (only for the items above): "## Logos", "## Colours", "## Fonts", "## Icons", "## Graphics and patterns", "## Photos", "## Components", "## Charts", "## Voice and tone".
+1. brand-report.md: ONE plain Markdown text file (the file extension must be .md; NOT an HTML file, NOT a web page or canvas). Use exactly these level-2 headings (only for the items above): "## Logos", "## Colours", "## Fonts", "## Icons", "## Graphics and patterns", "## Photos", "## Components", "## Charts", "## Voice and tone".
    - Logos / Icons / Graphics and patterns / Photos / Components / Charts: a bullet list, one bullet per asset, written as "- Name: short description (file name in the zip)". Describe them in words; do NOT paste SVG or code blocks in this file.
    - Colours: a Markdown table with the columns Name | HEX | RGB | Usage (primary, secondary, accent, neutrals), HEX written as #RRGGBB, plus usage rules and WCAG AA contrast checks under the table.
    - Fonts: one bullet per font as "- Font name: where it is used" (free Google Fonts, heading + body pairing), then the sizes and line-height scale.
@@ -171,7 +171,7 @@ ${brandBlock(c)}${c.inputs ? `
 - In mockup-report.md, add a short "# How the brand and research shaped these mock-ups" section listing the concrete decisions taken from them.
 ` : ""}
 ## Deliver (in ${lang(c)})
-1. mockup-report.md: ONE Markdown file with one top-level section per mock-up, in this order and with exactly these headings:
+1. mockup-report.md: ONE plain Markdown text file (the file extension must be .md; NOT an HTML file, NOT a web page or canvas) with one top-level section per mock-up, in this order and with exactly these headings:
 ${all.map((k, i) => `   ${i + 1}) "# ${k} mock-up": ${sections[k]}`).join("\n")}
    Then: "# Design tokens" (colours, fonts, spacing, radius from the brand, as CSS variables, shared by every mock-up), "# Responsive, interaction and accessibility notes" (mobile, tablet, desktop; animation; WCAG AA) and "# Approval checklist" (a checklist the client can tick, one block per mock-up).
 2. mockup-assets.zip: ONE zip of real PNG images (at least 1440 px wide for desktop screens, 390 px wide for mobile screens), in one folder per mock-up (${all.map((k) => `${k.toLowerCase()}/`).join(", ")}): the main screens or pages of each mock-up, drawn with the brand colours, fonts and logos${c.brandZipAttached ? " from the attached brand zip" : ""}. Name the files like ${all[0].toLowerCase()}/home-desktop.png. Real image files, not code and not links. If you cannot create images, say so in ONE line at the top of your reply and still deliver mockup-report.md.

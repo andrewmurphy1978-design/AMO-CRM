@@ -70,8 +70,8 @@ export async function generatePhasePrompt(projectId: string, phaseId: string): P
       brandWanted: project.brandItems.map((k) => BRAND_ITEMS.find((b) => b.key === k)?.label ?? k),
       brandExisting: brandRows.map((r) => `- ${r.category} | ${r.label}${r.value ? ` | ${fileName.has(r.id) ? `file in the attached zip: ${fileName.get(r.id)}` : r.value}` : ""}`),
       inputs,
-      brandZipAttached: files.length > 0 || (inputs ? inputFiles.length > 0 : false),
+      brandZipAttached: true, // every task comes with a zip (TASK.md + the brand files)
     };
-    return { prompt: buildPhasePrompt(kind, ctx), ...(kind === "mockup" ? { assetsZip: { url: `/api/projects/${projectId}/mockup-inputs`, count: files.length + inputFiles.length + 2 } } : files.length > 0 ? { assetsZip: { url: `/api/projects/${projectId}/brand-assets`, count: files.length } } : {}) };
+    return { prompt: buildPhasePrompt(kind, ctx), ...(kind === "mockup" ? { assetsZip: { url: `/api/projects/${projectId}/mockup-inputs`, count: files.length + inputFiles.length + 2 } } : kind === "research" || kind === "brand" ? { assetsZip: { url: `/api/projects/${projectId}/phase-zip?phase=${phaseId}`, count: files.length + 3 } } : files.length > 0 ? { assetsZip: { url: `/api/projects/${projectId}/brand-assets`, count: files.length } } : {}) };
   });
 }
