@@ -69,11 +69,11 @@ export default function TaskDialog({
     { value: "URGENT", label: t.priorities.URGENT },
   ] as const;
 
-  function save() {
+  function save(override?: { status?: TaskDialogValues["status"] }) {
     startTransition(async () => {
       const result = await onSave({
         title,
-        status,
+        status: override?.status ?? status,
         priority,
         phaseId,
         assigneeId: assigneeIds[0] ?? "",
@@ -105,8 +105,8 @@ export default function TaskDialog({
             <button
               type="button"
               disabled={pending || !title.trim()}
-              onClick={save}
-              className="rounded-md bg-white/25 px-3 py-1 text-sm font-semibold hover:bg-white/35 disabled:opacity-60"
+              onClick={() => save()}
+              className="rounded-md bg-amo-gold px-3 py-1 text-sm font-semibold text-[#152571] shadow-sm hover:brightness-95 disabled:opacity-60"
             >
               {pending ? t.common.saving : t.common.save}
             </button>
@@ -257,6 +257,23 @@ export default function TaskDialog({
           />
           {assetsZip && <BrandZipLink url={assetsZip.url} count={assetsZip.count} fr={fr} />}
         </div>
+        )}
+
+        {/^(review the brand guides|réviser les guides de marque)/i.test(title) && (
+          <div className="mt-3 rounded-lg border border-card-border bg-field-bg p-3">
+            <button
+              type="button"
+              disabled={pending || status === "DONE"}
+              onClick={() => {
+                setStatus("DONE");
+                save({ status: "DONE" });
+              }}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {status === "DONE" ? (fr ? "✓ Guides approuvés" : "✓ Brand guides approved") : fr ? "✓ Approuver les guides de marque" : "✓ Approve the brand guides"}
+            </button>
+            <p className="mt-1 text-xs text-soft">{fr ? "À cliquer une fois les guides (EN et FR) révisés et approuvés : la tâche est terminée." : "Click once the guides (EN and FR) have been reviewed and approved: the task is completed."}</p>
+          </div>
         )}
 
         {/\b(create the brand guide|créer le guide de marque)/i.test(title) && projectId && (

@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { importBrandZip, processBrandReport, type BrandReportResult } from "@/lib/brand-report";
+import { importBrandZip, processBrandReport, tickBrandPhaseTasks, type BrandReportResult } from "@/lib/brand-report";
 import { revalidatePath } from "next/cache";
 
 export const MAX_FILE_BYTES = 10_000_000;
@@ -53,6 +53,8 @@ export async function POST(request: Request) {
           try {
             const z = await importBrandZip(db, contactId, bytes);
             zipResult = { added: (zipResult?.added ?? 0) + z.added, skipped: [...(zipResult?.skipped ?? []), ...z.skipped] };
+            // New elements on the Brand card: the "Add the brand to the client's Brand card" task is done.
+            if (z.added > 0) await tickBrandPhaseTasks(db, contactId, /^add the brand to the client's brand card/i);
           } catch (err) {
             console.error("brand zip not read", err);
             problems.push(`${f.name}: could not be opened as a zip`);

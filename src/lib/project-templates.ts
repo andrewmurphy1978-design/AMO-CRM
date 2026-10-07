@@ -943,7 +943,7 @@ export function defaultTemplate(type: string): TemplateConfig {
 
 // ---- multi-type projects ----------------------------------------------------
 
-import { brandPhaseTasks } from "@/lib/brand-items";
+import { REVIEW_BRAND_TASK, brandPhaseTasks } from "@/lib/brand-items";
 
 // The Brand question is a project setting (General Info), not part of a type's details:
 // earlier versions put a "brand" Yes/No in the details, which is dropped here.
@@ -1040,7 +1040,9 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
   const pick = (name: string) => (shared.has(name) ? [shared.get(name)!] : []);
   // The Brand phase only exists for projects that include a brand; its tasks follow the ticked items
   // (or the type's own Brand phase when none are ticked).
-  const brandTasks = options.brandItems && options.brandItems.length > 0 ? brandPhaseTasks(options.brandItems) : shared.get("Brand")?.tasks ?? brandPhaseTasks(null);
+  const brandTasksRaw = options.brandItems && options.brandItems.length > 0 ? brandPhaseTasks(options.brandItems) : shared.get("Brand")?.tasks ?? brandPhaseTasks(null);
+  // The Brand phase always ends with the manual review / approval of the guides.
+  const brandTasks = brandTasksRaw.includes(REVIEW_BRAND_TASK) ? brandTasksRaw : [...brandTasksRaw, REVIEW_BRAND_TASK];
   const brandFromTemplate = !(options.brandItems && options.brandItems.length > 0) ? shared.get("Brand") : undefined;
   const brandPhase: PlanPhase[] = brand ? [{ name: "Brand", stage: "PLANNING", tasks: brandTasks, delayDays: brandFromTemplate?.delayDays ?? null, delays: brandFromTemplate?.delays }] : [];
   const phases: PlanPhase[] = [

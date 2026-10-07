@@ -24,6 +24,7 @@ const EXACT: Record<string, string> = {
   "Collect the client's existing brand assets": "Recueillir les éléments de marque existants du client", "Define the brand voice and style": "Définir la voix et le style de la marque",
   "Create the logo": "Créer le logo", "Choose the colours and fonts": "Choisir les couleurs et les polices", "Create the brand guide": "Créer le guide de marque",
   "Add the brand to the client's Brand card": "Ajouter la marque à la carte Marque du client",
+  "Review the brand guides": "Réviser les guides de marque",
   Yes: "Oui",
   No: "Non",
   // languages

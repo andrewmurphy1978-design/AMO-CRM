@@ -142,6 +142,24 @@ export function extractBrandItems(md: string): BrandCardItem[] {
   return items;
 }
 
+// Ticks the matching tasks of the Brand phase of the client's projects (and moves the project on).
+export async function tickBrandPhaseTasks(db: PrismaClient, contactId: string, match: RegExp): Promise<void> {
+  const projects = await db.project.findMany({ where: { contactId, createBrand: true }, select: { id: true, phases: { select: { name: true, tasks: { select: { id: true, title: true, status: true } } } } } });
+  for (const p of projects) {
+    let changed = false;
+    for (const phase of p.phases.filter((ph) => BRAND_PHASE.test(ph.name.trim()))) {
+      for (const task of phase.tasks) {
+        if (match.test(task.title.trim()) && task.status !== "DONE") {
+          await db.task.update({ where: { id: task.id }, data: { status: "DONE", completedAt: new Date() } });
+          await onTaskDone(db, task.id);
+          changed = true;
+        }
+      }
+    }
+    if (changed) await syncProjectLifecycle(db, p.id);
+  }
+}
+
 // The images of the AI's brand-assets.zip become files on the Brand card (by folder / file name).
 const IMAGE_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
 const ZIP_CATEGORIES: [RegExp, string][] = [
@@ -397,7 +415,12 @@ export async function processBrandReport(db: PrismaClient, contactId: string, ma
         let label = title;
         let why = "";
         const check = CHECKS.find((c) => c.match.test(title));
-        if (check) {
+        if (/^add the brand to the client's brand card/i.test(title)) {
+          // New elements were put on the Brand card by this report.
+          ok = added > 0;
+          label = "Add the brand to the client's Brand card";
+          why = "the report added nothing new to the Brand card";
+        } else if (check) {
           ok = check.ok(analysis);
           label = check.label;
           why = check.why;
