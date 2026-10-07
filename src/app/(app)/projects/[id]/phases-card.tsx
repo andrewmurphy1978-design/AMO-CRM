@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import Card, { CARD_COLORS } from "@/components/section-card";
@@ -41,6 +41,7 @@ export default function PhasesCard({
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   // The full phases table stays folded away under the progress bar; open it to see or pick a phase.
   const [showTable, setShowTable] = useState(false);
   const fmt = (iso: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "fr" ? "fr-CA" : "en-CA", { dateStyle: "medium" }) : "—");
@@ -53,8 +54,21 @@ export default function PhasesCard({
 
   function close() {
     setOpen(false);
+    setEditId(null);
     router.refresh();
   }
+
+  function editPhase(id: string) {
+    setEditId(id);
+    setOpen(true);
+  }
+
+  // The "Edit phase" button of the active-phase summary asks for this phase's editor.
+  useEffect(() => {
+    const handler = (e: Event) => editPhase((e as CustomEvent<{ phaseId: string }>).detail.phaseId);
+    window.addEventListener("amo:edit-phase", handler);
+    return () => window.removeEventListener("amo:edit-phase", handler);
+  }, []);
 
   return (
     <Card
@@ -98,6 +112,7 @@ export default function PhasesCard({
                 <th className="px-3 py-2 font-semibold">{t.phaseDialog.startDate}</th>
                 <th className="px-3 py-2 font-semibold">{t.phaseDialog.dueDate}</th>
                 <th className="px-3 py-2 font-semibold">{t.phaseDialog.completedDate}</th>
+                <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-card-border">
@@ -118,6 +133,18 @@ export default function PhasesCard({
                   <td className="px-3 py-2 text-soft">{fmt(phase.startDate)}</td>
                   <td className="px-3 py-2 text-soft">{fmt(phase.dueDate)}</td>
                   <td className="px-3 py-2 text-soft">{fmt(phase.completedDate ?? "")}</td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        editPhase(phase.id);
+                      }}
+                      className="rounded border border-card-border px-2 py-0.5 text-xs font-medium text-soft hover:bg-black/5 hover:text-ink"
+                    >
+                      ✏ {lang === "fr" ? "Modifier" : "Edit"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -141,7 +168,7 @@ export default function PhasesCard({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
-              <PhaseList projectId={projectId} initialPhases={phases} users={users} defaultTeamMemberIds={defaultTeamMemberIds} lang={lang} />
+              <PhaseList projectId={projectId} initialPhases={phases} users={users} defaultTeamMemberIds={defaultTeamMemberIds} lang={lang} autoEditId={editId} />
             </div>
           </div>
         </div>

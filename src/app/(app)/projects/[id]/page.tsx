@@ -9,6 +9,7 @@ import ProjectGeneralDialog from "./project-general-dialog";
 import ProjectDetailsDialog from "./project-details-dialog";
 import ProjectNotesDialog from "./project-notes-dialog";
 import PhasesCard from "./phases-card";
+import EditPhaseButton from "./edit-phase-button";
 import { BrandCard } from "../../contacts/[id]/brand-card";
 import { loadBrandRows } from "@/lib/brand-rows";
 import { loadBrandReports, loadProjectFileRows } from "@/lib/file-rows";
@@ -602,6 +603,7 @@ export default async function ProjectDetailPage({
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-semibold uppercase tracking-wide text-soft">
                       {lang === "fr" ? "Phase active" : "Active phase"} · <span className="normal-case text-ink">{activePhase.name}</span>
+                      <EditPhaseButton phaseId={activePhase.id} lang={lang} />
                     </span>
                     {selectedPhase?.id === activePhase.id ? (
               <Link href={`/projects/${project.id}?phase=all`} className="rounded border border-white/40 px-2 py-0.5 text-xs font-medium normal-case text-white hover:bg-white/15">

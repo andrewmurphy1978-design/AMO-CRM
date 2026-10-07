@@ -49,16 +49,22 @@ export default function PhaseList({
   users,
   defaultTeamMemberIds,
   lang,
+  autoEditId,
 }: {
   projectId: string;
   initialPhases: PhaseRowData[];
+  // Opens the editor on this phase right away.
+  autoEditId?: string | null;
   users: { id: string; name: string }[];
   defaultTeamMemberIds: string[];
   lang: Lang;
 }) {
   const t = getDict(lang);
   const [phases, setPhases] = useState(initialPhases);
-  const [dialog, setDialog] = useState<{ phase: PhaseRowData | null } | null>(null);
+  const [dialog, setDialog] = useState<{ phase: PhaseRowData | null } | null>(() => {
+    const phase = autoEditId ? initialPhases.find((p) => p.id === autoEditId) : undefined;
+    return phase ? { phase } : null;
+  });
 
   const STATUS_LABELS = t.projectStatuses;
 
