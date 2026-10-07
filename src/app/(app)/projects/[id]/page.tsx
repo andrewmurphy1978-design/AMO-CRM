@@ -12,7 +12,8 @@ import PhasesCard from "./phases-card";
 import EditPhaseButton from "./edit-phase-button";
 import { BrandCard } from "../../contacts/[id]/brand-card";
 import { loadBrandRows } from "@/lib/brand-rows";
-import { loadBrandReports, loadProjectFileRows } from "@/lib/file-rows";
+import { loadBrandReports, loadProjectFileRows, loadResearchCard } from "@/lib/file-rows";
+import ResearchCard from "./research-card";
 import FilesCard from "@/components/files-card";
 import FolderField from "@/components/folder-field";
 import { ensureProjectFolder } from "@/lib/local-folders";
@@ -89,6 +90,7 @@ export default async function ProjectDetailPage({
     brandRows,
     fileRows,
     brandReports,
+    researchCard,
     hour12,
     users,
     calendarEvents,
@@ -214,12 +216,14 @@ export default async function ProjectDetailPage({
     const brandRows = project ? await loadBrandRows(db, project.contactId) : [];
     const fileRows = project ? await loadProjectFileRows(db, { id: project.id, name: project.name }) : [];
     const brandReports = project ? await loadBrandReports(db, project.contactId) : [];
+    const researchCard = project ? await loadResearchCard(db, project.id) : { reports: [], shots: [], pdfs: [] };
 
     return {
       project,
       brandRows,
       fileRows,
       brandReports,
+      researchCard,
       hour12,
       users,
       calendarEvents,
@@ -271,6 +275,11 @@ export default async function ProjectDetailPage({
       reports={brandReports}
     />
   );
+  // The Research card (drop the AIs' research reports, merge them into the final report): right under the
+  // Phases card while the Research phase is the active one, otherwise at the bottom.
+  const hasResearch = project.phases.some((ph) => /(^|—\s*)research$/i.test(ph.name.trim())) || (Array.isArray(project.pendingPhases) && (project.pendingPhases as { name?: string }[]).some((p) => /(^|—\s*)research$/i.test((p.name ?? "").trim())));
+  const researchActive = Boolean(activePhase && /(^|—\s*)research$/i.test(activePhase.name.trim()));
+  const researchEl = <ResearchCard projectId={project.id} reports={researchCard.reports} shots={researchCard.shots} pdfs={researchCard.pdfs} lang={lang} />;
   const selectedPhase =
     phaseParam === "all" ? null : (project.phases.find((ph) => ph.id === phaseParam) ?? (phaseParam ? null : activePhase));
   const selectedPhaseId = selectedPhase?.id;
@@ -662,6 +671,8 @@ export default async function ProjectDetailPage({
 
           {brandActive && brandCard}
 
+          {researchActive && researchEl}
+
           <Card
             color="general"
             title={t.contactForm.cardGeneralInfo}
@@ -871,6 +882,8 @@ export default async function ProjectDetailPage({
           <DomainsCard contact={project.contact} lang={lang} />
 
           {!brandActive && brandCard}
+
+          {hasResearch && !researchActive && researchEl}
         </div>
 
         <div className="flex min-w-0 flex-col gap-3 sm:gap-6">

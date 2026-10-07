@@ -75,21 +75,37 @@ export function buildPhasePrompt(kind: PhaseKind, c: PromptContext): string {
 You are a senior market and competitor researcher. Produce the RESEARCH REPORT for this project.
 
 ${ctx}
-## Deliver
-A structured report in ${lang(c)} with these sections:
-1. Executive summary (5 bullets)
-2. The client's offer and positioning today
-3. Competitor landscape: 6-10 direct and indirect competitors, as a table (name, URL, offer, pricing, positioning, strengths, weaknesses, tech/SEO notes)
-4. Audience and search intent (who searches, what they ask, what they compare)
-5. Design and UX patterns seen on the best competitors (what to screenshot: pages, sections, calls to action)
-6. Gaps and differentiators the client can own
-7. Recommendations for this project (${c.types.map((t) => t.label).join(", ") || "the project"}): structure, messaging, features, pricing cues
-8. Risks and open questions to confirm with the client
+## Deliver (in ${lang(c)}) as downloadable FILES, not as an artifact, canvas or long chat reply
+1. research-report.md: ONE Markdown file. Use EXACTLY these level-2 headings, in this order, with these names in English even if the text is in another language (my CRM reads them and merges several reports):
+   ## Executive summary
+   5 short bullets.
+   ## Offer and positioning
+   The client's offer and positioning today, in 2 short paragraphs.
+   ## Competitors
+   ONE Markdown table, one row per competitor (6 to 10 rows: direct and indirect), with exactly these columns in this order: Name | URL | Type | Offer | Pricing | Positioning | Strengths | Weaknesses | Tech and SEO notes | Source
+   - Name: the competitor's official brand name, written the same way everywhere. URL: the full https:// address of its main site. Type: "Direct" or "Indirect". Source: the URL where you found the facts.
+   ## Audience and search intent
+   Who searches, what they ask, what they compare (2 short paragraphs), then a bullet list of the 10 to 20 most important keywords or questions.
+   ## Design and UX patterns
+   Bullets: what the best competitors do well (pages, sections, calls to action), each naming the competitor.
+   ## Gaps and differentiators
+   Bullets: what the client can own.
+   ## Recommendations
+   For this project (${c.types.map((t) => t.label).join(", ") || "the project"}): structure, messaging, features, pricing cues. One bullet per recommendation written "- Title: explanation".
+   ## Risks and open questions
+   Bullets.
+   ## Screenshots
+   ONE Markdown table, one row per screenshot file: File | Competitor | Page | What it shows (the File is the exact file name inside research-assets.zip).
+   ## Sources
+   A numbered list of every URL used.
+2. research-assets.zip (only if you can capture or generate images): ONE zip of PNG files (never SVG, never links), each under 500 KB and at least 1200 px wide, named like competitor-name-page.png (for example acme-home.png, acme-pricing.png): the competitor's home page, pricing page and the best sections or calls to action. If you cannot produce real screenshots, do not invent any: leave the zip out and keep the Screenshots table as a list of what I should capture by hand.
+Give me the file(s) to download, nothing else to copy and paste.
 
 ## Rules
 - Cite a source URL for every factual claim; mark anything you could not verify as "unverified".
 - Do not invent competitors, prices or statistics.
-- Finish with a short list of screenshots to take (competitor + page) for the client presentation.`;
+- No code blocks and no HTML in the Markdown file; plain Markdown only.
+- Keep each cell of the tables short (one line), so that reports from several AIs can be merged without losing information.`;
     case "brand":
       return `${intro}
 You are a brand designer. Create the BRAND for this client and write it up as a brand report the client can approve.

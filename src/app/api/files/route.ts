@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { importBrandZip, processBrandReport, tickBrandPhaseTasks, type BrandReportResult } from "@/lib/brand-report";
+import { importResearchZip, processResearchReport, type ResearchResult } from "@/lib/research-report";
 import { revalidatePath } from "next/cache";
 
 export const MAX_FILE_BYTES = 10_000_000;
@@ -13,7 +14,8 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const contactId = String(form.get("contactId") ?? "") || null;
   const projectId = String(form.get("projectId") ?? "") || null;
-  const kind = form.get("kind") === "BRAND_REPORT" ? "BRAND_REPORT" : null; // the AI brand report (Brand card)
+  // BRAND_REPORT: the AI brand report (Brand card); RESEARCH_REPORT: an AI research report (Research card)
+  const kind = form.get("kind") === "BRAND_REPORT" ? "BRAND_REPORT" : form.get("kind") === "RESEARCH_REPORT" ? "RESEARCH_REPORT" : null;
   if (!contactId === !projectId) return Response.json({ error: "Give either a contact or a project." }, { status: 400 });
   const files = form.getAll("file").filter((f): f is File => typeof f !== "string");
   if (files.length === 0) return Response.json({ error: "No file." }, { status: 400 });
@@ -23,6 +25,7 @@ export async function POST(request: Request) {
   let brand: BrandReportResult | null = null;
   let brandNote = "";
   let zipResult: { added: number; skipped: string[] } | null = null;
+  let research: ResearchResult | null = null;
   await withScopedPrismaClient(async (db) => {
     for (const f of files) {
       if (f.size === 0) {
@@ -40,6 +43,27 @@ export async function POST(request: Request) {
       });
       saved.push(row.id);
       // An AI brand report in Markdown: check it, tick the Brand tasks it covers, make the PDF guide.
+      // An AI research report (Markdown) or its screenshots zip, on the project's Research card.
+      if (kind === "RESEARCH_REPORT" && projectId) {
+        if (/\.(md|markdown|txt)$/i.test(f.name)) {
+          try {
+            research = await processResearchReport(db, projectId, new TextDecoder("utf-8").decode(bytes));
+          } catch (err) {
+            console.error("research report not processed", err);
+            problems.push(`${f.name}: could not be read`);
+          }
+        } else if (/\.zip$/i.test(f.name)) {
+          try {
+            const z = await importResearchZip(db, projectId, bytes);
+            zipResult = { added: (zipResult?.added ?? 0) + z.added, skipped: [...(zipResult?.skipped ?? []), ...z.skipped] };
+            await db.attachedFile.delete({ where: { id: row.id } }); // the screenshots are kept one by one
+            saved.pop();
+          } catch (err) {
+            console.error("research zip not read", err);
+            problems.push(`${f.name}: could not be opened as a zip`);
+          }
+        } else brandNote = "Only a Markdown (.md) report can be checked, and only a .zip's PNG / JPG screenshots are kept.";
+      }
       if (kind === "BRAND_REPORT" && contactId) {
         if (/\.(md|markdown|txt)$/i.test(f.name)) {
           try {
@@ -64,5 +88,6 @@ export async function POST(request: Request) {
     }
   });
   if ((brand || zipResult) && contactId) revalidatePath(`/contacts/${contactId}`);
-  return Response.json({ saved: saved.length, problems, brand, brandNote, zip: zipResult });
+  if ((research || zipResult) && projectId) revalidatePath(`/projects/${projectId}`);
+  return Response.json({ saved: saved.length, problems, brand, brandNote, zip: zipResult, research });
 }

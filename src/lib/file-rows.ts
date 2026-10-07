@@ -35,14 +35,14 @@ const toRow = (f: { id: string; name: string; mimeType: string; size: number; no
   note: f.note,
   uploadedByName: f.uploadedByName,
   createdAt: f.createdAt.toISOString(),
-  kind: f.kind === "BRAND_REPORT" ? "Brand report" : f.kind === "BRAND_PDF" ? "Brand guide (PDF)" : f.uploadedByName === "Stripe" ? "Payment confirmation" : undefined,
+  kind: f.kind === "BRAND_REPORT" ? "Brand report" : f.kind === "BRAND_PDF" ? "Brand guide (PDF)" : f.kind === "RESEARCH_REPORT" ? "Research report" : f.kind === "RESEARCH_PDF" ? "Research report (PDF)" : f.uploadedByName === "Stripe" ? "Payment confirmation" : undefined,
   from,
 });
 
 const byDate = (a: FileRow, b: FileRow) => b.createdAt.localeCompare(a.createdAt);
 
 export async function loadProjectFileRows(db: PrismaClient, project: { id: string; name: string }): Promise<FileRow[]> {
-  const own = await db.attachedFile.findMany({ where: { projectId: project.id }, orderBy: { createdAt: "desc" }, select: attachedSelect });
+  const own = await db.attachedFile.findMany({ where: { projectId: project.id, OR: [{ kind: null }, { kind: { not: "RESEARCH_SHOT" } }] }, orderBy: { createdAt: "desc" }, select: attachedSelect });
   // The client's brand report and PDF guide (kept on the Brand card) belong with the project's files too.
   const owner = await db.project.findUnique({ where: { id: project.id }, select: { contactId: true } });
   const brand = owner ? await db.attachedFile.findMany({ where: { contactId: owner.contactId, kind: { in: ["BRAND_REPORT", "BRAND_PDF"] } }, orderBy: { createdAt: "desc" }, select: attachedSelect }) : [];
@@ -69,4 +69,14 @@ export async function loadContactFileRows(db: PrismaClient, contactId: string): 
 export async function loadBrandReports(db: PrismaClient, contactId: string): Promise<FileRow[]> {
   const rows = await db.attachedFile.findMany({ where: { contactId, kind: { in: ["BRAND_REPORT", "BRAND_PDF"] } }, orderBy: { createdAt: "desc" }, select: attachedSelect });
   return rows.map((f) => toRow(f));
+}
+
+// The Research card: the AI research reports, their screenshots and the final PDFs.
+export async function loadResearchCard(db: PrismaClient, projectId: string): Promise<{ reports: FileRow[]; shots: { id: string; name: string }[]; pdfs: FileRow[] }> {
+  const rows = await db.attachedFile.findMany({ where: { projectId, kind: { in: ["RESEARCH_REPORT", "RESEARCH_SHOT", "RESEARCH_PDF"] } }, orderBy: { createdAt: "asc" }, select: attachedSelect });
+  return {
+    reports: rows.filter((r) => r.kind === "RESEARCH_REPORT").map((r) => toRow(r)),
+    shots: rows.filter((r) => r.kind === "RESEARCH_SHOT").map((r) => ({ id: r.id, name: r.name })),
+    pdfs: rows.filter((r) => r.kind === "RESEARCH_PDF").map((r) => toRow(r)),
+  };
 }
