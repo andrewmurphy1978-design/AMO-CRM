@@ -155,7 +155,11 @@ export default function PhasesCard({
         </div>
       )}
 
-      {open && (
+      {open && editId && (
+        <PhaseList projectId={projectId} initialPhases={phases} users={users} defaultTeamMemberIds={defaultTeamMemberIds} lang={lang} autoEditId={editId} onDone={close} />
+      )}
+
+      {open && !editId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={close}>
           <div
             className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
@@ -168,7 +172,7 @@ export default function PhasesCard({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
-              <PhaseList projectId={projectId} initialPhases={phases} users={users} defaultTeamMemberIds={defaultTeamMemberIds} lang={lang} autoEditId={editId} />
+              <PhaseList projectId={projectId} initialPhases={phases} users={users} defaultTeamMemberIds={defaultTeamMemberIds} lang={lang} />
             </div>
           </div>
         </div>

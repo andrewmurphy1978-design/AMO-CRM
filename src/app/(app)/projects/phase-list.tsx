@@ -50,11 +50,14 @@ export default function PhaseList({
   defaultTeamMemberIds,
   lang,
   autoEditId,
+  onDone,
 }: {
   projectId: string;
   initialPhases: PhaseRowData[];
   // Opens the editor on this phase right away.
   autoEditId?: string | null;
+  // Editor-only mode: shows just the phase dialog (no table); called when it closes.
+  onDone?: () => void;
   users: { id: string; name: string }[];
   defaultTeamMemberIds: string[];
   lang: Lang;
@@ -79,6 +82,8 @@ export default function PhaseList({
 
   return (
     <div>
+      {!onDone && (
+      <>
       <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.projectForm.phasesTitle}</label>
       <div className="mt-1.5">
         {phases.length === 0 ? (
@@ -131,11 +136,16 @@ export default function PhaseList({
           + {t.projectForm.addPhase}
         </button>
       </div>
+      </>
+      )}
 
       {dialog && (
         <PhaseDialog
           open
-          onClose={() => setDialog(null)}
+          onClose={() => {
+            setDialog(null);
+            onDone?.();
+          }}
           lang={lang}
           users={users}
           initial={
