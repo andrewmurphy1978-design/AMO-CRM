@@ -5,6 +5,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { brandFileEntries } from "@/lib/brand-zip";
 import { BRAND_ITEMS } from "@/lib/brand-items";
+import { mockupInputFiles } from "@/lib/mockup-inputs";
 import { buildPhasePrompt, phaseKind, type PromptContext } from "@/lib/phase-prompts";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { displayValue, isFieldVisible, typesOfProject, valuesOfType } from "@/lib/project-templates";
@@ -36,7 +37,11 @@ export async function generatePhasePrompt(projectId: string, phaseId: string): P
 
     // Uploaded brand files are not pasted into the prompt (base64): they go in a zip to drag and drop.
     const files = brandFileEntries(brandRows);
-    const fileName = new Map(files.map((f) => [f.id, f.name]));
+    const fileName = new Map(files.map((f) => [f.id, kind === "mockup" ? f.name.replace(/^brand-files\//, "brand/files/") : f.name]));
+
+    // The Mock-up prompt comes with ONE zip holding everything gathered in the Brand and Research phases.
+    const inputFiles = kind === "mockup" ? await mockupInputFiles(db, projectId, project.contactId, false) : [];
+    const inputs = kind === "mockup" ? { brandReports: inputFiles.filter((f) => f.name.startsWith("brand/")).length, researchReports: inputFiles.filter((f) => f.name.startsWith("research/reports/")).length, screenshots: inputFiles.filter((f) => f.name.startsWith("research/screenshots/")).length } : undefined;
 
     const ctx: PromptContext = {
       clientName: [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.company || project.contact.email || "the client",
@@ -64,8 +69,9 @@ export async function generatePhasePrompt(projectId: string, phaseId: string): P
       topics: pick("topics"),
       brandWanted: project.brandItems.map((k) => BRAND_ITEMS.find((b) => b.key === k)?.label ?? k),
       brandExisting: brandRows.map((r) => `- ${r.category} | ${r.label}${r.value ? ` | ${fileName.has(r.id) ? `file in the attached zip: ${fileName.get(r.id)}` : r.value}` : ""}`),
-      brandZipAttached: files.length > 0,
+      inputs,
+      brandZipAttached: files.length > 0 || (inputs ? inputFiles.length > 0 : false),
     };
-    return { prompt: buildPhasePrompt(kind, ctx), ...(files.length > 0 ? { assetsZip: { url: `/api/projects/${projectId}/brand-assets`, count: files.length } } : {}) };
+    return { prompt: buildPhasePrompt(kind, ctx), ...(kind === "mockup" ? { assetsZip: { url: `/api/projects/${projectId}/mockup-inputs`, count: files.length + inputFiles.length + 2 } } : files.length > 0 ? { assetsZip: { url: `/api/projects/${projectId}/brand-assets`, count: files.length } } : {}) };
   });
 }

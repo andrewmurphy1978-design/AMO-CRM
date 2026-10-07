@@ -23,6 +23,7 @@ export interface PromptContext {
   topics: string[];
   brandWanted: string[]; // what the brand should include
   brandExisting: string[]; // lines from the client's Brand card
+  inputs?: { brandReports: number; researchReports: number; screenshots: number }; // Brand / Research files in the mock-up inputs zip
   brandZipAttached?: boolean; // the uploaded brand files come as a zip next to the prompt
 }
 
@@ -162,7 +163,12 @@ Give me the two files to download, nothing else to copy and paste.`;
 You are a senior UX/UI designer. Produce ALL the mock-ups of this project in THIS SAME reply and deliverable (${all.join(", ")}): the client approves them together. Do not ask me to request them one by one.
 
 ${ctx}
-${brandBlock(c)}
+${brandBlock(c)}${c.inputs ? `
+## Inputs gathered in the earlier phases (attached .zip: unzip it and read EVERYTHING first, starting with README.md)
+- brand/: the Brand card, the brand files (logos, icons, images) and ${c.inputs.brandReports} brand report(s) / guide(s): follow them exactly (colours, fonts, voice, logo use)
+- research/: ${c.inputs.researchReports} research report(s) and ${c.inputs.screenshots} competitor screenshot(s): use them (competitor design patterns to match or beat, audience and search intent, keywords and content plan for the Blog, gaps and recommendations)
+- In mockup-report.md, add a short "# How the brand and research shaped these mock-ups" section listing the concrete decisions taken from them.
+` : ""}
 ## Deliver (in ${lang(c)})
 1. mockup-report.md: ONE Markdown file with one top-level section per mock-up, in this order and with exactly these headings:
 ${all.map((k, i) => `   ${i + 1}) "# ${k} mock-up": ${sections[k]}`).join("\n")}
