@@ -143,21 +143,33 @@ ${list(c.brandWanted, "- logos, colour palette, fonts, brand voice and a brand g
      voice/ : voice-sample.png (optional: a quote card with a sample sentence)
    - Skip a folder only if the client's brand does not include that item.
 Give me the two files to download, nothing else to copy and paste.`;
-    case "mockup":
+    case "mockup": {
+      const wants = (re: RegExp) => c.types.some((t) => re.test(t.label));
+      const kinds = [
+        wants(/website|site/i) && "Website",
+        wants(/funnel|entonnoir/i) && "Funnel",
+        wants(/blog/i) && "Blog",
+        wants(/\bapp\b|application/i) && "App",
+      ].filter(Boolean) as string[];
+      const all = kinds.length ? kinds : ["Website"];
+      const sections: Record<string, string> = {
+        Website: `Sitemap${c.pages.length ? ` (pages requested: ${c.pages.join(", ")})` : ""}; for each page: goal, sections in order (hero, benefits, proof, calls to action, footer), copy outline and a text wireframe${c.forms.length ? `; forms: ${c.forms.join(", ")} (fields, validation, thank-you behaviour)` : ""}`,
+        Funnel: `Every step from the opt-in or ad landing to the thank-you / sales / upsell pages${c.funnels.length ? ` (funnels: ${c.funnels.join(", ")})` : ""}: goal of each step, sections in order, headline and call-to-action copy, form fields, what happens after each click`,
+        Blog: `The blog home, a category page, an article page (with author box, related posts, newsletter sign-up) and a sample article outline${c.topics.length ? ` (topics: ${c.topics.join(", ")})` : ""}: layout, sections, navigation, sidebar and call-to-action placement`,
+        App: "Screen list and navigation map; the key user flows step by step (sign-up / log-in, main task, settings); for each screen: purpose, components, states (empty, loading, error) and a text wireframe",
+      };
       return `${intro}
-You are a senior UX/UI designer. Produce the MOCK-UP REPORT (design brief the client approves before building).
+You are a senior UX/UI designer. Produce ALL the mock-ups of this project in THIS SAME reply and deliverable (${all.join(", ")}): the client approves them together. Do not ask me to request them one by one.
 
 ${ctx}
 ${brandBlock(c)}
 ## Deliver (in ${lang(c)})
-1. Sitemap / screen list${c.pages.length ? ` (pages requested: ${c.pages.join(", ")})` : ""}${c.funnels.length ? ` (funnels: ${c.funnels.join(", ")})` : ""}
-2. For each page or screen: goal, sections in order (hero, benefits, proof, calls to action, footer), the copy outline, and a text wireframe
-3. Forms: fields, validation, thank-you behaviour${c.forms.length ? ` (${c.forms.join(", ")})` : ""}
-4. Design tokens from the brand (colours, fonts, spacing, radius) as CSS variables
-5. Responsive behaviour: mobile, tablet, desktop
-6. Interaction and animation notes, accessibility notes (WCAG AA)
-7. A checklist the client can tick to approve the mock-up
-Keep it concrete enough that a developer can build from it without questions.`;
+1. mockup-report.md: ONE Markdown file with one top-level section per mock-up, in this order and with exactly these headings:
+${all.map((k, i) => `   ${i + 1}) "# ${k} mock-up": ${sections[k]}`).join("\n")}
+   Then: "# Design tokens" (colours, fonts, spacing, radius from the brand, as CSS variables, shared by every mock-up), "# Responsive, interaction and accessibility notes" (mobile, tablet, desktop; animation; WCAG AA) and "# Approval checklist" (a checklist the client can tick, one block per mock-up).
+2. mockup-assets.zip: ONE zip of real PNG images (at least 1440 px wide for desktop screens, 390 px wide for mobile screens), in one folder per mock-up (${all.map((k) => `${k.toLowerCase()}/`).join(", ")}): the main screens or pages of each mock-up, drawn with the brand colours, fonts and logos${c.brandZipAttached ? " from the attached brand zip" : ""}. Name the files like ${all[0].toLowerCase()}/home-desktop.png. Real image files, not code and not links. If you cannot create images, say so in ONE line at the top of your reply and still deliver mockup-report.md.
+Keep it concrete enough that a developer can build from it without questions. Give me the two files to download, nothing else to copy and paste.`;
+    }
     case "build-website":
       return `${intro}
 You are a senior front-end developer. BUILD THE WEBSITE as static, production-ready files.
