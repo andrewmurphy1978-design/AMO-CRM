@@ -4,7 +4,7 @@ import DateInput from "@/components/date-input";
 import { useState, useTransition } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import type { PhaseValues } from "@/actions/projects";
-import MultiSelect from "@/components/multi-select";
+import { CARD_COLORS } from "@/components/section-card";
 
 export type { PhaseValues };
 
@@ -62,153 +62,114 @@ export default function PhaseDialog({
     });
   }
 
+  const FIELD = "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
+  const LABEL = "block text-xs font-semibold uppercase tracking-wide text-soft";
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-2xl border border-card-border bg-card-bg p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="font-display text-lg font-semibold text-ink">
-          {onDelete ? t.projectForm.editPhase : t.phaseDialog.addTitle}
-        </h3>
-
-        <div className="mt-4">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.name}</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-          />
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.status}</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as PhaseValues["status"])}
-              className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-            >
-              {STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.phaseType}</label>
-            <input
-              type="text"
-              value={phaseType}
-              onChange={(e) => setPhaseType(e.target.value)}
-              placeholder={t.phaseDialog.phaseTypePlaceholder}
-              className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.team}</label>
-          <div className="mt-1">
-            <MultiSelect
-              options={users.map((u) => ({ value: u.id, label: u.name }))}
-              selected={teamMemberIds}
-              placeholder={t.phaseDialog.selectTeamMembers}
-              onChange={setTeamMemberIds}
-            />
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.supervisor}</label>
-          <select
-            value={supervisorId}
-            onChange={(e) => setSupervisorId(e.target.value)}
-            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-          >
-            <option value="">{t.common.unassigned}</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.startDate}</label>
-            <DateInput
-             
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.dueDate}</label>
-            <DateInput
-             
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.completedDate}</label>
-            <DateInput value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30" />
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.phaseDialog.description}</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
-          />
-        </div>
-
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-        <div className="mt-5 flex items-center justify-between gap-3">
-          {onDelete ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                if (!confirm(t.phaseDialog.deleteConfirm)) return;
-                startTransition(async () => {
-                  await onDelete();
-                  onClose();
-                });
-              }}
-              className="text-sm text-red-600 hover:underline disabled:opacity-60"
-            >
-              {t.phaseDialog.delete}
-            </button>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={onClose} className="text-sm text-soft hover:underline">
-              {t.phaseDialog.cancel}
-            </button>
-            <button
-              type="button"
-              disabled={pending || !name.trim()}
-              onClick={save}
-              className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm disabled:opacity-60"
-            >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4" onClick={onClose}>
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className={`flex shrink-0 items-center justify-between gap-3 px-4 py-3 text-white ${CARD_COLORS.phases}`}>
+          <h3 className="truncate font-display text-lg font-semibold">{onDelete ? t.projectForm.editPhase : t.phaseDialog.addTitle}</h3>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={pending || !name.trim()} onClick={save} className="rounded-md bg-amo-gold px-3 py-1 text-sm font-semibold text-[#152571] shadow-sm hover:brightness-95 disabled:opacity-60">
               {pending ? t.phaseDialog.saving : t.phaseDialog.save}
             </button>
+            <button type="button" onClick={onClose} aria-label={t.phaseDialog.cancel} title={t.phaseDialog.cancel} className="rounded-md px-2 py-0.5 text-lg leading-none hover:bg-white/20">
+              ✕
+            </button>
           </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="sm:col-span-3">
+              <label className={LABEL}>{t.phaseDialog.name}</label>
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} className={FIELD} />
+            </div>
+
+            <div>
+              <label className={LABEL}>{t.phaseDialog.status}</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as PhaseValues["status"])} className={FIELD}>
+                {STATUSES.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={LABEL}>{t.phaseDialog.phaseType}</label>
+              <input type="text" value={phaseType} onChange={(e) => setPhaseType(e.target.value)} placeholder={t.phaseDialog.phaseTypePlaceholder} className={FIELD} />
+            </div>
+            <div>
+              <label className={LABEL}>{t.phaseDialog.supervisor}</label>
+              <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={FIELD}>
+                <option value="">{t.common.unassigned}</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sm:col-span-3">
+              <label className={LABEL}>{t.phaseDialog.team}</label>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-card-border bg-field-bg p-3">
+                {users.map((u) => (
+                  <label key={u.id} className="flex items-center gap-1.5 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      checked={teamMemberIds.includes(u.id)}
+                      onChange={(e) => setTeamMemberIds((prev) => (e.target.checked ? [...prev, u.id] : prev.filter((x) => x !== u.id)))}
+                      className="h-4 w-4 rounded border-card-border accent-amo-lime"
+                    />
+                    {u.name}
+                  </label>
+                ))}
+                {teamMemberIds.length === 0 && <span className="text-xs text-soft">{t.common.unassigned}</span>}
+              </div>
+            </div>
+
+            <div>
+              <label className={LABEL}>{t.phaseDialog.startDate}</label>
+              <DateInput value={startDate} onChange={(e) => setStartDate(e.target.value)} className={FIELD} />
+            </div>
+            <div>
+              <label className={LABEL}>{t.phaseDialog.dueDate}</label>
+              <DateInput value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={FIELD} />
+            </div>
+            <div>
+              <label className={LABEL}>{t.phaseDialog.completedDate}</label>
+              <DateInput value={completedDate} onChange={(e) => setCompletedDate(e.target.value)} className={FIELD} />
+            </div>
+
+            <div className="sm:col-span-3">
+              <label className={LABEL}>{t.phaseDialog.description}</label>
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className={FIELD} />
+            </div>
+          </div>
+
+          {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+          {onDelete && (
+            <div className="mt-4">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  if (!confirm(t.phaseDialog.deleteConfirm)) return;
+                  startTransition(async () => {
+                    await onDelete();
+                    onClose();
+                  });
+                }}
+                className="text-sm text-red-600 hover:underline disabled:opacity-60"
+              >
+                {t.phaseDialog.delete}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

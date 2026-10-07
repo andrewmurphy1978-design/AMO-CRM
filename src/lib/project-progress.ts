@@ -36,7 +36,7 @@ function asPending(value: unknown): PendingPhase[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((p): p is PendingPhase => Boolean(p) && typeof (p as PendingPhase).name === "string" && Array.isArray((p as PendingPhase).tasks))
-    .map((p) => ({ name: p.name, tasks: p.tasks.map(String), stage: /^2nd instalment$/i.test(p.name.trim()) ? ("PLANNING" as PhaseStage) : p.stage, delayDays: p.delayDays ?? null, delays: Array.isArray(p.delays) ? p.delays : undefined }));
+    .map((p) => ({ name: p.name, tasks: p.tasks.map(String), stage: /^(2nd instalment|present the reports and mock-ups)$/i.test(p.name.trim()) ? ("PLANNING" as PhaseStage) : p.stage, delayDays: p.delayDays ?? null, delays: Array.isArray(p.delays) ? p.delays : undefined }));
 }
 
 // Moves a Contact up the pipeline, never down: Prospect only from Lead;
@@ -184,7 +184,7 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
   const allFinished = pr.phases.every(finished);
   const money = await instalmentState(db, pr.id);
   // The "2nd Instalment" phase carries its own tasks; otherwise a reminder task is added to the first active phase.
-  const reminder = money.paid >= 2 || pending.some((p) => /^2nd instalment$/i.test(p.name.trim())) || pr.phases.some((p) => /^2nd instalment$/i.test(p.name.trim())) ? undefined : SECOND_INSTALMENT_TASK;
+  const reminder = money.paid >= 2 || pending.some((p) => /^(2nd instalment|present the reports and mock-ups)$/i.test(p.name.trim())) || pr.phases.some((p) => /^(2nd instalment|present the reports and mock-ups)$/i.test(p.name.trim())) ? undefined : SECOND_INSTALMENT_TASK;
 
   const goActive = async () => {
     await setStatus(db, pr.id, "ACTIVE");

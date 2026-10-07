@@ -830,6 +830,31 @@ export const DEFAULT_FIELDS: Record<string, FieldTpl[]> = {
       "label": "Keyword & competition research"
     },
     {
+      "key": "model",
+      "type": "yesno",
+      "label": "Mock-up"
+    },
+    {
+      "key": "modelApproval",
+      "type": "yesno",
+      "label": "Mock-up approval",
+      "showIf": {
+        "op": "yes",
+        "field": "model"
+      },
+      "keepSpace": true
+    },
+    {
+      "key": "modelApprovalBy",
+      "type": "text",
+      "label": "Mock-up approval by",
+      "showIf": {
+        "op": "yes",
+        "field": "modelApproval"
+      },
+      "keepSpace": true
+    },
+    {
       "key": "seo",
       "type": "yesno",
       "label": "SEO optimization"

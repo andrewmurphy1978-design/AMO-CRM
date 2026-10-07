@@ -26,6 +26,9 @@ const EXACT: Record<string, string> = {
   "Add the brand to the client's Brand card": "Ajouter la marque à la carte Marque du client",
   "Review the brand guides": "Réviser les guides de marque",
   "Review the research reports": "Réviser les rapports de recherche",
+  "Review mock-ups": "Réviser les maquettes", "Send email to book a call": "Envoyer un courriel pour réserver un appel",
+  "Present the reports and mock-ups": "Présenter les rapports et les maquettes", "Present the brand guides": "Présenter les guides de marque", "Get approval of the brand guides": "Obtenir l'approbation des guides de marque",
+  "Present the research reports": "Présenter les rapports de recherche", "Get approval of the research reports": "Obtenir l'approbation des rapports de recherche",
   Yes: "Oui",
   No: "Non",
   // languages
@@ -148,6 +151,10 @@ const EXACT: Record<string, string> = {
 
 // Titles built from the answers: "{key}" stands for what was picked.
 const PATTERNS: [string, string][] = [
+  ["Build the {t} mock-up", "Créer la maquette — {t}"],
+  ["Present the {t} mock-up", "Présenter la maquette — {t}"],
+  ["Get approval of the {t} mock-up ({n})", "Obtenir l'approbation de la maquette — {t} ({n})"],
+  ["Get approval of the {t} mock-up", "Obtenir l'approbation de la maquette — {t}"],
   ["Get model approval ({modelApprovalBy})", "Obtenir l'approbation de la maquette ({modelApprovalBy})"],
   ["Get mock-up approval ({modelApprovalBy})", "Obtenir l'approbation de la maquette ({modelApprovalBy})"],
   ["Setup domain (DNS: {dnsProvider})", "Configurer le domaine (DNS : {dnsProvider})"],

@@ -48,6 +48,7 @@ export default function TaskDialog({
   const [generating, setGenerating] = useState(false);
   const [guide, setGuide] = useState<{ busy: boolean; message?: string; error?: string; progress?: string }>({ busy: false });
   const [copied, setCopied] = useState(false);
+  const [mail, setMail] = useState<{ busy: boolean; to: string; subject: string; body: string; error?: string }>({ busy: false, to: "", subject: "", body: "" });
   const fr = lang === "fr";
   // The Proposal phase's tasks have no AI prompt: the proposal builder already has its own AI draft.
   const inProposalPhase = /^(proposal|soumission|proposition)$/i.test(phases.find((p) => p.id === phaseId)?.name.trim() ?? "");
@@ -260,7 +261,7 @@ export default function TaskDialog({
         </div>
         )}
 
-        {/^(review the (brand guides|research reports)|réviser les (guides de marque|rapports de recherche))/i.test(title) && (
+        {/^(review the (brand guides|research reports)|review mock-ups|réviser les (guides de marque|rapports de recherche|maquettes))/i.test(title) && (
           <div className="mt-3 rounded-lg border border-card-border bg-field-bg p-3">
             <button
               type="button"
@@ -273,10 +274,53 @@ export default function TaskDialog({
             >
               {(() => {
                 const research = /research|recherche/i.test(title);
+                if (/mock-ups|maquettes/i.test(title)) return status === "DONE" ? (fr ? "✓ Maquettes approuvées" : "✓ Mock-ups approved") : fr ? "✓ Approuver les maquettes" : "✓ Approve the mock-ups";
                 return status === "DONE" ? (fr ? (research ? "✓ Rapports approuvés" : "✓ Guides approuvés") : research ? "✓ Research reports approved" : "✓ Brand guides approved") : fr ? (research ? "✓ Approuver les rapports de recherche" : "✓ Approuver les guides de marque") : research ? "✓ Approve the research reports" : "✓ Approve the brand guides";
               })()}
             </button>
-            <p className="mt-1 text-xs text-soft">{fr ? "À cliquer une fois les documents (EN et FR) révisés et approuvés : la tâche est terminée." : "Click once the documents (EN and FR) have been reviewed and approved: the task is completed."}</p>
+            <p className="mt-1 text-xs text-soft">{/mock-ups|maquettes/i.test(title) ? (fr ? "À cliquer une fois toutes les maquettes révisées et approuvées : la tâche est terminée." : "Click once all the mock-ups have been reviewed and approved: the task is completed.") : fr ? "À cliquer une fois les documents (EN et FR) révisés et approuvés : la tâche est terminée." : "Click once the documents (EN and FR) have been reviewed and approved: the task is completed."}</p>
+          </div>
+        )}
+
+        {/^(send email to book a call|envoyer un courriel pour réserver un appel)/i.test(title) && projectId && (
+          <div className="mt-3 rounded-lg border border-card-border bg-field-bg p-3">
+            <button
+              type="button"
+              disabled={mail.busy}
+              onClick={async () => {
+                setMail((m) => ({ ...m, busy: true, error: undefined }));
+                try {
+                  const res = await fetch(`/api/projects/${projectId}/book-call-email`, { method: "POST" });
+                  const data = (await res.json()) as { error?: string; to?: string; subject?: string; body?: string };
+                  if (data.error) setMail((m) => ({ ...m, busy: false, error: data.error }));
+                  else setMail({ busy: false, to: data.to ?? "", subject: data.subject ?? "", body: data.body ?? "" });
+                } catch {
+                  setMail((m) => ({ ...m, busy: false, error: fr ? "Connexion interrompue : réessayez." : "Connection interrupted: try again." }));
+                }
+              }}
+              className="rounded-lg bg-amo-gold px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-60"
+            >
+              {mail.busy ? (fr ? "Rédaction…" : "Writing…") : mail.body ? (fr ? "Régénérer le courriel (IA)" : "Regenerate the email (AI)") : fr ? "Générer le courriel avec l'IA" : "Generate the email with AI"}
+            </button>
+            {mail.error && <p className="mt-2 text-sm text-red-600">{mail.error}</p>}
+            {mail.body && (
+              <div className="mt-2 space-y-2">
+                <input value={mail.subject} onChange={(e) => setMail((m) => ({ ...m, subject: e.target.value }))} className="w-full rounded-md border border-card-border bg-card-bg px-3 py-1.5 text-sm text-ink" />
+                <textarea value={mail.body} onChange={(e) => setMail((m) => ({ ...m, body: e.target.value }))} rows={9} className="w-full rounded-md border border-card-border bg-card-bg px-3 py-2 text-sm text-ink" />
+                <div className="flex flex-wrap gap-2">
+                  <a href={`mailto:${encodeURIComponent(mail.to)}?subject=${encodeURIComponent(mail.subject)}&body=${encodeURIComponent(mail.body)}`} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">
+                    {fr ? "Ouvrir dans mon courriel" : "Open in my email app"}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard?.writeText(`${mail.subject}\n\n${mail.body}`).catch(() => undefined)}
+                    className="rounded-lg border border-card-border px-3 py-1.5 text-sm font-semibold text-ink hover:bg-card-bg"
+                  >
+                    {fr ? "Copier" : "Copy"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

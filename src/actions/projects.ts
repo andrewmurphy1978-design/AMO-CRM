@@ -360,7 +360,7 @@ async function applyTypeChanges(db: PrismaClient, projectId: string, newTypes: s
       const template = await getProjectTemplate(db, type);
       const plan = buildMultiPlan([{ type, label: labels[type] ?? type, template, values: {} }]);
       for (const ph of plan.phases) {
-        if (/^(proposal|research|brand|mock-up|2nd instalment|presenting|deploying|final payment)$/i.test(ph.name)) continue; // shared: already in the plan
+        if (/^(proposal|research|brand|mock-up|2nd instalment|present the reports and mock-ups|presenting|deploying|final payment)$/i.test(ph.name)) continue; // shared: already in the plan
         addedPhases.push({ ...ph, name: `${labels[type] ?? type} — ${ph.name}` });
       }
     }

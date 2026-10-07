@@ -232,9 +232,9 @@ function expandTitle(task: TaskTpl, values: FieldValues): string[] {
 // awaited before the building starts.
 export function secondInstalmentPhase(): PhaseTpl {
   return {
-    name: "2nd Instalment",
+    name: PRESENT_PHASE,
     stage: "PLANNING",
-    tasks: [{ title: "Send the 2nd instalment invoice" }, { title: "Await the 2nd instalment payment" }],
+    tasks: [{ title: BOOK_CALL_TASK }, { title: "Send the 2nd instalment invoice" }, { title: "Await the 2nd instalment payment" }],
   };
 }
 
@@ -514,11 +514,15 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
       { key: "topics", label: "Topics / categories", type: "multiselect", options: [], allowOther: true },
       { key: "articles", label: "Number of articles to write", type: "number" },
       { key: "research", label: "Keyword & competition research", type: "yesno" },
+      { key: "model", label: "Mock-up", type: "yesno" },
+      { key: "modelApproval", label: "Mock-up approval", type: "yesno", showIf: yes("model"), keepSpace: true },
+      { key: "modelApprovalBy", label: "Mock-up approval by", type: "text", showIf: yes("modelApproval"), keepSpace: true },
       { key: "seo", label: "SEO optimization", type: "yesno" },
       { key: "optIn", label: "Newsletter opt-in form on the blog", type: "yesno" },
     ],
     phases: [
       { name: "Research", when: yes("research"), tasks: [{ title: "Research keywords" }, { title: "Review competitor blogs" }, { title: "Produce content plan" }] },
+      { name: "Mock-up", when: yes("model"), tasks: [{ title: "Build mock-up" }, { title: "Present mock-up", when: yes("modelApproval") }, { title: "Get mock-up approval ({modelApprovalBy})", when: yes("modelApproval") }] },
       {
         name: "Blog Setup",
         tasks: [
@@ -943,7 +947,7 @@ export function defaultTemplate(type: string): TemplateConfig {
 
 // ---- multi-type projects ----------------------------------------------------
 
-import { REVIEW_BRAND_TASK, REVIEW_RESEARCH_TASK, brandPhaseTasks } from "@/lib/brand-items";
+import { BOOK_CALL_TASK, PRESENT_PHASE, REVIEW_BRAND_TASK, REVIEW_MOCKUP_TASK, REVIEW_RESEARCH_TASK, brandPhaseTasks } from "@/lib/brand-items";
 
 // The Brand question is a project setting (General Info), not part of a type's details:
 // earlier versions put a "brand" Yes/No in the details, which is dropped here.
@@ -983,6 +987,7 @@ const SHARED_NAMES: Record<string, string> = {
   model: "Mock-up",
   design: "Mock-up",
   "2nd instalment": "2nd Instalment",
+  "present the reports and mock-ups": "2nd Instalment",
   presenting: "Presenting",
   deploying: "Deploying",
   "final payment": "Final Payment",
@@ -1020,17 +1025,40 @@ function sharedTaskTitle(phaseKey: string, title: string): string {
   return title;
 }
 
+// "Website building" -> "Website", "Funnels building" -> "Funnels": the short name used in mock-up task titles.
+function shortLabel(label: string): string {
+  return label.replace(/\s+(building|setup|set-up|creation)$/i, "").trim() || label;
+}
+
 export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): ProjectPlan {
   const multi = inputs.length > 1;
   const shared = new Map<string, PlanPhase>();
   const own: PlanPhase[] = [];
   const brand = Boolean(options.brand);
+  // Each type's mock-up: it is built in the Mock-up phase, presented (and approved) in "Present the reports and mock-ups".
+  const mockups: { short: string; present: boolean; approvers: string[] }[] = [];
 
   for (const input of inputs) {
     const values = cleanValues(input.template, input.values);
     for (const phase of buildPlan(input.template, values).phases) {
       const key = SHARED_NAMES[phase.name.trim().toLowerCase()];
-      if (key) {
+      if (key === "Mock-up") {
+        const short = shortLabel(input.label);
+        const m = { short, present: false, approvers: [] as string[] };
+        for (const t of phase.tasks) {
+          if (/^(present|show)\b/i.test(t)) m.present = true;
+          const approval = /^get\b.*approval\s*(?:\((.*)\))?\s*$/i.exec(t);
+          if (approval) {
+            m.present = true;
+            if (approval[1]?.trim()) m.approvers.push(approval[1].trim());
+            else m.approvers.push("");
+          }
+        }
+        mockups.push(m);
+        if (!shared.has("Mock-up")) shared.set("Mock-up", { ...phase, name: "Mock-up", tasks: [], delays: [] });
+      } else if (key === "2nd Instalment") {
+        // Rebuilt below (it also presents the reports and mock-ups): the template's own copy is not used.
+      } else if (key) {
         const existing = shared.get(key);
         if (!existing) {
           const tasks: string[] = [];
@@ -1056,8 +1084,25 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
     }
   }
 
-  // Saved (customized) templates predate this phase: every project gets it once.
-  if (!shared.has("2nd Instalment")) shared.set("2nd Instalment", { ...secondInstalmentPhase(), tasks: secondInstalmentPhase().tasks.map((t) => t.title), stage: "PLANNING", delays: [] });
+  // The Mock-up phase: one detailed task per type (Website, Funnel, Blog, App...), then the manual review.
+  const mockupPhase = shared.get("Mock-up");
+  if (mockupPhase) {
+    mockupPhase.tasks = [...mockups.map((m) => (multi ? `Build the ${m.short} mock-up` : "Build mock-up")), REVIEW_MOCKUP_TASK];
+    mockupPhase.delays = [];
+  }
+
+  // "Present the reports and mock-ups": first the email to book the call, then everything that is presented
+  // and approved (brand guides, research reports, each mock-up), then the 2nd instalment.
+  const presentTasks: string[] = [BOOK_CALL_TASK];
+  if (brand) presentTasks.push("Present the brand guides", "Get approval of the brand guides");
+  if (shared.has("Research")) presentTasks.push("Present the research reports", "Get approval of the research reports");
+  for (const m of mockups) {
+    presentTasks.push(multi ? `Present the ${m.short} mock-up` : "Present mock-up");
+    for (const who of m.approvers) presentTasks.push(multi ? `Get approval of the ${m.short} mock-up${who ? ` (${who})` : ""}` : `Get mock-up approval${who ? ` (${who})` : ""}`);
+  }
+  presentTasks.push("Send the 2nd instalment invoice", "Await the 2nd instalment payment");
+  shared.set("2nd Instalment", { name: PRESENT_PHASE, stage: "PLANNING", tasks: [...new Set(presentTasks)], delays: [] });
+
   const pick = (name: string) => (shared.has(name) ? [shared.get(name)!] : []);
   // The Brand phase only exists for projects that include a brand; its tasks follow the ticked items
   // (or the type's own Brand phase when none are ticked).
