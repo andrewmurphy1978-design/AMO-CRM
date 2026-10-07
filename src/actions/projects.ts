@@ -12,7 +12,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { brandPhaseTasks } from "@/lib/brand-items";
-import { TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, readFieldValues, typesOfProject, type FieldValues, type TypeInput } from "@/lib/project-templates";
+import { TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, readFieldValues, typesOfProject, valuesOfType, type FieldValues, type TypeInput } from "@/lib/project-templates";
 import { getTypeLabels } from "@/lib/project-type-store";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 
@@ -300,6 +300,51 @@ async function applyProjectSettings(db: PrismaClient, projectId: string, next: {
   await db.project.update({ where: { id: projectId }, data: { createBrand: next.createBrand, brandItems: next.brandItems, accountMode: next.accountMode } });
 }
 
+// A project's answers changed (e.g. "Research competition" or "Mock-up" set to Yes after the project was
+// created): any phase the answers now call for, and the project doesn't have yet, is added. A phase of a
+// stage the project has already reached is created straight away, in its place in the plan; a later one
+// waits in the pending list, also in its place. Existing phases and tasks are never touched or removed.
+async function syncPlanWithAnswers(db: PrismaClient, projectId: string) {
+  const project = await db.project.findUnique({ where: { id: projectId }, include: { phases: { select: { id: true, name: true, order: true } } } });
+  if (!project) return;
+  const types = typesOfProject(project);
+  const labels = await getTypeLabels(db, getDict("en").projectTypes as Record<string, string>, "en");
+  const inputs: TypeInput[] = await Promise.all(types.map(async (type) => {
+    const template = await getProjectTemplate(db, type);
+    return { type, label: labels[type] ?? type, template, values: cleanValues(template, valuesOfType(project, type)) };
+  }));
+  const plan = buildMultiPlan(inputs, { brand: project.createBrand, brandItems: project.brandItems, accountMode: project.accountMode }).phases.filter((p) => p.tasks.length > 0);
+  const norm = (n: string) => n.trim().toLowerCase();
+  const have = new Set(project.phases.map((p) => norm(p.name)));
+  const pending = (Array.isArray(project.pendingPhases) ? project.pendingPhases : []) as { name: string; tasks: string[]; stage?: string; delays?: (number | null)[]; delayDays?: number | null }[];
+  const waiting = new Set(pending.map((p) => norm(p.name)));
+  const missing = plan.filter((p) => !have.has(norm(p.name)) && !waiting.has(norm(p.name)) && p.stage !== "PROPOSAL");
+  if (missing.length === 0) return;
+
+  const reached = (stage: string) => (stage === "PLANNING" ? !["PROPOSAL"].includes(project.status) : stage === "ACTIVE" ? ["ACTIVE", "FINAL", "COMPLETED"].includes(project.status) : ["FINAL", "COMPLETED"].includes(project.status));
+  const createdNow = missing.filter((p) => project.lifecycleManaged === false || reached(p.stage));
+  const later = missing.filter((p) => !createdNow.includes(p));
+
+  // Phases that wait: in plan order, among the others still waiting.
+  if (later.length > 0) {
+    const order = new Map(plan.map((p, i) => [norm(p.name), i]));
+    const merged = [...pending, ...later.map((p) => ({ name: p.name, tasks: p.tasks, stage: p.stage, delays: p.delays, delayDays: p.delayDays ?? null }))].sort((a, b) => (order.get(norm(a.name)) ?? 999) - (order.get(norm(b.name)) ?? 999));
+    await db.project.update({ where: { id: projectId }, data: { pendingPhases: merged as never } });
+  }
+  // Phases created now: each goes right before the first phase that follows it in the plan and already exists.
+  for (const ph of createdNow) {
+    const index = plan.findIndex((p) => norm(p.name) === norm(ph.name));
+    const nextExisting = plan.slice(index + 1).map((p) => project.phases.find((x) => norm(x.name) === norm(p.name))).find(Boolean);
+    const phases = await db.projectPhase.findMany({ where: { projectId }, select: { id: true, order: true } });
+    const at = nextExisting ? nextExisting.order : phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
+    await db.projectPhase.updateMany({ where: { projectId, order: { gte: at } }, data: { order: { increment: 1 } } });
+    const created = await db.projectPhase.create({ data: { projectId, name: ph.name, order: at, status: project.status === "PROPOSAL" ? "PLANNING" : (["PLANNING", "ACTIVE", "FINAL", "COMPLETED"].includes(project.status) ? (project.status as "PLANNING" | "ACTIVE" | "FINAL" | "COMPLETED") : "PLANNING") } });
+    await db.task.createMany({ data: taskRows(projectId, created.id, ph.tasks, ph.delays) });
+    project.phases.push({ id: created.id, name: ph.name, order: at });
+    for (const x of project.phases) if (x.id !== created.id && x.order >= at) x.order += 1;
+  }
+}
+
 // A project whose types changed: phases of newly added types are added too (as
 // pending phases for a lifecycle-managed project, directly otherwise). Types that
 // were removed leave their existing phases alone.
@@ -578,6 +623,7 @@ export async function updateProjectCustomFields(
     if (!all[project.type] && project.customFields) all[project.type] = project.customFields as FieldValues;
     all[type] = values;
     await db.project.update({ where: { id: projectId }, data: { typeFields: all as never } });
+    await syncPlanWithAnswers(db, projectId); // answers that call for new phases (Research, Mock-up...)
     // Newly chosen apps join the Apps & subscriptions (existing rows are kept).
     const have = await db.projectSubscription.findMany({ where: { projectId }, select: { name: true } });
     const known = new Set(have.map((x) => x.name.trim().toLowerCase()));
