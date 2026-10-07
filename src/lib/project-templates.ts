@@ -943,7 +943,7 @@ export function defaultTemplate(type: string): TemplateConfig {
 
 // ---- multi-type projects ----------------------------------------------------
 
-import { REVIEW_BRAND_TASK, brandPhaseTasks } from "@/lib/brand-items";
+import { REVIEW_BRAND_TASK, REVIEW_RESEARCH_TASK, brandPhaseTasks } from "@/lib/brand-items";
 
 // The Brand question is a project setting (General Info), not part of a type's details:
 // earlier versions put a "brand" Yes/No in the details, which is dropped here.
@@ -1048,7 +1048,8 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
   const phases: PlanPhase[] = [
     ...pick("Proposal"),
     ...brandPhase,
-    ...pick("Research"),
+    // The Research phase always ends with the manual review / approval of the research reports.
+    ...pick("Research").map((r) => (r.tasks.includes(REVIEW_RESEARCH_TASK) ? r : { ...r, tasks: [...r.tasks, REVIEW_RESEARCH_TASK] })),
     ...pick("Mock-up"),
     ...own.filter((p) => p.stage === "PLANNING"),
     ...pick("2nd Instalment"),

@@ -14,7 +14,9 @@ import { syncProjectLifecycle } from "@/lib/project-progress";
 export interface ResearchAnalysis {
   competitors: { name: string; url: string }[];
   screenshots: number;
-  keywords: boolean;
+  keywords: number;
+  blogs: number;
+  contentPlan: number;
   sections: string[];
 }
 
@@ -40,12 +42,13 @@ export function tableUnder(md: string, heading: RegExp): { header: string[]; row
 }
 
 export function analyseResearchReport(md: string): ResearchAnalysis {
-  const comp = tableUnder(md, /competitor|concurren/i);
+  const comp = tableUnder(md, /competitors?(?!\s*blog)|concurrents?(?!\s*blog)/i);
   const urlCol = comp ? comp.header.findIndex((h) => /url|site|web/i.test(h)) : -1;
   const competitors = (comp?.rows ?? []).filter((r) => r[0]).map((r) => ({ name: r[0], url: urlCol >= 0 ? r[urlCol] ?? "" : "" }));
   const shots = tableUnder(md, /screenshot|capture/i);
   const sections = md.split("\n").filter((l) => /^##\s/.test(l)).map((l) => l.replace(/^##\s+/, "").trim());
-  return { competitors, screenshots: shots?.rows.length ?? 0, keywords: /keyword|mots-cl/i.test(md), sections };
+  const rows = (re: RegExp) => tableUnder(md, re)?.rows.filter((r) => r[0]).length ?? 0;
+  return { competitors, screenshots: shots?.rows.length ?? 0, keywords: rows(/keyword|mots-cl/i), blogs: rows(/competitor blog|blogue/i), contentPlan: rows(/content plan|plan de contenu/i), sections };
 }
 
 // ---- ticking the research tasks ---------------------------------------------------------
@@ -75,6 +78,9 @@ export async function tickResearchTasks(db: PrismaClient, projectId: string, che
 
 export interface ResearchResult {
   competitors: number;
+  keywords: number;
+  blogs: number;
+  contentPlan: number;
   verified: string[];
   missing: string[];
 }
@@ -82,11 +88,12 @@ export interface ResearchResult {
 export async function processResearchReport(db: PrismaClient, projectId: string, md: string): Promise<ResearchResult> {
   const a = analyseResearchReport(md);
   const { verified, missing } = await tickResearchTasks(db, projectId, [
-    { match: /^find competitors/i, ok: a.competitors.length > 0, label: "Find competitors", why: "the report has no Competitors table with rows" },
-    { match: /^research keywords/i, ok: a.keywords, label: "Research keywords", why: "the report doesn't cover keywords" },
-    { match: /^review competitor blogs/i, ok: a.competitors.length > 0, label: "Review competitor blogs", why: "the report lists no competitors" },
+    { match: /^find (competitors|competing apps)/i, ok: a.competitors.length > 0, label: "Find competitors", why: "the report has no Competitors table with rows" },
+    { match: /^research keywords/i, ok: a.keywords > 0, label: "Research keywords", why: "the report has no Keywords table with rows" },
+    { match: /^review competitor blogs/i, ok: a.blogs > 0, label: "Review competitor blogs", why: "the report has no Competitor blogs table with rows" },
+    { match: /^produce content plan/i, ok: a.contentPlan > 0, label: "Produce content plan", why: "the report has no Content plan table with rows" },
   ]);
-  return { competitors: a.competitors.length, verified, missing };
+  return { competitors: a.competitors.length, keywords: a.keywords, blogs: a.blogs, contentPlan: a.contentPlan, verified, missing };
 }
 
 // The screenshots of the AI's research zip (PNG / JPG) are kept on the project (shown in the Research card
@@ -125,6 +132,9 @@ export interface ResearchDoc {
   audience?: string;
   competitors?: { name: string; url?: string; type?: string; offer?: string; pricing?: string; positioning?: string; strengths?: string; weaknesses?: string; notes?: string }[];
   design?: { intro?: string; patterns?: string[] };
+  keywords?: { keyword: string; intent?: string; volume?: string; difficulty?: string; priority?: string }[];
+  competitorBlogs?: { competitor: string; blogUrl?: string; topics?: string; frequency?: string; formats?: string; gaps?: string }[];
+  contentPlan?: { title: string; keyword?: string; format?: string; language?: string; priority?: string }[];
   gaps?: string[];
   recommendations?: { title: string; description: string }[];
   risks?: string[];
@@ -134,6 +144,7 @@ export interface ResearchDoc {
 export const RESEARCH_PARTS: { id: string; shape: string }[] = [
   { id: "summary", shape: '{"executiveSummary": ["5 short bullets"], "positioning": "the client\'s offer and positioning today (2 short paragraphs)", "audience": "audience and search intent (2 short paragraphs)"}' },
   { id: "competitors", shape: '{"competitors": [{"name": "", "url": "https://...", "type": "direct or indirect", "offer": "", "pricing": "", "positioning": "", "strengths": "", "weaknesses": "", "notes": "tech / SEO notes"}], "design": {"intro": "", "patterns": [""]}}' },
+  { id: "seo", shape: '{"keywords": [{"keyword": "", "intent": "", "volume": "", "difficulty": "", "priority": "High/Medium/Low"}], "competitorBlogs": [{"competitor": "", "blogUrl": "", "topics": "", "frequency": "", "formats": "", "gaps": ""}], "contentPlan": [{"title": "", "keyword": "", "format": "", "language": "", "priority": ""}]}' },
   { id: "recommendations", shape: '{"gaps": [""], "recommendations": [{"title": "", "description": ""}], "risks": [""], "nextSteps": [""]}' },
 ];
 
@@ -212,6 +223,9 @@ export function normaliseResearch(raw: Partial<ResearchDoc>): ResearchDoc {
       .filter((c) => (seen.has(c.name.trim().toLowerCase()) ? false : (seen.add(c.name.trim().toLowerCase()), true)))
       .map((c) => ({ name: c.name.trim(), url: str(c.url), type: str(c.type), offer: str(c.offer), pricing: str(c.pricing), positioning: str(c.positioning), strengths: str(c.strengths), weaknesses: str(c.weaknesses), notes: str(c.notes) })),
     design: { intro: str(raw.design?.intro), patterns: strs(raw.design?.patterns) },
+    keywords: (Array.isArray(raw.keywords) ? raw.keywords : []).filter((k) => k && typeof k.keyword === "string" && k.keyword.trim()).map((k) => ({ keyword: k.keyword, intent: str(k.intent), volume: str(k.volume), difficulty: str(k.difficulty), priority: str(k.priority) })),
+    competitorBlogs: (Array.isArray(raw.competitorBlogs) ? raw.competitorBlogs : []).filter((b) => b && typeof b.competitor === "string" && b.competitor.trim()).map((b) => ({ competitor: b.competitor, blogUrl: str(b.blogUrl), topics: str(b.topics), frequency: str(b.frequency), formats: str(b.formats), gaps: str(b.gaps) })),
+    contentPlan: (Array.isArray(raw.contentPlan) ? raw.contentPlan : []).filter((c) => c && typeof c.title === "string" && c.title.trim()).map((c) => ({ title: c.title, keyword: str(c.keyword), format: str(c.format), language: str(c.language), priority: str(c.priority) })),
     gaps: strs(raw.gaps),
     recommendations: (Array.isArray(raw.recommendations) ? raw.recommendations : []).filter((r) => r && typeof r.title === "string").map((r) => ({ title: r.title, description: str(r.description) ?? "" })),
     risks: strs(raw.risks),
@@ -220,8 +234,8 @@ export function normaliseResearch(raw: Partial<ResearchDoc>): ResearchDoc {
 }
 
 const T = {
-  en: { report: "Research report", contents: "Contents", summary: "Executive summary", positioning: "Offer and positioning", audience: "Audience and search intent", competitors: "Competitor landscape", design: "Design and UX patterns", gaps: "Gaps and differentiators", recommendations: "Recommendations", risks: "Risks and open questions", next: "Next steps", screenshots: "Screenshots", offer: "Offer", pricing: "Pricing", pos: "Positioning", strengths: "Strengths", weaknesses: "Weaknesses", notes: "Notes", prepared: "Prepared by Andrew Murphy Online" },
-  fr: { report: "Rapport de recherche", contents: "Table des matières", summary: "Sommaire exécutif", positioning: "Offre et positionnement", audience: "Public et intention de recherche", competitors: "Paysage concurrentiel", design: "Tendances de design et d'expérience", gaps: "Lacunes et différenciateurs", recommendations: "Recommandations", risks: "Risques et questions ouvertes", next: "Prochaines étapes", screenshots: "Captures d'écran", offer: "Offre", pricing: "Prix", pos: "Positionnement", strengths: "Forces", weaknesses: "Faiblesses", notes: "Notes", prepared: "Préparé par Andrew Murphy Online" },
+  en: { report: "Research report", contents: "Contents", summary: "Executive summary", positioning: "Offer and positioning", audience: "Audience and search intent", competitors: "Competitor landscape", design: "Design and UX patterns", keywords: "Keywords and search intent", blogs: "Competitor blogs", plan: "Content plan", keyword: "Keyword", intent: "Intent", volume: "Volume", difficulty: "Difficulty", priority: "Priority", competitor: "Competitor", topics: "Topics", frequency: "Frequency", formats: "Formats", gapsCol: "Gaps", title: "Title", format: "Format", language: "Language", gaps: "Gaps and differentiators", recommendations: "Recommendations", risks: "Risks and open questions", next: "Next steps", screenshots: "Screenshots", offer: "Offer", pricing: "Pricing", pos: "Positioning", strengths: "Strengths", weaknesses: "Weaknesses", notes: "Notes", prepared: "Prepared by Andrew Murphy Online" },
+  fr: { report: "Rapport de recherche", contents: "Table des matières", summary: "Sommaire exécutif", positioning: "Offre et positionnement", audience: "Public et intention de recherche", competitors: "Paysage concurrentiel", design: "Tendances de design et d'expérience", keywords: "Mots-clés et intention de recherche", blogs: "Blogues des concurrents", plan: "Plan de contenu", keyword: "Mot-clé", intent: "Intention", volume: "Volume", difficulty: "Difficulté", priority: "Priorité", competitor: "Concurrent", topics: "Sujets", frequency: "Fréquence", formats: "Formats", gapsCol: "Lacunes", title: "Titre", format: "Format", language: "Langue", gaps: "Lacunes et différenciateurs", recommendations: "Recommandations", risks: "Risques et questions ouvertes", next: "Prochaines étapes", screenshots: "Captures d'écran", offer: "Offre", pricing: "Prix", pos: "Positionnement", strengths: "Forces", weaknesses: "Faiblesses", notes: "Notes", prepared: "Préparé par Andrew Murphy Online" },
 } as const;
 
 const EXTRA = new Set("œŒšŠžŽŸ€‘’“”„•–—…™".split(""));
@@ -366,6 +380,39 @@ export async function renderResearchPdf(input: { doc: ResearchDoc; lang: "en" | 
     para(d.design?.intro);
     bullets(d.design?.patterns);
   }
+  // A table: header row, then the rows (cells wrap), with its columns sized by weight.
+  const table = (headers: string[], rows: string[][], weights: number[]) => {
+    const total = weights.reduce((a, b) => a + b, 0);
+    const widths = weights.map((w) => (w / total) * CW);
+    const draw = (cells: string[], head: boolean) => {
+      const wrapped = cells.map((c, i) => wrap(c || "", head ? bold : regular, 8.5, widths[i] - 8));
+      const h = Math.max(...wrapped.map((l) => l.length)) * 11 + 8;
+      ensure(h + 2);
+      if (head) page.drawRectangle({ x: MX, y: y - h + 4, width: CW, height: h, color: rgb(0.93, 0.96, 0.94) });
+      let x = MX;
+      wrapped.forEach((lines, i) => {
+        lines.forEach((ln, n) => page.drawText(ln, { x: x + 4, y: y - 8 - n * 11, size: 8.5, font: head ? bold : regular, color: head ? GREEN : INK }));
+        x += widths[i];
+      });
+      page.drawLine({ start: { x: MX, y: y - h + 4 }, end: { x: W - MX, y: y - h + 4 }, thickness: 0.4, color: LINE });
+      y -= h;
+    };
+    draw(headers, true);
+    for (const r of rows) draw(r, false);
+    y -= 10;
+  };
+  if (d.keywords?.length) {
+    newPage(t.keywords);
+    table([t.keyword, t.intent, t.volume, t.difficulty, t.priority], d.keywords.map((k) => [k.keyword, k.intent ?? "", k.volume ?? "", k.difficulty ?? "", k.priority ?? ""]), [3, 3, 1.5, 1.5, 1.5]);
+  }
+  if (d.competitorBlogs?.length) {
+    newPage(t.blogs);
+    table([t.competitor, "URL", t.topics, t.frequency, t.formats, t.gapsCol], d.competitorBlogs.map((b) => [b.competitor, b.blogUrl ?? "", b.topics ?? "", b.frequency ?? "", b.formats ?? "", b.gaps ?? ""]), [2, 2.4, 3, 1.5, 1.6, 3]);
+  }
+  if (d.contentPlan?.length) {
+    newPage(t.plan);
+    table(["#", t.title, t.keyword, t.format, t.language, t.priority], d.contentPlan.map((c, i) => [String(i + 1), c.title, c.keyword ?? "", c.format ?? "", c.language ?? "", c.priority ?? ""]), [0.5, 5, 2.5, 1.6, 1.4, 1.4]);
+  }
   if (input.shots.length > 0) {
     newPage(t.screenshots);
     const cw = (CW - 12) / 2;
@@ -438,6 +485,8 @@ export async function finishResearchReport(db: PrismaClient, projectId: string, 
   for (const m of made) {
     await db.attachedFile.create({ data: { projectId, kind: "RESEARCH_PDF", name: m.name, mimeType: "application/pdf", size: m.bytes.length, data: m.bytes as never, uploadedByName: "AMO CRM", note: `${m.lang === "en" ? "English" : "French"} research report, merged from the AI research reports` } });
   }
-  await tickResearchTasks(db, projectId, [{ match: /^produce (the )?report/i, ok: true, label: "Produce report", why: "" }, { match: /^produce content plan/i, ok: true, label: "Produce content plan", why: "" }]);
+  // The final report is the "Produce report" task. (The keyword research, the competitor-blog review and the
+  // content plan are ticked when a dropped report contains them; the final review is the Approve button.)
+  await tickResearchTasks(db, projectId, [{ match: /^produce (the )?report|^produce competitor report/i, ok: true, label: "Produce report", why: "" }]);
   return { fileNames: made.map((m) => m.name) };
 }

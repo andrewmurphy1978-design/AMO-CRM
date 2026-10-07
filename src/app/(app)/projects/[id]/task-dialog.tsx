@@ -260,7 +260,7 @@ export default function TaskDialog({
         </div>
         )}
 
-        {/^(review the brand guides|réviser les guides de marque)/i.test(title) && (
+        {/^(review the (brand guides|research reports)|réviser les (guides de marque|rapports de recherche))/i.test(title) && (
           <div className="mt-3 rounded-lg border border-card-border bg-field-bg p-3">
             <button
               type="button"
@@ -271,9 +271,12 @@ export default function TaskDialog({
               }}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
             >
-              {status === "DONE" ? (fr ? "✓ Guides approuvés" : "✓ Brand guides approved") : fr ? "✓ Approuver les guides de marque" : "✓ Approve the brand guides"}
+              {(() => {
+                const research = /research|recherche/i.test(title);
+                return status === "DONE" ? (fr ? (research ? "✓ Rapports approuvés" : "✓ Guides approuvés") : research ? "✓ Research reports approved" : "✓ Brand guides approved") : fr ? (research ? "✓ Approuver les rapports de recherche" : "✓ Approuver les guides de marque") : research ? "✓ Approve the research reports" : "✓ Approve the brand guides";
+              })()}
             </button>
-            <p className="mt-1 text-xs text-soft">{fr ? "À cliquer une fois les guides (EN et FR) révisés et approuvés : la tâche est terminée." : "Click once the guides (EN and FR) have been reviewed and approved: the task is completed."}</p>
+            <p className="mt-1 text-xs text-soft">{fr ? "À cliquer une fois les documents (EN et FR) révisés et approuvés : la tâche est terminée." : "Click once the documents (EN and FR) have been reviewed and approved: the task is completed."}</p>
           </div>
         )}
 

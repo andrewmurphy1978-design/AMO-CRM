@@ -85,8 +85,14 @@ ${ctx}
    ONE Markdown table, one row per competitor (6 to 10 rows: direct and indirect), with exactly these columns in this order: Name | URL | Type | Offer | Pricing | Positioning | Strengths | Weaknesses | Tech and SEO notes | Source
    - Name: the competitor's official brand name, written the same way everywhere. URL: the full https:// address of its main site. Type: "Direct" or "Indirect". Source: the URL where you found the facts.
    ## Audience and search intent
-   Who searches, what they ask, what they compare (2 short paragraphs), then a bullet list of the 10 to 20 most important keywords or questions.
-   ## Design and UX patterns
+   Who searches, what they ask, what they compare (2 short paragraphs; the keywords go in the Keywords table below).
+   ## Keywords
+   ONE Markdown table of the 15 to 30 most important keywords and questions people search: Keyword | Intent | Volume (estimate or "unknown") | Difficulty (estimate or "unknown") | Priority (High, Medium or Low) | Source
+   ${c.tasks.some((t) => /blog|content plan/i.test(t)) ? `## Competitor blogs
+   ONE Markdown table, one row per competitor blog reviewed (at least 5): Competitor | Blog URL | Topics covered | Posting frequency | Formats | Gaps and opportunities | Source
+   ## Content plan
+   ONE Markdown table of 20 to 30 article ideas for the client's blog: # | Title | Target keyword | Format | Language | Priority | Notes
+   ` : ""}## Design and UX patterns
    Bullets: what the best competitors do well (pages, sections, calls to action), each naming the competitor.
    ## Gaps and differentiators
    Bullets: what the client can own.

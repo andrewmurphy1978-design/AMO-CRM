@@ -22,6 +22,9 @@ export const BRAND_ITEMS: BrandItem[] = [
 // Ticked by default when "Create a brand" is chosen and nothing was picked.
 export const DEFAULT_BRAND_ITEMS = ["logos", "colours", "fonts", "voice", "guide"];
 
+// The last task of the Research phase: done by hand (the Approve button) once the research reports are reviewed and approved.
+export const REVIEW_RESEARCH_TASK = "Review the research reports";
+
 // The last task of the Brand phase: done by hand (the Approve button) once the guides are reviewed and approved.
 export const REVIEW_BRAND_TASK = "Review the brand guides";
 
