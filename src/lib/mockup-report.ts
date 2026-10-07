@@ -292,7 +292,7 @@ export async function renderMockupPdf(input: { parts: Partial<MockupDoc>[]; lang
       sub(t.flows);
       bullets(b.flows);
     }
-    const imgs = input.images.filter((i) => i.type === b.type.toLowerCase()).slice(0, 8);
+    const imgs = input.images.filter((i) => i.type === b.type.toLowerCase()).slice(0, 3);
     if (imgs.length > 0) {
       sub(t.images);
       const cw = (CW - 12) / 2;
@@ -374,20 +374,30 @@ export async function renderMockupPdf(input: { parts: Partial<MockupDoc>[]; lang
   return pdf.save();
 }
 
-export async function finishMockupReport(db: PrismaClient, projectId: string, parts: { en: Partial<MockupDoc>[]; fr: Partial<MockupDoc>[] }): Promise<{ error?: string; fileNames?: string[] }> {
+// One language per call: laying out a PDF with its images is heavy, so each PDF gets its own request.
+export async function finishMockupReport(db: PrismaClient, projectId: string, lang: "en" | "fr", parts: Partial<MockupDoc>[]): Promise<{ error?: string; fileNames?: string[] }> {
   const p = await db.project.findUnique({ where: { id: projectId }, select: { name: true, contact: { select: { firstName: true, lastName: true, company: true } } } });
   if (!p) return { error: "Project not found." };
   const clientName = p.contact.company || [p.contact.firstName, p.contact.lastName].filter(Boolean).join(" ") || "Client";
-  const rows = await db.attachedFile.findMany({ where: { projectId, kind: "MOCKUP_SHOT" }, orderBy: { createdAt: "asc" }, take: 40, select: { name: true, mimeType: true, data: true } });
-  const images: MockupImage[] = rows.map((s) => ({ name: s.name, type: s.name.includes("/") ? s.name.split("/")[0].toLowerCase() : "", bytes: new Uint8Array(s.data as unknown as Uint8Array), kind: s.mimeType === "image/png" ? "png" : "jpg" }));
+  // At most 3 small images per mock-up (decoding a PNG is the heaviest part of the layout).
+  const all = await db.attachedFile.findMany({ where: { projectId, kind: "MOCKUP_SHOT", size: { lt: 450_000 } }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, mimeType: true } });
+  const perType = new Map<string, number>();
+  const picked = all.filter((s) => {
+    const type = s.name.includes("/") ? s.name.split("/")[0].toLowerCase() : "";
+    const n = perType.get(type) ?? 0;
+    perType.set(type, n + 1);
+    return n < 3;
+  });
+  const images: MockupImage[] = [];
+  for (const s of picked) {
+    const row = await db.attachedFile.findUnique({ where: { id: s.id }, select: { data: true } });
+    if (row) images.push({ name: s.name, type: s.name.includes("/") ? s.name.split("/")[0].toLowerCase() : "", bytes: new Uint8Array(row.data as unknown as Uint8Array), kind: s.mimeType === "image/png" ? "png" : "jpg" });
+  }
   const base = `${clientName}-${p.name}`.replace(/[^\w.-]+/g, "-");
-  const made: { lang: "en" | "fr"; name: string; bytes: Uint8Array }[] = [];
-  for (const lang of ["en", "fr"] as const) {
-    made.push({ lang, name: `Mockup-report-${base}-${lang === "en" ? "EN" : "FR"}.pdf`, bytes: await renderMockupPdf({ parts: parts[lang], lang, clientName, projectName: p.name, images }) });
-  }
-  await db.attachedFile.deleteMany({ where: { projectId, kind: "MOCKUP_PDF" } });
-  for (const m of made) {
-    await db.attachedFile.create({ data: { projectId, kind: "MOCKUP_PDF", name: m.name, mimeType: "application/pdf", size: m.bytes.length, data: m.bytes as never, uploadedByName: "AMO CRM", note: `${m.lang === "en" ? "English" : "French"} mock-up report, merged from the AI mock-up reports` } });
-  }
-  return { fileNames: made.map((m) => m.name) };
+  const suffix = lang === "en" ? "EN" : "FR";
+  const name = `Mockup-report-${base}-${suffix}.pdf`;
+  const bytes = await renderMockupPdf({ parts, lang, clientName, projectName: p.name, images });
+  await db.attachedFile.deleteMany({ where: { projectId, kind: "MOCKUP_PDF", name: { endsWith: `-${suffix}.pdf` } } });
+  await db.attachedFile.create({ data: { projectId, kind: "MOCKUP_PDF", name, mimeType: "application/pdf", size: bytes.length, data: bytes as never, uploadedByName: "AMO CRM", note: `${lang === "en" ? "English" : "French"} mock-up report, merged from the AI mock-up reports` } });
+  return { fileNames: [name] };
 }

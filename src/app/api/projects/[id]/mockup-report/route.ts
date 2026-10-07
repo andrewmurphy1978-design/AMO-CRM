@@ -30,8 +30,9 @@ async function handle(request: Request, params: Promise<{ id: string }>) {
     const res = await writeMockupPart({ ...src, lang: body.lang, part: body.part });
     return Response.json("error" in res ? { error: res.error } : { content: res });
   }
-  if (body.step === "finish" && body.parts) {
-    const res = await withScopedPrismaClient((db) => finishMockupReport(db, id, body.parts!));
+  if (body.step === "finish" && body.parts && (body.lang === "en" || body.lang === "fr")) {
+    const lang = body.lang;
+    const res = await withScopedPrismaClient((db) => finishMockupReport(db, id, lang, body.parts![lang]));
     revalidatePath(`/projects/${id}`);
     return Response.json(res);
   }

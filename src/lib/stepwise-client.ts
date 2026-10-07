@@ -6,7 +6,9 @@ export async function runStepwiseReport(
   url: string,
   fr: boolean,
   onProgress: (text: string) => void,
-  finishKey: "guides" | "parts"
+  finishKey: "guides" | "parts",
+  // Lay out one language per request (heavy PDFs): { step: "finish", lang, parts: { [lang]: ... } }
+  finishPerLang = false
 ): Promise<{ error?: string; fileNames?: string[] }> {
   type Reply = { error?: string; parts?: number; content?: Record<string, unknown>; fileNames?: string[] };
   const call = async (payload: object): Promise<Reply> => {
@@ -64,6 +66,16 @@ export async function runStepwiseReport(
 
   onProgress(fr ? "Mise en page des PDF…" : "Laying out the PDFs…");
   try {
+    if (finishPerLang) {
+      const names: string[] = [];
+      for (const lang of ["en", "fr"] as const) {
+        onProgress(`${fr ? "Mise en page des PDF" : "Laying out the PDFs"} ${lang === "en" ? "1" : "2"}/2…`);
+        const res = await call({ step: "finish", lang, [finishKey]: { [lang]: results[lang] } });
+        if (res.error) return { error: res.error };
+        names.push(...(res.fileNames ?? []));
+      }
+      return { fileNames: names };
+    }
     const res = await call({ step: "finish", [finishKey]: results });
     return res.error ? { error: res.error } : { fileNames: res.fileNames };
   } catch (e) {

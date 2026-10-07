@@ -63,7 +63,7 @@ export default function MockupCard({ projectId, reports, shots, pdfs, lang }: { 
   const mdReports = reports.filter((r) => /\.(md|markdown|txt)$/i.test(r.name));
   async function createReport() {
     setGen({ busy: true });
-    const res = await runStepwiseReport(`/api/projects/${projectId}/mockup-report`, fr, (progress) => setGen({ busy: true, progress }), "parts");
+    const res = await runStepwiseReport(`/api/projects/${projectId}/mockup-report`, fr, (progress) => setGen({ busy: true, progress }), "parts", true);
     if (res.error) setGen({ busy: false, error: res.error });
     else {
       setGen({ busy: false, done: fr ? `Rapports créés : ${(res.fileNames ?? []).join(", ")}.` : `Reports created: ${(res.fileNames ?? []).join(", ")}.` });
