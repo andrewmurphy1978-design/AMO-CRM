@@ -1,6 +1,6 @@
 "use server";
 
-import { onTaskDone } from "@/lib/task-schedule";
+import { onTaskDone, syncPhaseOfTask, syncPhaseStatus } from "@/lib/task-schedule";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -143,6 +143,8 @@ export async function updateTaskViaDialog(
     if (data.status === "DONE") {
       if (existing?.status !== "DONE") await onTaskDone(db, taskId);
       await advanceProjectPlan(db, projectId);
+    } else {
+      await syncPhaseOfTask(db, taskId); // a reopened task reopens its phase
     }
   });
 
@@ -291,6 +293,8 @@ export async function updateTask(
     if (data.status === "DONE") {
       if (existing?.status !== "DONE") await onTaskDone(db, taskId);
       await advanceProjectPlan(db, data.projectId);
+    } else {
+      await syncPhaseOfTask(db, taskId);
     }
 
     return existing?.projectId;
@@ -322,6 +326,8 @@ export async function toggleTaskStatus(taskId: string, projectId: string, done: 
     if (done) {
       await onTaskDone(db, taskId);
       await advanceProjectPlan(db, projectId);
+    } else {
+      await syncPhaseOfTask(db, taskId);
     }
   });
 
@@ -336,7 +342,11 @@ export async function deleteTask(taskId: string, projectId: string) {
   if (!session) throw new Error("Not authenticated");
 
   await removeTaskFromGoogle(taskId);
-  await withScopedPrismaClient((db) => db.task.delete({ where: { id: taskId } }));
+  await withScopedPrismaClient(async (db) => {
+    const t = await db.task.findUnique({ where: { id: taskId }, select: { phaseId: true } });
+    await db.task.delete({ where: { id: taskId } });
+    if (t?.phaseId) await syncPhaseStatus(db, t.phaseId); // deleting the last open task completes the phase
+  });
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/tasks");
 }

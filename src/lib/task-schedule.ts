@@ -32,7 +32,7 @@ export function phaseDates(start: Date, delayDays?: number | null) {
 
 // When a task is finished, the next task of its phase (the first one not done and not yet started)
 // starts that same moment, with its due date from its own delay.
-export async function onTaskDone(db: PrismaClient, taskId: string): Promise<void> {
+async function startNextTask(db: PrismaClient, taskId: string): Promise<void> {
   const done = await db.task.findUnique({ where: { id: taskId }, select: { phaseId: true, completedAt: true } });
   if (!done?.phaseId) return;
   const at = done.completedAt ?? new Date();
@@ -50,4 +50,33 @@ export async function onTaskDone(db: PrismaClient, taskId: string): Promise<void
     return;
   }
   await db.task.update({ where: { id: next.id }, data: { startDate: at, ...(next.delayDays != null && !next.dueDate ? { dueDate: addDays(at, next.delayDays) } : {}) } });
+}
+
+// When a task is finished: the next task starts (see above) and the phase is checked.
+export async function onTaskDone(db: PrismaClient, taskId: string): Promise<void> {
+  await startNextTask(db, taskId);
+  await syncPhaseOfTask(db, taskId);
+}
+
+// A phase follows its tasks: when the last task is done it becomes Completed (with its completion date) and the
+// next phase that isn't completed becomes Active (starting now); if a task of a completed phase is reopened,
+// the phase is Active again.
+export async function syncPhaseStatus(db: PrismaClient, phaseId: string): Promise<void> {
+  const phase = await db.projectPhase.findUnique({ where: { id: phaseId }, select: { id: true, projectId: true, order: true, status: true, tasks: { select: { status: true, completedAt: true } } } });
+  if (!phase || phase.tasks.length === 0) return;
+  const allDone = phase.tasks.every((t) => t.status === "DONE");
+  if (allDone && phase.status !== "COMPLETED") {
+    const last = phase.tasks.reduce<Date | null>((m, t) => (t.completedAt && (!m || t.completedAt > m) ? t.completedAt : m), null);
+    const at = last ?? new Date();
+    await db.projectPhase.update({ where: { id: phase.id }, data: { status: "COMPLETED", completedAt: at } });
+    const next = await db.projectPhase.findFirst({ where: { projectId: phase.projectId, order: { gt: phase.order }, NOT: { status: "COMPLETED" } }, orderBy: { order: "asc" }, select: { id: true, startDate: true } });
+    if (next) await db.projectPhase.update({ where: { id: next.id }, data: { status: "ACTIVE", ...(next.startDate ? {} : { startDate: at }) } });
+  } else if (!allDone && phase.status === "COMPLETED") {
+    await db.projectPhase.update({ where: { id: phase.id }, data: { status: "ACTIVE", completedAt: null } });
+  }
+}
+
+export async function syncPhaseOfTask(db: PrismaClient, taskId: string): Promise<void> {
+  const t = await db.task.findUnique({ where: { id: taskId }, select: { phaseId: true } });
+  if (t?.phaseId) await syncPhaseStatus(db, t.phaseId);
 }
