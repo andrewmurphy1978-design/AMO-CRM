@@ -99,8 +99,8 @@ export async function importResearchZip(db: PrismaClient, projectId: string, zip
     const ext = (e.name.split(".").pop() ?? "").toLowerCase();
     const mime = ext === "png" ? "image/png" : ext === "jpg" || ext === "jpeg" ? "image/jpeg" : null;
     if (!mime) continue;
-    if (e.data.length > 600_000) {
-      skipped.push(`${e.name} (over 600 KB)`);
+    if (e.data.length > 900_000) {
+      skipped.push(`${e.name} (over 900 KB)`);
       continue;
     }
     if (added >= 40) {

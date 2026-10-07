@@ -98,7 +98,8 @@ ${ctx}
    ONE Markdown table, one row per screenshot file: File | Competitor | Page | What it shows (the File is the exact file name inside research-assets.zip).
    ## Sources
    A numbered list of every URL used.
-2. research-assets.zip (only if you can capture or generate images): ONE zip of PNG files (never SVG, never links), each under 500 KB and at least 1200 px wide, named like competitor-name-page.png (for example acme-home.png, acme-pricing.png): the competitor's home page, pricing page and the best sections or calls to action. If you cannot produce real screenshots, do not invent any: leave the zip out and keep the Screenshots table as a list of what I should capture by hand.
+2. research-assets.zip: ONE zip of REAL screenshots of the competitors' pages. Take them yourself, now, WITHOUT waiting for me to ask or confirm: open each competitor's pages with your browser tool (in Claude: the Claude in Chrome extension, in a new tab; in ChatGPT: the agent / browse mode) and capture them (home page, pricing page, and the best sections or calls to action). Never invent or mock up a screenshot. If your browser tool is not available, say so in ONE line at the top of your reply, still deliver research-report.md, and keep the Screenshots table as a list of what I should capture by hand.
+   - Files: PNG (JPEG is accepted too if PNG is not possible; never SVG, WebP or links), each under 800 KB and at least 1200 px wide, named like competitor-name-page.png (for example acme-home.png, acme-pricing.png).
 Give me the file(s) to download, nothing else to copy and paste.
 
 ## Rules
@@ -123,7 +124,7 @@ ${list(c.brandWanted, "- logos, colour palette, fonts, brand voice and a brand g
    - Voice and tone: bullets such as "- Tone: ..." and "- Audience: ...", 5 attributes, a do/don't list and 3 sample sentences.
    - Start with a short summary and end with a "Brand guide contents" list (one topic per page of the PDF guide).
 2. brand-assets.zip: ONE zip with image FILES for EVERY section of the report, so that every section of the brand guide can show its own images. Real image files, not code and not links.
-   - File types: PNG for everything (the PDF guide can only use PNG or JPG): at least 1200 px wide for logos, banners and mock-ups, 256 x 256 px for icons, each file under 500 KB, transparent background where it makes sense. Also add the SVG version of every logo and icon.
+   - File types: PNG for everything (JPEG is accepted if you cannot make PNG, for example for photos; the PDF guide can only use PNG or JPEG, never WebP): at least 1200 px wide for logos, banners and mock-ups, 256 x 256 px for icons, each file under 500 KB, transparent background where it makes sense. Also add the SVG version of every logo and icon.
    - Folders and files (use exactly these folder names; every file is named in the matching section of brand-report.md):
      logos/ : logo-main-light.png, logo-main-dark.png, logo-horizontal-light.png, logo-horizontal-dark.png, logo-icon-light.png, logo-icon-dark.png (+ the .svg of each) and concept-a.png, concept-b.png, concept-c.png for the 3 concepts
      colours/ : palette.png, a swatch sheet showing every colour with its name and HEX code
