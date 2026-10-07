@@ -8,6 +8,15 @@ import { mockupInputFiles } from "@/lib/mockup-inputs";
 // GET /api/projects/<id>/mockup-inputs: everything gathered in the Brand and Research phases, as one .zip
 // to drag and drop into an AI chat together with the Mock-up prompt.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    return await build(params);
+  } catch (err) {
+    console.error("mockup inputs zip failed", err);
+    return new Response(`Could not build the zip: ${err instanceof Error ? err.message.slice(0, 200) : "unknown error"}`, { status: 500 });
+  }
+}
+
+async function build(params: Promise<{ id: string }>) {
   const session = await auth();
   if (!session) return new Response("Unauthorized", { status: 401 });
   const { id } = await params;
@@ -28,9 +37,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const readme =
     "# Inputs for the mock-ups\n\n" +
     "- brand/brand-card.md: the client's Brand card (colours, fonts, voice...), with brand/files/ holding the uploaded logos, icons and images\n" +
-    "- brand/reports/: the brand reports and the final brand guides (PDF)\n" +
-    "- research/reports/: the research reports and the final research reports (PDF): competitors, keywords, competitor blogs, content plan, recommendations\n" +
-    "- research/screenshots/: screenshots of the competitors' pages\n\n" +
+    "- brand/reports/: the brand reports\n" +
+    "- research/reports/: the research reports: competitors, keywords, competitor blogs, content plan, recommendations\n" +
+    "- research/screenshots/: some screenshots of the competitors' pages\n\n" +
     "Read ALL of it before designing: the mock-ups must follow the brand exactly and answer what the research found.\n";
   const zip = createZip([
     { name: "README.md", content: readme },
