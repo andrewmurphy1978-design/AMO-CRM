@@ -5,17 +5,19 @@ import { useRouter } from "next/navigation";
 import Card from "@/components/section-card";
 import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { deleteAttachedFile } from "@/actions/attached-files";
+import { runStepwiseReport } from "@/lib/stepwise-client";
 import type { FileRow } from "@/components/files-card";
 
 // The Mock-ups card: drop what the AI made (mockup-report.md and the mockup-assets.zip of PNG images). The CRM
 // ticks the "Build the … mock-up" tasks the files cover and shows the images by mock-up.
-export default function MockupCard({ projectId, reports, shots, lang }: { projectId: string; reports: FileRow[]; shots: { id: string; name: string }[]; lang: "en" | "fr" }) {
+export default function MockupCard({ projectId, reports, shots, pdfs, lang }: { projectId: string; reports: FileRow[]; shots: { id: string; name: string }[]; pdfs: FileRow[]; lang: "en" | "fr" }) {
   const fr = lang === "fr";
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [info, setInfo] = useState("");
+  const [gen, setGen] = useState<{ busy: boolean; progress?: string; error?: string; done?: string }>({ busy: false });
   const [pending, startTransition] = useTransition();
 
   async function upload(list: FileList | File[]) {
@@ -57,6 +59,17 @@ export default function MockupCard({ projectId, reports, shots, lang }: { projec
     router.refresh();
   }
   const drop = useFileDrop((files) => void upload(files), busy);
+
+  const mdReports = reports.filter((r) => /\.(md|markdown|txt)$/i.test(r.name));
+  async function createReport() {
+    setGen({ busy: true });
+    const res = await runStepwiseReport(`/api/projects/${projectId}/mockup-report`, fr, (progress) => setGen({ busy: true, progress }), "parts");
+    if (res.error) setGen({ busy: false, error: res.error });
+    else {
+      setGen({ busy: false, done: fr ? `Rapports créés : ${(res.fileNames ?? []).join(", ")}.` : `Reports created: ${(res.fileNames ?? []).join(", ")}.` });
+      router.refresh();
+    }
+  }
 
   // Images grouped by mock-up ("website/home-desktop.png" -> Website).
   const groups = new Map<string, { id: string; name: string }[]>();
@@ -127,6 +140,27 @@ export default function MockupCard({ projectId, reports, shots, lang }: { projec
           </div>
         </div>
       ))}
+
+      <div className="rounded-lg border border-card-border bg-field-bg p-3">
+        <button type="button" disabled={gen.busy || mdReports.length === 0} onClick={() => void createReport()} className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold shadow-sm disabled:opacity-60">
+          {gen.busy ? (gen.progress ?? "…") : fr ? "📄 Créer le rapport des maquettes (EN + FR)" : "📄 Create the mock-up report (EN + FR)"}
+        </button>
+        <p className="mt-1 text-xs text-soft">
+          {mdReports.length === 0
+            ? fr ? "Déposez au moins un rapport (.md) pour pouvoir créer le PDF." : "Drop at least one report (.md) to create the PDF."
+            : fr ? "L'IA met le rapport en forme en anglais et en français, avec vos images (environ 1 minute)." : "The AI lays the report out in English and in French, with your images (about a minute)."}
+        </p>
+        {gen.done && <p className="mt-1 text-xs text-emerald-700">{gen.done}</p>}
+        {gen.error && <p className="mt-1 text-xs text-red-600">{gen.error}</p>}
+        {pdfs.map((p) => (
+          <p key={p.id} className="mt-1 text-sm">
+            📕{" "}
+            <a href={`/api/files/${p.id}`} target="_blank" rel="noreferrer" className="font-medium text-emerald-700 hover:underline">
+              {p.name}
+            </a>
+          </p>
+        ))}
+      </div>
     </Card>
   );
 }

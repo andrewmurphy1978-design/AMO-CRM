@@ -218,7 +218,7 @@ export default async function ProjectDetailPage({
     const brandRows = project ? await loadBrandRows(db, project.contactId) : [];
     const fileRows = project ? await loadProjectFileRows(db, { id: project.id, name: project.name }) : [];
     const brandReports = project ? await loadBrandReports(db, project.contactId) : [];
-    const mockupCard = project ? await loadMockupCard(db, project.id) : { reports: [], shots: [] };
+    const mockupCard = project ? await loadMockupCard(db, project.id) : { reports: [], shots: [], pdfs: [] };
     const researchCard = project ? await loadResearchCard(db, project.id) : { reports: [], shots: [], pdfs: [] };
 
     return {
@@ -284,7 +284,7 @@ export default async function ProjectDetailPage({
   const hasResearch = project.phases.some((ph) => /(^|—\s*)research$/i.test(ph.name.trim())) || (Array.isArray(project.pendingPhases) && (project.pendingPhases as { name?: string }[]).some((p) => /(^|—\s*)research$/i.test((p.name ?? "").trim())));
   const hasMockup = project.phases.some((ph) => /(^|—\s*)mock-?up$/i.test(ph.name.trim())) || (Array.isArray(project.pendingPhases) && (project.pendingPhases as { name?: string }[]).some((p) => /(^|—\s*)mock-?up$/i.test((p.name ?? "").trim())));
   const mockupActive = Boolean(activePhase && /(^|—\s*)mock-?up$/i.test(activePhase.name.trim()));
-  const mockupEl = <MockupCard projectId={project.id} reports={mockupCard.reports} shots={mockupCard.shots} lang={lang} />;
+  const mockupEl = <MockupCard projectId={project.id} reports={mockupCard.reports} shots={mockupCard.shots} pdfs={mockupCard.pdfs} lang={lang} />;
   const researchActive = Boolean(activePhase && /(^|—\s*)research$/i.test(activePhase.name.trim()));
   const researchEl = <ResearchCard projectId={project.id} reports={researchCard.reports} shots={researchCard.shots} pdfs={researchCard.pdfs} lang={lang} />;
   const selectedPhase =

@@ -35,7 +35,7 @@ const toRow = (f: { id: string; name: string; mimeType: string; size: number; no
   note: f.note,
   uploadedByName: f.uploadedByName,
   createdAt: f.createdAt.toISOString(),
-  kind: f.kind === "BRAND_REPORT" ? "Brand report" : f.kind === "BRAND_PDF" ? "Brand guide (PDF)" : f.kind === "RESEARCH_REPORT" ? "Research report" : f.kind === "RESEARCH_PDF" ? "Research report (PDF)" : f.kind === "MOCKUP_REPORT" ? "Mock-up report" : f.uploadedByName === "Stripe" ? "Payment confirmation" : undefined,
+  kind: f.kind === "BRAND_REPORT" ? "Brand report" : f.kind === "BRAND_PDF" ? "Brand guide (PDF)" : f.kind === "RESEARCH_REPORT" ? "Research report" : f.kind === "RESEARCH_PDF" ? "Research report (PDF)" : f.kind === "MOCKUP_REPORT" ? "Mock-up report" : f.kind === "MOCKUP_PDF" ? "Mock-up report (PDF)" : f.uploadedByName === "Stripe" ? "Payment confirmation" : undefined,
   from,
 });
 
@@ -82,10 +82,11 @@ export async function loadResearchCard(db: PrismaClient, projectId: string): Pro
 }
 
 // The Mock-ups card: the AI mock-up reports and the images of their zip.
-export async function loadMockupCard(db: PrismaClient, projectId: string): Promise<{ reports: FileRow[]; shots: { id: string; name: string }[] }> {
-  const rows = await db.attachedFile.findMany({ where: { projectId, kind: { in: ["MOCKUP_REPORT", "MOCKUP_SHOT"] } }, orderBy: { createdAt: "asc" }, select: attachedSelect });
+export async function loadMockupCard(db: PrismaClient, projectId: string): Promise<{ reports: FileRow[]; shots: { id: string; name: string }[]; pdfs: FileRow[] }> {
+  const rows = await db.attachedFile.findMany({ where: { projectId, kind: { in: ["MOCKUP_REPORT", "MOCKUP_SHOT", "MOCKUP_PDF"] } }, orderBy: { createdAt: "asc" }, select: attachedSelect });
   return {
     reports: rows.filter((r) => r.kind === "MOCKUP_REPORT").map((r) => toRow(r)),
     shots: rows.filter((r) => r.kind === "MOCKUP_SHOT").map((r) => ({ id: r.id, name: r.name })),
+    pdfs: rows.filter((r) => r.kind === "MOCKUP_PDF").map((r) => toRow(r)),
   };
 }

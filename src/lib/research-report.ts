@@ -239,7 +239,7 @@ const T = {
 } as const;
 
 const EXTRA = new Set("œŒšŠžŽŸ€‘’“”„•–—…™".split(""));
-const ok = (t: string) => {
+export const ok = (t: string) => {
   let out = "";
   for (const ch of (t ?? "").replace(/ | /g, " ").replace(/[\r\t]/g, " ")) {
     const c = ch.codePointAt(0) ?? 0;
