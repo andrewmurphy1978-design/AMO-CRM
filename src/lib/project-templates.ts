@@ -675,7 +675,7 @@ export const DEFAULT_TEMPLATES: Record<string, TemplateConfig> = {
       {
         name: "Design",
         when: yes("mockups"),
-        tasks: [{ title: "Design mock-ups" }, { title: "Present mock-ups", when: yes("mockupApproval") }, { title: "Get mock-up approval ({approvalBy})", when: yes("mockupApproval") }],
+        tasks: [{ title: "Build mock-up" }, { title: "Present mock-up", when: yes("mockupApproval") }, { title: "Get mock-up approval ({approvalBy})", when: yes("mockupApproval") }],
       },
       {
         name: "Architecture & Setup",
@@ -1009,6 +1009,17 @@ export const TRAINING_PHASE_TASKS = [
   "Confirm the client is comfortable managing it",
 ];
 
+// The Mock-up phase is shared by every type of the project, and the types word its tasks differently
+// ("Design mock-ups" / "Present mock-ups" for an app, "Build mock-up" / "Present mock-up" for a website):
+// the same step must appear once, so the shared tasks are put in one wording before they are merged.
+function sharedTaskTitle(phaseKey: string, title: string): string {
+  if (phaseKey === "Research" && /^find competing (apps|sites|products|websites)/i.test(title)) return "Find competitors";
+  if (phaseKey !== "Mock-up") return title;
+  if (/^(design|build|create|make)\s+(the\s+)?mock-?ups?\b/i.test(title)) return "Build mock-up";
+  if (/^(present|show)\s+(the\s+)?mock-?ups?\b/i.test(title)) return "Present mock-up";
+  return title;
+}
+
 export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): ProjectPlan {
   const multi = inputs.length > 1;
   const shared = new Map<string, PlanPhase>();
@@ -1021,11 +1032,21 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
       const key = SHARED_NAMES[phase.name.trim().toLowerCase()];
       if (key) {
         const existing = shared.get(key);
-        if (!existing) shared.set(key, { ...phase, name: key, tasks: [...phase.tasks], delays: [...(phase.delays ?? [])] });
-        else
+        if (!existing) {
+          const tasks: string[] = [];
+          const delays: (number | null)[] = [];
           phase.tasks.forEach((t, i) => {
-            if (existing.tasks.includes(t)) return;
-            existing.tasks.push(t);
+            const title = sharedTaskTitle(key, t);
+            if (tasks.includes(title)) return;
+            tasks.push(title);
+            delays.push(phase.delays?.[i] ?? null);
+          });
+          shared.set(key, { ...phase, name: key, tasks, delays });
+        } else
+          phase.tasks.forEach((t, i) => {
+            const title = sharedTaskTitle(key, t);
+            if (existing.tasks.includes(title)) return;
+            existing.tasks.push(title);
             (existing.delays ??= []).push(phase.delays?.[i] ?? null);
           });
       } else {
