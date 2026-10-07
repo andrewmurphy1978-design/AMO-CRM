@@ -68,7 +68,8 @@ const brandBlock = (c: PromptContext) =>
 const lang = (c: PromptContext) => (c.languages.length ? c.languages.join(" and ") : c.clientLanguage === "fr" ? "French" : "English");
 
 export function buildPhasePrompt(kind: PhaseKind, c: PromptContext): string {
-  const intro = `You are working on the "${c.phaseName}" phase of a client project. Tasks of this phase:\n${list(c.tasks)}\n`;
+  const attached = c.brandZipAttached || c.inputs ? "READ THIS FIRST: this message is the complete task. The attached files (a .zip and/or .md files) are only INPUT material for it, not the task itself. Do NOT ask me what to do with them or what I want: unzip and read them, then carry out the task below straight away and deliver the files requested.\n\n" : "";
+  const intro = `${attached}You are working on the "${c.phaseName}" phase of a client project. Tasks of this phase:\n${list(c.tasks)}\n`;
   const ctx = contextBlock(c);
   switch (kind) {
     case "research":

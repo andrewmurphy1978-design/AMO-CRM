@@ -35,7 +35,7 @@ async function build(params: Promise<{ id: string }>) {
     built.rows.map((r) => `- ${r.category} | ${r.label}${r.value ? ` | ${isDataUri(r.value) ? `file: ${byId.get(r.id) ?? "(attached)"}` : r.value}` : ""}${r.note ? ` - ${r.note}` : ""}`).join("\n") +
     "\n";
   const readme =
-    "# Inputs for the mock-ups\n\n" +
+    "# Inputs for the mock-ups\n\nThese files are INPUT material for the task given in the chat message: they are not the task. Do not ask what to do with them; read them and carry out that task.\n\n" +
     "- brand/brand-card.md: the client's Brand card (colours, fonts, voice...), with brand/files/ holding the uploaded logos, icons and images\n" +
     "- brand/reports/: the brand reports\n" +
     "- research/reports/: the research reports: competitors, keywords, competitor blogs, content plan, recommendations\n" +

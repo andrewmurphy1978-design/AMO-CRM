@@ -10,14 +10,15 @@ export default function BrandZipLink({ url, count, fr }: { url: string; count: n
       draggable
       onDragStart={(e) => {
         const abs = new URL(url, window.location.origin).toString();
-        e.dataTransfer.setData("DownloadURL", `application/zip:brand-assets.zip:${abs}`);
+        const zipName = `${url.split("/").pop()}.zip`;
+        e.dataTransfer.setData("DownloadURL", `application/zip:${zipName}:${abs}`);
         e.dataTransfer.effectAllowed = "copy";
       }}
       className="mt-2 inline-flex items-center gap-2 rounded-md border border-dashed border-card-border bg-field-bg px-3 py-1.5 text-xs font-semibold text-ink hover:bg-black/5"
       title={fr ? "Glissez-déposez ce fichier dans l'IA avec le prompt" : "Drag and drop this file into the AI together with the prompt"}
     >
-      📦 brand-assets.zip ({count} {fr ? (count > 1 ? "fichiers" : "fichier") : count > 1 ? "files" : "file"})
-      <span className="font-normal text-soft">{fr ? "— glisser-déposer dans l'IA avec le prompt" : "— drag and drop into the AI with the prompt"}</span>
+      📦 {url.split("/").pop()}.zip ({count} {fr ? (count > 1 ? "fichiers" : "fichier") : count > 1 ? "files" : "file"})
+      <span className="font-normal text-soft">{fr ? "— à joindre au MÊME message que le prompt (collez le prompt, joignez le zip, puis envoyez)" : "— attach it to the SAME message as the prompt (paste the prompt, attach the zip, then send)"}</span>
     </a>
   );
 }
