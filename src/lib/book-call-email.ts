@@ -3,8 +3,9 @@ import { decryptSecret } from "@/lib/crypto";
 
 const CLAUDE_MODEL = "claude-sonnet-5-5";
 
-// The email that invites the client to a call where the brand guides, research reports and mock-ups are presented.
-export async function draftBookCallEmail(db: PrismaClient, projectId: string): Promise<{ to: string; subject: string; body: string } | { error: string }> {
+// kind "send": the call is booked, the reports and the approval form are attached.
+// kind "book": the email that invites the client to a call where the brand guides, research reports and mock-ups are presented.
+export async function draftBookCallEmail(db: PrismaClient, projectId: string, kind: "book" | "send" = "book"): Promise<{ to: string; subject: string; body: string } | { error: string }> {
   const project = await db.project.findUnique({ where: { id: projectId }, include: { contact: true, phases: { select: { name: true } } } });
   if (!project) return { error: "Project not found." };
   const setting = await db.integrationSetting.findUnique({ where: { provider: "anthropic" } });
@@ -29,9 +30,12 @@ export async function draftBookCallEmail(db: PrismaClient, projectId: string): P
   const building = [...new Set(keys.map((k) => WORK[k] ?? k.toLowerCase().replace(/_/g, " ")))];
   const next = building.length ? `the building of the ${building.join(", ").replace(/, ([^,]*)$/, " and $1")}` : "the building phase";
 
+  const purpose = kind === "send"
+    ? `Purpose: the call to present the work on the project "${project.name}" is booked. Andrew attaches ${items.length ? items.join(", ") : "the deliverables"} and an approval and signature page. He asks the client to review the documents before the call and, once they are happy with them, to sign the approval page and send it back (printed and scanned, or signed digitally). Do NOT mention the 2nd instalment, an invoice, payments or prices.`
+    : null;
   const prompt = `Write a short, warm, professional email from Andrew Murphy (AMO, a consultant who builds websites, funnels, blogs and apps and deploys AI tools) to ${first || "the client"}${c.company ? ` (${c.company})` : ""}.
-Purpose: the work on the project "${project.name}" is ready, and Andrew wants to book a call to present ${items.length ? items.join(", ") : "the deliverables"} and get the client's approval, so that the next step, ${next}, can start. Do NOT mention the 2nd instalment, an invoice, payments or prices: Andrew raises that himself during the call.
-Write it in ${fr ? "French (Québec, use \"vous\")" : "English"}. 120 to 170 words in 3 short paragraphs (greeting and context, what to review together, the call request), then the signature. ${bookingUrl ? "Invite them to book the call themselves: put the exact text {{BOOKING_URL}} alone on its own line (it is replaced by the real booking link), and say they can also reply with times that suit them." : "Invite them to reply with 2 or 3 times that suit them."} Do not invent a link, prices or dates. End with a short closing word (such as "Cordialement," or "Best regards,") and do not write a name: the email signature is added automatically.
+${purpose ?? `Purpose: the work on the project "${project.name}" is ready, and Andrew wants to book a call to present ${items.length ? items.join(", ") : "the deliverables"} and get the client's approval, so that the next step, ${next}, can start. Do NOT mention the 2nd instalment, an invoice, payments or prices: Andrew raises that himself during the call.`}
+Write it in ${fr ? "French (Québec, use \"vous\")" : "English"}. 120 to 170 words in 3 short paragraphs (greeting and context, what is attached or to be reviewed together, what you ask them to do), then the signature. ${kind === "send" ? "Do not ask them to book a call: it is already booked." : bookingUrl ? "Invite them to book the call themselves: put the exact text {{BOOKING_URL}} alone on its own line (it is replaced by the real booking link), and say they can also reply with times that suit them." : "Invite them to reply with 2 or 3 times that suit them."} Do not invent a link, prices or dates. End with a short closing word (such as "Cordialement," or "Best regards,") and do not write a name: the email signature is added automatically.
 Reply in exactly this plain-text format, nothing else (no code fence, no JSON, no quotes around the text):
 Subject: <the subject line>
 

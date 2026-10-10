@@ -280,6 +280,7 @@ export default async function ProjectDetailPage({
       items={brandRows}
       reports={brandReports}
       expanded={brandActive}
+      projectId={project.id}
     />
   );
   // The Research card (drop the AIs' research reports, merge them into the final report): right under the

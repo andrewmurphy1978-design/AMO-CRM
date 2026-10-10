@@ -26,6 +26,7 @@ export const DEFAULT_BRAND_ITEMS = ["logos", "colours", "fonts", "voice", "guide
 // The last task of the Mock-up phase (Approve button), the first and last of the presentation phase.
 export const REVIEW_MOCKUP_TASK = "Review mock-ups";
 export const BOOK_CALL_TASK = "Send email to book a call";
+export const SEND_REPORTS_TASK = "Send the reports and the approval form";
 export const PRESENT_PHASE = "Present the reports";
 
 export const REVIEW_RESEARCH_TASK = "Review the research reports";

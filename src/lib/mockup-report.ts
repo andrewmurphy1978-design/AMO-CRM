@@ -3,6 +3,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
 import { mockupSections } from "@/lib/mockup-files";
 import { ok } from "@/lib/research-report";
+import { createApprovalForm } from "@/lib/approval-form";
 
 // The final mock-up report: the AI report(s) merged into one designed PDF, in English and in French. Written in
 // small parallel parts (see the brand guide): part 0 = overview, tokens, notes and checklist; then one part per mock-up.
@@ -399,5 +400,7 @@ export async function finishMockupReport(db: PrismaClient, projectId: string, la
   const bytes = await renderMockupPdf({ parts, lang, clientName, projectName: p.name, images });
   await db.attachedFile.deleteMany({ where: { projectId, kind: "MOCKUP_PDF", name: { endsWith: `-${suffix}.pdf` } } });
   await db.attachedFile.create({ data: { projectId, kind: "MOCKUP_PDF", name, mimeType: "application/pdf", size: bytes.length, data: bytes as never, uploadedByName: "AMO CRM", note: `${lang === "en" ? "English" : "French"} mock-up report, merged from the AI mock-up reports` } });
-  return { fileNames: [name] };
+  // Once the mock-ups are done, the approval / signature page for everything presented is made too.
+  const approval = await createApprovalForm(db, projectId).catch(() => null);
+  return { fileNames: approval ? [name, approval] : [name] };
 }

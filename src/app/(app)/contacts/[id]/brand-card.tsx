@@ -4,6 +4,7 @@ import { BRAND_CATEGORIES, isKept, mimeIsImage, safeBrandUrl, safeHexColor, type
 import { saveContactBrand } from "@/actions/contact-brand";
 import BrandDialog from "./brand-dialog";
 import BrandReportDrop from "./brand-report-drop";
+import BrandGuideButton from "./brand-guide-button";
 import CardCollapse from "@/components/card-collapse";
 import type { FileRow } from "@/components/files-card";
 
@@ -16,7 +17,7 @@ export interface BrandItemRow extends BrandItemInput {
 
 // A contact's Brand card: logos, colours, fonts, voice, photos, components,
 // icons, graphics and charts — shown by category, edited in one dialog.
-export function BrandCard({ contactId, items, lang, reports = [], expanded = true }: { contactId: string; items: BrandItemRow[]; lang: Lang; reports?: FileRow[]; expanded?: boolean }) {
+export function BrandCard({ contactId, items, lang, reports = [], expanded = true, projectId }: { contactId: string; items: BrandItemRow[]; lang: Lang; reports?: FileRow[]; expanded?: boolean; projectId?: string }) {
   const fr = lang === "fr";
   const total = items.length;
 
@@ -34,6 +35,7 @@ export function BrandCard({ contactId, items, lang, reports = [], expanded = tru
     >
       <CardCollapse key={String(expanded)} fr={fr} defaultOpen={expanded}>
       <BrandReportDrop contactId={contactId} reports={reports} fr={fr} />
+      {projectId && <BrandGuideButton projectId={projectId} hasReport={reports.some((r) => /\.(md|markdown|txt)$/i.test(r.name))} fr={fr} />}
       {total === 0 ? (
         <p className="text-sm text-soft">{fr ? "Aucun élément de marque pour le moment." : "No brand assets yet."}</p>
       ) : (

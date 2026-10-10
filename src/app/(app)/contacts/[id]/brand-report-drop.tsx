@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { deleteAttachedFile } from "@/actions/attached-files";
+import FinalReports from "@/components/final-reports";
 import type { FileRow } from "@/components/files-card";
 
 // The Brand card's "AI report" drop zone: drop the report the AI wrote for the brand (a PDF, Markdown,
@@ -63,11 +64,10 @@ export default function BrandReportDrop({ contactId, reports, fr, part = "drop" 
   const isPdf = (r: FileRow) => /\.pdf$/i.test(r.name);
   const shown = reports.filter((r) => (part === "guides" ? isPdf(r) : !isPdf(r)));
 
-  if (part === "guides" && shown.length === 0) return null;
+  if (part === "guides") return <FinalReports title={fr ? "Guides de marque" : "Brand guides"} files={shown} fr={fr} />;
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-soft">{part === "guides" ? (fr ? "Guides de marque" : "Brand guides") : fr ? "Rapport de l'IA" : "AI report"}</p>
-      {part === "drop" && (
+      <p className="text-xs font-semibold uppercase tracking-wide text-soft">{fr ? "Rapport de l'IA" : "AI report"}</p>
       <div {...drop.bind} className={`mt-1.5 rounded-lg border-2 border-dashed border-card-border p-3 text-center text-xs text-soft ${drop.dragging ? DROP_RING : ""}`}>
         {busy ? (
           fr ? "Téléversement…" : "Uploading…"
@@ -81,7 +81,6 @@ export default function BrandReportDrop({ contactId, reports, fr, part = "drop" 
         )}
         <input ref={input} type="file" multiple className="hidden" onChange={(e) => e.target.files && void upload(e.target.files)} />
       </div>
-      )}
       {message && <p className="mt-1 text-xs text-red-600">{message}</p>}
       {info && <p className="mt-1 text-xs text-emerald-700">{info}</p>}
       {shown.length > 0 && (

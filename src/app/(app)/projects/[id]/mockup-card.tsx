@@ -6,6 +6,7 @@ import Card from "@/components/section-card";
 import { useFileDrop, DROP_RING } from "@/components/use-file-drop";
 import { deleteAttachedFile } from "@/actions/attached-files";
 import CardCollapse from "@/components/card-collapse";
+import FinalReports from "@/components/final-reports";
 import { runStepwiseReport } from "@/lib/stepwise-client";
 import type { FileRow } from "@/components/files-card";
 
@@ -196,19 +197,7 @@ export default function MockupCard({ projectId, reports, shots, pdfs, lang, acti
           {gen.error && <p className="mt-1 text-xs text-red-600">{gen.error}</p>}
         </div>
       </CardCollapse>
-      {pdfs.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-soft">{fr ? "Rapports finaux" : "Final reports"}</p>
-          {pdfs.map((p) => (
-            <p key={p.id} className="mt-1 text-sm">
-              📕{" "}
-              <a href={`/api/files/${p.id}`} target="_blank" rel="noreferrer" className="font-medium text-emerald-700 hover:underline">
-                {p.name}
-              </a>
-            </p>
-          ))}
-        </div>
-      )}
+      <FinalReports title={fr ? "Rapports finaux" : "Final reports"} files={pdfs} fr={fr} />
     </Card>
   );
 }

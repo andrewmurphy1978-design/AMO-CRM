@@ -234,7 +234,7 @@ export function secondInstalmentPhase(): PhaseTpl {
   return {
     name: PRESENT_PHASE,
     stage: "PLANNING",
-    tasks: [{ title: BOOK_CALL_TASK }, { title: "Send the 2nd instalment invoice" }, { title: "Await the 2nd instalment payment" }],
+    tasks: [{ title: BOOK_CALL_TASK }, { title: SEND_REPORTS_TASK }, { title: "Send the 2nd instalment invoice" }, { title: "Await the 2nd instalment payment" }],
   };
 }
 
@@ -947,7 +947,7 @@ export function defaultTemplate(type: string): TemplateConfig {
 
 // ---- multi-type projects ----------------------------------------------------
 
-import { BOOK_CALL_TASK, PRESENT_PHASE, REVIEW_BRAND_TASK, REVIEW_MOCKUP_TASK, REVIEW_RESEARCH_TASK, brandPhaseTasks } from "@/lib/brand-items";
+import { BOOK_CALL_TASK, SEND_REPORTS_TASK, PRESENT_PHASE, REVIEW_BRAND_TASK, REVIEW_MOCKUP_TASK, REVIEW_RESEARCH_TASK, brandPhaseTasks } from "@/lib/brand-items";
 
 // The Brand question is a project setting (General Info), not part of a type's details:
 // earlier versions put a "brand" Yes/No in the details, which is dropped here.
@@ -1094,7 +1094,7 @@ export function buildMultiPlan(inputs: TypeInput[], options: PlanOptions = {}): 
 
   // "Present the reports and mock-ups": first the email to book the call, then everything that is presented
   // and approved (brand guides, research reports, each mock-up), then the 2nd instalment.
-  const presentTasks: string[] = [BOOK_CALL_TASK];
+  const presentTasks: string[] = [BOOK_CALL_TASK, SEND_REPORTS_TASK];
   if (brand) presentTasks.push("Present the brand guides", "Get approval of the brand guides");
   if (shared.has("Research")) presentTasks.push("Present the research reports", "Get approval of the research reports");
   for (const m of mockups) {

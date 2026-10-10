@@ -290,7 +290,7 @@ export default function TaskDialog({
           </div>
         )}
 
-        {/^(send email to book a call|envoyer un courriel pour réserver un appel)/i.test(title) && projectId && (
+        {/^(send email to book a call|envoyer un courriel pour réserver un appel|send the reports and the approval form|envoyer les rapports et le formulaire d'approbation)/i.test(title) && projectId && (
           <div className="mt-3 rounded-lg border border-card-border bg-field-bg p-3">
             <button
               type="button"
@@ -298,7 +298,7 @@ export default function TaskDialog({
               onClick={async () => {
                 setMail((m) => ({ ...m, busy: true, error: undefined }));
                 try {
-                  const res = await fetch(`/api/projects/${projectId}/book-call-email`, { method: "POST" });
+                  const res = await fetch(`/api/projects/${projectId}/book-call-email`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind: /reports|rapports/i.test(title) ? "send" : "book" }) });
                   const data = (await res.json()) as { error?: string; to?: string; subject?: string; body?: string };
                   if (data.error) setMail((m) => ({ ...m, busy: false, error: data.error }));
                   else setMail({ busy: false, to: data.to ?? "", subject: data.subject ?? "", body: data.body ?? "" });
@@ -324,6 +324,16 @@ export default function TaskDialog({
                         if (!target) return setMail((m) => ({ ...m, error: fr ? "Aucune boîte courriel connectée." : "No mailbox is connected." }));
                         target.message.subject = mail.subject;
                         const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        // The "send the reports" email carries the PDFs (the client's language only) and the approval form.
+                        if (/reports|rapports/i.test(title)) {
+                          try {
+                            const b = (await (await fetch(`/api/projects/${projectId}/reports-bundle`)).json()) as { attachments?: { filename: string; mimeType: string; base64: string }[]; error?: string };
+                            if (b.attachments?.length) target.initialAttachments = b.attachments;
+                            else return setMail((m) => ({ ...m, error: b.error ?? (fr ? "Aucun rapport PDF à joindre : créez d'abord les rapports." : "No report PDFs to attach: create the reports first.") }));
+                          } catch {
+                            return setMail((m) => ({ ...m, error: fr ? "Impossible de charger les rapports." : "Couldn't load the reports." }));
+                          }
+                        }
                         target.initialHtml = mail.body.split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("<p><br></p>");
                         setCompose(target);
                       }}
@@ -444,7 +454,7 @@ export default function TaskDialog({
         target={compose}
         onClose={() => setCompose(null)}
         onSent={() => {
-          // The email is out: the "Send email to book a call" task is done.
+          // The email is out: the task is done.
           setCompose(null);
           setStatus("DONE");
           save({ status: "DONE" });
