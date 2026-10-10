@@ -16,6 +16,8 @@ export interface TaskCardItem {
   priority: TaskDialogValues["priority"];
   dueDate: string | null; // ISO
   assignee: { name: string } | null;
+  assigneeIds: string[];
+  supervisorId: string | null;
   // Set on a phase's first task when the phase has an AI prompt (research, brand, mock-up, builds).
   aiPhaseId?: string | null;
   // Everything the edit dialog needs, as plain form values.
@@ -44,12 +46,14 @@ export default function TasksCard({
   users,
   phases,
   lang,
+  currentUserId,
 }: {
   projectId: string;
   tasks: TaskCardItem[];
   users: { id: string; name: string }[];
   phases: { id: string; name: string }[];
   lang: Lang;
+  currentUserId?: string;
 }) {
   const t = getDict(lang);
   const router = useRouter();
@@ -67,7 +71,8 @@ export default function TasksCard({
   const row = (task: TaskCardItem) => (
     <TaskRow
       key={task.id}
-      task={{ id: task.id, title: task.title, status: task.status, priority: task.priority, dueDate: task.dueDate ? new Date(task.dueDate) : null, assignee: task.assignee }}
+      task={{ id: task.id, title: task.title, status: task.status, priority: task.priority, dueDate: task.dueDate ? new Date(task.dueDate) : null, completedDate: task.values.completedDate ?? null, assignee: task.assignee, assigneeIds: task.assigneeIds, supervisorId: task.supervisorId }}
+      currentUserId={currentUserId}
       projectId={projectId}
       lang={lang}
       onEdit={() => show(task)}
@@ -103,11 +108,16 @@ export default function TasksCard({
         <p className="text-sm text-soft">{t.projectDetail.noTasksYet}</p>
       ) : (
         <>
-          <ul className="divide-y divide-card-border">{open.map(row)}</ul>
+          <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-soft">
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "rgb(14 165 233)" }} />{lang === "fr" ? "Assignée à moi" : "Assigned to me"}</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "rgb(139 92 246)" }} />{lang === "fr" ? "Je supervise" : "I supervise"}</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "linear-gradient(90deg, rgb(14 165 233), rgb(139 92 246))" }} />{lang === "fr" ? "Les deux" : "Both"}</span>
+          </div>
+          <ul className="space-y-1">{open.map(row)}</ul>
           {done.length > 0 && (
             <details className="mt-1">
               <summary className="cursor-pointer text-xs font-medium text-soft">{t.projectDetail.completed(done.length)}</summary>
-              <ul className="mt-2 divide-y divide-card-border">{done.map(row)}</ul>
+              <ul className="mt-2 space-y-1">{done.map(row)}</ul>
             </details>
           )}
         </>

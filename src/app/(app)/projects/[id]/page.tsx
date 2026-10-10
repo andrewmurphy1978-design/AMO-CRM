@@ -270,6 +270,8 @@ export default async function ProjectDetailPage({
   };
   const activePhase = project.phases.find((ph) => !phaseDone(ph)) ?? project.phases[project.phases.length - 1] ?? null;
   // The client's Brand card: at the bottom, but right under the Phases card while the Brand phase is the active one.
+  // "Present the reports and mock-ups": all three cards (Brand, Research, Mock-up) sit right under the Phases card.
+  const presentActive = Boolean(activePhase && /^(present the reports and mock-ups|2nd instalment)$/i.test(activePhase.name.trim()));
   const brandActive = Boolean(activePhase && /(^|—\s*)brand$/i.test(activePhase.name.trim()));
   const brandCard = (
     <BrandCard
@@ -388,6 +390,8 @@ export default async function ProjectDetailPage({
     status: task.status,
     priority: task.priority,
     dueDate: task.dueDate ? task.dueDate.toISOString() : null,
+    assigneeIds: task.assigneeIds.length > 0 ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [],
+    supervisorId: task.supervisorId ?? null,
     assignee: (() => {
       const ids = task.assigneeIds.length > 0 ? task.assigneeIds : task.assigneeId ? [task.assigneeId] : [];
       const names = ids.map((uid) => users.find((u) => u.id === uid)?.name).filter(Boolean);
@@ -634,7 +638,6 @@ export default async function ProjectDetailPage({
           {(() => {
             const own = project.tasks.filter((tk) => tk.phaseId === activePhase.id);
             const done = own.filter((tk) => tk.status === "DONE").length;
-            const open = own.filter((tk) => tk.status !== "DONE").slice(0, 4);
             const pct = own.length > 0 ? Math.round((done / own.length) * 100) : 0;
             const nextUp = Array.isArray(project.pendingPhases) ? String(((project.pendingPhases as { name?: string }[])[0]?.name ?? "")) : "";
             return (
@@ -659,13 +662,6 @@ export default async function ProjectDetailPage({
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-black/5">
                     <div className="h-full rounded-full amo-card-accent" style={{ width: `${pct}%` }} />
                   </div>
-                  {open.length > 0 && (
-                    <ul className="mt-2 space-y-0.5 text-sm text-ink">
-                      {open.map((tk) => (
-                        <li key={tk.id}>• {tk.title}</li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
               </div>
             );
@@ -676,11 +672,11 @@ export default async function ProjectDetailPage({
           />
 
 
-          {brandActive && brandCard}
+          {(brandActive || presentActive) && brandCard}
 
-          {researchActive && researchEl}
+          {(researchActive || (presentActive && hasResearch)) && researchEl}
 
-          {mockupActive && mockupEl}
+          {(mockupActive || (presentActive && hasMockup)) && mockupEl}
 
           <Card
             color="general"
@@ -890,11 +886,11 @@ export default async function ProjectDetailPage({
 
           <DomainsCard contact={project.contact} lang={lang} />
 
-          {!brandActive && brandCard}
+          {!brandActive && !presentActive && brandCard}
 
-          {hasResearch && !researchActive && researchEl}
+          {hasResearch && !researchActive && !presentActive && researchEl}
 
-          {hasMockup && !mockupActive && mockupEl}
+          {hasMockup && !mockupActive && !presentActive && mockupEl}
         </div>
 
         <div className="flex min-w-0 flex-col gap-3 sm:gap-6">
@@ -905,6 +901,7 @@ export default async function ProjectDetailPage({
             users={users}
             phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
             lang={lang}
+            currentUserId={session?.user.id}
           />
           </div>
 
