@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { setFolderPath } from "@/actions/local-folders";
+
+// A phone or tablet (touch device): clicking a folder does nothing there.
+const isMobile = () => typeof navigator !== "undefined" && (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)));
 
 const LABEL = "text-xs font-semibold uppercase tracking-wide text-soft";
 
@@ -14,6 +18,7 @@ export default function FolderField({ kind, id, path, created, lang }: { kind: "
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(path ?? "");
   const [copied, setCopied] = useState(false);
+  const [hint, setHint] = useState(false);
   const [pending, startTransition] = useTransition();
 
   return (
@@ -47,7 +52,22 @@ export default function FolderField({ kind, id, path, created, lang }: { kind: "
               <span>📁</span>
               <button
                 type="button"
-                title={fr ? "Cliquer pour copier le chemin" : "Click to copy the path"}
+                title={fr ? "Cliquer pour ouvrir le dossier" : "Click to open the folder"}
+                onClick={() => {
+                  // No effect on a phone or tablet. On a computer the folder opens in its file manager
+                  // (through the amo-folder:// link installed from Settings > Local files).
+                  if (isMobile()) return;
+                  window.location.href = `amo-folder://open?path=${encodeURIComponent(path).replace(/'/g, "%27")}`;
+                  setHint(true);
+                  setTimeout(() => setHint(false), 7000);
+                }}
+                className="min-w-0 break-all text-left font-mono text-xs hover:underline"
+              >
+                {path}
+              </button>
+              <button
+                type="button"
+                title={fr ? "Copier le chemin" : "Copy the path"}
                 onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(path);
@@ -57,10 +77,18 @@ export default function FolderField({ kind, id, path, created, lang }: { kind: "
                     /* clipboard unavailable */
                   }
                 }}
-                className="min-w-0 break-all text-left font-mono text-xs hover:underline"
+                className="text-xs text-soft hover:underline"
               >
-                {path}
+                {fr ? "Copier" : "Copy"}
               </button>
+              {hint && !isMobile() && (
+                <span className="text-xs text-soft">
+                  {fr ? "Rien ne s'ouvre ? Installez l'ouverture des dossiers dans " : "Nothing opened? Install folder opening in "}
+                  <Link href="/settings" className="font-semibold text-emerald-700 hover:underline">
+                    {fr ? "Paramètres" : "Settings"}
+                  </Link>
+                </span>
+              )}
               {copied && <span className="text-xs text-emerald-700">{fr ? "Copié" : "Copied"}</span>}
               <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${created ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
                 {created ? (fr ? "créé sur l'ordinateur" : "created on the computer") : fr ? "pas encore créé" : "not created yet"}

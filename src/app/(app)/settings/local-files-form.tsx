@@ -66,6 +66,23 @@ export default function LocalFilesForm({ root, lang }: { root: string | null; la
         )}
         {info && <p className="mt-2 text-xs text-emerald-700">{info}</p>}
       </div>
+
+      <div className="rounded-lg border border-card-border bg-field-bg p-3">
+        <p className={LABEL}>{fr ? "Ouvrir les dossiers depuis le CRM" : "Open folders from the CRM"}</p>
+        <p className="mt-1 text-xs text-soft">
+          {fr
+            ? "Un clic sur un lien Dossier ouvre ce dossier dans l'Explorateur (Windows) ou le gestionnaire de fichiers (Linux). Une page web ne peut pas le faire seule : installez une fois ce petit réglage sur l'ordinateur, puis cliquez « Ouvrir » si le navigateur le demande (cochez « toujours autoriser »). Il n'ouvre que des dossiers existants. Sur un téléphone, le clic n'a aucun effet. (Pas encore disponible sur Mac : le chemin peut être copié.)"
+            : "Clicking a Folder link opens that folder in File Explorer (Windows) or the file manager (Linux). A web page can't do that alone: install this small setting once on the computer, then click “Open” if the browser asks (tick “always allow”). It only opens folders that exist. On a phone, the click does nothing. (Not available on Mac yet: the path can be copied.)"}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <a href="/api/folder-opener?os=windows" download className="rounded-md border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5">
+            ⬇ Windows (.reg)
+          </a>
+          <a href="/api/folder-opener?os=linux" download className="rounded-md border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5">
+            ⬇ Linux (.sh)
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
