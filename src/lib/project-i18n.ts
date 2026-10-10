@@ -27,7 +27,7 @@ const EXACT: Record<string, string> = {
   "Review the brand guides": "Réviser les guides de marque",
   "Review the research reports": "Réviser les rapports de recherche",
   "Review mock-ups": "Réviser les maquettes", "Send email to book a call": "Envoyer un courriel pour réserver un appel",
-  "Present the reports and mock-ups": "Présenter les rapports et les maquettes", "Present the brand guides": "Présenter les guides de marque", "Get approval of the brand guides": "Obtenir l'approbation des guides de marque",
+  "Present the reports": "Présenter les rapports", "Present the reports and mock-ups": "Présenter les rapports et les maquettes", "Present the brand guides": "Présenter les guides de marque", "Get approval of the brand guides": "Obtenir l'approbation des guides de marque",
   "Present the research reports": "Présenter les rapports de recherche", "Get approval of the research reports": "Obtenir l'approbation des rapports de recherche",
   Yes: "Oui",
   No: "Non",

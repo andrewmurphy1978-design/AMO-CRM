@@ -271,7 +271,7 @@ export default async function ProjectDetailPage({
   const activePhase = project.phases.find((ph) => !phaseDone(ph)) ?? project.phases[project.phases.length - 1] ?? null;
   // The client's Brand card: at the bottom, but right under the Phases card while the Brand phase is the active one.
   // "Present the reports and mock-ups": all three cards (Brand, Research, Mock-up) sit right under the Phases card.
-  const presentActive = Boolean(activePhase && /^(present the reports and mock-ups|2nd instalment)$/i.test(activePhase.name.trim()));
+  const presentActive = Boolean(activePhase && /^(present the reports( and mock-ups)?|2nd instalment)$/i.test(activePhase.name.trim()));
   const brandActive = Boolean(activePhase && /(^|—\s*)brand$/i.test(activePhase.name.trim()));
   const brandCard = (
     <BrandCard

@@ -988,6 +988,7 @@ const SHARED_NAMES: Record<string, string> = {
   design: "Mock-up",
   "2nd instalment": "2nd Instalment",
   "present the reports and mock-ups": "2nd Instalment",
+  "present the reports": "2nd Instalment",
   presenting: "Presenting",
   deploying: "Deploying",
   "final payment": "Final Payment",
