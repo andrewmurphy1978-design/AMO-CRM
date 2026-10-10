@@ -324,7 +324,7 @@ export default function TaskDialog({
                         if (!target) return setMail((m) => ({ ...m, error: fr ? "Aucune boîte courriel connectée." : "No mailbox is connected." }));
                         target.message.subject = mail.subject;
                         const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                        target.initialHtml = mail.body.split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+                        target.initialHtml = mail.body.split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("<p><br></p>");
                         setCompose(target);
                       }}
                       className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"

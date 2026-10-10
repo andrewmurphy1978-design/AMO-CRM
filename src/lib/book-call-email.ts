@@ -10,6 +10,8 @@ export async function draftBookCallEmail(db: PrismaClient, projectId: string): P
   const setting = await db.integrationSetting.findUnique({ where: { provider: "anthropic" } });
   if (!setting?.apiKeyEncrypted) return { error: "No Anthropic API key configured: add one in Settings first." };
   const apiKey = await decryptSecret(setting.apiKeyEncrypted);
+  // The page where clients book a call (Settings > Billing).
+  const bookingUrl = (await db.billingSettings.findUnique({ where: { id: "singleton" }, select: { bookingUrl: true } }))?.bookingUrl?.trim() || null;
 
   const c = project.contact;
   const fr = (c.locale ?? "").toLowerCase().startsWith("fr");
@@ -21,9 +23,15 @@ export async function draftBookCallEmail(db: PrismaClient, projectId: string): P
     names.some((n) => n.includes("mock-up")) ? "the mock-ups" : "",
   ].filter(Boolean);
 
+  // What gets built next, from the project's types (the 2nd instalment is raised by Andrew during the call).
+  const WORK: Record<string, string> = { WEBSITE: "website", FUNNEL: "funnel", BLOG: "blog", APP: "app", NEWSLETTER: "newsletter" };
+  const keys = (project.types?.length ? project.types : [project.type]).filter(Boolean) as string[];
+  const building = [...new Set(keys.map((k) => WORK[k] ?? k.toLowerCase().replace(/_/g, " ")))];
+  const next = building.length ? `the building of the ${building.join(", ").replace(/, ([^,]*)$/, " and $1")}` : "the building phase";
+
   const prompt = `Write a short, warm, professional email from Andrew Murphy (AMO, a consultant who builds websites, funnels, blogs and apps and deploys AI tools) to ${first || "the client"}${c.company ? ` (${c.company})` : ""}.
-Purpose: the work on the project "${project.name}" is ready, and Andrew wants to book a call to present ${items.length ? items.join(", ") : "the deliverables"} and get approval before the next step (2nd instalment).
-Write it in ${fr ? "French (Québec, use \"vous\")" : "English"}. 120 to 170 words in 3 short paragraphs (greeting and context, what to review together, the call request), then the signature. Invite them to reply with 2 or 3 times that suit them, or to pick a slot; do not invent a booking link, prices or dates. Sign "Andrew Murphy".
+Purpose: the work on the project "${project.name}" is ready, and Andrew wants to book a call to present ${items.length ? items.join(", ") : "the deliverables"} and get the client's approval, so that the next step, ${next}, can start. Do NOT mention the 2nd instalment, an invoice, payments or prices: Andrew raises that himself during the call.
+Write it in ${fr ? "French (Québec, use \"vous\")" : "English"}. 120 to 170 words in 3 short paragraphs (greeting and context, what to review together, the call request), then the signature. ${bookingUrl ? "Invite them to book the call themselves: put the exact text {{BOOKING_URL}} alone on its own line (it is replaced by the real booking link), and say they can also reply with times that suit them." : "Invite them to reply with 2 or 3 times that suit them."} Do not invent a link, prices or dates. End with a short closing word (such as "Cordialement," or "Best regards,") and do not write a name: the email signature is added automatically.
 Reply in exactly this plain-text format, nothing else (no code fence, no JSON, no quotes around the text):
 Subject: <the subject line>
 
@@ -57,6 +65,8 @@ Subject: <the subject line>
       }
     }
     if (!subject || !body) return { error: "The AI's answer could not be read. Try again." };
+    // The booking link is put in by the CRM (never typed by the AI); without one the placeholder line is dropped.
+    body = bookingUrl ? body.replace(/\{\{\s*BOOKING_URL\s*\}\}/g, bookingUrl) : body.replace(/^.*\{\{\s*BOOKING_URL\s*\}\}.*\n?/gm, "");
     return { to: c.email ?? "", subject, body };
   } catch (e) {
     return { error: `Could not generate the email (${e instanceof Error ? e.message.slice(0, 100) : "unknown error"}).` };
