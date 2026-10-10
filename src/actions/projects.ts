@@ -1,7 +1,7 @@
 "use server";
 
 import { ensureProjectFolder } from "@/lib/local-folders";
-import { phaseDates, taskRows, taskWho } from "@/lib/task-schedule";
+import { phaseDates, syncTaskSupervisor, taskRows, taskWho } from "@/lib/task-schedule";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -461,6 +461,7 @@ export async function updateProject(
   // One shared client — the update and team-member resync would
   // otherwise each open their own connection.
   await withScopedPrismaClient(async (db) => {
+    const before = await db.project.findUnique({ where: { id: projectId }, select: { supervisorId: true, ownerId: true } });
     await db.project.update({
       where: { id: projectId },
       data: {
@@ -475,6 +476,7 @@ export async function updateProject(
         subscriptionEmail: String(formData.get("subscriptionEmail") ?? "").trim() || null,
       },
     });
+    await syncTaskSupervisor(db, projectId, before);
     await applyTypeChanges(db, projectId, data.types);
     await applyProjectSettings(db, projectId, readSettings(formData));
 
@@ -535,7 +537,7 @@ export async function updateProjectGeneral(
   const completedInput = String(formData.get("completedAt") ?? "");
 
   await withScopedPrismaClient(async (db) => {
-    const before = await db.project.findUnique({ where: { id: projectId }, select: { completedAt: true } });
+    const before = await db.project.findUnique({ where: { id: projectId }, select: { completedAt: true, supervisorId: true, ownerId: true } });
     const completedAt = completedInput && data.status === "COMPLETED" ? new Date(completedInput) : data.status === "COMPLETED" ? before?.completedAt ?? new Date() : null;
     await db.project.update({
       where: { id: projectId },
@@ -552,6 +554,7 @@ export async function updateProjectGeneral(
         subscriptionEmail: String(formData.get("subscriptionEmail") ?? "").trim() || null,
       },
     });
+    await syncTaskSupervisor(db, projectId, before);
     await applyTypeChanges(db, projectId, data.types);
     await applyProjectSettings(db, projectId, readSettings(formData));
     await db.projectTeamMember.deleteMany({ where: { projectId } });

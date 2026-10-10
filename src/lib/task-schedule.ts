@@ -21,6 +21,15 @@ export async function taskWho(db: PrismaClient, projectId: string): Promise<Task
   return { supervisorId: p?.supervisorId ?? p?.ownerId ?? null, assigneeIds: p?.teamMembers.map((m) => m.userId) ?? [] };
 }
 
+// The project's supervisor (else owner) changed: its tasks that are not completed follow.
+export async function syncTaskSupervisor(db: PrismaClient, projectId: string, before: { supervisorId: string | null; ownerId: string | null } | null): Promise<void> {
+  const now = await db.project.findUnique({ where: { id: projectId }, select: { supervisorId: true, ownerId: true } });
+  const was = before ? (before.supervisorId ?? before.ownerId) : null;
+  const is = now ? (now.supervisorId ?? now.ownerId) : null;
+  if (!is || is === was) return;
+  await db.task.updateMany({ where: { projectId, status: { not: "DONE" } }, data: { supervisorId: is } });
+}
+
 export function taskRows(projectId: string, phaseId: string, titles: string[], delays?: (number | null | undefined)[], start?: Date | null, who?: TaskWho) {
   const base = Date.now();
   return titles.map((title, i) => {
