@@ -7,6 +7,9 @@ import type { TaskDialogValues } from "@/actions/tasks";
 import { generatePhasePrompt } from "@/actions/phase-prompts";
 import BrandZipLink from "./brand-zip-link";
 import { CARD_COLORS } from "@/components/section-card";
+import { getDateLocale } from "@/lib/i18n/date-locale";
+import EmailComposeDialog, { type EmailComposeLabels, type EmailComposeTarget } from "../../email/email-compose-dialog";
+import { buildNewComposeTarget } from "../../contacts/[id]/contact-email-links";
 
 export type { TaskDialogValues };
 
@@ -22,6 +25,7 @@ export default function TaskDialog({
   onSave,
   lang,
   projectId,
+  emailing,
 }: {
   open: boolean;
   onClose: () => void;
@@ -31,6 +35,8 @@ export default function TaskDialog({
   onSave: (values: TaskDialogValues) => Promise<{ error?: string } | void>;
   lang: Lang;
   projectId?: string;
+  // Lets the generated email open in the CRM's own email composer.
+  emailing?: { defaultComposeSource: string | null; intlLocale: string; hour12: boolean; emailComposeLabels: EmailComposeLabels };
 }) {
   const t = getDict(lang);
   const [title, setTitle] = useState(initial.title);
@@ -48,6 +54,7 @@ export default function TaskDialog({
   const [generating, setGenerating] = useState(false);
   const [guide, setGuide] = useState<{ busy: boolean; message?: string; error?: string; progress?: string }>({ busy: false });
   const [copied, setCopied] = useState(false);
+  const [compose, setCompose] = useState<EmailComposeTarget | null>(null);
   const [mail, setMail] = useState<{ busy: boolean; to: string; subject: string; body: string; error?: string }>({ busy: false, to: "", subject: "", body: "" });
   const fr = lang === "fr";
   // The Proposal phase's tasks have no AI prompt: the proposal builder already has its own AI draft.
@@ -96,6 +103,7 @@ export default function TaskDialog({
   const LABEL = "block text-xs font-semibold uppercase tracking-wide text-soft";
 
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-card-border bg-card-bg shadow-xl"
@@ -308,9 +316,26 @@ export default function TaskDialog({
                 <input value={mail.subject} onChange={(e) => setMail((m) => ({ ...m, subject: e.target.value }))} className="w-full rounded-md border border-card-border bg-card-bg px-3 py-1.5 text-sm text-ink" />
                 <textarea value={mail.body} onChange={(e) => setMail((m) => ({ ...m, body: e.target.value }))} rows={9} className="w-full rounded-md border border-card-border bg-card-bg px-3 py-2 text-sm text-ink" />
                 <div className="flex flex-wrap gap-2">
-                  <a href={`mailto:${encodeURIComponent(mail.to)}?subject=${encodeURIComponent(mail.subject)}&body=${encodeURIComponent(mail.body)}`} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">
-                    {fr ? "Ouvrir dans mon courriel" : "Open in my email app"}
-                  </a>
+                  {emailing ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const target = await buildNewComposeTarget(mail.to, emailing.defaultComposeSource);
+                        if (!target) return setMail((m) => ({ ...m, error: fr ? "Aucune boîte courriel connectée." : "No mailbox is connected." }));
+                        target.message.subject = mail.subject;
+                        const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        target.initialHtml = mail.body.split(/\n{2,}/).map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+                        setCompose(target);
+                      }}
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
+                    >
+                      {fr ? "Ouvrir dans le courriel du CRM" : "Open in the CRM's email"}
+                    </button>
+                  ) : (
+                    <a href={`mailto:${encodeURIComponent(mail.to)}?subject=${encodeURIComponent(mail.subject)}&body=${encodeURIComponent(mail.body)}`} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700">
+                      {fr ? "Ouvrir dans mon courriel" : "Open in my email app"}
+                    </a>
+                  )}
                   <button
                     type="button"
                     onClick={() => void navigator.clipboard?.writeText(`${mail.subject}\n\n${mail.body}`).catch(() => undefined)}
@@ -414,5 +439,22 @@ export default function TaskDialog({
         </div>
       </div>
     </div>
+    {emailing && (
+      <EmailComposeDialog
+        target={compose}
+        onClose={() => setCompose(null)}
+        onSent={() => {
+          // The email is out: the "Send email to book a call" task is done.
+          setCompose(null);
+          setStatus("DONE");
+          save({ status: "DONE" });
+        }}
+        dateLocale={getDateLocale(lang)}
+        intlLocale={emailing.intlLocale}
+        hour12={emailing.hour12}
+        labels={emailing.emailComposeLabels}
+      />
+    )}
+    </>
   );
 }

@@ -23,7 +23,7 @@ export async function draftBookCallEmail(db: PrismaClient, projectId: string): P
 
   const prompt = `Write a short, warm, professional email from Andrew Murphy (AMO, a consultant who builds websites, funnels, blogs and apps and deploys AI tools) to ${first || "the client"}${c.company ? ` (${c.company})` : ""}.
 Purpose: the work on the project "${project.name}" is ready, and Andrew wants to book a call to present ${items.length ? items.join(", ") : "the deliverables"} and get approval before the next step (2nd instalment).
-Write it in ${fr ? "French (Québec, use \"vous\")" : "English"}. 90 to 140 words. Invite them to reply with 2 or 3 times that suit them, or to pick a slot; do not invent a booking link, prices or dates. Sign "Andrew Murphy".
+Write it in ${fr ? "French (Québec, use \"vous\")" : "English"}. 120 to 170 words in 3 short paragraphs (greeting and context, what to review together, the call request), then the signature. Invite them to reply with 2 or 3 times that suit them, or to pick a slot; do not invent a booking link, prices or dates. Sign "Andrew Murphy".
 Reply in exactly this plain-text format, nothing else (no code fence, no JSON, no quotes around the text):
 Subject: <the subject line>
 
@@ -33,12 +33,12 @@ Subject: <the subject line>
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 700, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 1500, messages: [{ role: "user", content: prompt }] }),
       signal: AbortSignal.timeout(60_000),
     });
     if (!res.ok) return { error: `The AI request failed (HTTP ${res.status}). Check the Anthropic API key in Settings and try again.` };
     const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-    const text = data.content?.find((x) => x.type === "text")?.text ?? "";
+    const text = (data.content ?? []).filter((x) => x.type === "text").map((x) => x.text ?? "").join("");
     const clean = text.replace(/^```[a-z]*\n?|```$/gim, "").trim();
     const m = /^\s*(?:subject|objet)\s*:\s*(.+?)\s*\n+([\s\S]+)$/i.exec(clean);
     let subject = m?.[1]?.trim().replace(/^["“]|["”]$/g, "");

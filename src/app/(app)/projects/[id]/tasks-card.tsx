@@ -47,6 +47,7 @@ export default function TasksCard({
   phases,
   lang,
   currentUserId,
+  emailing,
 }: {
   projectId: string;
   tasks: TaskCardItem[];
@@ -54,6 +55,7 @@ export default function TasksCard({
   phases: { id: string; name: string }[];
   lang: Lang;
   currentUserId?: string;
+  emailing?: React.ComponentProps<typeof TaskDialog>["emailing"];
 }) {
   const t = getDict(lang);
   const router = useRouter();
@@ -134,6 +136,7 @@ export default function TasksCard({
           users={users}
           phases={phases}
           projectId={projectId}
+          emailing={emailing}
           initial={dialog.task ? dialog.task.values : BLANK}
           onSave={async (values) => {
             const result = dialog.task ? await updateTaskViaDialog(dialog.task.id, projectId, values) : await createTaskViaDialog(projectId, values);

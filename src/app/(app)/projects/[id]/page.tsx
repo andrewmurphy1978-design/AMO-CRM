@@ -903,6 +903,7 @@ export default async function ProjectDetailPage({
             phases={project.phases.map((p) => ({ id: p.id, name: p.name }))}
             lang={lang}
             currentUserId={session?.user.id}
+            emailing={emailing}
           />
           </div>
 
