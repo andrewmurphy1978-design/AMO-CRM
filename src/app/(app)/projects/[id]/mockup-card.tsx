@@ -11,7 +11,7 @@ import type { FileRow } from "@/components/files-card";
 
 // The Mock-ups card: drop what the AI made (mockup-report.md and the mockup-assets.zip of PNG images). The CRM
 // ticks the "Build the … mock-up" tasks the files cover and shows the images by mock-up.
-export default function MockupCard({ projectId, reports, shots, pdfs, lang }: { projectId: string; reports: FileRow[]; shots: { id: string; name: string }[]; pdfs: FileRow[]; lang: "en" | "fr" }) {
+export default function MockupCard({ projectId, reports, shots, pdfs, lang, active = true }: { projectId: string; reports: FileRow[]; shots: { id: string; name: string }[]; pdfs: FileRow[]; lang: "en" | "fr"; active?: boolean }) {
   const fr = lang === "fr";
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
@@ -104,7 +104,7 @@ export default function MockupCard({ projectId, reports, shots, pdfs, lang }: { 
       }
       compact
     >
-      <CardCollapse fr={fr}>
+      <CardCollapse key={String(active)} fr={fr} defaultOpen={active}>
         <div {...drop.bind} className={`rounded-lg border-2 border-dashed border-card-border p-3 text-center text-xs text-soft ${drop.dragging ? DROP_RING : ""}`}>
           {busy ? (
             fr ? (

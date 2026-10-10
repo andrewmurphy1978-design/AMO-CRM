@@ -16,7 +16,7 @@ export interface BrandItemRow extends BrandItemInput {
 
 // A contact's Brand card: logos, colours, fonts, voice, photos, components,
 // icons, graphics and charts — shown by category, edited in one dialog.
-export function BrandCard({ contactId, items, lang, reports = [] }: { contactId: string; items: BrandItemRow[]; lang: Lang; reports?: FileRow[] }) {
+export function BrandCard({ contactId, items, lang, reports = [], expanded = true }: { contactId: string; items: BrandItemRow[]; lang: Lang; reports?: FileRow[]; expanded?: boolean }) {
   const fr = lang === "fr";
   const total = items.length;
 
@@ -32,7 +32,7 @@ export function BrandCard({ contactId, items, lang, reports = [] }: { contactId:
       compact
       actions={<BrandDialog action={saveContactBrand.bind(null, contactId)} items={items.map(({ category, label, value, note }) => ({ category, label, value, note }))} lang={lang} />}
     >
-      <CardCollapse fr={fr}>
+      <CardCollapse key={String(expanded)} fr={fr} defaultOpen={expanded}>
       <BrandReportDrop contactId={contactId} reports={reports} fr={fr} />
       {total === 0 ? (
         <p className="text-sm text-soft">{fr ? "Aucun élément de marque pour le moment." : "No brand assets yet."}</p>

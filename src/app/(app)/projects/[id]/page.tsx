@@ -279,6 +279,7 @@ export default async function ProjectDetailPage({
       lang={lang}
       items={brandRows}
       reports={brandReports}
+      expanded={brandActive}
     />
   );
   // The Research card (drop the AIs' research reports, merge them into the final report): right under the
@@ -286,9 +287,9 @@ export default async function ProjectDetailPage({
   const hasResearch = project.phases.some((ph) => /(^|—\s*)research$/i.test(ph.name.trim())) || (Array.isArray(project.pendingPhases) && (project.pendingPhases as { name?: string }[]).some((p) => /(^|—\s*)research$/i.test((p.name ?? "").trim())));
   const hasMockup = project.phases.some((ph) => /(^|—\s*)mock-?up$/i.test(ph.name.trim())) || (Array.isArray(project.pendingPhases) && (project.pendingPhases as { name?: string }[]).some((p) => /(^|—\s*)mock-?up$/i.test((p.name ?? "").trim())));
   const mockupActive = Boolean(activePhase && /(^|—\s*)mock-?up$/i.test(activePhase.name.trim()));
-  const mockupEl = <MockupCard projectId={project.id} reports={mockupCard.reports} shots={mockupCard.shots} pdfs={mockupCard.pdfs} lang={lang} />;
+  const mockupEl = <MockupCard projectId={project.id} reports={mockupCard.reports} shots={mockupCard.shots} pdfs={mockupCard.pdfs} lang={lang} active={mockupActive} />;
   const researchActive = Boolean(activePhase && /(^|—\s*)research$/i.test(activePhase.name.trim()));
-  const researchEl = <ResearchCard projectId={project.id} reports={researchCard.reports} shots={researchCard.shots} pdfs={researchCard.pdfs} lang={lang} />;
+  const researchEl = <ResearchCard projectId={project.id} reports={researchCard.reports} shots={researchCard.shots} pdfs={researchCard.pdfs} lang={lang} active={researchActive} />;
   const selectedPhase =
     phaseParam === "all" ? null : (project.phases.find((ph) => ph.id === phaseParam) ?? (phaseParam ? null : activePhase));
   const selectedPhaseId = selectedPhase?.id;
