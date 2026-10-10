@@ -71,7 +71,7 @@ export default function TasksCard({
   const row = (task: TaskCardItem) => (
     <TaskRow
       key={task.id}
-      task={{ id: task.id, title: task.title, status: task.status, priority: task.priority, dueDate: task.dueDate ? new Date(task.dueDate) : null, completedDate: task.values.completedDate ?? null, assignee: task.assignee, assigneeIds: task.assigneeIds, supervisorId: task.supervisorId }}
+      task={{ id: task.id, title: task.title, status: task.status, priority: task.priority, dueDate: task.values.dueDate || null, completedDate: task.values.completedDate ?? null, assignee: task.assignee, assigneeIds: task.assigneeIds, supervisorId: task.supervisorId }}
       currentUserId={currentUserId}
       projectId={projectId}
       lang={lang}

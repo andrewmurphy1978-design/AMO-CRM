@@ -19,6 +19,7 @@ const tint = (c: string, a: number) => c.replace("VAR", String(a));
 
 // Due date colour code: past = red, within 72 hours = yellow, otherwise green.
 function dueClass(due: Date): string {
+  // `due` is local midnight of the due day: past only once that day is over.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   if (due.getTime() < today.getTime()) return "bg-red-500/15 text-red-600";
@@ -39,7 +40,7 @@ export default function TaskRow({
     title: string;
     status: string;
     priority: string;
-    dueDate: Date | null;
+    dueDate: string | null; // yyyy-mm-dd (the same day as in the Edit Task dialog)
     completedDate: string | null; // yyyy-mm-dd
     assignee: { name: string } | null;
     assigneeIds: string[];
@@ -107,8 +108,8 @@ export default function TaskRow({
         )
       ) : (
         task.dueDate && (
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${dueClass(new Date(task.dueDate))}`} title={t.projectDetail.due}>
-            {new Date(task.dueDate).toLocaleDateString(locale, { dateStyle: "medium" })}
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${dueClass(new Date(`${task.dueDate}T00:00:00`))}`} title={t.projectDetail.due}>
+            {new Date(`${task.dueDate}T00:00:00`).toLocaleDateString(locale, { dateStyle: "medium" })}
           </span>
         )
       )}

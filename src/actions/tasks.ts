@@ -1,5 +1,6 @@
 "use server";
 
+import { taskWho } from "@/lib/task-schedule";
 import { onTaskDone, syncPhaseOfTask, syncPhaseStatus } from "@/lib/task-schedule";
 import { advanceProjectPlan } from "@/lib/project-progress";
 import { z } from "zod";
@@ -77,8 +78,9 @@ export async function createTaskViaDialog(
     throw error;
   }
 
-  const task = await withScopedPrismaClient((db) =>
-    db.task.create({
+  const task = await withScopedPrismaClient(async (db) => {
+    const who = await taskWho(db, projectId);
+    return db.task.create({
       data: {
         title: data.title,
         projectId,
@@ -87,15 +89,16 @@ export async function createTaskViaDialog(
         aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
-        assigneeId: (data.assigneeIds?.[0] ?? data.assigneeId) || null,
-        assigneeIds: data.assigneeIds ?? (data.assigneeId ? [data.assigneeId] : []),
-        supervisorId: data.supervisorId || null,
+        // None chosen: the project's team members, and its supervisor (else its owner).
+        assigneeId: (data.assigneeIds?.length ? data.assigneeIds : data.assigneeId ? [data.assigneeId] : who.assigneeIds)[0] || null,
+        assigneeIds: data.assigneeIds?.length ? data.assigneeIds : data.assigneeId ? [data.assigneeId] : who.assigneeIds,
+        supervisorId: data.supervisorId || who.supervisorId,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? new Date() : null,
       },
-    })
-  );
+    });
+  });
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/tasks");
@@ -173,8 +176,9 @@ export async function createTask(
     throw error;
   }
 
-  const created = await withScopedPrismaClient((db) =>
-    db.task.create({
+  const created = await withScopedPrismaClient(async (db) => {
+    const who = await taskWho(db, data.projectId);
+    return db.task.create({
       data: {
         title: data.title,
         projectId: data.projectId,
@@ -183,15 +187,16 @@ export async function createTask(
         aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
-        assigneeId: (data.assigneeIds?.[0] ?? data.assigneeId) || null,
-        assigneeIds: data.assigneeIds ?? (data.assigneeId ? [data.assigneeId] : []),
-        supervisorId: data.supervisorId || null,
+        // None chosen: the project's team members, and its supervisor (else its owner).
+        assigneeId: (data.assigneeIds?.length ? data.assigneeIds : data.assigneeId ? [data.assigneeId] : who.assigneeIds)[0] || null,
+        assigneeIds: data.assigneeIds?.length ? data.assigneeIds : data.assigneeId ? [data.assigneeId] : who.assigneeIds,
+        supervisorId: data.supervisorId || who.supervisorId,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? new Date() : null,
       },
-    })
-  );
+    });
+  });
 
   revalidatePath(`/projects/${data.projectId}`);
   revalidatePath("/tasks");
@@ -220,8 +225,9 @@ export async function createTaskAndRedirect(
     throw error;
   }
 
-  const task = await withScopedPrismaClient((db) =>
-    db.task.create({
+  const task = await withScopedPrismaClient(async (db) => {
+    const who = await taskWho(db, data.projectId);
+    return db.task.create({
       data: {
         title: data.title,
         projectId: data.projectId,
@@ -230,15 +236,16 @@ export async function createTaskAndRedirect(
         aiPrompt: data.aiPrompt ?? null,
         status: data.status,
         priority: data.priority,
-        assigneeId: (data.assigneeIds?.[0] ?? data.assigneeId) || null,
-        assigneeIds: data.assigneeIds ?? (data.assigneeId ? [data.assigneeId] : []),
-        supervisorId: data.supervisorId || null,
+        // None chosen: the project's team members, and its supervisor (else its owner).
+        assigneeId: (data.assigneeIds?.length ? data.assigneeIds : data.assigneeId ? [data.assigneeId] : who.assigneeIds)[0] || null,
+        assigneeIds: data.assigneeIds?.length ? data.assigneeIds : data.assigneeId ? [data.assigneeId] : who.assigneeIds,
+        supervisorId: data.supervisorId || who.supervisorId,
         startDate: data.startDate ? new Date(data.startDate) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         completedAt: data.completedDate && data.status === "DONE" ? new Date(data.completedDate) : data.status === "DONE" ? new Date() : null,
       },
-    })
-  );
+    });
+  });
 
   revalidatePath(`/projects/${data.projectId}`);
   revalidatePath("/tasks");

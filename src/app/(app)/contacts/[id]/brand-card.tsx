@@ -4,6 +4,7 @@ import { BRAND_CATEGORIES, isKept, mimeIsImage, safeBrandUrl, safeHexColor, type
 import { saveContactBrand } from "@/actions/contact-brand";
 import BrandDialog from "./brand-dialog";
 import BrandReportDrop from "./brand-report-drop";
+import CardCollapse from "@/components/card-collapse";
 import type { FileRow } from "@/components/files-card";
 
 const LABEL_CLASS = "text-xs font-semibold uppercase tracking-wide text-soft";
@@ -31,6 +32,7 @@ export function BrandCard({ contactId, items, lang, reports = [] }: { contactId:
       compact
       actions={<BrandDialog action={saveContactBrand.bind(null, contactId)} items={items.map(({ category, label, value, note }) => ({ category, label, value, note }))} lang={lang} />}
     >
+      <CardCollapse fr={fr}>
       <BrandReportDrop contactId={contactId} reports={reports} fr={fr} />
       {total === 0 ? (
         <p className="text-sm text-soft">{fr ? "Aucun élément de marque pour le moment." : "No brand assets yet."}</p>
@@ -118,6 +120,8 @@ export function BrandCard({ contactId, items, lang, reports = [] }: { contactId:
           })}
         </div>
       )}
+      </CardCollapse>
+      <BrandReportDrop contactId={contactId} reports={reports} fr={fr} part="guides" />
     </Card>
   );
 }

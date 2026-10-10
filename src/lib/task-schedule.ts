@@ -9,7 +9,19 @@ export function addDays(d: Date, n: number): Date {
 // Rows for the tasks of a new phase. They are created in order (createdAt differs by a millisecond
 // each, so lists keep the template's order); the first one can start right away, and every task
 // remembers its deadline delay (days from its start to its due date).
-export function taskRows(projectId: string, phaseId: string, titles: string[], delays?: (number | null | undefined)[], start?: Date | null) {
+// Who a new task is for: its supervisor is the project's supervisor (else the project's owner) and it is assigned
+// to every team member of the project.
+export interface TaskWho {
+  supervisorId: string | null;
+  assigneeIds: string[];
+}
+
+export async function taskWho(db: PrismaClient, projectId: string): Promise<TaskWho> {
+  const p = await db.project.findUnique({ where: { id: projectId }, select: { supervisorId: true, ownerId: true, teamMembers: { select: { userId: true } } } });
+  return { supervisorId: p?.supervisorId ?? p?.ownerId ?? null, assigneeIds: p?.teamMembers.map((m) => m.userId) ?? [] };
+}
+
+export function taskRows(projectId: string, phaseId: string, titles: string[], delays?: (number | null | undefined)[], start?: Date | null, who?: TaskWho) {
   const base = Date.now();
   return titles.map((title, i) => {
     const delay = delays?.[i] ?? null;
@@ -20,6 +32,7 @@ export function taskRows(projectId: string, phaseId: string, titles: string[], d
       title,
       createdAt: new Date(base + i),
       delayDays: delay,
+      ...(who ? { supervisorId: who.supervisorId, assigneeIds: who.assigneeIds, assigneeId: who.assigneeIds[0] ?? null } : {}),
       ...(starts ? { startDate: start, ...(delay != null ? { dueDate: addDays(start, delay) } : {}) } : {}),
     };
   });

@@ -1,7 +1,7 @@
 "use server";
 
 import { ensureProjectFolder } from "@/lib/local-folders";
-import { phaseDates, taskRows } from "@/lib/task-schedule";
+import { phaseDates, taskRows, taskWho } from "@/lib/task-schedule";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -245,7 +245,7 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
     ),
     ...phaseRows
       .filter(({ phase }) => phase.tasks.length > 0)
-      .map(({ phase, id, index }) => db.task.createMany({ data: taskRows(projectId, id, phase.tasks, phase.delays, index === 0 ? projectStart : null) })),
+      .map(({ phase, id, index }) => db.task.createMany({ data: taskRows(projectId, id, phase.tasks, phase.delays, index === 0 ? projectStart : null, { supervisorId: input.supervisorId ?? input.ownerId ?? null, assigneeIds: input.teamMemberIds }) })),
     db.activityLogEntry.create({
       data: {
         projectId,
@@ -288,7 +288,7 @@ async function applyProjectSettings(db: PrismaClient, projectId: string, next: {
     } else {
       const order = project.phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
       const created = await db.projectPhase.create({ data: { projectId, name, order } });
-      if (tasks.length > 0) await db.task.createMany({ data: taskRows(projectId, created.id, tasks) });
+      if (tasks.length > 0) await db.task.createMany({ data: taskRows(projectId, created.id, tasks, undefined, null, await taskWho(db, projectId)) });
     }
   };
   if (next.createBrand) await addPhase("Brand", brandPhaseTasks(next.brandItems), "PLANNING", /^(research|mock-up)$/i);
@@ -339,7 +339,7 @@ async function syncPlanWithAnswers(db: PrismaClient, projectId: string) {
     const at = nextExisting ? nextExisting.order : phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
     await db.projectPhase.updateMany({ where: { projectId, order: { gte: at } }, data: { order: { increment: 1 } } });
     const created = await db.projectPhase.create({ data: { projectId, name: ph.name, order: at, status: project.status === "PROPOSAL" ? "PLANNING" : (["PLANNING", "ACTIVE", "FINAL", "COMPLETED"].includes(project.status) ? (project.status as "PLANNING" | "ACTIVE" | "FINAL" | "COMPLETED") : "PLANNING") } });
-    await db.task.createMany({ data: taskRows(projectId, created.id, ph.tasks, ph.delays) });
+    await db.task.createMany({ data: taskRows(projectId, created.id, ph.tasks, ph.delays, null, await taskWho(db, projectId)) });
     project.phases.push({ id: created.id, name: ph.name, order: at });
     for (const x of project.phases) if (x.id !== created.id && x.order >= at) x.order += 1;
   }
@@ -375,7 +375,7 @@ async function applyTypeChanges(db: PrismaClient, projectId: string, newTypes: s
         let order = project.phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
         for (const ph of addedPhases) {
           const created = await db.projectPhase.create({ data: { projectId, name: ph.name, order: order++ } });
-          if (ph.tasks.length > 0) await db.task.createMany({ data: taskRows(projectId, created.id, ph.tasks, ph.delays) });
+          if (ph.tasks.length > 0) await db.task.createMany({ data: taskRows(projectId, created.id, ph.tasks, ph.delays, null, await taskWho(db, projectId)) });
         }
       }
     }

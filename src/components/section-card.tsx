@@ -17,6 +17,8 @@ export const CARD_COLORS = {
   billing: "bg-yellow-600",
   domains: "bg-cyan-700",
   brand: "bg-purple-700",
+  research: "bg-teal-700",
+  mockups: "bg-amber-600",
   files: "bg-zinc-600",
   aiDetails: "bg-indigo-700",
   relations: "bg-fuchsia-700",

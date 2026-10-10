@@ -8,7 +8,7 @@ import type { FileRow } from "@/components/files-card";
 
 // The Brand card's "AI report" drop zone: drop the report the AI wrote for the brand (a PDF, Markdown,
 // Word or zip file...) and it is kept with the client's files.
-export default function BrandReportDrop({ contactId, reports, fr }: { contactId: string; reports: FileRow[]; fr: boolean }) {
+export default function BrandReportDrop({ contactId, reports, fr, part = "drop" }: { contactId: string; reports: FileRow[]; fr: boolean; part?: "drop" | "guides" }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -59,10 +59,15 @@ export default function BrandReportDrop({ contactId, reports, fr }: { contactId:
   }
 
   const drop = useFileDrop((files) => void upload(files), busy);
+  // The final guides (PDF) are shown at the bottom of the card; the working files (reports, zip) with the drop zone.
+  const isPdf = (r: FileRow) => /\.pdf$/i.test(r.name);
+  const shown = reports.filter((r) => (part === "guides" ? isPdf(r) : !isPdf(r)));
 
+  if (part === "guides" && shown.length === 0) return null;
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-soft">{fr ? "Rapport de l'IA" : "AI report"}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-soft">{part === "guides" ? (fr ? "Guides de marque" : "Brand guides") : fr ? "Rapport de l'IA" : "AI report"}</p>
+      {part === "drop" && (
       <div {...drop.bind} className={`mt-1.5 rounded-lg border-2 border-dashed border-card-border p-3 text-center text-xs text-soft ${drop.dragging ? DROP_RING : ""}`}>
         {busy ? (
           fr ? "Téléversement…" : "Uploading…"
@@ -76,11 +81,12 @@ export default function BrandReportDrop({ contactId, reports, fr }: { contactId:
         )}
         <input ref={input} type="file" multiple className="hidden" onChange={(e) => e.target.files && void upload(e.target.files)} />
       </div>
+      )}
       {message && <p className="mt-1 text-xs text-red-600">{message}</p>}
       {info && <p className="mt-1 text-xs text-emerald-700">{info}</p>}
-      {reports.length > 0 && (
+      {shown.length > 0 && (
         <ul className="mt-2 space-y-1">
-          {reports.map((r) => (
+          {shown.map((r) => (
             <li key={r.id} className="flex items-center gap-3 text-sm">
               <span>📄</span>
               <a href={`/api/files/${r.id}`} target="_blank" rel="noreferrer" className="min-w-0 flex-1 truncate font-medium text-emerald-700 hover:underline" title={r.name}>

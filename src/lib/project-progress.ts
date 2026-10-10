@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
-import { phaseDates, taskRows } from "@/lib/task-schedule";
+import { phaseDates, taskRows, taskWho } from "@/lib/task-schedule";
 import { billPendingSupplierCosts } from "@/lib/supplier-costs";
 import type { PhaseStage } from "@/lib/project-templates";
 
@@ -96,6 +96,7 @@ async function releaseStage(db: PrismaClient, pr: Loaded, pending: PendingPhase[
   const baseOrder = (pr.phases[0]?.order ?? -1) + 1;
   let cursor = now;
   const phaseRows: { id: string; projectId: string; name: string; order: number; status: "PLANNING" | "ACTIVE"; startDate: Date; dueDate?: Date }[] = [];
+  const who = await taskWho(db, pr.id);
   const taskData: ReturnType<typeof taskRows> = [];
   batch.forEach((ph, i) => {
     const id = crypto.randomUUID();
@@ -104,7 +105,7 @@ async function releaseStage(db: PrismaClient, pr: Loaded, pending: PendingPhase[
     const first = i === 0;
     const titles = [...(first && extraFirstTask ? [extraFirstTask] : []), ...ph.tasks];
     const delays = [...(first && extraFirstTask ? [null] : []), ...(ph.delays ?? [])];
-    if (titles.length > 0) taskData.push(...taskRows(pr.id, id, titles, delays, first ? now : null));
+    if (titles.length > 0) taskData.push(...taskRows(pr.id, id, titles, delays, first ? now : null, who));
     if (ph.delayDays != null) cursor = dates.dueDate ?? cursor;
   });
   await db.projectPhase.createMany({ data: phaseRows });
