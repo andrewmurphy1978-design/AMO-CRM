@@ -22,7 +22,12 @@ on:
   push:
     branches:
       - claude/andrew-murphy-crm-psambw
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: "ONE-TIME: record every migration in prisma/migrations as already applied (only if Neon already matches the schema)"
+        type: boolean
+        default: false
 
 jobs:
   deploy:
@@ -54,6 +59,25 @@ jobs:
         run: |
           echo "NEXT_PUBLIC_BUILD_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      # One-time: Neon's schema was built by hand, so its _prisma_migrations history is incomplete.
+      # This checks (read-only) that Neon already matches prisma/schema.prisma; only then it marks
+      # every migration in the folder as applied. If Neon differs, it stops and prints the difference.
+      - name: Baseline migration history (one-time)
+        if: ${{ inputs.baseline }}
+        run: |
+          set -e
+          DIFF=$(npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script)
+          echo "$DIFF"
+          if ! echo "$DIFF" | grep -q "This is an empty migration"; then
+            echo "::error::Neon does not match prisma/schema.prisma (see the SQL above). Nothing was changed."
+            exit 1
+          fi
+          for d in prisma/migrations/*/; do
+            npx prisma migrate resolve --applied "$(basename "$d")" || true
+          done
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Apply database migrations (Neon)
         run: |
