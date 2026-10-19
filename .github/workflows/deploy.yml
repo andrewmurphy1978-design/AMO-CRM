@@ -11,10 +11,12 @@ name: Deploy to Cloudflare
 #   - CLOUDFLARE_ACCOUNT_ID — found on the right side of any page in the
 #     Cloudflare dashboard, or via `npx wrangler whoami`.
 #
-# This does NOT run database migrations — if a change includes a Prisma
-# schema change, run `npx prisma migrate deploy` against Neon by hand
-# before (or right after) this deploys the new code, same as DEPLOY.md
-# already describes for manual deploys.
+# Database migrations: before the code is deployed, `prisma migrate deploy`
+# applies any pending migration in prisma/migrations to Neon, so nothing has to be
+# run by hand. It needs one more repo secret:
+#   - DATABASE_URL — Neon's DIRECT (non-pooled) connection string
+#     (Neon console > the project > Connect > untick "Connection pooling").
+# Without it the step only prints a warning and the deploy goes on.
 
 on:
   push:
@@ -52,6 +54,16 @@ jobs:
         run: |
           echo "NEXT_PUBLIC_BUILD_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      - name: Apply database migrations (Neon)
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::DATABASE_URL secret is not set: pending migrations were NOT applied."
+            exit 0
+          fi
+          npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Deploy to Cloudflare Workers
         run: npm run cf:deploy
