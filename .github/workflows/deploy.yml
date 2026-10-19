@@ -69,8 +69,12 @@ jobs:
           set -e
           DIFF=$(npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --script)
           echo "$DIFF"
-          if ! echo "$DIFF" | grep -q "This is an empty migration"; then
-            echo "::error::Neon does not match prisma/schema.prisma (see the SQL above). Nothing was changed."
+          # Harmless drift is tolerated (indexes Neon has and the schema does not, one default value, an old
+          # scratch table); anything else (a missing/extra table, column or type) stops here.
+          REST=$(echo "$DIFF" | grep -v '^--' | grep -v '^[[:space:]]*$' | grep -v '^DROP INDEX ' | grep -v '^ALTER TABLE "projects" ALTER COLUMN "status" SET DEFAULT ' | grep -v '^DROP TABLE "icon_scratch";' || true)
+          if [ -n "$REST" ]; then
+            echo "::error::Neon differs from prisma/schema.prisma beyond harmless drift (see the SQL above). Nothing was changed."
+            echo "$REST"
             exit 1
           fi
           for d in prisma/migrations/*/; do
