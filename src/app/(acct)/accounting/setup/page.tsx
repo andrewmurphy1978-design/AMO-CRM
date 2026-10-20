@@ -50,32 +50,47 @@ export default async function SetupPage() {
                   ? "Comptes chèques, épargne, cartes de crédit, CELI, REER, CELIAPP, REEE, comptes de placement, CRI, FERR et FRV : tous peuvent recevoir des relevés importés."
                   : "Chequing, savings, credit cards, TFSA, RRSP, FHSA, RESP, investment accounts, LIRA, RRIF and LIF: all can receive imported statements."}
               </p>
-              <Card
-                color={entityCardColor(e) as CardColor}
-                title={<>{e.name} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{mine.length}</span></>}
-                actions={<AddBankDialog lang={lang} entities={books.entities} entityId={e.id} color={entityCardColor(e) as CardColor} />}
-              >
-                <ul className="divide-y divide-card-border text-sm">
-                  {mine.length === 0 && <li className="py-2 text-soft">{fr ? "Aucun compte pour cette entité : utilisez le + pour en ajouter un." : "No accounts for this entity yet: use the + to add one."}</li>}
-                  {mine.map((b) => (
-                    <BankRow
-                      key={b.id}
-                      lang={lang}
-                      color={entityCardColor(e) as CardColor}
-                      bank={{ id: b.id, name: b.name, nameFr: b.nameFr, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: e.name, code: b.code, txCount: txCounts.get(b.id) ?? 0, currency: b.currency ?? e.currency, registeredLabel: b.registeredType ? REGISTERED_TYPES[b.registeredType]?.[lang].split(" (")[0] : undefined }}
-                    />
-                  ))}
-                </ul>
-                <p className="text-xs text-soft">
-                  {e.kind === "PERSONAL"
-                    ? fr
-                      ? "Un compte personnel peut aussi servir à l'entreprise individuelle : importez-le ici, puis choisissez l'entreprise comme catégorie (ou répartissez 60/40) ; les écritures de transfert avec le propriétaire sont créées automatiquement. Pour un compte de placement, le solde du relevé inclut le rendement du marché : enregistrez-le dans Rapprochement."
-                      : "A personal account can also be used for the sole proprietorship: import it here, then pick the business as the category (or split 60/40) — the owner contribution / draw entries are created automatically. For an investment account, the statement balance includes market gains: record them in Reconcile."
-                    : fr
-                      ? "Les comptes de cette entité reçoivent leurs propres relevés ; un virement vers un autre de vos comptes est reconnu comme transfert."
-                      : "This entity's accounts take their own statements; a payment to another of your accounts is recognized as a transfer."}
-                </p>
-              </Card>
+              {(["bank", "registered"] as const).map((group) => {
+                const list = mine.filter((b) => (group === "registered" ? !!b.registeredType : !b.registeredType));
+                return (
+                  <Card
+                    key={group}
+                    color={group === "registered" ? "calendarEvents" : (entityCardColor(e) as CardColor)}
+                    title={<>{group === "registered" ? (fr ? "Comptes enregistrés et de placement" : "Registered & investment accounts") : fr ? "Comptes bancaires et cartes de crédit" : "Bank accounts & credit cards"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{list.length}</span></>}
+                    actions={<AddBankDialog lang={lang} entities={books.entities} entityId={e.id} color={group === "registered" ? "calendarEvents" : (entityCardColor(e) as CardColor)} kindGroup={group} />}
+                  >
+                    {group === "registered" && (
+                      <p className="text-xs text-soft">
+                        {fr
+                          ? "CELI, REER, CELIAPP, REEE, comptes de placement, CRI, FERR, FRV : des actifs à long terme, rangés sous leur compte du plan comptable. Chacun reçoit des relevés comme un compte bancaire. Le solde du relevé inclut le rendement du marché : enregistrez-le dans Rapprochement."
+                          : "TFSA, RRSP, FHSA, RESP, investment accounts, LIRA, RRIF, LIF: long-term assets, filed under their own chart account. Each takes statements like a bank account. The statement balance includes market gains: record them in Reconcile."}
+                      </p>
+                    )}
+                    <ul className="divide-y divide-card-border text-sm">
+                      {list.length === 0 && <li className="py-2 text-soft">{fr ? "Aucun compte : utilisez le + pour en ajouter un." : "No accounts yet: use the + to add one."}</li>}
+                      {list.map((b) => (
+                        <BankRow
+                          key={b.id}
+                          lang={lang}
+                          color={group === "registered" ? "calendarEvents" : (entityCardColor(e) as CardColor)}
+                          bank={{ id: b.id, name: b.name, nameFr: b.nameFr, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: e.name, code: b.code, txCount: txCounts.get(b.id) ?? 0, currency: b.currency ?? e.currency, registeredLabel: b.registeredType ? REGISTERED_TYPES[b.registeredType]?.[lang].split(" (")[0] : undefined }}
+                        />
+                      ))}
+                    </ul>
+                    {group === "bank" && (
+                      <p className="text-xs text-soft">
+                        {e.kind === "PERSONAL"
+                          ? fr
+                            ? "Un compte personnel peut aussi servir à l'entreprise individuelle : importez-le ici, puis choisissez l'entreprise comme catégorie (ou répartissez 60/40) ; les écritures de transfert avec le propriétaire sont créées automatiquement."
+                            : "A personal account can also be used for the sole proprietorship: import it here, then pick the business as the category (or split 60/40) — the owner contribution / draw entries are created automatically."
+                          : fr
+                            ? "Les comptes de cette entité reçoivent leurs propres relevés ; un virement vers un autre de vos comptes est reconnu comme transfert."
+                            : "This entity's accounts take their own statements; a payment to another of your accounts is recognized as a transfer."}
+                      </p>
+                    )}
+                  </Card>
+                );
+              })}
             </div>
           ),
         };

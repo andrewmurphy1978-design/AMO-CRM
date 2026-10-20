@@ -70,7 +70,7 @@ export interface BankFieldsValue {
   inverted: boolean;
   currency: string;
 }
-export function BankFields({ lang, entities, defaultEntityId, bank }: { lang: Lang; entities?: EntityInfo[]; defaultEntityId?: string; bank?: BankFieldsValue }) {
+export function BankFields({ lang, entities, defaultEntityId, bank, kindGroup }: { lang: Lang; entities?: EntityInfo[]; defaultEntityId?: string; bank?: BankFieldsValue; kindGroup?: "bank" | "registered" }) {
   const fr = lang === "fr";
   return (
     <Grid>
@@ -81,11 +81,15 @@ export function BankFields({ lang, entities, defaultEntityId, bank }: { lang: La
       )}
       {entities && (
         <F label={fr ? "Type" : "Type"}>
-          <select name="kind" className={FIELD_CLASS}>
-            <option value="CHEQUING">{fr ? "Compte chèques" : "Chequing"}</option>
-            <option value="SAVINGS">{fr ? "Épargne" : "Savings"}</option>
-            <option value="CREDIT_CARD">{fr ? "Carte de crédit" : "Credit card"}</option>
-            {Object.entries(REGISTERED_TYPES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
+          <select name="kind" className={FIELD_CLASS} defaultValue={kindGroup === "registered" ? "TFSA" : "CHEQUING"}>
+            {kindGroup !== "registered" && (
+              <>
+                <option value="CHEQUING">{fr ? "Compte chèques" : "Chequing"}</option>
+                <option value="SAVINGS">{fr ? "Épargne" : "Savings"}</option>
+                <option value="CREDIT_CARD">{fr ? "Carte de crédit" : "Credit card"}</option>
+              </>
+            )}
+            {kindGroup !== "bank" && Object.entries(REGISTERED_TYPES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
           </select>
         </F>
       )}
