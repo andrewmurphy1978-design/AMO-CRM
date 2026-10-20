@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { lockedThrough } from "./reconcile";
-import { chartFor, suggestGifi, usesGifi, entityDefaults, intercoSpec, type EntityKind } from "./charts";
+import { REGISTERED_TYPES, chartFor, suggestGifi, usesGifi, entityDefaults, intercoSpec, type EntityKind } from "./charts";
 import { buildPosting, r2, type AllocationInput, type PostAccount, type PostEntity, type PostingEntry } from "./posting";
 import { parseCsv } from "./csv";
 import { supplierKey, supplierName } from "./supplier";
@@ -102,9 +102,12 @@ async function nextCode(db: PrismaClient, entityId: string, from: number, to: nu
 
 export async function createBankAccount(
   db: PrismaClient,
-  input: { entityId: string; name: string; kind: "CHEQUING" | "SAVINGS" | "CREDIT_CARD"; institution?: string; last4?: string; importSign?: number; currency?: string; nameFr?: string }
+  input: { entityId: string; name: string; kind: string; institution?: string; last4?: string; importSign?: number; currency?: string; nameFr?: string }
 ) {
   const card = input.kind === "CREDIT_CARD";
+  // TFSA, RRSP, FHSA, RESP, LIRA, RRIF, LIF and non-registered investment accounts: statement accounts like a bank
+  // account, shown under long-term assets.
+  const registeredType = input.kind in REGISTERED_TYPES ? input.kind : null;
   const code = card ? await nextCode(db, input.entityId, 2010, 2099) : await nextCode(db, input.entityId, 1010, 1099);
   return db.accAccount.create({
     data: {
@@ -117,6 +120,8 @@ export async function createBankAccount(
       institution: input.institution ?? null,
       last4: input.last4 ?? null,
       importSign: input.importSign ?? 1,
+      registeredType,
+      section: registeredType ? "LONG_TERM" : null,
       currency: input.currency || null,
       isSystem: true,
     },

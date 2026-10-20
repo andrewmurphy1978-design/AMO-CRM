@@ -2106,6 +2106,8 @@ model AccAccount {
   // Bank / credit-card accounts.
   institution     String?
   last4           String?
+  // Registered / investment account type for a statement account: TFSA | RRSP | FHSA | RESP | NON_REG | LIRA | RRIF | LIF.
+  registeredType  String?
   // Normalizes a statement's sign: 1 = deposits positive; -1 when the statement shows purchases as positive.
   importSign      Int            @default(1)
   // Currency the account is held in; null = the entity's own currency.

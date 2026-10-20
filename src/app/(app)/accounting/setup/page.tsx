@@ -5,7 +5,8 @@ import { loadBooks, KIND_LABEL } from "@/lib/accounting/options";
 import { AddAccountForm, AddBankForm, AddEntityForm, EditEntityForm } from "./setup-forms";
 import BankRow from "./bank-row";
 import DeleteRuleButton from "./delete-rule-button";
-import { usesGifi } from "@/lib/accounting/charts";
+import { ASSET_SECTIONS, LIABILITY_SECTIONS, REGISTERED_TYPES, usesGifi } from "@/lib/accounting/charts";
+import EntityTabs from "./entity-tabs";
 import SetupLayout, { type SetupSection } from "./setup-layout";
 import AccountEditor from "./account-editor";
 
@@ -54,22 +55,35 @@ export default async function SetupPage() {
 
   const banksSection = (
     <section className={card}>
-      <h2 className={h2}>{fr ? "Comptes bancaires et cartes" : "Bank accounts and cards"}</h2>
-      {banks.length > 0 && (
-        <ul className="divide-y divide-card-border text-sm">
-          {banks.map((b) => (
-            <BankRow
-              key={b.id}
-              lang={lang}
-              bank={{ id: b.id, name: b.name, nameFr: b.nameFr, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: entityName.get(b.entityId) ?? "", code: b.code, txCount: txCounts.get(b.id) ?? 0, currency: b.currency ?? books.entities.find((e) => e.id === b.entityId)?.currency ?? "CAD" }}
-            />
-          ))}
-        </ul>
-      )}
+      <h2 className={h2}>{fr ? "Comptes bancaires, cartes et comptes enregistrés" : "Bank accounts, cards and registered accounts"}</h2>
       <p className="text-xs text-soft">
         {fr
-          ? "Un compte personnel peut aussi servir à l'entreprise individuelle : importez-le sous « Personnel », puis choisissez l'entreprise comme catégorie (ou répartissez 60/40) ; les écritures de transfert avec le propriétaire sont créées automatiquement."
-          : "A personal account can also be used for the sole proprietorship: import it under Personal, then pick the business as the category (or split 60/40) — the owner contribution / draw entries are created automatically."}
+          ? "Comptes chèques, épargne, cartes de crédit, CELI, REER, CELIAPP, REEE, comptes de placement, CRI, FERR et FRV : tous peuvent recevoir des relevés importés."
+          : "Chequing, savings, credit cards, TFSA, RRSP, FHSA, RESP, investment accounts, LIRA, RRIF and LIF: all can receive imported statements."}
+      </p>
+      <EntityTabs
+        tabs={books.entities.map((e) => ({
+          id: e.id,
+          label: e.name,
+          sub: String(banks.filter((b) => b.entityId === e.id).length),
+          content: (
+            <ul className="divide-y divide-card-border text-sm">
+              {banks.filter((b) => b.entityId === e.id).length === 0 && <li className="py-2 text-soft">{fr ? "Aucun compte pour cette entité." : "No accounts for this entity yet."}</li>}
+              {banks.filter((b) => b.entityId === e.id).map((b) => (
+                <BankRow
+                  key={b.id}
+                  lang={lang}
+                  bank={{ id: b.id, name: b.name, nameFr: b.nameFr, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: entityName.get(b.entityId) ?? "", code: b.code, txCount: txCounts.get(b.id) ?? 0, currency: b.currency ?? e.currency, registeredLabel: b.registeredType ? REGISTERED_TYPES[b.registeredType]?.[lang].split(" (")[0] : undefined }}
+                />
+              ))}
+            </ul>
+          ),
+        }))}
+      />
+      <p className="text-xs text-soft">
+        {fr
+          ? "Un compte personnel peut aussi servir à l'entreprise individuelle : importez-le sous « Personnel », puis choisissez l'entreprise comme catégorie (ou répartissez 60/40) ; les écritures de transfert avec le propriétaire sont créées automatiquement. Pour un compte de placement, le solde du relevé inclut le rendement du marché : enregistrez-le dans Journal pour rapprocher."
+          : "A personal account can also be used for the sole proprietorship: import it under Personal, then pick the business as the category (or split 60/40) — the owner contribution / draw entries are created automatically. For an investment account, the statement balance includes market gains: record them in Journal to reconcile."}
       </p>
       <AddBankForm lang={lang} entities={books.entities} />
     </section>
@@ -86,44 +100,67 @@ export default async function SetupPage() {
         </p>
         <AddAccountForm lang={lang} entities={books.entities} options={books.options} />
       </section>
-      {books.entities.map((e) => {
-        const gifi = usesGifi(e.kind, e.country);
-        const own = books.options.filter((o) => o.entityId === e.id && !o.bank);
-        return (
-          <section key={e.id} className={card}>
-            <h2 className={h2}>{e.name}</h2>
-            {gifi && (
-              <p className="text-xs text-soft">
-                {fr
-                  ? "Codes GIFI (Indice général des renseignements financiers) suggérés d'après les annexes 100 et 125 : vérifiez-les avec le guide RC4088 de l'ARC ou votre comptable, et corrigez-les au besoin."
-                  : "GIFI codes (General Index of Financial Information) are suggested from Schedules 100 and 125: check them against the CRA's RC4088 guide or your accountant, and edit any."}
-              </p>
-            )}
-            {TYPES.map((t) => {
-              const list = own.filter((o) => o.type === t.key).sort((x, y) => x.code.localeCompare(y.code));
-              if (list.length === 0) return null;
-              const parents = list.filter((o) => !o.parentId);
-              const ordered = parents.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]);
-              const hasChildren = new Set(list.map((o) => o.parentId).filter(Boolean));
-              return (
-                <div key={t.key}>
-                  <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-soft">{t[lang]}</p>
-                  <div className="divide-y divide-card-border">
-                    {ordered.map((o) => (
-                      <AccountEditor
-                        key={o.id}
-                        lang={lang}
-                        showGifi={gifi}
-                        account={{ id: o.id, code: o.code, name: fr && o.nameFr ? o.nameFr : o.name, type: o.type, section: books.options.find((x) => x.id === o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), bank: false, parentChoices: parents.filter((p) => p.id !== o.id).map((p) => ({ id: p.id, label: fr && p.nameFr ? p.nameFr : p.name })) }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        );
-      })}
+      <EntityTabs
+        tabs={books.entities.map((e) => {
+          const gifi = usesGifi(e.kind, e.country);
+          const own = books.options.filter((o) => o.entityId === e.id);
+          const optionOf = (id: string) => books.options.find((x) => x.id === id);
+          return {
+            id: e.id,
+            label: e.name,
+            sub: String(own.length),
+            content: (
+              <section className={card}>
+                {gifi && (
+                  <p className="text-xs text-soft">
+                    {fr
+                      ? "Codes GIFI (Indice général des renseignements financiers) suggérés automatiquement : vérifiez-les avec le guide RC4088 de l'ARC ou votre comptable, et corrigez-les au besoin."
+                      : "GIFI codes (General Index of Financial Information) are suggested automatically: check them against the CRA's RC4088 guide or your accountant, and edit any."}
+                  </p>
+                )}
+                {TYPES.map((t) => {
+                  const list = own.filter((o) => o.type === t.key).sort((x, y) => x.code.localeCompare(y.code));
+                  if (list.length === 0) return null;
+                  const parents = list.filter((o) => !o.parentId && !o.bank);
+                  const hasChildren = new Set(list.map((o) => o.parentId).filter(Boolean));
+                  const renderRow = (o: (typeof list)[number]) => (
+                    <AccountEditor
+                      key={o.id}
+                      lang={lang}
+                      showGifi={gifi}
+                      account={{ id: o.id, code: o.code, name: fr ? (o.nameFr ?? o.name) : o.name, type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), bank: o.bank, parentChoices: parents.filter((p) => p.id !== o.id).map((p) => ({ id: p.id, label: fr ? (p.nameFr ?? p.name) : p.name })) }}
+                    />
+                  );
+                  // Assets and liabilities: grouped under their second-level section; an account whose section is changed moves there.
+                  const sectionDefs = t.key === "ASSET" ? ASSET_SECTIONS : t.key === "LIABILITY" ? LIABILITY_SECTIONS : null;
+                  return (
+                    <div key={t.key} className="space-y-1">
+                      <p className="mt-3 border-b border-card-border pb-1 text-sm font-semibold uppercase tracking-wide text-ink">{t[lang]}</p>
+                      {sectionDefs
+                        ? sectionDefs.map((d) => {
+                            const inSection = list.filter((o) => !o.parentId && o.section === d.key);
+                            const rows = inSection.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]);
+                            if (rows.length === 0) return null;
+                            return (
+                              <div key={d.key} className="pl-3">
+                                <p className="mt-2 text-xs font-semibold text-soft">{d[lang]} <span className="font-normal">({rows.length})</span></p>
+                                <div className="divide-y divide-card-border">{rows.map(renderRow)}</div>
+                              </div>
+                            );
+                          })
+                        : (
+                          <div className="divide-y divide-card-border pl-3">
+                            {parents.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]).map(renderRow)}
+                          </div>
+                        )}
+                    </div>
+                  );
+                })}
+              </section>
+            ),
+          };
+        })}
+      />
     </>
   );
 

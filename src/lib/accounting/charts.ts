@@ -365,3 +365,16 @@ export function suggestGifi(entityKind: string, a: { code: string; name: string;
 export function usesGifi(kind: string, country: string): boolean {
   return country === "CA" && (kind === "CORPORATION" || kind === "SOLE_PROPRIETORSHIP");
 }
+
+// ---------------------------------------------------------------- registered & investment accounts
+
+export const REGISTERED_TYPES: Record<string, { en: string; fr: string }> = {
+  TFSA: { en: "TFSA (Tax-Free Savings Account)", fr: "CELI (compte d'épargne libre d'impôt)" },
+  RRSP: { en: "RRSP (Registered Retirement Savings Plan)", fr: "REER (régime enregistré d'épargne-retraite)" },
+  FHSA: { en: "FHSA (First Home Savings Account)", fr: "CELIAPP (compte d'épargne libre d'impôt pour l'achat d'une première propriété)" },
+  RESP: { en: "RESP (Registered Education Savings Plan)", fr: "REEE (régime enregistré d'épargne-études)" },
+  NON_REG: { en: "Investment account (non-registered)", fr: "Compte de placement (non enregistré)" },
+  LIRA: { en: "LIRA / Lock-in RRSP (Locked-In Retirement Account)", fr: "CRI / REER immobilisé (compte de retraite immobilisé)" },
+  RRIF: { en: "RRIF (Registered Retirement Income Fund)", fr: "FERR (fonds enregistré de revenu de retraite)" },
+  LIF: { en: "LIF (Life Income Fund / lock-in fund)", fr: "FRV (fonds de revenu viager)" },
+};

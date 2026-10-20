@@ -2,7 +2,7 @@
 
 import { addAccount, addBankAccount, addEntity, updateEntity } from "@/actions/accounting";
 import { useState } from "react";
-import { ASSET_SECTIONS, LIABILITY_SECTIONS, usesGifi } from "@/lib/accounting/charts";
+import { REGISTERED_TYPES, ASSET_SECTIONS, LIABILITY_SECTIONS, usesGifi } from "@/lib/accounting/charts";
 import ActionForm, { CurrencyField, Field, inputCls } from "../action-form";
 import TaxNumbersField from "./tax-numbers-field";
 import type { AccountOption, EntityInfo } from "@/lib/accounting/options";
@@ -62,6 +62,7 @@ export function AddBankForm({ lang, entities }: { lang: Lang; entities: EntityIn
           <option value="CHEQUING">{fr ? "Compte chèques" : "Chequing"}</option>
           <option value="SAVINGS">{fr ? "Épargne" : "Savings"}</option>
           <option value="CREDIT_CARD">{fr ? "Carte de crédit" : "Credit card"}</option>
+          {Object.entries(REGISTERED_TYPES).map(([k, v]) => <option key={k} value={k}>{v[lang]}</option>)}
         </select>
       </Field>
       <Field label={fr ? "Institution" : "Institution"}><input name="institution" className={inputCls} /></Field>

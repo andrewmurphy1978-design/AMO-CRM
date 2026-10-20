@@ -16,6 +16,7 @@ export interface BankInfo {
   code: string;
   txCount: number;
   currency: string;
+  registeredLabel?: string;
 }
 
 export default function BankRow({ bank, lang }: { bank: BankInfo; lang: "en" | "fr" }) {
@@ -34,7 +35,7 @@ export default function BankRow({ bank, lang }: { bank: BankInfo; lang: "en" | "
           {fr && bank.nameFr ? bank.nameFr : bank.name}
           {bank.last4 ? ` ••${bank.last4}` : ""}{" "}
           <span className="text-soft">
-            · {bank.entityName} · {bank.code} · {bank.currency} · {bank.txCount} {fr ? "transactions" : "transactions"}
+            · {bank.entityName} · {bank.code} · {bank.registeredLabel ? `${bank.registeredLabel} · ` : ""}{bank.currency} · {bank.txCount} {fr ? "transactions" : "transactions"}
             {bank.inverted ? (fr ? " · signes inversés" : " · signs inverted") : ""}
           </span>
         </span>

@@ -93,7 +93,7 @@ export async function addBankAccount(_prev: Result | undefined, formData: FormDa
   await requireAdmin();
   const entityId = String(formData.get("entityId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
-  const kind = String(formData.get("kind") ?? "CHEQUING") as "CHEQUING" | "SAVINGS" | "CREDIT_CARD";
+  const kind = String(formData.get("kind") ?? "CHEQUING");
   if (!entityId || !name) return { error: "Choose whose account it is and name it." };
   await withScopedPrismaClient((db) =>
     createBankAccount(db, {
