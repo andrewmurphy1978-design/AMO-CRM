@@ -83,8 +83,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   };
 
   const optById = new Map(options.map((o) => [o.id, o]));
+  // Four amount columns, from the lowest level on the left to the report total on the right: sub-account amounts,
+  // account totals, section (or group) totals, and the total of the whole block (assets, income...).
+  const NCOL = 4;
+  const numCells = (col: number, content: ReactNode, cls = "text-ink") =>
+    Array.from({ length: NCOL }, (_, i) => (i + 1 === col ? <td key={i} className={`text-right ${cls}`}>{content}</td> : <td key={i} />));
   // Sub-categories are shown under their parent with a subtotal, to any depth, even when a parent has no balance itself.
-  const Rows = ({ rows }: { rows: AccountRow[] }) => {
+  // `topCol` is the column of the top level of this block; each level down sits one column further left.
+  const Rows = ({ rows, topCol }: { rows: AccountRow[]; topCol: number }) => {
     const rowById = new Map(rows.map((r) => [r.id, r]));
     // Every account to show: the rows plus all their ancestors (headers such as groups carry no balance of their own).
     const needed = new Set<string>();
@@ -110,6 +116,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       const o = optById.get(id);
       return o ? (fr && o.nameFr ? o.nameFr : o.name) : "";
     };
+    const colOf = (depth: number) => Math.max(1, topCol - depth);
     const render = (id: string, depth: number): ReactNode => {
       const children = (kids.get(id) ?? []).sort((x, y) => codeOf(x).localeCompare(codeOf(y)));
       const own = rowById.get(id);
@@ -119,42 +126,36 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           <tr key={id}>
             <td className="py-1 pr-3 text-soft">{codeOf(id)}</td>
             <td className="pr-3 text-ink" style={pad}>{nameOf(id)}</td>
-            <td className="text-right text-ink">{m(own?.balance ?? 0)}</td>
-            <td />
-            <td />
+            {numCells(colOf(depth), m(own?.balance ?? 0))}
           </tr>
         );
       }
-      // A header with its accounts (amounts in the middle column), then its total below them in the right-hand column.
+      // A header with its accounts, then its total below them, one column to the right of the accounts' amounts.
       return (
         <Fragment key={id}>
           <tr>
             <td className="py-1 pr-3 text-soft">{codeOf(id)}</td>
-            <td className={`pr-3 text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`} style={pad} colSpan={4}>{nameOf(id)}</td>
+            <td className={`pr-3 text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`} style={pad} colSpan={NCOL + 1}>{nameOf(id)}</td>
           </tr>
           {own && own.balance !== 0 && (
             <tr>
               <td />
               <td className="pr-3 text-ink" style={{ paddingLeft: (depth + 1) * 16 }}>{nameOf(id)}</td>
-              <td className="text-right text-ink">{m(own.balance)}</td>
-              <td />
-              <td />
+              {numCells(colOf(depth + 1), m(own.balance))}
             </tr>
           )}
           {children.map((c) => render(c, depth + 1))}
           <tr className="border-t border-card-border">
             <td />
             <td className={`py-1 pr-3 text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`} style={pad}>{fr ? "Total" : "Total"} — {nameOf(id)}</td>
-            <td />
-            <td className={`text-right text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`}>{m(total(id))}</td>
-            <td />
+            {numCells(colOf(depth), m(total(id)), depth === 0 ? "font-semibold text-ink" : "font-medium text-ink")}
           </tr>
         </Fragment>
       );
     };
     return <>{roots.sort((x, y) => codeOf(x).localeCompare(codeOf(y))).map((id) => render(id, 0))}</>;
   };
-  // Balance-sheet sections with their own subtotals.
+  // Balance-sheet sections: their accounts (and sub-accounts) with the section total in the third column.
   const Sections = ({ rows, defs }: { rows: AccountRow[]; defs: { key: string; en: string; fr: string }[] }) => (
     <>
       {defs.map((d) => {
@@ -162,26 +163,25 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         if (list.length === 0) return null;
         return (
           <Fragment key={d.key}>
-            <tr><td colSpan={5} className="pt-2 pb-0.5 text-xs font-medium text-ink">{d[lang]}</td></tr>
-            <Rows rows={list} />
-            <tr className="text-xs text-soft"><td /><td className="py-0.5">{fr ? "Total" : "Total"} — {d[lang]}</td><td /><td className="text-right">{m(list.reduce((s, r) => s + r.balance, 0))}</td><td /></tr>
+            <tr><td colSpan={NCOL + 2} className="pt-3 pb-0.5 text-sm font-semibold text-ink">{d[lang]}</td></tr>
+            <Rows rows={list} topCol={2} />
+            <tr className="border-t border-card-border"><td /><td className="py-1 pr-3 font-semibold text-ink">{fr ? "Total" : "Total"} — {d[lang]}</td>{numCells(3, m(list.reduce((sum, r) => sum + r.balance, 0)), "font-semibold text-ink")}</tr>
           </Fragment>
         );
       })}
     </>
   );
+  // Total of a whole block (income, expenses, assets...), in the last column.
   const Total = ({ label, value, strong }: { label: string; value: number; strong?: boolean }) => (
     <tr className={strong ? "border-t-2 border-ink font-bold" : "border-t border-card-border font-semibold"}>
       <td />
       <td className="py-1.5 pr-3 text-ink">{label}</td>
-      <td />
-      <td />
-      <td className="text-right text-ink">{m(value)}</td>
+      {numCells(4, m(value))}
     </tr>
   );
   const Head = ({ children }: { children: string }) => (
     <tr>
-      <td colSpan={5} className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-soft">{children}</td>
+      <td colSpan={NCOL + 2} className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-soft">{children}</td>
     </tr>
   );
 
@@ -235,10 +235,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         {report === "is" && data.is ? (() => {
           const s = data.is as Awaited<ReturnType<typeof incomeStatement>>;
           return (
-            <table className="mt-3 w-full max-w-3xl text-sm"><tbody>
-              <Head>{fr ? "Revenus" : "Income"}</Head><Rows rows={s.income} /><Total label={fr ? "Total des revenus" : "Total income"} value={s.totalIncome} />
-              {s.cogs.length > 0 && (<><Head>{fr ? "Coût des marchandises vendues" : "Cost of goods sold"}</Head><Rows rows={s.cogs} /><Total label={fr ? "Marge brute" : "Gross profit"} value={s.grossProfit} /></>)}
-              <Head>{fr ? "Dépenses" : "Expenses"}</Head><Rows rows={s.expenses} /><Total label={fr ? "Total des dépenses" : "Total expenses"} value={s.totalExpenses} />
+            <table className="mt-3 w-full max-w-5xl text-sm"><tbody>
+              <Head>{fr ? "Revenus" : "Income"}</Head><Rows rows={s.income} topCol={3} /><Total label={fr ? "Total des revenus" : "Total income"} value={s.totalIncome} />
+              {s.cogs.length > 0 && (<><Head>{fr ? "Coût des marchandises vendues" : "Cost of goods sold"}</Head><Rows rows={s.cogs} topCol={3} /><Total label={fr ? "Marge brute" : "Gross profit"} value={s.grossProfit} /></>)}
+              <Head>{fr ? "Dépenses" : "Expenses"}</Head><Rows rows={s.expenses} topCol={3} /><Total label={fr ? "Total des dépenses" : "Total expenses"} value={s.totalExpenses} />
               <Total strong label={fr ? "Résultat net" : "Net income"} value={s.netIncome} />
             </tbody></table>
           );
@@ -248,12 +248,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           const b = data.bs as Awaited<ReturnType<typeof balanceSheet>>;
           return (
             <>
-              <table className="mt-3 w-full max-w-3xl text-sm"><tbody>
+              <table className="mt-3 w-full max-w-5xl text-sm"><tbody>
                 <Head>{fr ? "Actifs" : "Assets"}</Head><Sections rows={b.assets} defs={ASSET_SECTIONS} /><Total label={fr ? "Total des actifs" : "Total assets"} value={b.totalAssets} />
                 <Head>{fr ? "Passifs" : "Liabilities"}</Head><Sections rows={b.liabilities} defs={LIABILITY_SECTIONS} /><Total label={fr ? "Total des passifs" : "Total liabilities"} value={b.totalLiabilities} />
-                <Head>{fr ? "Capitaux propres" : "Equity"}</Head><Rows rows={b.equity} />
-                <tr><td /><td className="py-1 text-ink">{fr ? "Bénéfices non répartis" : "Retained earnings"}</td><td className="text-right">{m(b.retained)}</td><td /><td /></tr>
-                <tr><td /><td className="py-1 text-ink">{fr ? "Résultat de l'exercice" : "Current-year earnings"}</td><td className="text-right">{m(b.currentEarnings)}</td><td /><td /></tr>
+                <Head>{fr ? "Capitaux propres" : "Equity"}</Head><Rows rows={b.equity} topCol={3} />
+                <tr><td /><td className="py-1 text-ink">{fr ? "Bénéfices non répartis" : "Retained earnings"}</td>{numCells(3, m(b.retained))}</tr>
+                <tr><td /><td className="py-1 text-ink">{fr ? "Résultat de l'exercice" : "Current-year earnings"}</td>{numCells(3, m(b.currentEarnings))}</tr>
                 <Total label={fr ? "Total des capitaux propres" : "Total equity"} value={b.totalEquity} />
                 <Total strong label={fr ? "Passifs + capitaux propres" : "Liabilities + equity"} value={b.totalLiabilities + b.totalEquity} />
               </tbody></table>
@@ -308,12 +308,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           const Block = ({ title, list }: { title: string; list: typeof t.income }) => (
             <>
               <Head>{title}</Head>
-              {list.map((g) => (<tr key={g.taxLine}><td className="py-1 pr-3 text-soft">{g.taxLine}</td><td className="pr-3 text-ink">{g.accounts.join(", ")}</td><td className="text-right text-ink">{m(g.deductible)}</td><td /><td /></tr>))}
+              {list.map((g) => (<tr key={g.taxLine}><td className="py-1 pr-3 text-soft">{g.taxLine}</td><td className="pr-3 text-ink">{g.accounts.join(", ")}</td>{numCells(3, m(g.deductible))}</tr>))}
             </>
           );
           return (
             <>
-              <table className="mt-3 w-full max-w-3xl text-sm"><tbody>
+              <table className="mt-3 w-full max-w-5xl text-sm"><tbody>
                 <Block title={fr ? "Revenus" : "Income"} list={t.income} /><Total label={fr ? "Total des revenus" : "Total income"} value={t.totalIncome} />
                 <Block title={fr ? "Dépenses déductibles" : "Deductible expenses"} list={t.expenses} /><Total label={fr ? "Total déductible" : "Total deductible"} value={t.totalDeductible} />
                 <Total strong label={fr ? "Revenu net d'entreprise" : "Net business income"} value={t.netBusinessIncome} />
@@ -328,17 +328,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           const Part = ({ title, p }: { title: string; p: typeof s.gstHst }) => (
             <tbody>
               <Head>{title}</Head>
-              <tr><td /><td className="py-1 text-ink">{fr ? "Perçue sur les ventes" : "Collected on sales"}</td><td className="text-right">{m(p.collected)}</td><td /><td /></tr>
-              <tr><td /><td className="py-1 text-ink">{fr ? "Payée sur les achats (récupérable)" : "Paid on purchases (recoverable)"}</td><td className="text-right">{m(p.recoverable)}</td><td /><td /></tr>
+              <tr><td /><td className="py-1 text-ink">{fr ? "Perçue sur les ventes" : "Collected on sales"}</td>{numCells(3, m(p.collected))}</tr>
+              <tr><td /><td className="py-1 text-ink">{fr ? "Payée sur les achats (récupérable)" : "Paid on purchases (recoverable)"}</td>{numCells(3, m(p.recoverable))}</tr>
               <Total label={fr ? "Net de la période" : "Net for the period"} value={p.netForPeriod} />
-              <tr><td /><td className="py-1 text-ink">{fr ? "Remise payée" : "Remitted"}</td><td className="text-right">{m(p.remitted)}</td><td /><td /></tr>
+              <tr><td /><td className="py-1 text-ink">{fr ? "Remise payée" : "Remitted"}</td>{numCells(3, m(p.remitted))}</tr>
               <Total strong label={fr ? "Solde à remettre" : "Balance owing"} value={p.owing} />
             </tbody>
           );
           return (
             <>
               <p className="mt-3 text-sm text-ink">{fr ? "Ventes de la période" : "Sales for the period"}: <b>{m(s.sales)}</b></p>
-              <table className="mt-1 w-full max-w-3xl text-sm"><Part title="GST/HST — TPS/TVH" p={s.gstHst} /><Part title="QST — TVQ" p={s.qst} /></table>
+              <table className="mt-1 w-full max-w-5xl text-sm"><Part title="GST/HST — TPS/TVH" p={s.gstHst} /><Part title="QST — TVQ" p={s.qst} /></table>
               {!entity.salesTaxRegistered && <p className="mt-3 text-xs text-soft">{fr ? "Cette entité n'est pas inscrite aux taxes de vente : activez l'inscription dans Configuration lorsque vous dépassez 30 000 $." : "This entity is not registered for sales taxes: turn registration on in Setup once you pass $30,000."}</p>}
             </>
           );
