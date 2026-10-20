@@ -80,21 +80,36 @@ export async function balanceSheet(db: PrismaClient, entityId: string, asOf: Dat
   const before = await incomeStatement(db, entityId, new Date(Date.UTC(1990, 0, 1)), new Date(fiscalYearStart.getTime() - 86400000));
   const current = await incomeStatement(db, entityId, fiscalYearStart, asOf);
 
+  // Which accounts may switch sides: those marked as opposite accounts (or under one), and by default every receivable,
+  // payable, loan or tax account (a credit balance in a receivable is a liability, a debit balance in a payable an asset).
+  // Bank, card, investment, fixed and intangible assets, and the input tax credits that net against a tax payable, stay put.
+  const all = await db.accAccount.findMany({ where: { entityId }, select: { id: true, parentId: true, twoWay: true } });
+  const meta = new Map(all.map((a) => [a.id, a]));
+  const forcedByAncestor = (id: string) => {
+    let cur = meta.get(id);
+    for (let i = 0; cur?.parentId && i < 6; i++) {
+      cur = meta.get(cur.parentId);
+      if (cur?.twoWay) return true;
+    }
+    return false;
+  };
+  const STAYS = new Set(["BANK", "CREDIT_CARD", "FIXED_ASSET", "INTANGIBLE", "INVESTMENT", "TAX_RECOVERABLE"]);
+  const canSwitch = (r: AccountRow) => r.twoWay || forcedByAncestor(r.id) || !STAYS.has(r.subtype);
   const assets: AccountRow[] = [];
   const liabilities: AccountRow[] = [];
   const equity: AccountRow[] = [];
   // An opposite account sits on the side its balance falls on, in the matching section: a loan receivable that
   // turns into a debt moves from assets to liabilities (and back), a tax refund becomes tax owed, and so on.
   // On the other side it takes the number and names chosen for it, and stands on its own in the new section.
-  const flipped = (r: AccountRow) => ({ code: r.altCode ?? r.code, name: r.altName ?? r.name, nameFr: r.altNameFr ?? r.altName ?? r.nameFr, parentId: null });
+  const flipped = (r: AccountRow) => ({ code: r.altCode ?? r.code, name: r.altName ?? r.name, nameFr: r.altNameFr ?? r.altName ?? r.nameFr, parentId: r.altCode || r.altName ? null : r.parentId });
   const toLiability: Record<string, string> = { TREASURY: "SHORT_TERM", CURRENT: "SHORT_TERM", LONG_TERM: "LONG_TERM", FIXED: "LONG_TERM", INTANGIBLE: "LONG_TERM" };
   const toAsset: Record<string, string> = { SHORT_TERM: "CURRENT", LONG_TERM: "LONG_TERM" };
   for (const r of rows) {
     if (r.type === "ASSET") {
-      if (r.twoWay && r.balance < 0) liabilities.push({ ...r, ...flipped(r), balance: -r.balance, section: toLiability[r.section ?? "CURRENT"] ?? "SHORT_TERM" });
+      if (canSwitch(r) && r.balance < 0) liabilities.push({ ...r, ...flipped(r), balance: -r.balance, section: toLiability[r.section ?? "CURRENT"] ?? "SHORT_TERM" });
       else assets.push(r);
     } else if (r.type === "LIABILITY") {
-      if (r.twoWay && r.balance < 0) assets.push({ ...r, ...flipped(r), balance: -r.balance, section: toAsset[r.section ?? "SHORT_TERM"] ?? "CURRENT" });
+      if (canSwitch(r) && r.balance < 0) assets.push({ ...r, ...flipped(r), balance: -r.balance, section: toAsset[r.section ?? "SHORT_TERM"] ?? "CURRENT" });
       else liabilities.push(r);
     } else if (r.type === "EQUITY") equity.push(r);
   }
