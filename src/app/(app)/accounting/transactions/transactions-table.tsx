@@ -231,7 +231,7 @@ export default function TransactionsTable({
                     <div className="w-24 shrink-0 pt-1 text-sm text-soft">{t.date}</div>
                     <div className="min-w-48 flex-1">
                       <SupplierName t={t} disabled={busy} onRename={(n) => run(async () => { await updateSupplier(t.id, n); })} />
-                      <p className="truncate text-xs text-soft" title={t.description}>{t.description} · {bankName.get(t.accountId)}</p>
+                      <p className="text-xs text-soft break-words">{t.description} · {bankName.get(t.accountId)}</p>
                       {t.status === "SUGGESTED" && t.suggestionText && <p className="text-xs text-amber-700">{fr ? "Suggestion : " : "Suggested: "}{t.suggestionText}</p>}
                     </div>
                     <div className={`w-28 shrink-0 pt-1 text-right text-sm font-semibold ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{money(t.amount, t.currency, lang)}
@@ -314,7 +314,7 @@ export default function TransactionsTable({
                 {done.map((t) => (
                   <tr key={t.id}>
                     <td className="py-1.5 pr-3 whitespace-nowrap text-soft">{t.date}</td>
-                    <td className="pr-3 text-ink" title={t.description}>{t.supplier}</td>
+                    <td className="pr-3 text-ink">{t.supplier}<span className="block max-w-md text-xs text-soft break-words">{t.description}</span></td>
                     <td className="pr-3 text-soft">
                       {t.status === "IGNORED" ? (fr ? "(ignorée)" : "(ignored)") : t.categoryText}
                       {t.by === "RULE" && <span className="ml-1 rounded bg-emerald-50 px-1 text-xs text-emerald-700">{fr ? "auto" : "auto"}</span>}

@@ -181,12 +181,17 @@ export async function deleteRule(id: string): Promise<void> {
 
 // ---------------------------------------------------------------- import
 
-export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number } }> {
+export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1, format?: { signature: string; map: unknown } | null): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number } }> {
   await requireAdmin();
   if (rows.length === 0) return { error: "There is nothing to import." };
   if (rows.length > 20000) return { error: "That file is too large — import it in parts." };
   try {
-    const counts = await withScopedPrismaClient((db) => importTransactions(db, accountId, rows, fileName, fxRate));
+    const counts = await withScopedPrismaClient(async (db) => {
+      const c = await importTransactions(db, accountId, rows, fileName, fxRate);
+      // Remember how this account's statements are laid out (columns, date order) for the next import.
+      if (format) await db.accAccount.update({ where: { id: accountId }, data: { importFormat: format as never } });
+      return c;
+    });
     refresh();
     return { success: "Imported.", counts };
   } catch (error) {

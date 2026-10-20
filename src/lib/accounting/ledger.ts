@@ -280,7 +280,7 @@ export async function applyRules(db: PrismaClient, txIds?: string[]): Promise<{ 
 
 export type ImportRow = { date: string; description: string; amount: number; supplier?: string };
 
-export async function importTransactions(db: PrismaClient, accountId: string, rows: ImportRow[], fileName: string, fxRate = 1): Promise<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number }> {
+export async function importTransactions(db: PrismaClient, accountId: string, rows: ImportRow[], fileName: string, fxRate = 1): Promise<{ rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number }> {
   const account = await db.accAccount.findUniqueOrThrow({ where: { id: accountId } });
   if (account.subtype !== "BANK" && account.subtype !== "CREDIT_CARD") throw new Error("Choose a bank or credit-card account to import into.");
   const sign = account.importSign === -1 ? -1 : 1;
@@ -297,11 +297,39 @@ export async function importTransactions(db: PrismaClient, accountId: string, ro
     prepared.push({ date: new Date(`${r.date}T00:00:00.000Z`), description: r.description, amount, dedupeKey: await sha256(`${base}|${n}`), supplier: supplierName(r.supplier || r.description) });
   }
   const existing = new Set<string>();
+  const matchedIds = new Set<string>();
   for (const c of chunks(prepared.map((p) => p.dedupeKey), 1000)) {
-    const found = await db.accTransaction.findMany({ where: { accountId, dedupeKey: { in: c } }, select: { dedupeKey: true } });
-    for (const f of found) existing.add(f.dedupeKey);
+    const found = await db.accTransaction.findMany({ where: { accountId, dedupeKey: { in: c } }, select: { id: true, dedupeKey: true } });
+    for (const f of found) {
+      existing.add(f.dedupeKey);
+      matchedIds.add(f.id);
+    }
   }
-  const fresh = prepared.filter((p) => !existing.has(p.dedupeKey));
+  // A second pass for rows whose date was read the other way round (03/04 as 4 March instead of 3 April): the same
+  // amount and description with the day and month swapped is the same transaction, not a new one.
+  const sameWithSwappedDate = new Set<string>();
+  const stillNew = prepared.filter((p) => !existing.has(p.dedupeKey));
+  if (stillNew.length > 0) {
+    const amounts = [...new Set(stillNew.map((p) => p.amount))];
+    const candidates: { id: string; date: Date; amount: number; description: string }[] = [];
+    for (const c of chunks(amounts, 500)) {
+      candidates.push(...(await db.accTransaction.findMany({ where: { accountId, amount: { in: c }, id: { notIn: [...matchedIds] } }, select: { id: true, date: true, amount: true, description: true } })));
+    }
+    const used = new Set<string>();
+    for (const p of stillNew) {
+      const m = p.date.getUTCMonth() + 1;
+      const d = p.date.getUTCDate();
+      if (m === d || d > 12) continue;
+      const swapped = Date.UTC(p.date.getUTCFullYear(), d - 1, m);
+      const key = supplierKey(p.description);
+      const hit = candidates.find((c) => !used.has(c.id) && r2(c.amount) === p.amount && c.date.getTime() === swapped && supplierKey(c.description) === key);
+      if (hit) {
+        used.add(hit.id);
+        sameWithSwappedDate.add(p.dedupeKey);
+      }
+    }
+  }
+  const fresh = prepared.filter((p) => !existing.has(p.dedupeKey) && !sameWithSwappedDate.has(p.dedupeKey));
   const batch = await db.accImportBatch.create({ data: { accountId, fileName, rowCount: rows.length, newCount: fresh.length, dupCount: rows.length - fresh.length } });
   const created: string[] = [];
   for (const c of chunks(fresh, 500)) {
@@ -332,7 +360,7 @@ export async function importTransactions(db: PrismaClient, accountId: string, ro
   }
 
   const auto = await applyRules(db, created);
-  return { rows: rows.length, added: fresh.length, duplicates: rows.length - fresh.length, autoPosted: auto.posted, transfersLinked };
+  return { rows: rows.length, added: fresh.length, duplicates: rows.length - fresh.length, dateMismatches: sameWithSwappedDate.size, autoPosted: auto.posted, transfersLinked };
 }
 
 export { parseCsv };

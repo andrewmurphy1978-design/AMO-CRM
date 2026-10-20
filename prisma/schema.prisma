@@ -2110,6 +2110,8 @@ model AccAccount {
   importSign      Int            @default(1)
   // Currency the account is held in; null = the entity's own currency.
   currency        String?
+  // How this account's statements are laid out, remembered from the last import: { signature, map }.
+  importFormat    Json?
   // Accounts that stand for a relationship with another entity (owner contributions, shareholder loan...).
   counterEntityId String?
 

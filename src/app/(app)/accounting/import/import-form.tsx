@@ -9,7 +9,11 @@ import { money } from "@/lib/accounting/format";
 
 const none = -1;
 
-export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; accounts: { id: string; label: string; card: boolean; currency: string; entityCurrency: string }[] }) {
+// Identifies a statement layout: its header cells, or just the column count when it has no header.
+const layoutSignature = (grid: string[][], headerRow: number) =>
+  headerRow >= 0 ? grid[headerRow].map((h) => h.trim().toLowerCase()).join("|") : `cols:${Math.max(0, ...grid.slice(0, 20).map((r) => r.length))}`;
+
+export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; accounts: { id: string; label: string; card: boolean; currency: string; entityCurrency: string; format: { signature: string; map: ColumnMap } | null }[] }) {
   const fr = lang === "fr";
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [fileName, setFileName] = useState("");
@@ -20,7 +24,8 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
   const [pdfRows, setPdfRows] = useState<ImportRow[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number } | null>(null);
+  const [result, setResult] = useState<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number; dateMismatches?: number } | null>(null);
+  const [usedSaved, setUsedSaved] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
   const [rate, setRate] = useState("1");
@@ -30,6 +35,25 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
 
   const parsed = grid && map ? toTransactions(grid, headerRow, map) : null;
   const rows: ImportRow[] | null = pdfRows ?? parsed?.rows ?? null;
+
+  const dateInfo = (() => {
+    if (!rows || rows.length === 0) return null;
+    const dates = rows.map((r) => r.date).sort();
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    const today = new Date().toISOString().slice(0, 10);
+    const future = dates.filter((d) => d > today).length;
+    const spanDays = (Date.parse(last) - Date.parse(first)) / 86400000;
+    const warnings: string[] = [];
+    if (future > 0) warnings.push(fr ? `${future} date(s) sont dans le futur : l'ordre jour/mois est probablement inversé.` : `${future} date(s) are in the future: the day/month order is probably swapped.`);
+    if (spanDays > 400) warnings.push(fr ? `Le fichier couvre ${Math.round(spanDays / 30)} mois : vérifiez le format de date.` : `The file spans ${Math.round(spanDays / 30)} months: check the date order.`);
+    if (map && map.dateOrder !== "YMD" && grid) {
+      const col = grid.slice(headerRow + 1, headerRow + 400).map((r) => (r[map.date] ?? "").trim());
+      const ambiguous = col.length > 0 && col.every((v) => { const m = /^(\d{1,2})[-/.](\d{1,2})[-/.]/.exec(v); return !m || (+m[1] <= 12 && +m[2] <= 12); });
+      if (ambiguous) warnings.push(fr ? "Toutes les dates pourraient se lire JJ/MM ou MM/JJ : confirmez le format avec la plage de dates ci-dessous." : "Every date could be read as DD/MM or MM/DD: confirm the order using the date range below.");
+    }
+    return { first, last, warnings };
+  })();
 
   const reset = () => {
     setGrid(null);
@@ -66,8 +90,12 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
       setGrid(g);
       setHeaders(d.headers);
       setHeaderRow(d.headerRow);
-      setMap(d.map);
-      if (!d.map) setError(fr ? "Colonnes non reconnues — choisissez-les ci-dessous." : "Could not detect the columns — choose them below.");
+      // The same layout as this account's last import: reuse the columns and date order chosen then.
+      const saved = accounts.find((a) => a.id === accountId)?.format;
+      const same = saved && saved.signature === layoutSignature(g, d.headerRow);
+      setUsedSaved(!!same);
+      setMap(same ? saved.map : d.map);
+      if (!d.map && !same) setError(fr ? "Colonnes non reconnues — choisissez-les ci-dessous." : "Could not detect the columns — choose them below.");
     });
   };
 
@@ -90,7 +118,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
   const doImport = () =>
     startTransition(async () => {
       if (!rows) return;
-      const r = await importStatement(accountId, rows, fileName, foreign ? Number(rate) || 1 : 1);
+      const r = await importStatement(accountId, rows, fileName, foreign ? Number(rate) || 1 : 1, grid && map ? { signature: layoutSignature(grid, headerRow), map } : null);
       if (r.error) setError(r.error);
       else {
         setError(null);
@@ -100,6 +128,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
         suggestWithAI().then((ai) => setAiNote(ai.error ? (fr ? `Suggestions IA impossibles : ${ai.error}` : `AI suggestions failed: ${ai.error}`) : ai.suggested ? (fr ? `${ai.suggested} transaction(s) ont une suggestion IA à confirmer.` : `${ai.suggested} transaction(s) have an AI suggestion to confirm.`) : null));
         setGrid(null);
         setMap(null);
+        setUsedSaved(false);
         setPdfRows(null);
       }
     });
@@ -197,6 +226,13 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
             <b>{rows.length}</b> {fr ? "transactions lues" : "transactions read"}
             {parsed && parsed.skipped > 0 ? (fr ? ` (${parsed.skipped} lignes ignorées)` : ` (${parsed.skipped} lines skipped)`) : ""}. {fr ? "Aperçu :" : "Preview:"}
           </p>
+          {dateInfo && (
+            <div className={`rounded-lg px-3 py-2 text-sm ${dateInfo.warnings.length ? "bg-amber-50 text-amber-900" : "bg-black/[0.03] text-ink"}`}>
+              <p>{fr ? "Dates :" : "Dates:"} <b>{dateInfo.first}</b> → <b>{dateInfo.last}</b></p>
+              {dateInfo.warnings.map((w) => <p key={w}>⚠ {w}</p>)}
+            </div>
+          )}
+          {usedSaved && <p className="text-xs text-soft">{fr ? "Colonnes et format de date repris du dernier import de ce compte." : "Columns and date order reused from this account's last import."}</p>}
           <table className="w-full text-sm">
             <tbody className="divide-y divide-card-border">
               {rows.slice(0, 8).map((r, i) => (
@@ -225,6 +261,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
           <p className="font-semibold">{fr ? "Importation terminée" : "Import complete"}</p>
           <ul className="mt-1 list-disc pl-5">
             <li>{result.added} {fr ? "nouvelles transactions" : "new transactions"} ({result.duplicates} {fr ? "doublons ignorés" : "duplicates skipped"})</li>
+            {!!result.dateMismatches && <li>{result.dateMismatches} {fr ? "reconnues comme déjà importées malgré une date inversée (jour/mois) — les dates existantes sont conservées" : "recognized as already imported despite a swapped day/month date — the existing dates were kept"}</li>}
             <li>{result.autoPosted} {fr ? "catégorisées automatiquement (fournisseurs connus)" : "categorized automatically (known suppliers)"}</li>
             {result.transfersLinked > 0 && <li>{result.transfersLinked} {fr ? "virements entre vos comptes reliés" : "transfers between your accounts linked"}</li>}
           </ul>
