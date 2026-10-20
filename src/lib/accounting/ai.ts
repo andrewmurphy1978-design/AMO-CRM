@@ -45,7 +45,7 @@ ${entities.map(([id, label]) => `${id} = ${label}`).join("\n")}
 Accounts (id|entity|code name [type]):
 ${accountList}
 
-Suppliers (name, one raw bank description, typical amount, how many transactions):
+Suppliers (name, one raw bank description made of payee · memo · transaction type (use all of it; negative amount = money out, positive = money in), typical amount, how many transactions):
 ${JSON.stringify(batch)}
 
 Respond with ONLY a JSON object, no markdown fences, no other text, in exactly this shape:

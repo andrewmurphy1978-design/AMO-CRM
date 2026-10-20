@@ -5,7 +5,11 @@ export type DateOrder = "YMD" | "DMY" | "MDY";
 
 export interface ColumnMap {
   date: number;
+  // The main text column. When a file also has Name / Memo / Type columns they are joined into the description.
   description: number;
+  name?: number | null;
+  memo?: number | null;
+  kind?: number | null;
   // Either one signed amount column, or separate debit (money out) and credit (money in) columns.
   amount: number | null;
   debit: number | null;
@@ -16,6 +20,8 @@ export interface ColumnMap {
 export interface ParsedRow {
   date: string; // YYYY-MM-DD
   description: string;
+  // The payee when the file has a separate Name column (the supplier is taken from it).
+  supplier?: string;
   amount: number; // statement sign: positive = money in when the file is a bank account
 }
 
@@ -121,7 +127,10 @@ export function parseAmount(value: string): number | null {
 
 const HEADERS = {
   date: ["date", "transaction date", "date de la transaction", "date de transaction", "posted date", "date d'inscription", "date inscription", "booking date"],
-  description: ["description", "description 1", "details", "détails", "libellé", "libelle", "memo", "payee", "merchant", "narrative", "transaction", "nom"],
+  description: ["description", "description 1", "libellé", "libelle", "narrative", "details", "détails"],
+  name: ["name", "nom", "payee", "merchant", "beneficiary", "bénéficiaire", "marchand"],
+  memo: ["memo", "note", "notes", "reference", "référence", "description 2", "message", "remarks"],
+  kind: ["transaction", "transaction type", "type", "type de transaction", "type d'operation"],
   amount: ["amount", "montant", "amount cad", "montant cad", "transaction amount"],
   debit: ["debit", "débit", "withdrawal", "withdrawals", "retrait", "retraits", "montant débit", "paid out", "amount debit"],
   credit: ["credit", "crédit", "deposit", "deposits", "dépôt", "depot", "dépôts", "montant crédit", "paid in", "amount credit"],
@@ -150,7 +159,7 @@ export function detectColumns(rows: string[][]): { headerRow: number; map: Colum
   const named = (cells: string[]) => cells.map(norm);
   for (let i = 0; i < Math.min(rows.length, 12); i++) {
     const cells = named(rows[i]);
-    const hits = (["date", "description", "amount", "debit", "credit"] as const).filter((k) => cells.some((c) => HEADERS[k].map(norm).includes(c))).length;
+    const hits = (["date", "description", "name", "memo", "kind", "amount", "debit", "credit"] as const).filter((k) => cells.some((c) => HEADERS[k].map(norm).includes(c))).length;
     if (hits >= 2) {
       headerRow = i;
       headers = rows[i];
@@ -161,6 +170,10 @@ export function detectColumns(rows: string[][]): { headerRow: number; map: Colum
   const find = (k: keyof typeof HEADERS) => (headerRow >= 0 ? named(rows[headerRow]).findIndex((c) => HEADERS[k].map(norm).includes(c)) : -1);
   let date = find("date");
   let description = find("description");
+  const nameCol = find("name");
+  const memoCol = find("memo");
+  const kindCol = find("kind");
+  if (description < 0) description = nameCol >= 0 ? nameCol : memoCol >= 0 ? memoCol : kindCol;
   let amount = find("amount");
   const debit = find("debit");
   const credit = find("credit");
@@ -205,7 +218,7 @@ export function detectColumns(rows: string[][]): { headerRow: number; map: Colum
     description = best;
   }
   if (date < 0 || description < 0 || (amount < 0 && debitCol < 0 && creditCol < 0)) return { headerRow, map: null, headers };
-  return { headerRow, headers, map: { date, description, amount: amount >= 0 ? amount : null, debit: debitCol >= 0 ? debitCol : null, credit: creditCol >= 0 ? creditCol : null, dateOrder: detectDateOrder(body, date) } };
+  return { headerRow, headers, map: { date, description, name: nameCol >= 0 ? nameCol : null, memo: memoCol >= 0 && memoCol !== description ? memoCol : null, kind: kindCol >= 0 && kindCol !== description ? kindCol : null, amount: amount >= 0 ? amount : null, debit: debitCol >= 0 ? debitCol : null, credit: creditCol >= 0 ? creditCol : null, dateOrder: detectDateOrder(body, date) } };
 }
 
 /** Rows -> transactions with a statement-signed amount. Rows that are not transactions (totals, notes) are skipped. */
@@ -222,12 +235,18 @@ export function toTransactions(rows: string[][], headerRow: number, map: ColumnM
       if (debit !== null && debit !== 0) amount = -Math.abs(debit);
       else if (credit !== null && credit !== 0) amount = Math.abs(credit);
     }
-    const description = (r[map.description] ?? "").trim();
+    const cell = (c: number | null | undefined) => (c === null || c === undefined || c < 0 ? "" : (r[c] ?? "").trim());
+    const parts: string[] = [];
+    for (const text of [cell(map.name), cell(map.description), cell(map.memo), cell(map.kind)]) {
+      if (text && !parts.some((p) => p.toLowerCase() === text.toLowerCase())) parts.push(text);
+    }
+    const description = parts.join(" · ");
+    const supplier = cell(map.name) || undefined;
     if (!date || amount === null || amount === 0 || !description) {
       skipped++;
       continue;
     }
-    out.push({ date, description, amount });
+    out.push({ date, description, amount, ...(supplier ? { supplier } : {}) });
   }
   return { rows: out, skipped };
 }

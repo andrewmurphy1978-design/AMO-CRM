@@ -256,6 +256,18 @@ export async function categorizeTransactions(input: { txIds: string[]; allocatio
   });
 }
 
+/** Removes an import and its transactions (posted ones are first taken out of the books). */
+export async function deleteImportBatch(batchId: string): Promise<void> {
+  await requireAdmin();
+  await withScopedPrismaClient(async (db) => {
+    const ids = (await db.accTransaction.findMany({ where: { batchId }, select: { id: true } })).map((t) => t.id);
+    await unpostTransactions(db, ids);
+    await db.accTransaction.deleteMany({ where: { batchId } });
+    await db.accImportBatch.delete({ where: { id: batchId } });
+  });
+  refresh();
+}
+
 export async function uncategorizeTransactions(txIds: string[]): Promise<void> {
   await requireAdmin();
   await withScopedPrismaClient((db) => unpostTransactions(db, txIds));

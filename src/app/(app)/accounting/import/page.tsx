@@ -2,6 +2,7 @@ import Link from "next/link";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
+import DeleteBatchButton from "./delete-batch-button";
 import ImportForm from "./import-form";
 
 export default async function ImportPage() {
@@ -30,7 +31,7 @@ export default async function ImportPage() {
             {batches.map((b) => (
               <li key={b.id} className="flex justify-between py-2">
                 <span className="text-ink">{b.fileName} <span className="text-soft">· {b.account.name}</span></span>
-                <span className="text-soft">{b.createdAt.toISOString().slice(0, 10)}</span>
+                <span className="flex items-center gap-3 text-soft">{b.createdAt.toISOString().slice(0, 10)} <DeleteBatchButton id={b.id} label={fr ? "Supprimer" : "Delete"} confirmText={fr ? "Supprimer cette importation et ses transactions ?" : "Delete this import and its transactions?"} /></span>
               </li>
             ))}
           </ul>

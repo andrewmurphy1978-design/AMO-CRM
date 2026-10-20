@@ -278,7 +278,7 @@ export async function applyRules(db: PrismaClient, txIds?: string[]): Promise<{ 
 
 // ---------------------------------------------------------------- import
 
-export type ImportRow = { date: string; description: string; amount: number };
+export type ImportRow = { date: string; description: string; amount: number; supplier?: string };
 
 export async function importTransactions(db: PrismaClient, accountId: string, rows: ImportRow[], fileName: string, fxRate = 1): Promise<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number }> {
   const account = await db.accAccount.findUniqueOrThrow({ where: { id: accountId } });
@@ -294,7 +294,7 @@ export async function importTransactions(db: PrismaClient, accountId: string, ro
     const base = `${r.date}|${amount.toFixed(2)}|${supplierKey(r.description)}`;
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
-    prepared.push({ date: new Date(`${r.date}T00:00:00.000Z`), description: r.description, amount, dedupeKey: await sha256(`${base}|${n}`), supplier: supplierName(r.description) });
+    prepared.push({ date: new Date(`${r.date}T00:00:00.000Z`), description: r.description, amount, dedupeKey: await sha256(`${base}|${n}`), supplier: supplierName(r.supplier || r.description) });
   }
   const existing = new Set<string>();
   for (const c of chunks(prepared.map((p) => p.dedupeKey), 1000)) {

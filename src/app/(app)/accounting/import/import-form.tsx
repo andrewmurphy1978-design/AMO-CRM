@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { importStatement, readStatementPdf } from "@/actions/accounting";
+import { importStatement, readStatementPdf, suggestWithAI } from "@/actions/accounting";
 import { detectColumns, parseCsv, toTransactions, type ColumnMap, type DateOrder } from "@/lib/accounting/csv";
 import type { ImportRow } from "@/lib/accounting/ledger";
 import { money } from "@/lib/accounting/format";
@@ -21,6 +21,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number } | null>(null);
+  const [aiNote, setAiNote] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
   const [rate, setRate] = useState("1");
   const [dragging, setDragging] = useState(false);
@@ -94,6 +95,9 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
       else {
         setError(null);
         setResult(r.counts ?? null);
+        // Let the AI propose a category for everything the remembered suppliers did not already cover.
+        setAiNote(fr ? "L'IA catégorise les nouvelles transactions…" : "The AI is categorizing the new transactions…");
+        suggestWithAI().then((ai) => setAiNote(ai.error ? (fr ? `Suggestions IA impossibles : ${ai.error}` : `AI suggestions failed: ${ai.error}`) : ai.suggested ? (fr ? `${ai.suggested} transaction(s) ont une suggestion IA à confirmer.` : `${ai.suggested} transaction(s) have an AI suggestion to confirm.`) : null));
         setGrid(null);
         setMap(null);
         setPdfRows(null);
@@ -161,6 +165,18 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
             <select value={map?.description ?? none} onChange={(e) => patch({ description: Number(e.target.value) })} className="rounded-lg border border-card-border bg-white px-2 py-1">{colOptions(false)}</select>
           </label>
           <label className="flex flex-col gap-1">
+            <span className="text-xs text-soft">{fr ? "Nom / bénéficiaire" : "Name / payee"}</span>
+            <select value={map?.name ?? none} onChange={(e) => patch({ name: num(e.target.value) })} className="rounded-lg border border-card-border bg-white px-2 py-1">{colOptions(true)}</select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-soft">{fr ? "Mémo / détails" : "Memo / details"}</span>
+            <select value={map?.memo ?? none} onChange={(e) => patch({ memo: num(e.target.value) })} className="rounded-lg border border-card-border bg-white px-2 py-1">{colOptions(true)}</select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-soft">{fr ? "Type de transaction" : "Transaction type"}</span>
+            <select value={map?.kind ?? none} onChange={(e) => patch({ kind: num(e.target.value) })} className="rounded-lg border border-card-border bg-white px-2 py-1">{colOptions(true)}</select>
+          </label>
+          <label className="flex flex-col gap-1">
             <span className="text-xs text-soft">{fr ? "Montant (une colonne)" : "Amount (one column)"}</span>
             <select value={map?.amount ?? none} onChange={(e) => patch({ amount: num(e.target.value) })} className="rounded-lg border border-card-border bg-white px-2 py-1">{colOptions(true)}</select>
           </label>
@@ -212,6 +228,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
             <li>{result.autoPosted} {fr ? "catégorisées automatiquement (fournisseurs connus)" : "categorized automatically (known suppliers)"}</li>
             {result.transfersLinked > 0 && <li>{result.transfersLinked} {fr ? "virements entre vos comptes reliés" : "transfers between your accounts linked"}</li>}
           </ul>
+          {aiNote && <p className="mt-2">{aiNote}</p>}
           <Link href="/accounting/transactions" className="mt-2 inline-block underline">{fr ? "Catégoriser maintenant →" : "Categorize now →"}</Link>
         </div>
       )}

@@ -173,6 +173,15 @@ export default function TransactionsTable({
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               {fr ? "Mémoriser pour ce fournisseur" : "Remember for this supplier"}
             </label>
+            {pending.some((t) => t.status === "SUGGESTED") && (
+              <button
+                disabled={busy}
+                onClick={() => run(async () => { const r = await confirmSuggestions(pending.filter((t) => t.status === "SUGGESTED").map((t) => t.id)); return r.error ?? (fr ? `${r.posted ?? 0} transaction(s) confirmée(s).` : `${r.posted ?? 0} transaction(s) confirmed.`); })}
+                className="btn-primary rounded-lg px-3 py-1.5 font-semibold disabled:opacity-50"
+              >
+                {fr ? "Confirmer toutes les suggestions" : "Confirm all suggestions"}
+              </button>
+            )}
             <button
               disabled={busy || pending.every((t) => t.status !== "NEW")}
               onClick={() => run(async () => { const r = await suggestWithAI(); return r.error ?? r.success; })}
