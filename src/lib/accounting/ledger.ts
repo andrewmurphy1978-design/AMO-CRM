@@ -29,6 +29,18 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
   // Also adds accounts that were added to the template after the entity was created.
   const existing = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, gifi: true, name: true, type: true, subtype: true } });
   const haveCodes = new Set(existing.map((a) => a.code));
+  // Canadian businesses: input tax credits used to be assets (1300 / 1310); they now sit under the tax payable
+  // accounts (2301 / 2311) and 1300 / 1310 become the GST/HST and QST receivable accounts.
+  if ((entity.kind === "SOLE_PROPRIETORSHIP" || entity.kind === "CORPORATION") && entity.country === "CA") {
+    for (const [oldCode, newCode, payableCode] of [["1300", "2301", "2300"], ["1310", "2311", "2310"]]) {
+      const old = existing.find((a) => a.code === oldCode && a.type === "ASSET" && a.subtype === "TAX_RECOVERABLE");
+      if (!old || haveCodes.has(newCode)) continue;
+      const payable = existing.find((a) => a.code === payableCode);
+      await db.accAccount.update({ where: { id: old.id }, data: { code: newCode, type: "LIABILITY", subtype: "TAX_RECOVERABLE", section: null, parentId: payable?.id ?? null } });
+      haveCodes.delete(oldCode);
+      haveCodes.add(newCode);
+    }
+  }
   // Canadian corporations: fill in the suggested GIFI code on accounts that have none yet.
   if (usesGifi(entity.kind, entity.country)) {
     for (const a of existing) {
@@ -60,6 +72,17 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
     })),
     skipDuplicates: true,
   });
+  // Second-level accounts (the input tax credits sit under the tax payable accounts).
+  const withParent = missing.filter(({ c }) => c.parent);
+  if (withParent.length > 0) {
+    const rows = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true } });
+    const idOf = new Map(rows.map((r) => [r.code, r.id]));
+    for (const { c } of withParent) {
+      const child = idOf.get(c.code);
+      const parent = idOf.get(c.parent as string);
+      if (child && parent) await db.accAccount.update({ where: { id: child }, data: { parentId: parent } });
+    }
+  }
 }
 
 export async function createEntity(

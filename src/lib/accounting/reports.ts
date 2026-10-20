@@ -159,7 +159,7 @@ export async function salesTaxReport(db: PrismaClient, entityId: string, from: D
     const owing = r2((payBal ? payBal.credit - payBal.debit : 0) - (recBal ? recBal.debit - recBal.credit : 0));
     return { collected, recoverable, netForPeriod: r2(collected - recoverable), remitted, owing };
   };
-  return { sales: revenue.totalIncome, gstHst: part("2300", "1300"), qst: part("2310", "1310") };
+  return { sales: revenue.totalIncome, gstHst: part("2300", "2301"), qst: part("2310", "2311") };
 }
 
 /**

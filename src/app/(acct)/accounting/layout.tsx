@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { accountingUserFor } from "@/lib/accounting/access";
+import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -17,6 +18,8 @@ export default async function AccountingLayout({ children }: { children: ReactNo
   const t = getDict(lang);
   const { hour12, toCategorize, me } = await withScopedPrismaClient(async (db) => {
     const me = await accountingUserFor(db, session);
+    // Keeps every entity's chart up to date (new template accounts, moved accounts) before any page or action uses it.
+    if (me) await ensureAccountingSetup(db, me);
     return {
       me,
       hour12: await getHour12(session, db),

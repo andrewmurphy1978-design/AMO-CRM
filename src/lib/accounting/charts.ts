@@ -16,6 +16,8 @@ export interface ChartAccount {
   taxLine?: string;
   deductiblePct?: number;
   system?: boolean;
+  // Chart code of the account this one sits under (second level).
+  parent?: string;
 }
 
 const a = (code: string, en: string, fr: string, type: AccType, subtype: string, taxLine?: string, extra: Partial<ChartAccount> = {}): ChartAccount => ({ code, en, fr, type, subtype, taxLine, ...extra });
@@ -23,10 +25,14 @@ const a = (code: string, en: string, fr: string, type: AccType, subtype: string,
 // Sales taxes (Canada): GST/HST goes to the CRA, QST to Revenu Québec. Collected on sales = payable; paid on
 // purchases = recoverable (input tax credits / input tax refunds). Remittances are plain payments to the payable accounts.
 const CA_SALES_TAX: ChartAccount[] = [
-  a("1300", "GST/HST recoverable (input tax credits)", "TPS/TVH à recouvrer (crédits de taxe sur les intrants)", "ASSET", "TAX_RECOVERABLE", "GST34 line 106", { system: true }),
-  a("1310", "QST recoverable (input tax refunds)", "TVQ à recouvrer (remboursements de taxe sur les intrants)", "ASSET", "TAX_RECOVERABLE", "Revenu Québec QST return", { system: true }),
+  // Assets: refunds the government owes the business (when input tax credits exceed the tax collected). Not the ITCs.
+  a("1300", "GST/HST receivable", "TPS/TVH à recevoir", "ASSET", "TAX_RECEIVABLE", "GST34 line 111", { system: true }),
+  a("1310", "QST receivable", "TVQ à recevoir", "ASSET", "TAX_RECEIVABLE", "Revenu Québec QST return", { system: true }),
+  // Liabilities: tax collected on sales (payable), with the input tax credits / refunds claimed on purchases below it.
   a("2300", "GST/HST payable", "TPS/TVH à payer", "LIABILITY", "TAX_PAYABLE", "GST34 line 103", { system: true }),
+  a("2301", "GST/HST recoverable (input tax credits)", "TPS/TVH à recouvrer (crédits de taxe sur les intrants)", "LIABILITY", "TAX_RECOVERABLE", "GST34 line 106", { system: true, parent: "2300" }),
   a("2310", "QST payable", "TVQ à payer", "LIABILITY", "TAX_PAYABLE", "Revenu Québec QST return", { system: true }),
+  a("2311", "QST recoverable (input tax refunds)", "TVQ à recouvrer (remboursements de taxe sur les intrants)", "LIABILITY", "TAX_RECOVERABLE", "Revenu Québec QST return", { system: true, parent: "2310" }),
 ];
 
 const PERSONAL_CA: ChartAccount[] = [

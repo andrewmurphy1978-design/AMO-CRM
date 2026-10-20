@@ -115,8 +115,8 @@ export function buildPosting(input: {
       const s = splitTax(a.amount, a.tax);
       line(home, acc.id, s.net, counterIsDebit);
       // Sales (money in) create tax payable; purchases (money out) create tax recoverable.
-      const gstCode = inflow ? "2300" : "1300";
-      const qstCode = inflow ? "2310" : "1310";
+      const gstCode = inflow ? "2300" : "2301";
+      const qstCode = inflow ? "2310" : "2311";
       const gstAcc = ctx.accountByCode(ent.id, gstCode);
       const qstAcc = ctx.accountByCode(ent.id, qstCode);
       if (s.gstHst > 0) {
