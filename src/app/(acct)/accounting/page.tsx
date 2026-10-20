@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { requireAccountingUser } from "./session";
-import Card from "@/components/section-card";
+import Card, { type CardColor } from "@/components/section-card";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
-import { loadBooks, KIND_LABEL } from "@/lib/accounting/options";
+import { entityCardColor, loadBooks, KIND_LABEL } from "@/lib/accounting/options";
 import { fiscalYearRange, incomeStatement, salesTaxReport, smallSupplierStatus } from "@/lib/accounting/reports";
 import { money } from "@/lib/accounting/format";
 
@@ -64,7 +64,7 @@ export default async function AccountingOverview({ searchParams }: { searchParam
           const cur = e.currency;
           const kind = KIND_LABEL[e.kind]?.[fr ? "fr" : "en"] ?? e.kind;
           return (
-            <Card key={e.id} color={e.kind === "PERSONAL" ? "personal" : e.kind === "SOLE_PROPRIETORSHIP" ? "general" : e.kind === "CORPORATION" ? "contact" : "addresses"} title={e.name}>
+            <Card key={e.id} color={entityCardColor(e) as CardColor} title={e.name}>
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-xs text-soft">
