@@ -331,7 +331,7 @@ export async function categorizeTransactions(input: { txIds: string[]; allocatio
     // Every transaction and every account chosen must belong to this user.
     const ownIds = await ownTxIds(db, me, input.txIds);
     const chosen = [...new Set(input.allocations.map((a) => a.accountId))];
-    const ownChosen = await db.accAccount.findMany({ where: { id: { in: chosen }, entity: { ownerId: me.id } }, select: { id: true, entityId: true } });
+    const ownChosen = await db.accAccount.findMany({ where: { id: { in: chosen }, subtype: { not: "GROUP" }, entity: { ownerId: me.id } }, select: { id: true, entityId: true } });
     const entityOf = new Map(ownChosen.map((a) => [a.id, a.entityId]));
     if (ownChosen.length !== chosen.length || input.allocations.some((a) => entityOf.get(a.accountId) !== a.entityId)) throw deny();
     const txs = await db.accTransaction.findMany({ where: { id: { in: ownIds } } });
@@ -443,7 +443,7 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
         g.ids.push(t.id);
         groups.set(t.supplier, g);
       }
-      const accounts = await db.accAccount.findMany({ where: { archived: false, entity: { ownerId: me.id } }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
+      const accounts = await db.accAccount.findMany({ where: { archived: false, subtype: { not: "GROUP" }, entity: { ownerId: me.id } }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
       const options: AiAccountOption[] = accounts
         .filter((a) => !a.entity.archived)
         .map((a) => ({ id: a.id, entityId: a.entityId, entityName: a.entity.name, entityKind: a.entity.kind, code: a.code, name: a.name, type: a.type }));
@@ -507,7 +507,8 @@ export async function addManualEntry(input: { entityId: string; date: string; me
   try {
     await withScopedPrismaClient(async (db) => {
       await ownEntity(db, me, input.entityId);
-      const accs = await db.accAccount.findMany({ where: { id: { in: lines.map((l) => l.accountId) } }, select: { entityId: true } });
+      const accs = await db.accAccount.findMany({ where: { id: { in: lines.map((l) => l.accountId) } }, select: { entityId: true, subtype: true } });
+      if (accs.some((a) => a.subtype === "GROUP")) throw new Error("A sub-category header cannot be used in an entry: choose an account under it.");
       if (accs.some((a) => a.entityId !== input.entityId)) throw new Error("Every line must use an account of the same entity.");
       await db.accJournalEntry.create({
         data: { entityId: input.entityId, date: new Date(`${input.date}T00:00:00.000Z`), memo: input.memo, source: input.opening ? "OPENING" : "MANUAL", lines: { create: lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit })) } },

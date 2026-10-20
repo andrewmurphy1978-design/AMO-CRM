@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { lockedThrough } from "./reconcile";
-import { LEGACY_NAME_FIXES, REGISTERED_TYPES, chartFor, suggestGifi, usesGifi, entityDefaults, intercoSpec, type EntityKind } from "./charts";
+import { LEGACY_NAME_FIXES, groupsFor, REGISTERED_TYPES, chartFor, suggestGifi, usesGifi, entityDefaults, intercoSpec, type EntityKind } from "./charts";
 import { buildPosting, r2, type AllocationInput, type PostAccount, type PostEntity, type PostingEntry } from "./posting";
 import { parseCsv } from "./csv";
 import { supplierKey, supplierName } from "./supplier";
@@ -55,8 +55,14 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
     }
   }
   const missing = chart.map((c, order) => ({ c, order })).filter(({ c }) => !haveCodes.has(c.code));
-  if (missing.length === 0) return;
-  await db.accAccount.createMany({
+  // Income / expense sub-categories: a group is created once (with at least one of its accounts in the chart) and
+  // adopts those of its accounts that have no parent yet. Groups that already exist are left as the user has them.
+  const groups = groupsFor(entity.kind as EntityKind, entity.country).filter((g) => !haveCodes.has(g.code) && g.members.some((m) => haveCodes.has(m) || chart.some((c) => c.code === m)));
+  for (const g of groups) {
+    await db.accAccount.create({ data: { entityId, code: g.code, name: g.en, nameFr: g.fr, type: g.type, subtype: "GROUP", isSystem: true, order: 9000 } }).catch(() => null);
+  }
+  if (missing.length === 0 && groups.length === 0) return;
+  if (missing.length > 0) await db.accAccount.createMany({
     data: missing.map(({ c, order }) => ({
       entityId,
       code: c.code,
@@ -81,6 +87,19 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
       const child = idOf.get(c.code);
       const parent = idOf.get(c.parent as string);
       if (child && parent) await db.accAccount.update({ where: { id: child }, data: { parentId: parent } });
+    }
+  }
+  // Adopt members into the groups just created.
+  if (groups.length > 0) {
+    const rows = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, parentId: true } });
+    const idOf = new Map(rows.map((r) => [r.code, r]));
+    for (const g of groups) {
+      const gid = idOf.get(g.code)?.id;
+      if (!gid) continue;
+      for (const m of g.members) {
+        const acc = idOf.get(m);
+        if (acc && !acc.parentId) await db.accAccount.update({ where: { id: acc.id }, data: { parentId: gid } });
+      }
     }
   }
 }

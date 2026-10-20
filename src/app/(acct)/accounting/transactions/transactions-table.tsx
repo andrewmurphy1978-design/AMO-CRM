@@ -34,7 +34,7 @@ function CategoryPicker({ value, onChange, entities, options, lang }: { value: s
       <option value="">{fr ? "— Choisir une catégorie —" : "— Choose a category —"}</option>
       {entities.map((e) =>
         (["EXPENSE", "INCOME", "TRANSFER", "LIABILITY", "ASSET", "EQUITY"] as const).map((g) => {
-          const list = options.filter((o) => o.entityId === e.id && o.group === g);
+          const list = options.filter((o) => o.entityId === e.id && o.group === g && !o.isGroup);
           if (list.length === 0) return null;
           return (
             <optgroup key={`${e.id}${g}`} label={`${e.name} — ${GROUP_LABEL[g][lang]}`}>

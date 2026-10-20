@@ -36,6 +36,8 @@ export interface AccountOption {
   // The group heading in a picker.
   group: "EXPENSE" | "INCOME" | "TRANSFER" | "LIABILITY" | "ASSET" | "EQUITY";
   bank: boolean;
+  // A header account of the chart (sub-category): shown in the chart, never chosen for a transaction.
+  isGroup: boolean;
 }
 
 const GROUP_ORDER = ["EXPENSE", "INCOME", "TRANSFER", "LIABILITY", "ASSET", "EQUITY"] as const;
@@ -60,6 +62,7 @@ export async function loadBooks(db: PrismaClient, ownerId: string): Promise<{ en
       label: a.parentId && byId.get(a.parentId) ? `${byId.get(a.parentId)!.name} › ${a.name}` : a.name,
       labelFr: a.parentId && byId.get(a.parentId) ? `${byId.get(a.parentId)!.nameFr ?? byId.get(a.parentId)!.name} › ${a.nameFr ?? a.name}` : a.nameFr ?? a.name,
       bank,
+      isGroup: a.subtype === "GROUP",
       group: bank ? "TRANSFER" : a.type,
     };
   });

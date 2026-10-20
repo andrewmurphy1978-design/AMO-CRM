@@ -15,7 +15,7 @@ export default function JournalForm({ lang, entities, options }: { lang: "en" | 
   const [lines, setLines] = useState<L[]>([{ accountId: "", debit: "", credit: "" }, { accountId: "", debit: "", credit: "" }]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, start] = useTransition();
-  const accts = options.filter((o) => o.entityId === entityId);
+  const accts = options.filter((o) => o.entityId === entityId && !o.isGroup);
   const d = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
   const c = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
   const set = (i: number, p: Partial<L>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)));

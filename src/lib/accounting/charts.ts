@@ -355,6 +355,7 @@ const GIFI_BY_NAME: [RegExp, string, AccType?][] = [
 
 /** A suggested GIFI code for an account of a Canadian business, from its chart code (corporations) or its name. */
 export function suggestGifi(entityKind: string, a: { code: string; name: string; type: string; subtype: string }): string | null {
+  if (a.subtype === "GROUP") return null;
   if (a.type === "EQUITY" && !/share capital|retained/i.test(a.name)) return null;
   if (entityKind === "CORPORATION" && CORP_GIFI[a.code]) return CORP_GIFI[a.code];
   if (a.subtype === "BANK") return "1002";
@@ -392,3 +393,65 @@ export const LEGACY_NAME_FIXES: Record<string, { oldName: string; en: string; fr
   "1220": { oldName: "FHSA (CELIAPP)", en: "First Home Savings Account (FHSA)", fr: "Compte d'épargne libre d'impôt pour l'achat d'une première propriété (CELIAPP)" },
   "1230": { oldName: "RESP (REEE)", en: "Registered Education Savings Plan (RESP)", fr: "Régime enregistré d'épargne-études (REEE)" },
 };
+
+// ---------------------------------------------------------------- income / expense sub-categories
+
+// Second-level grouping of the income and expense accounts: a group is a header account (subtype GROUP, never posted
+// to) with the accounts that belong under it. Groups are added to existing books once; after that the user's own
+// choices are left alone.
+export interface ChartGroup {
+  code: string;
+  en: string;
+  fr: string;
+  type: "INCOME" | "EXPENSE";
+  members: string[];
+}
+
+const BUSINESS_GROUPS: ChartGroup[] = [
+  { code: "4950", en: "Sales & service revenue", fr: "Ventes et revenus de services", type: "INCOME", members: ["4000", "4010", "4020"] },
+  { code: "4960", en: "Other income", fr: "Autres revenus", type: "INCOME", members: ["4900"] },
+  { code: "6800", en: "Cost of sales", fr: "Coût des ventes", type: "EXPENSE", members: ["5000", "5010"] },
+  { code: "6810", en: "Advertising, meals & entertainment", fr: "Publicité, repas et divertissement", type: "EXPENSE", members: ["6010", "6020"] },
+  { code: "6820", en: "Office & technology", fr: "Bureau et technologie", type: "EXPENSE", members: ["6070", "6075", "6080"] },
+  { code: "6830", en: "Professional & management fees", fr: "Honoraires professionnels et de gestion", type: "EXPENSE", members: ["6090", "6100"] },
+  { code: "6840", en: "Premises, repairs & utilities", fr: "Locaux, réparations et services publics", type: "EXPENSE", members: ["6110", "6120", "6160", "6200"] },
+  { code: "6850", en: "Payroll", fr: "Masse salariale", type: "EXPENSE", members: ["6130", "6135"] },
+  { code: "6860", en: "Travel, vehicle & delivery", fr: "Déplacements, véhicule et livraison", type: "EXPENSE", members: ["6150", "6180", "6190"] },
+  { code: "6870", en: "Insurance, financial & taxes", fr: "Assurances, frais financiers et taxes", type: "EXPENSE", members: ["6030", "6040", "6050", "6060", "7000"] },
+  { code: "6880", en: "Amortization", fr: "Amortissement", type: "EXPENSE", members: ["6210"] },
+  { code: "6890", en: "Other expenses", fr: "Autres dépenses", type: "EXPENSE", members: ["6900"] },
+];
+
+const PERSONAL_GROUPS: ChartGroup[] = [
+  { code: "4950", en: "Employment & benefits", fr: "Emploi et prestations", type: "INCOME", members: ["4000", "4010", "4020"] },
+  { code: "4960", en: "Investment & rental income", fr: "Revenus de placement et de location", type: "INCOME", members: ["4100", "4110", "4120", "4200"] },
+  { code: "4970", en: "Other income", fr: "Autres revenus", type: "INCOME", members: ["4900"] },
+  { code: "5900", en: "Housing", fr: "Habitation", type: "EXPENSE", members: ["5000", "5010", "5020", "5030", "5040", "5050"] },
+  { code: "5910", en: "Food & drink", fr: "Alimentation", type: "EXPENSE", members: ["5100", "5110", "5120"] },
+  { code: "5920", en: "Transportation", fr: "Transport", type: "EXPENSE", members: ["5200", "5210", "5220", "5230"] },
+  { code: "5930", en: "Health, pets & insurance", fr: "Santé, animaux et assurances", type: "EXPENSE", members: ["5300", "5310", "5320", "5330"] },
+  { code: "5940", en: "Family & education", fr: "Famille et éducation", type: "EXPENSE", members: ["5400", "5410", "5420"] },
+  { code: "5950", en: "Lifestyle & leisure", fr: "Mode de vie et loisirs", type: "EXPENSE", members: ["5500", "5510", "5600", "5610", "5620", "5700", "5710"] },
+  { code: "5960", en: "Financial & other", fr: "Frais financiers et autres", type: "EXPENSE", members: ["5800", "5990"] },
+];
+
+const LLC_GROUPS: ChartGroup[] = [
+  { code: "4950", en: "Sales", fr: "Ventes", type: "INCOME", members: ["4000"] },
+  { code: "4960", en: "Other income", fr: "Autres revenus", type: "INCOME", members: ["4900"] },
+  { code: "6800", en: "Cost of goods sold", fr: "Coût des marchandises vendues", type: "EXPENSE", members: ["5000"] },
+  { code: "6810", en: "Advertising, commissions & meals", fr: "Publicité, commissions et repas", type: "EXPENSE", members: ["6010", "6030", "6190"] },
+  { code: "6820", en: "Office & supplies", fr: "Bureau et fournitures", type: "EXPENSE", members: ["6110", "6160"] },
+  { code: "6830", en: "Professional & contract services", fr: "Services professionnels et contractuels", type: "EXPENSE", members: ["6040", "6100"] },
+  { code: "6840", en: "Rent, utilities & property", fr: "Loyer, services publics et immeuble", type: "EXPENSE", members: ["6130", "6140", "6150", "6200", "6230"] },
+  { code: "6850", en: "Payroll & benefits", fr: "Masse salariale et avantages", type: "EXPENSE", members: ["6060", "6120", "6210"] },
+  { code: "6860", en: "Travel & vehicle", fr: "Déplacements et véhicule", type: "EXPENSE", members: ["6020", "6180"] },
+  { code: "6870", en: "Insurance, interest & taxes", fr: "Assurances, intérêts et taxes", type: "EXPENSE", members: ["6070", "6080", "6090", "6170"] },
+  { code: "6880", en: "Depreciation", fr: "Amortissement", type: "EXPENSE", members: ["6050"] },
+  { code: "6890", en: "Other expenses", fr: "Autres dépenses", type: "EXPENSE", members: ["6220"] },
+];
+
+export function groupsFor(kind: EntityKind, country: string): ChartGroup[] {
+  if (kind === "PERSONAL") return PERSONAL_GROUPS;
+  if (kind === "LLC" && country === "US") return LLC_GROUPS;
+  return BUSINESS_GROUPS;
+}

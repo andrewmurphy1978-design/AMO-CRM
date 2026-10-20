@@ -33,7 +33,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     else if (report === "tax") data.tax = await taxSummary(db, entity.id, range.from, range.to);
     else if (report === "st") data.st = await salesTaxReport(db, entity.id, range.from, range.to);
     else if (report === "gl") {
-      const accountId = options.find((o) => o.id === sp.account && o.entityId === entity.id)?.id ?? options.find((o) => o.entityId === entity.id && !o.bank)?.id;
+      const accountId = options.find((o) => o.id === sp.account && o.entityId === entity.id && !o.isGroup)?.id ?? options.find((o) => o.entityId === entity.id && !o.bank && !o.isGroup)?.id;
       if (accountId) data.gl = await generalLedger(db, accountId, range.from, range.to);
     }
     return { entities, options, entity, range, cur, data };
@@ -212,7 +212,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <form className="flex items-center gap-2 text-sm">
               <input type="hidden" name="entity" value={entity.id} /><input type="hidden" name="year" value={year} /><input type="hidden" name="r" value="gl" />
               <select name="account" defaultValue={sp.account} className="rounded-lg border border-card-border bg-white px-2 py-1.5">
-                {options.filter((o) => o.entityId === entity.id).map((o) => (<option key={o.id} value={o.id}>{o.code} {fr ? o.labelFr : o.label}</option>))}
+                {options.filter((o) => o.entityId === entity.id && !o.isGroup).map((o) => (<option key={o.id} value={o.id}>{o.code} {fr ? o.labelFr : o.label}</option>))}
               </select>
               <button className="btn-primary rounded-lg px-3 py-1.5 font-semibold">OK</button>
             </form>
