@@ -2106,6 +2106,8 @@ model AccAccount {
   last4           String?
   // Normalizes a statement's sign: 1 = deposits positive; -1 when the statement shows purchases as positive.
   importSign      Int            @default(1)
+  // Currency the account is held in; null = the entity's own currency.
+  currency        String?
   // Accounts that stand for a relationship with another entity (owner contributions, shareholder loan...).
   counterEntityId String?
 
@@ -2149,6 +2151,8 @@ model AccTransaction {
   // categorizations are remembered per supplier.
   supplier             String          @default("")
   amount               Float
+  // Entity-currency value of one unit of the account's currency when the account is in a foreign currency.
+  fxRate               Float           @default(1)
   // NEW | SUGGESTED | POSTED | IGNORED
   status               String          @default("NEW")
   // Who categorized it once posted: USER | RULE (a remembered supplier) | AI

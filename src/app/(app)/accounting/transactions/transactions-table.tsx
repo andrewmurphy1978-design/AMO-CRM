@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { categorizeTransactions, confirmSuggestions, deleteTransactions, ignoreTransactions, suggestWithAI, uncategorizeTransactions, updateSupplier } from "@/actions/accounting";
+import { setFxRate, categorizeTransactions, confirmSuggestions, deleteTransactions, ignoreTransactions, suggestWithAI, uncategorizeTransactions, updateSupplier } from "@/actions/accounting";
 import type { AccountOption, EntityInfo } from "@/lib/accounting/options";
 import { GROUP_LABEL } from "@/lib/accounting/options";
 import { money } from "@/lib/accounting/format";
@@ -12,6 +12,9 @@ export interface TxRow {
   description: string;
   supplier: string;
   amount: number;
+  currency: string;
+  entityCurrency: string;
+  fxRate: number;
   accountId: string;
   status: string;
   by: string | null;
@@ -222,7 +225,13 @@ export default function TransactionsTable({
                       <p className="truncate text-xs text-soft" title={t.description}>{t.description} · {bankName.get(t.accountId)}</p>
                       {t.status === "SUGGESTED" && t.suggestionText && <p className="text-xs text-amber-700">{fr ? "Suggestion : " : "Suggested: "}{t.suggestionText}</p>}
                     </div>
-                    <div className={`w-28 shrink-0 pt-1 text-right text-sm font-semibold ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{money(t.amount, "CAD", lang)}</div>
+                    <div className={`w-28 shrink-0 pt-1 text-right text-sm font-semibold ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{money(t.amount, t.currency, lang)}
+                      {t.currency !== t.entityCurrency && (
+                        <label className="mt-1 block text-xs font-normal text-soft" title={fr ? "Taux de change" : "Exchange rate"}>
+                          × <input type="number" step="0.0001" defaultValue={t.fxRate} className="w-20 rounded border border-card-border px-1 py-0.5" onBlur={(e) => { const r = Number(e.target.value); if (r > 0 && r !== t.fxRate) run(async () => (await setFxRate([t.id], r)).error); }} /> {t.entityCurrency}
+                        </label>
+                      )}
+                    </div>
                     <div className="flex min-w-72 flex-1 flex-col gap-1.5">
                       {ls.map((l, i) => {
                         const ent = entityById.get(l.pick.split("|")[0]);
@@ -301,7 +310,7 @@ export default function TransactionsTable({
                       {t.status === "IGNORED" ? (fr ? "(ignorée)" : "(ignored)") : t.categoryText}
                       {t.by === "RULE" && <span className="ml-1 rounded bg-emerald-50 px-1 text-xs text-emerald-700">{fr ? "auto" : "auto"}</span>}
                     </td>
-                    <td className={`pr-3 text-right whitespace-nowrap ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{money(t.amount, "CAD", lang)}</td>
+                    <td className={`pr-3 text-right whitespace-nowrap ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{money(t.amount, t.currency, lang)}{t.currency !== t.entityCurrency && <span className="block text-xs text-soft">× {t.fxRate} {t.entityCurrency}</span>}</td>
                     <td className="space-x-2 text-right whitespace-nowrap text-xs">
                       <button disabled={busy} className="text-soft underline" onClick={() => run(async () => { if (t.status === "IGNORED") await ignoreTransactions([t.id], false); else await uncategorizeTransactions([t.id]); })}>
                         {fr ? "Modifier" : "Change"}

@@ -9,7 +9,7 @@ import { money } from "@/lib/accounting/format";
 
 const none = -1;
 
-export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; accounts: { id: string; label: string; card: boolean }[] }) {
+export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; accounts: { id: string; label: string; card: boolean; currency: string; entityCurrency: string }[] }) {
   const fr = lang === "fr";
   const [accountId, setAccountId] = useState(accounts[0]?.id ?? "");
   const [fileName, setFileName] = useState("");
@@ -22,6 +22,9 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number } | null>(null);
   const [busy, startTransition] = useTransition();
+  const [rate, setRate] = useState("1");
+  const account = accounts.find((a) => a.id === accountId);
+  const foreign = !!account && account.currency !== account.entityCurrency;
 
   const parsed = grid && map ? toTransactions(grid, headerRow, map) : null;
   const rows: ImportRow[] | null = pdfRows ?? parsed?.rows ?? null;
@@ -85,7 +88,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
   const doImport = () =>
     startTransition(async () => {
       if (!rows) return;
-      const r = await importStatement(accountId, rows, fileName);
+      const r = await importStatement(accountId, rows, fileName, foreign ? Number(rate) || 1 : 1);
       if (r.error) setError(r.error);
       else {
         setError(null);
@@ -115,6 +118,12 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
             ))}
           </select>
         </label>
+        {foreign && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-soft">{fr ? `Taux : 1 ${account.currency} = ? ${account.entityCurrency}` : `Rate: 1 ${account.currency} = ? ${account.entityCurrency}`}</span>
+            <input type="number" step="0.0001" min="0" value={rate} onChange={(e) => setRate(e.target.value)} className="w-28 rounded-lg border border-card-border bg-white px-2 py-1.5" />
+          </label>
+        )}
         <label className="flex flex-col gap-1">
           <span className="text-xs text-soft">CSV / PDF</span>
           <input type="file" accept=".csv,.txt,.pdf,text/csv,application/pdf" onChange={(e) => onFile(e.target.files?.[0])} className="text-sm" />
@@ -170,7 +179,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
                 <tr key={i}>
                   <td className="py-1 pr-3 whitespace-nowrap text-soft">{r.date}</td>
                   <td className="pr-3 text-ink">{r.description}</td>
-                  <td className="text-right whitespace-nowrap text-ink">{money(r.amount, "CAD", lang)}</td>
+                  <td className="text-right whitespace-nowrap text-ink">{money(r.amount, account?.currency ?? "CAD", lang)}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,7 +1,7 @@
 "use client";
 
 import { addAccount, addBankAccount, addEntity, updateEntity } from "@/actions/accounting";
-import ActionForm, { Field, inputCls } from "../action-form";
+import ActionForm, { CurrencyField, Field, inputCls } from "../action-form";
 import type { EntityInfo } from "@/lib/accounting/options";
 
 type Lang = "en" | "fr";
@@ -62,6 +62,7 @@ export function AddBankForm({ lang, entities }: { lang: Lang; entities: EntityIn
       </Field>
       <Field label={fr ? "Institution" : "Institution"}><input name="institution" className={inputCls} /></Field>
       <Field label={fr ? "4 derniers chiffres" : "Last 4 digits"}><input name="last4" maxLength={4} className={`${inputCls} w-24`} /></Field>
+      <CurrencyField label={fr ? "Devise" : "Currency"} />
       <label className="flex items-center gap-2 pb-2 text-soft"><input type="checkbox" name="invertSign" /> {fr ? "Inverser les signes à l'import" : "Invert signs on import"}</label>
     </ActionForm>
   );

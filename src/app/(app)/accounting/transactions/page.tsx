@@ -29,6 +29,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       }),
       db.accTransaction.count({ where: { ...base, status: sp.show === "ignored" ? "IGNORED" : "POSTED" } }),
     ]);
+    const bankCur = new Map(banks.map((b) => [b.id, b.currency ?? books.entities.find((e) => e.id === b.entityId)?.currency ?? "CAD"]));
+    const entCur = new Map(banks.map((b) => [b.id, books.entities.find((e) => e.id === b.entityId)?.currency ?? "CAD"]));
     const label = new Map<string, string>();
     for (const o of books.options) label.set(o.id, o.name);
     const entityName = new Map(books.entities.map((e) => [e.id, e.name]));
@@ -43,6 +45,9 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         description: t.description,
         supplier: t.supplier,
         amount: t.amount,
+        currency: bankCur.get(t.accountId) ?? "CAD",
+        entityCurrency: entCur.get(t.accountId) ?? "CAD",
+        fxRate: t.fxRate,
         accountId: t.accountId,
         status: t.status,
         by: t.categorizedBy,

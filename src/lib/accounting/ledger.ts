@@ -85,7 +85,7 @@ async function nextCode(db: PrismaClient, entityId: string, from: number, to: nu
 
 export async function createBankAccount(
   db: PrismaClient,
-  input: { entityId: string; name: string; kind: "CHEQUING" | "SAVINGS" | "CREDIT_CARD"; institution?: string; last4?: string; importSign?: number }
+  input: { entityId: string; name: string; kind: "CHEQUING" | "SAVINGS" | "CREDIT_CARD"; institution?: string; last4?: string; importSign?: number; currency?: string }
 ) {
   const card = input.kind === "CREDIT_CARD";
   const code = card ? await nextCode(db, input.entityId, 2010, 2099) : await nextCode(db, input.entityId, 1010, 1099);
@@ -99,6 +99,7 @@ export async function createBankAccount(
       institution: input.institution ?? null,
       last4: input.last4 ?? null,
       importSign: input.importSign ?? 1,
+      currency: input.currency || null,
       isSystem: true,
     },
   });
@@ -177,7 +178,7 @@ export async function postTransactions(db: PrismaClient, items: PostItem[]): Pro
     if (!tx) continue;
     try {
       const built: PostingEntry[] = buildPosting({
-        tx: { id: tx.id, date: isoDate(tx.date), amount: tx.amount, description: tx.supplier || tx.description },
+        tx: { id: tx.id, date: isoDate(tx.date), amount: r2(tx.amount * (tx.fxRate || 1)), description: tx.supplier || tx.description },
         bank: { id: tx.accountId, entityId: tx.account.entityId },
         allocations: item.allocations,
         ctx: { entities: entMap, accounts: accMap, accountByCode: (e, c) => byCode.get(`${e}:${c}`), interco: (a, b) => intercoCache.get(`${a}>${b}`) as string },
@@ -277,7 +278,7 @@ export async function applyRules(db: PrismaClient, txIds?: string[]): Promise<{ 
 
 export type ImportRow = { date: string; description: string; amount: number };
 
-export async function importTransactions(db: PrismaClient, accountId: string, rows: ImportRow[], fileName: string): Promise<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number }> {
+export async function importTransactions(db: PrismaClient, accountId: string, rows: ImportRow[], fileName: string, fxRate = 1): Promise<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number }> {
   const account = await db.accAccount.findUniqueOrThrow({ where: { id: accountId } });
   if (account.subtype !== "BANK" && account.subtype !== "CREDIT_CARD") throw new Error("Choose a bank or credit-card account to import into.");
   const sign = account.importSign === -1 ? -1 : 1;
@@ -302,7 +303,7 @@ export async function importTransactions(db: PrismaClient, accountId: string, ro
   const batch = await db.accImportBatch.create({ data: { accountId, fileName, rowCount: rows.length, newCount: fresh.length, dupCount: rows.length - fresh.length } });
   const created: string[] = [];
   for (const c of chunks(fresh, 500)) {
-    const withIds = c.map((p) => ({ id: crypto.randomUUID(), accountId, batchId: batch.id, ...p }));
+    const withIds = c.map((p) => ({ id: crypto.randomUUID(), accountId, batchId: batch.id, fxRate: fxRate > 0 ? fxRate : 1, ...p }));
     await db.accTransaction.createMany({ data: withIds });
     created.push(...withIds.map((w) => w.id));
   }

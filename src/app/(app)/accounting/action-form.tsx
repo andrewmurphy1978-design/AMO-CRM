@@ -39,3 +39,14 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 export const inputCls = "rounded-lg border border-card-border bg-white px-2 py-1.5 text-sm text-ink";
+
+export function CurrencyField({ label, defaultValue }: { label: string; defaultValue?: string }) {
+  return (
+    <Field label={label}>
+      <input name="currency" list="acc-currencies" defaultValue={defaultValue ?? ""} maxLength={3} placeholder="CAD" className={`${inputCls} w-24 uppercase`} />
+      <datalist id="acc-currencies">
+        {["CAD", "USD", "EUR", "GBP", "CHF", "AUD", "MXN"].map((c) => <option key={c} value={c} />)}
+      </datalist>
+    </Field>
+  );
+}

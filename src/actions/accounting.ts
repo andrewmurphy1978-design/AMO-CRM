@@ -28,6 +28,12 @@ async function requireAdmin() {
   return session;
 }
 
+// "" or the entity's own currency means "same as the entity" (stored as null by the caller's comparison below).
+function cleanCurrency(v: FormDataEntryValue | null): string | undefined {
+  const c = String(v ?? "").trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(c) ? c : undefined;
+}
+
 const refresh = () => revalidatePath("/accounting", "layout");
 
 type Result = { error?: string; success?: string };
@@ -93,6 +99,7 @@ export async function addBankAccount(_prev: Result | undefined, formData: FormDa
       institution: String(formData.get("institution") ?? "").trim() || undefined,
       last4: String(formData.get("last4") ?? "").trim() || undefined,
       importSign: formData.get("invertSign") === "on" ? -1 : 1,
+      currency: cleanCurrency(formData.get("currency")),
     })
   );
   refresh();
@@ -111,6 +118,7 @@ export async function updateBankAccount(id: string, _prev: Result | undefined, f
         institution: String(formData.get("institution") ?? "").trim() || null,
         last4: String(formData.get("last4") ?? "").trim() || null,
         importSign: formData.get("invertSign") === "on" ? -1 : 1,
+        currency: cleanCurrency(formData.get("currency")),
       },
     })
   );
@@ -152,6 +160,15 @@ export async function addAccount(_prev: Result | undefined, formData: FormData):
   return { success: "Account added." };
 }
 
+/** Sets the exchange rate of not-yet-categorized transactions in a foreign-currency account. */
+export async function setFxRate(txIds: string[], rate: number): Promise<Result> {
+  await requireAdmin();
+  if (!(rate > 0)) return { error: "Enter a rate above 0." };
+  await withScopedPrismaClient((db) => db.accTransaction.updateMany({ where: { id: { in: txIds }, status: { in: ["NEW", "SUGGESTED"] } }, data: { fxRate: rate } }));
+  refresh();
+  return { success: "Rate saved." };
+}
+
 export async function deleteRule(id: string): Promise<void> {
   await requireAdmin();
   await withScopedPrismaClient((db) => db.accRule.delete({ where: { id } }));
@@ -160,12 +177,12 @@ export async function deleteRule(id: string): Promise<void> {
 
 // ---------------------------------------------------------------- import
 
-export async function importStatement(accountId: string, rows: ImportRow[], fileName: string): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number } }> {
+export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number } }> {
   await requireAdmin();
   if (rows.length === 0) return { error: "There is nothing to import." };
   if (rows.length > 20000) return { error: "That file is too large — import it in parts." };
   try {
-    const counts = await withScopedPrismaClient((db) => importTransactions(db, accountId, rows, fileName));
+    const counts = await withScopedPrismaClient((db) => importTransactions(db, accountId, rows, fileName, fxRate));
     refresh();
     return { success: "Imported.", counts };
   } catch (error) {

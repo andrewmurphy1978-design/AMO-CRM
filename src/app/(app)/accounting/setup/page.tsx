@@ -50,7 +50,7 @@ export default async function SetupPage() {
               <BankRow
                 key={b.id}
                 lang={lang}
-                bank={{ id: b.id, name: b.name, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: entityName.get(b.entityId) ?? "", code: b.code, txCount: txCounts.get(b.id) ?? 0 }}
+                bank={{ id: b.id, name: b.name, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: entityName.get(b.entityId) ?? "", code: b.code, txCount: txCounts.get(b.id) ?? 0, currency: b.currency ?? books.entities.find((e) => e.id === b.entityId)?.currency ?? "CAD" }}
               />
             ))}
           </ul>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { deleteBankAccount, updateBankAccount } from "@/actions/accounting";
-import ActionForm, { Field, inputCls } from "../action-form";
+import ActionForm, { CurrencyField, Field, inputCls } from "../action-form";
 
 export interface BankInfo {
   id: string;
@@ -14,6 +14,7 @@ export interface BankInfo {
   entityName: string;
   code: string;
   txCount: number;
+  currency: string;
 }
 
 export default function BankRow({ bank, lang }: { bank: BankInfo; lang: "en" | "fr" }) {
@@ -32,7 +33,7 @@ export default function BankRow({ bank, lang }: { bank: BankInfo; lang: "en" | "
           {bank.name}
           {bank.last4 ? ` ••${bank.last4}` : ""}{" "}
           <span className="text-soft">
-            · {bank.entityName} · {bank.code} · {bank.txCount} {fr ? "transactions" : "transactions"}
+            · {bank.entityName} · {bank.code} · {bank.currency} · {bank.txCount} {fr ? "transactions" : "transactions"}
             {bank.inverted ? (fr ? " · signes inversés" : " · signs inverted") : ""}
           </span>
         </span>
@@ -50,6 +51,7 @@ export default function BankRow({ bank, lang }: { bank: BankInfo; lang: "en" | "
             <Field label={fr ? "Nom du compte" : "Account name"}><input name="name" defaultValue={bank.name} required className={inputCls} /></Field>
             <Field label={fr ? "Institution" : "Institution"}><input name="institution" defaultValue={bank.institution ?? ""} className={inputCls} /></Field>
             <Field label={fr ? "4 derniers chiffres" : "Last 4 digits"}><input name="last4" maxLength={4} defaultValue={bank.last4 ?? ""} className={`${inputCls} w-24`} /></Field>
+            <CurrencyField label={fr ? "Devise" : "Currency"} defaultValue={bank.currency} />
             <label className="flex items-center gap-2 pb-2 text-soft"><input type="checkbox" name="invertSign" defaultChecked={bank.inverted} /> {fr ? "Inverser les signes à l'import" : "Invert signs on import"}</label>
           </ActionForm>
         </div>
