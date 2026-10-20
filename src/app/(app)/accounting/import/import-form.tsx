@@ -23,6 +23,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
   const [result, setResult] = useState<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number } | null>(null);
   const [busy, startTransition] = useTransition();
   const [rate, setRate] = useState("1");
+  const [dragging, setDragging] = useState(false);
   const account = accounts.find((a) => a.id === accountId);
   const foreign = !!account && account.currency !== account.entityCurrency;
 
@@ -124,11 +125,18 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
             <input type="number" step="0.0001" min="0" value={rate} onChange={(e) => setRate(e.target.value)} className="w-28 rounded-lg border border-card-border bg-white px-2 py-1.5" />
           </label>
         )}
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-soft">CSV / PDF</span>
-          <input type="file" accept=".csv,.txt,.pdf,text/csv,application/pdf" onChange={(e) => onFile(e.target.files?.[0])} className="text-sm" />
-        </label>
       </div>
+
+      <label
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); onFile(e.dataTransfer.files?.[0]); }}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-4 py-8 text-center text-sm ${dragging ? "border-emerald-500 bg-emerald-50" : "border-card-border bg-field-bg/40"}`}
+      >
+        <span className="font-medium text-ink">{fileName ? fileName : fr ? "Glissez-déposez votre relevé ici" : "Drag and drop your statement here"}</span>
+        <span className="text-xs text-soft">{fr ? "ou cliquez pour choisir un fichier CSV / PDF" : "or click to choose a CSV / PDF file"}</span>
+        <input type="file" accept=".csv,.txt,.pdf,text/csv,application/pdf" className="hidden" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
+      </label>
 
       {busy && !rows && <p className="text-sm text-soft">{fr ? "Lecture en cours…" : "Reading…"}</p>}
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
