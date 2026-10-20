@@ -104,6 +104,7 @@ const L = {
     instalment: "Instalment",
     percent: "%",
     dueOn: "Due",
+    amountDue: "Amount due",
     payment: "Payment method",
     paymentBody:
       "A new invoice is issued for each instalment when it falls due, with payment instructions. Accepted methods (for example Interac e-Transfer and credit card) will be confirmed with your first invoice.",
@@ -176,6 +177,7 @@ const L = {
     instalment: "Versement",
     percent: "%",
     dueOn: "Échéance",
+    amountDue: "Montant à l'échéance",
     payment: "Mode de paiement",
     paymentBody:
       "Une nouvelle facture est émise pour chaque versement à son échéance, avec les instructions de paiement. Les modes acceptés (par exemple virement Interac et carte de crédit) seront confirmés avec votre première facture.",
@@ -438,7 +440,7 @@ class Layout {
   table(
     cols: { header: string; width: number; align?: "left" | "right" }[],
     rows: string[][],
-    opts: { boldLast?: boolean; details?: (string | null | undefined)[] } = {}
+    opts: { boldLast?: boolean; details?: (string | null | undefined)[]; detailCol?: number } = {}
   ) {
     const colX: number[] = [];
     let acc = MX + 8;
@@ -450,7 +452,7 @@ class Layout {
       this.ensure(30);
       this.page.drawRectangle({ x: MX, y: this.y - 6, width: CONTENT_W, height: 20, color: GREEN });
       cols.forEach((c, i) => {
-        const w = this.bold.widthOfTextAtSize(safe(c.header), 8.5);
+        const w = this.bold.widthOfTextAtSize(safe(c.header.toUpperCase()), 8.5);
         this.text(c.header.toUpperCase(), c.align === "right" ? colX[i] + c.width - 12 - w : colX[i], this.y, { size: 8.5, font: this.bold, color: MIST });
       });
       this.gap(22);
@@ -460,7 +462,8 @@ class Layout {
     rows.forEach((row, ri) => {
       const wrapped = row.map((cell, i) => this.wrap(cell, cols[i].width - 12, 9.5, this.regular));
       const lines = Math.max(...wrapped.map((w) => w.length));
-      const detailLines = opts.details?.[ri] ? this.wrap(opts.details[ri] as string, cols[0].width - 16, 8.5, this.regular) : [];
+      const dc = opts.detailCol ?? 0;
+      const detailLines = opts.details?.[ri] ? this.wrap(opts.details[ri] as string, cols[dc].width - 16, 8.5, this.regular) : [];
       const h = lines * 12 + (detailLines.length ? detailLines.length * 11 + 3 : 0) + 8;
       if (this.y - h < BOTTOM) {
         this.newPage();
@@ -476,7 +479,7 @@ class Layout {
         });
       });
       detailLines.forEach((dl, di) => {
-        this.text(dl, colX[0] + 4, this.y - lines * 12 - 1 - di * 11, { size: 8.5, color: SOFT });
+        this.text(dl, colX[dc] + (dc === 0 ? 4 : 0), this.y - lines * 12 - 1 - di * 11, { size: 8.5, color: SOFT });
       });
       this.gap(h);
     });
@@ -631,15 +634,17 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     lo.page.drawRectangle({ x: MX, y: lo.y, width: CONTENT_W, height: 0.7, color: RULE });
     lo.gap(14);
   };
+  // One "amount due" column at the far right; a due date, when there is one, sits under the instalment's name.
   const instalmentCols = [
     { header: "#", width: 24 },
-    { header: t.instalment, width: CONTENT_W - 8 - 24 - 50 - 110 - 120 },
+    { header: t.instalment, width: CONTENT_W - 8 - 24 - 50 - 150 },
     { header: t.percent, width: 50, align: "right" as const },
-    { header: t.amount, width: 110, align: "right" as const },
-    { header: t.dueOn, width: 120 },
+    { header: t.amountDue, width: 150, align: "right" as const },
   ];
-  const instalmentRows = (list: { label: string; percentage: number | null; amount: number; dueDate?: Date | null }[], from = 0) =>
-    list.map((r, i) => [String(from + i + 1), r.label, r.percentage != null ? `${r.percentage}%` : "", money(r.amount, data.currency), r.dueDate ? fmtDate(r.dueDate, data.lang) : ""]);
+  type InstalmentRow = { label: string; percentage: number | null; amount: number; dueDate?: Date | null };
+  const instalmentRows = (list: InstalmentRow[], from = 0) =>
+    list.map((r, i) => [String(from + i + 1), r.label, r.percentage != null ? `${r.percentage}%` : "", money(r.amount, data.currency)]);
+  const instalmentDetails = (list: InstalmentRow[]) => list.map((r) => (r.dueDate ? `${t.dueOn} : ${fmtDate(r.dueDate, data.lang)}` : null));
 
   const signatureLines = () => {
     lo.gap(34);
@@ -718,7 +723,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
       // Instalments
       if (sec.instalments.length > 0) {
         subHeading(t.instalmentsTitle);
-        lo.table(instalmentCols, instalmentRows(sec.instalments, firstNumber[si]));
+        lo.table(instalmentCols, instalmentRows(sec.instalments, firstNumber[si]), { details: instalmentDetails(sec.instalments), detailCol: 1 });
       }
 
       // Acceptance of this section alone, so the client can accept only part of the project.
@@ -843,22 +848,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   if (data.instalments.length > 0) {
     lo.keep(() => {
     lo.heading(data.sections ? t.allInstalments : t.schedule);
-    lo.table(
-      [
-        { header: "#", width: 24 },
-        { header: t.instalment, width: CONTENT_W - 8 - 24 - 50 - 110 - 120 },
-        { header: t.percent, width: 50, align: "right" },
-        { header: t.amount, width: 110, align: "right" },
-        { header: t.dueOn, width: 120 },
-      ],
-      data.instalments.map((r, i) => [
-        String(i + 1),
-        r.label,
-        r.percentage != null ? `${r.percentage}%` : "",
-        money(r.amount, data.currency),
-        r.dueDate ? fmtDate(r.dueDate, data.lang) : "",
-      ])
-    );
+    lo.table(instalmentCols, instalmentRows(data.instalments), { details: instalmentDetails(data.instalments), detailCol: 1 });
     });
   }
 

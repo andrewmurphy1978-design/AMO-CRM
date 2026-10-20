@@ -11,6 +11,7 @@ import { getTypeLabels } from "@/lib/project-type-store";
 import { signPath } from "@/lib/signed-url";
 import { localizeInstalmentLabel, localizeText, localizeValue } from "@/lib/project-i18n";
 import { clientFacingDescription } from "@/lib/catalog-text";
+import { translateToFrench } from "@/lib/translate-cache";
 import { LOGO_FULL_EN_B64, LOGO_FULL_FR_B64 } from "@/lib/logo-assets";
 import { contactTaxLocation } from "@/lib/billing-totals";
 import { computeSectionedTotals } from "@/lib/proposal-sections";
@@ -78,6 +79,43 @@ function localizeLine<T extends { description: string; details?: string | null }
     details = sameAsEnglish && item?.clientDescriptionFr ? item.clientDescriptionFr : localizeText(details, "fr");
   }
   return { ...li, description, details };
+}
+
+// Free texts typed in English (lines that did not come from the price list, custom instalment labels, notes...)
+// are machine-translated for a French client, once each (cached). A text already in French is left alone, and
+// if the AI is unavailable the original is kept, so a PDF is never blocked.
+async function frenchify(db: PrismaClient, data: ProposalPdfData | InvoicePdfData): Promise<void> {
+  const proposal = data as ProposalPdfData;
+  const texts: (string | null | undefined)[] = [data.notes];
+  for (const li of data.lineItems) texts.push(li.description, li.details);
+  for (const x of proposal.subscriptions ?? []) texts.push(x.name, x.note);
+  for (const r of proposal.instalments ?? []) texts.push(r.label);
+  for (const sec of proposal.sections ?? []) {
+    texts.push(sec.title);
+    for (const li of sec.lineItems) texts.push(li.description, li.details);
+    for (const r of sec.instalments) texts.push(r.label);
+  }
+  const map = await translateToFrench(db, texts.filter((x): x is string => Boolean(x && x.trim())));
+  if (map.size === 0) return;
+  const tr = <T extends string | null | undefined>(x: T): T => ((x && map.get(x.trim())) || x) as T;
+  data.notes = tr(data.notes);
+  for (const li of data.lineItems) {
+    li.description = tr(li.description);
+    li.details = tr(li.details);
+  }
+  for (const x of proposal.subscriptions ?? []) {
+    x.name = tr(x.name);
+    x.note = tr(x.note);
+  }
+  for (const r of proposal.instalments ?? []) r.label = tr(r.label);
+  for (const sec of proposal.sections ?? []) {
+    sec.title = tr(sec.title);
+    for (const li of sec.lineItems) {
+      li.description = tr(li.description);
+      li.details = tr(li.details);
+    }
+    for (const r of sec.instalments) r.label = tr(r.label);
+  }
 }
 
 export async function loadProposalPdfData(db: PrismaClient, projectId: string, proposalId: string): Promise<{ data: ProposalPdfData; fileName: string } | null> {
@@ -246,6 +284,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     sections,
     notes: proposal.notes,
   };
+  if (lang === "fr") await frenchify(db, data);
   return { data, fileName: `${number}-${project.name}`.replace(/[^\w.-]+/g, "-") };
 }
 
@@ -328,6 +367,7 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     totals: { subtotal: invoice.subtotal, gst: invoice.gstAmount, qst: invoice.qstAmount, hst: invoice.hstAmount, total: invoice.taxAmount },
     notes: invoice.notes,
   };
+  if (lang === "fr") await frenchify(db, data);
   return { data, fileName: `${number}-${project.name}`.replace(/[^\w.-]+/g, "-") };
 }
 

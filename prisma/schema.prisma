@@ -2020,3 +2020,18 @@ model AttachedFile {
   @@index([projectId])
   @@map("attached_files")
 }
+
+// Machine translations of texts typed in one language and shown to a client who reads another (the lines of a
+// French client's proposal or invoice that are not price-list services). Keyed by a hash of the source text so
+// a text is translated once, not on every PDF.
+model TranslationCache {
+  id         String   @id @default(cuid())
+  lang       String
+  sourceHash String
+  source     String   @db.Text
+  translated String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@unique([lang, sourceHash])
+  @@map("translation_cache")
+}
