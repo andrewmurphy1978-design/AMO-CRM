@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Card from "@/components/section-card";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
@@ -26,8 +27,7 @@ export default async function ImportPage() {
         <ImportForm lang={lang} accounts={banks.map((b) => ({ id: b.id, label: `${b.entity.name} — ${fr && b.nameFr ? b.nameFr : b.name}${b.last4 ? ` ••${b.last4}` : ""}`, card: b.subtype === "CREDIT_CARD", currency: b.currency ?? b.entity.currency, entityCurrency: b.entity.currency, format: (b.importFormat as { signature: string; map: ColumnMap } | null) ?? null }))} />
       )}
       {batches.length > 0 && (
-        <section className="rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-          <h2 className="font-display text-lg font-semibold text-ink">{fr ? "Importations récentes" : "Recent imports"}</h2>
+        <Card color="activity" title={fr ? "Importations récentes" : "Recent imports"}>
           <ul className="mt-2 divide-y divide-card-border text-sm">
             {batches.map((b) => (
               <li key={b.id} className="flex justify-between py-2">
@@ -36,7 +36,7 @@ export default async function ImportPage() {
               </li>
             ))}
           </ul>
-        </section>
+        </Card>
       )}
     </div>
   );

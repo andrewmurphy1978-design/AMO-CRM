@@ -1,4 +1,5 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
+import Card from "@/components/section-card";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks } from "@/lib/accounting/options";
@@ -20,18 +21,15 @@ export default async function JournalPage() {
     });
     return { books, entries };
   });
-  const card = "space-y-3 rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm";
   return (
     <div className="space-y-6">
-      <section className={card}>
-        <h2 className="font-display text-lg font-semibold text-ink">{fr ? "Écriture manuelle" : "Manual entry"}</h2>
+      <Card color="aiDetails" title={fr ? "Écriture manuelle" : "Manual entry"}>
         <p className="text-sm text-soft">
           {fr ? "Pour les soldes d'ouverture, l'amortissement, les corrections. Les débits doivent égaler les crédits." : "For opening balances, depreciation and corrections. Debits must equal credits."}
         </p>
         <JournalForm lang={lang} entities={books.entities} options={books.options} />
-      </section>
-      <section className={card}>
-        <h2 className="font-display text-lg font-semibold text-ink">{fr ? "Écritures manuelles" : "Manual entries"}</h2>
+      </Card>
+      <Card color="activity" title={<>{fr ? "Écritures manuelles" : "Manual entries"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{entries.length}</span></>}>
         {entries.length === 0 ? (
           <p className="text-sm text-soft">{fr ? "Aucune." : "None."}</p>
         ) : (
@@ -51,7 +49,7 @@ export default async function JournalPage() {
             ))}
           </ul>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Card from "@/components/section-card";
 import { reconcileMonth, setOpeningBalance } from "@/actions/accounting";
 import { differenceHints, type ReconcileSummary } from "@/lib/accounting/reconcile";
 import { money } from "@/lib/accounting/format";
@@ -23,13 +24,7 @@ export default function ReconcilePanel({ lang, month, summary: s }: { lang: "en"
   const cls = "rounded-lg border border-card-border bg-white px-2 py-1.5 text-sm text-ink";
 
   return (
-    <section className="space-y-4 rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-lg font-semibold text-ink">
-          {fr ? "Rapprochement" : "Reconciliation"} — {s.periodStart} → {s.periodEnd}
-        </h2>
-        {locked && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">🔒 {s.reconciled ? (fr ? "Rapproché et verrouillé" : "Reconciled and locked") : fr ? `Verrouillé jusqu'au ${s.lockedThrough}` : `Locked through ${s.lockedThrough}`}</span>}
-      </div>
+    <Card color="billing" title={<>{fr ? "Rapprochement" : "Reconciliation"} — {s.periodStart} → {s.periodEnd}</>} actions={locked ? <span className="rounded-full bg-white/25 px-3 py-0.5 text-xs font-semibold normal-case text-white">🔒 {s.reconciled ? (fr ? "Rapproché et verrouillé" : "Reconciled and locked") : fr ? `Verrouillé jusqu'au ${s.lockedThrough}` : `Locked through ${s.lockedThrough}`}</span> : undefined}>
 
       <dl className="grid gap-3 text-sm sm:grid-cols-4">
         <div><dt className="text-xs uppercase text-soft">{fr ? "Solde d'ouverture" : "Opening balance"}</dt><dd className="font-semibold text-ink">{m(s.opening)}</dd></div>
@@ -109,6 +104,6 @@ export default function ReconcilePanel({ lang, month, summary: s }: { lang: "en"
           </tbody>
         </table>
       </details>
-    </section>
+    </Card>
   );
 }

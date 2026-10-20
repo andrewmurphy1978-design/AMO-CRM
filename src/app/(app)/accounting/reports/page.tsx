@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import Card from "@/components/section-card";
 import Link from "next/link";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -158,8 +159,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ))}
       </div>
 
-      <section className="rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-        <h2 className="font-display text-lg font-semibold text-ink">{entity.name}</h2>
+      <Card color="statistics" title={<>{entity.name} · {tabs.find(([k]) => k === report)?.[1]}</>}>
         <p className="text-xs text-soft">{isoDate(range.from)} → {isoDate(range.to)} · {cur}</p>
 
         {report === "is" && data.is ? (() => {
@@ -269,7 +269,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             </>
           );
         })() : null}
-      </section>
+      </Card>
     </div>
   );
 }

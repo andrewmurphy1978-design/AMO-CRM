@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Card from "@/components/section-card";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
@@ -61,10 +62,9 @@ export default async function AccountingOverview({ searchParams }: { searchParam
           const cur = e.currency;
           const kind = KIND_LABEL[e.kind]?.[fr ? "fr" : "en"] ?? e.kind;
           return (
-            <section key={e.id} className="rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <Card key={e.id} color={e.kind === "PERSONAL" ? "personal" : e.kind === "SOLE_PROPRIETORSHIP" ? "general" : e.kind === "CORPORATION" ? "contact" : "addresses"} title={e.name}>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h2 className="font-display text-lg font-semibold text-ink">{e.name}</h2>
                   <p className="text-xs text-soft">
                     {kind} · {e.country}
                     {e.province ? `-${e.province}` : ""} · {e.basis === "CASH" ? (fr ? "base de caisse" : "cash basis") : fr ? "comptabilité d'exercice" : "accrual basis"}
@@ -121,7 +121,7 @@ export default async function AccountingOverview({ searchParams }: { searchParam
                   {accounts.map((a) => `${a.name}${a.last4 ? ` ••${a.last4}` : ""}`).join(", ")}
                 </p>
               )}
-            </section>
+            </Card>
           );
         })}
       </div>

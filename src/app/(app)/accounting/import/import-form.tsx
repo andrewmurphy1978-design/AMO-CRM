@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Card from "@/components/section-card";
 import Link from "next/link";
 import { importStatement, readStatementPdf, suggestWithAI } from "@/actions/accounting";
 import { detectColumns, parseCsv, toTransactions, type ColumnMap, type DateOrder } from "@/lib/accounting/csv";
@@ -134,8 +135,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
     });
 
   return (
-    <section className="space-y-4 rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-      <h2 className="font-display text-lg font-semibold text-ink">{fr ? "Importer un relevé" : "Import a statement"}</h2>
+    <Card color="files" title={fr ? "Importer un relevé" : "Import a statement"}>
       <p className="text-sm text-soft">
         {fr
           ? "Déposez le CSV (ou le PDF) exporté de votre banque. Les doublons sont ignorés : vous pouvez réimporter des périodes qui se chevauchent."
@@ -269,6 +269,6 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
           <Link href="/accounting/transactions" className="mt-2 inline-block underline">{fr ? "Catégoriser maintenant →" : "Categorize now →"}</Link>
         </div>
       )}
-    </section>
+    </Card>
   );
 }

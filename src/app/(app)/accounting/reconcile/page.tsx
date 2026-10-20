@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Card from "@/components/section-card";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
@@ -75,8 +76,7 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
         summary={summary}
       />
 
-      <section className="rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
-        <h2 className="font-display text-lg font-semibold text-ink">{fr ? "Mois rapprochés" : "Reconciled months"}</h2>
+      <Card color="activity" title={<>{fr ? "Mois rapprochés" : "Reconciled months"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{history.length}</span></>}>
         {history.length === 0 ? (
           <p className="mt-2 text-sm text-soft">{fr ? "Aucun pour l'instant." : "None yet."}</p>
         ) : (
@@ -91,7 +91,7 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
             ))}
           </ul>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

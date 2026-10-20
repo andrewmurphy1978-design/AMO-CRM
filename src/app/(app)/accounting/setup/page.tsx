@@ -1,4 +1,5 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
+import Card from "@/components/section-card";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks, KIND_LABEL } from "@/lib/accounting/options";
@@ -22,8 +23,6 @@ export default async function SetupPage() {
     return { books, rules, banks, entityName: new Map(books.entities.map((e) => [e.id, e.name])), txCounts: new Map(counts.map((c) => [c.accountId, c._count._all])) };
   });
   const accName = new Map(books.options.map((o) => [o.id, o.name]));
-  const card = "space-y-3 rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm";
-  const h2 = "font-display text-lg font-semibold text-ink";
   const TYPES: { key: string; en: string; fr: string }[] = [
     { key: "ASSET", en: "Assets", fr: "Actifs" },
     { key: "LIABILITY", en: "Liabilities", fr: "Passifs" },
@@ -33,8 +32,7 @@ export default async function SetupPage() {
   ];
 
   const entitiesSection = (
-    <section className={card}>
-      <h2 className={h2}>{fr ? "Entités" : "Entities"}</h2>
+    <Card color="general" title={<>{fr ? "Entités" : "Entities"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{books.entities.length}</span></>}>
       <p className="text-sm text-soft">
         {fr
           ? "Chaque entité a ses propres livres (actifs, passifs, capitaux propres, revenus, dépenses). Les transactions entre entités passent par des comptes inter-entités / prêt d'actionnaire, comme un comptable le ferait."
@@ -50,12 +48,11 @@ export default async function SetupPage() {
         <summary className="cursor-pointer text-sm font-medium text-ink">{fr ? "+ Ajouter une société / LLC" : "+ Add a corporation / LLC"}</summary>
         <div className="mt-3"><AddEntityForm lang={lang} /></div>
       </details>
-    </section>
+    </Card>
   );
 
   const banksSection = (
-    <section className={card}>
-      <h2 className={h2}>{fr ? "Comptes bancaires, cartes et comptes enregistrés" : "Bank accounts, cards and registered accounts"}</h2>
+    <Card color="contact" title={<>{fr ? "Comptes bancaires, cartes et comptes enregistrés" : "Bank accounts, cards and registered accounts"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{banks.length}</span></>}>
       <p className="text-xs text-soft">
         {fr
           ? "Comptes chèques, épargne, cartes de crédit, CELI, REER, CELIAPP, REEE, comptes de placement, CRI, FERR et FRV : tous peuvent recevoir des relevés importés."
@@ -86,7 +83,7 @@ export default async function SetupPage() {
           : "A personal account can also be used for the sole proprietorship: import it under Personal, then pick the business as the category (or split 60/40) — the owner contribution / draw entries are created automatically. For an investment account, the statement balance includes market gains: record them in Journal to reconcile."}
       </p>
       <AddBankForm lang={lang} entities={books.entities} />
-    </section>
+    </Card>
   );
 
   const chartSection = (
@@ -107,11 +104,10 @@ export default async function SetupPage() {
             sub: String(own.length),
             content: (
               <>
-              <section className={card}>
-                <h2 className={h2}>{fr ? "Ajouter un compte" : "Add an account"}</h2>
+              <Card color="other" title={fr ? "Ajouter un compte" : "Add an account"}>
                 <AddAccountForm key={e.id} lang={lang} entities={books.entities} options={books.options} defaultEntityId={e.id} />
-              </section>
-              <section className={card}>
+              </Card>
+              <Card color="statistics" title={<>{e.name} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{own.length}</span></>}>
                 {gifi && (
                   <p className="text-xs text-soft">
                     {fr
@@ -157,7 +153,7 @@ export default async function SetupPage() {
                     </div>
                   );
                 })}
-              </section>
+              </Card>
               </>
             ),
           };
@@ -167,8 +163,7 @@ export default async function SetupPage() {
   );
 
   const suppliersSection = (
-    <section className={card}>
-      <h2 className={h2}>{fr ? "Fournisseurs mémorisés" : "Remembered suppliers"} <span className="text-sm font-normal text-soft">({rules.length})</span></h2>
+    <Card color="proposals" title={<>{fr ? "Fournisseurs mémorisés" : "Remembered suppliers"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{rules.length}</span></>}>
       {rules.length === 0 ? (
         <p className="text-sm text-soft">{fr ? "Aucun pour l'instant : ils apparaissent quand vous catégorisez avec « mémoriser »." : "None yet: they appear when you categorize with “remember” on."}</p>
       ) : (
@@ -184,7 +179,7 @@ export default async function SetupPage() {
           })}
         </ul>
       )}
-    </section>
+    </Card>
   );
 
   const sections: SetupSection[] = [

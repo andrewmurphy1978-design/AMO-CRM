@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Card from "@/components/section-card";
 import { setFxRate, categorizeTransactions, confirmSuggestions, deleteTransactions, ignoreTransactions, suggestWithAI, uncategorizeTransactions, updateSupplier } from "@/actions/accounting";
 import type { AccountOption, EntityInfo } from "@/lib/accounting/options";
 import { GROUP_LABEL } from "@/lib/accounting/options";
@@ -162,12 +163,8 @@ export default function TransactionsTable({
 
       {message && <p className="rounded-lg bg-black/5 px-3 py-2 text-sm text-ink">{message}</p>}
 
-      <section className="rounded-2xl border border-amber-300 bg-card-bg p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
-            {fr ? "À catégoriser" : "To categorize"}
-            <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-amber-500 px-2 text-xs font-semibold text-white">{pending.length}</span>
-          </h2>
+      <Card color="marketingPending" title={<>{fr ? "À catégoriser" : "To categorize"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{pending.length}</span></>}>
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <label className="flex items-center gap-2 text-soft">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
@@ -289,13 +286,9 @@ export default function TransactionsTable({
             })}
           </ul>
         )}
-      </section>
+      </Card>
 
-      <section className="rounded-2xl border border-card-border bg-card-bg p-4 shadow-sm">
-        <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-ink">
-          {filters.show === "ignored" ? (fr ? "Ignorées" : "Ignored") : fr ? "Catégorisées" : "Categorized"}
-          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-emerald-600 px-2 text-xs font-semibold text-white">{doneCount}</span>
-        </h2>
+      <Card color="marketingActive" title={<>{filters.show === "ignored" ? (fr ? "Ignorées" : "Ignored") : fr ? "Catégorisées" : "Categorized"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{doneCount}</span></>}>
         {done.length === 0 ? (
           <p className="mt-3 text-sm text-soft">{fr ? "Rien à afficher." : "Nothing to show."}</p>
         ) : (
@@ -333,7 +326,7 @@ export default function TransactionsTable({
             {doneCount > done.length && <p className="mt-2 text-xs text-soft">{fr ? `Les ${done.length} plus récentes sur ${doneCount} — utilisez les filtres pour voir les autres.` : `Showing the most recent ${done.length} of ${doneCount} — use the filters to see others.`}</p>}
           </div>
         )}
-      </section>
+      </Card>
     </div>
   );
 }
