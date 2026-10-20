@@ -709,11 +709,45 @@ export async function recordInvestmentAdjustment(input: { accountId: string; mon
   return { success: "Adjustment recorded." };
 }
 
+/** Other posted transactions of the same supplier, split into those that can be moved and those in a reconciled (locked) month. */
+async function findSimilar(db: Db, me: AccountingUser, tx: { id: string; supplier: string }) {
+  const key = supplierKey(tx.supplier);
+  if (!key) return { movable: [] as { id: string; accountId: string; amount: number; allocations: unknown }[], locked: 0 };
+  const candidates = await db.accTransaction.findMany({
+    where: { id: { not: tx.id }, status: "POSTED", matchedTransactionId: null, account: { entity: { ownerId: me.id } } },
+    select: { id: true, accountId: true, amount: true, supplier: true, date: true, allocations: true },
+  });
+  const locks = new Map<string, Date | null>();
+  const movable: { id: string; accountId: string; amount: number; allocations: unknown }[] = [];
+  let locked = 0;
+  for (const c of candidates) {
+    if (supplierKey(c.supplier) !== key) continue;
+    if (!locks.has(c.accountId)) {
+      const l = await db.accReconciliation.findFirst({ where: { accountId: c.accountId }, orderBy: { periodEnd: "desc" }, select: { periodEnd: true } });
+      locks.set(c.accountId, l?.periodEnd ?? null);
+    }
+    const lock = locks.get(c.accountId);
+    if (lock && c.date <= lock) locked++;
+    else movable.push({ id: c.id, accountId: c.accountId, amount: c.amount, allocations: c.allocations });
+  }
+  return { movable, locked };
+}
+
+export async function countSimilarTransactions(txId: string): Promise<{ count: number; locked: number }> {
+  const me = await access();
+  return withScopedPrismaClient(async (db) => {
+    if ((await ownTxIds(db, me, [txId])).length === 0) throw deny();
+    const tx = await db.accTransaction.findUniqueOrThrow({ where: { id: txId }, select: { id: true, supplier: true } });
+    const { movable, locked } = await findSimilar(db, me, tx);
+    return { count: movable.length, locked };
+  });
+}
+
 /**
  * Moves an already-categorized transaction to another category (from the General Ledger). The old posting is
  * replaced; a transfer's other half is reopened first and linked again if the new category is a transfer too.
  */
-export async function recategorizeTransaction(input: { txId: string; entityId: string; accountId: string; tax: boolean; remember: boolean }): Promise<Result> {
+export async function recategorizeTransaction(input: { txId: string; entityId: string; accountId: string; tax: boolean; remember: boolean; applyToSimilar?: boolean }): Promise<Result> {
   const me = await access();
   try {
     return await withScopedPrismaClient(async (db) => {
@@ -737,8 +771,28 @@ export async function recategorizeTransaction(input: { txId: string; entityId: s
         await saveRule(db, me.id, tx.supplier, [{ entityId: target.entityId, accountId: target.id, pct: 100, tax: taxProvince }]);
         await applyRules(db, me.id);
       }
+      // The same change for the supplier's other already-categorized transactions.
+      let moved = 0;
+      let skipped = 0;
+      if (input.applyToSimilar) {
+        const { movable, locked } = await findSimilar(db, me, tx);
+        skipped += locked;
+        const todo = movable.filter((m) => {
+          if (m.accountId === target.id) return false; // a transaction never goes to its own bank account
+          const a = (m.allocations as { accountId?: string }[] | null) ?? [];
+          return !(a.length === 1 && a[0].accountId === target.id); // already there
+        });
+        if (todo.length > 0) {
+          const ids2 = todo.map((m) => m.id);
+          const linked2 = await db.accTransaction.findMany({ where: { matchedTransactionId: { in: ids2 } }, select: { id: true } });
+          if (linked2.length > 0) await db.accTransaction.updateMany({ where: { id: { in: linked2.map((l) => l.id) } }, data: { status: "NEW", categorizedBy: null, matchedTransactionId: null } });
+          const r2res = await postTransactions(db, todo.map((m) => ({ txId: m.id, by: "USER" as const, allocations: allocationsFromRule([{ entityId: target.entityId, accountId: target.id, pct: 100, tax: taxProvince }], m.amount) })));
+          moved = r2res.posted;
+          skipped += r2res.errors.length;
+        }
+      }
       refresh();
-      return { success: "Recategorized." };
+      return { success: input.applyToSimilar ? `Recategorized, and ${moved} similar transaction(s) moved too${skipped ? ` (${skipped} left as they were: locked month or an error)` : ""}.` : "Recategorized." };
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Not found") throw error;
