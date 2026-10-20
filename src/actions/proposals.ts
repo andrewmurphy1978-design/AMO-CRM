@@ -17,7 +17,7 @@ import { loadProposalPdfData } from "@/lib/document-data";
 import { buildProposalPdf } from "@/lib/proposal-pdf";
 import { proposalIssues } from "@/lib/proposal-check";
 import { BRAND_ITEMS, DEFAULT_BRAND_ITEMS } from "@/lib/brand-items";
-import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
+import { draftLetterAndItems, listRequiredApps, priceApp, type AIApp, type AIContext, type AIProposalDraft } from "@/lib/proposal-ai";
 import { computeSectionedTotals, type ProposalSectionInput } from "@/lib/proposal-sections";
 
 const ProposalSchema = z.object({
@@ -593,89 +593,122 @@ export async function updateFullProposal(
   return { success: t.actions.proposalUpdated };
 }
 
-// Called directly from the client form (not a <form action>) — a plain
-// async function, not FormData-shaped, since it just returns a draft for
-// the form to pre-fill rather than persisting anything.
-export async function draftProposalAI(projectId: string, brief: string, sections?: { title: string; kind: string }[]): Promise<AIProposalDraft | { error: string }> {
+// --- "Generate with AI", in steps (the form calls them in turn and shows a progress report) ---
+
+export interface AIPrep {
+  ctx: AIContext;
+  createBrand: boolean;
+  brandNames: string[];
+}
+
+// Step 1: gather what the CRM knows. With no brief typed, it works from the project (type, description, custom
+// answers) and what's been written for AI about the client (voice, preferences, background).
+export async function prepareProposalAI(projectId: string, brief: string, sections?: { title: string; kind: string }[]): Promise<AIPrep | { error: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
-
   try {
-  return await withScopedPrismaClient(async (db) => {
-    const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { contact: true } });
-    const servicesCatalog = await db.servicePriceListItem.findMany({ where: { active: true }, orderBy: { name: "asc" } });
-    const clientLabel =
-      [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") ||
-      project.contact.company ||
-      project.contact.email ||
-      "";
-    const language: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
+    return await withScopedPrismaClient(async (db) => {
+      const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { contact: true } });
+      const clientLabel = [project.contact.firstName, project.contact.lastName].filter(Boolean).join(" ") || project.contact.company || project.contact.email || "";
+      const language: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
 
-    // With no brief typed, work from what the CRM already knows: the project
-    // (type, description, custom answers) and what's been written for AI about
-    // the client (voice, preferences, background).
-    let fullBrief = brief.trim();
-    if (!fullBrief) {
-      const types = typesOfProject(project);
-      const details: string[] = [];
-      for (const type of types) {
-        const template = await getProjectTemplate(db, type);
-        const answers = valuesOfType(project, type);
-        const lines = template.fields
-          .filter((f) => f.type !== "spacer")
-          .filter((f) => isFieldVisible(f, answers, template.fields))
-          .map((f) => `${f.label}: ${displayValue(answers[f.key])}`)
-          .filter((line) => !line.endsWith(": "));
-        if (lines.length > 0) details.push(types.length > 1 ? `[${type}]` : "", ...lines);
+      let fullBrief = brief.trim();
+      if (!fullBrief) {
+        const types = typesOfProject(project);
+        const details: string[] = [];
+        for (const type of types) {
+          const template = await getProjectTemplate(db, type);
+          const answers = valuesOfType(project, type);
+          const lines = template.fields
+            .filter((f) => f.type !== "spacer")
+            .filter((f) => isFieldVisible(f, answers, template.fields))
+            .map((f) => `${f.label}: ${displayValue(answers[f.key])}`)
+            .filter((line) => !line.endsWith(": "));
+          if (lines.length > 0) details.push(types.length > 1 ? `[${type}]` : "", ...lines);
+        }
+        const voice = await db.contactBrandItem.findMany({ where: { contactId: project.contactId, category: "voice" }, select: { label: true, value: true } });
+        fullBrief = [
+          `Project type${types.length > 1 ? "s" : ""}: ${types.join(", ")}`,
+          project.description ? `Project description: ${project.description}` : "",
+          details.length ? `Project details:\n${details.filter(Boolean).join("\n")}` : "",
+          project.contact.company ? `Client company: ${project.contact.company}` : "",
+          project.contact.industry ? `Client industry: ${project.contact.industry}` : "",
+          project.contact.aiDetails ? `Background about the client:\n${project.contact.aiDetails}` : "",
+          voice.length ? `Client brand voice:\n${voice.map((v) => `${v.label}: ${v.value}`).join("\n")}` : "",
+          `Client first name: ${project.contact.firstName ?? ""}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
       }
-      const voice = await db.contactBrandItem.findMany({ where: { contactId: project.contactId, category: "voice" }, select: { label: true, value: true } });
-      fullBrief = [
-        `Project type${typesOfProject(project).length > 1 ? "s" : ""}: ${typesOfProject(project).join(", ")}`,
-        project.description ? `Project description: ${project.description}` : "",
-        details.length ? `Project details:\n${details.filter(Boolean).join("\n")}` : "",
-        project.contact.company ? `Client company: ${project.contact.company}` : "",
-        project.contact.industry ? `Client industry: ${project.contact.industry}` : "",
-        project.contact.aiDetails ? `Background about the client:\n${project.contact.aiDetails}` : "",
-        voice.length ? `Client brand voice:\n${voice.map((v) => `${v.label}: ${v.value}`).join("\n")}` : "",
-        `Client first name: ${project.contact.firstName ?? ""}`,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
-    }
 
-    // The brand is part of the project whatever the brief says: the AI is told, and a priced
-    // "Brand creation" line is added afterwards if the draft still left it out.
-    const brandNames = BRAND_ITEMS.filter((b) => (project.brandItems.length > 0 ? project.brandItems : DEFAULT_BRAND_ITEMS).includes(b.key)).map((b) => (language === "fr" ? b.labelFr : b.label));
-    if (project.createBrand) fullBrief += `\n\nThe project includes creating a brand for the client (${brandNames.join(", ")}): include a separate priced line item "Brand creation".`;
-    const draft = await draftProposalWithAI(db, {
-      clientLabel,
-      projectName: project.name,
-      currency: project.contact.preferredCurrency || "CAD",
-      servicesCatalog,
-      brief: fullBrief,
-      language,
-      sections,
+      // The brand is part of the project whatever the brief says: the AI is told, and a priced "Brand creation"
+      // line is added afterwards if the draft still left it out.
+      const brandNames = BRAND_ITEMS.filter((b) => (project.brandItems.length > 0 ? project.brandItems : DEFAULT_BRAND_ITEMS).includes(b.key)).map((b) => (language === "fr" ? b.labelFr : b.label));
+      if (project.createBrand) fullBrief += `\n\nThe project includes creating a brand for the client (${brandNames.join(", ")}): include a separate priced line item "Brand creation".`;
+
+      return {
+        ctx: { clientLabel, projectName: project.name, currency: project.contact.preferredCurrency || "CAD", language, brief: fullBrief, sections },
+        createBrand: project.createBrand,
+        brandNames,
+      };
     });
-    if ("error" in draft || !project.createBrand) return draft;
-    if (!draft.lineItems.some((li) => /brand|marque/i.test(`${li.description} ${li.details ?? ""}`))) {
-      const priced = servicesCatalog.find((c) => /brand|marque/i.test(c.name));
-      draft.lineItems.unshift({
-        description: language === "fr" ? "Création de l'image de marque" : "Brand creation",
-        details: `${language === "fr" ? "Comprend : " : "Includes: "}${brandNames.join(", ")}.`,
-        quantity: 1,
-        unitPrice: priced?.unitPrice ?? 0,
-        ...(sections?.length ? { section: Math.max(0, sections.findIndex((s) => s.kind === "PREP")) } : {}),
-      });
-    }
-    return draft;
-  });
   } catch (error) {
-    console.error("draftProposalAI failed", error);
+    console.error("prepareProposalAI failed", error);
     return { error: `Couldn't prepare the AI draft. (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"})` };
   }
 }
 
-// ---- internal approval, then send
+// Step 2: the cover letter and the priced line items.
+export async function aiProposalItems(prep: AIPrep): Promise<{ coverLetter: string; lineItems: NonNullable<AIProposalDraft["lineItems"]> } | { error: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  try {
+    return await withScopedPrismaClient(async (db) => {
+      const servicesCatalog = await db.servicePriceListItem.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+      const draft = await draftLetterAndItems(db, { ...prep.ctx, servicesCatalog });
+      if ("error" in draft || !prep.createBrand) return draft;
+      if (!draft.lineItems.some((li) => /brand|marque/i.test(`${li.description} ${li.details ?? ""}`))) {
+        const fr = prep.ctx.language === "fr";
+        const priced = servicesCatalog.find((c) => /brand|marque/i.test(c.name));
+        draft.lineItems.unshift({
+          description: fr ? "Création de l'image de marque" : "Brand creation",
+          details: `${fr ? "Comprend : " : "Includes: "}${prep.brandNames.join(", ")}.`,
+          quantity: 1,
+          unitPrice: priced?.unitPrice ?? 0,
+          ...(prep.ctx.sections?.length ? { section: Math.max(0, prep.ctx.sections.findIndex((x) => x.kind === "PREP")) } : {}),
+        });
+      }
+      return draft;
+    });
+  } catch (error) {
+    console.error("aiProposalItems failed", error);
+    return { error: `Couldn't draft the proposal. (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"})` };
+  }
+}
+
+// Step 3: the apps / memberships the project needs.
+export async function aiProposalApps(ctx: AIContext, lineItems: { description: string }[]): Promise<{ apps: AIApp[] } | { error: string }> {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  try {
+    return await withScopedPrismaClient((db) => listRequiredApps(db, { ...ctx, lineItems }));
+  } catch (error) {
+    console.error("aiProposalApps failed", error);
+    return { error: `Couldn't list the apps. (${error instanceof Error ? error.message.slice(0, 160) : "unknown error"})` };
+  }
+}
+
+// Steps 4...: the current price of one app.
+export async function aiProposalAppPrice(app: AIApp, currency: string, language: "en" | "fr") {
+  const session = await auth();
+  if (!session) throw new Error("Not authenticated");
+  try {
+    return await withScopedPrismaClient((db) => priceApp(db, { app, currency, language }));
+  } catch (error) {
+    console.error("aiProposalAppPrice failed", error);
+    return { error: `Couldn't get the price of ${app.name}.` };
+  }
+}
 
 // Sign-off before anything goes to the client.
 // Refuses (with the list of what is missing) while important information is still blank.

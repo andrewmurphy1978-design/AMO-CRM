@@ -2,7 +2,7 @@
 
 import DateInput from "@/components/date-input";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { draftProposalAI } from "@/actions/proposals";
+import { aiProposalApps, aiProposalAppPrice, aiProposalItems, prepareProposalAI } from "@/actions/proposals";
 import type { RecipientOption } from "@/lib/contact-address";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -154,6 +154,7 @@ export default function ProposalForm({
   const [aiPending, startAiTransition] = useTransition();
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiDone, setAiDone] = useState<string | null>(null);
+  const [aiProgress, setAiProgress] = useState<{ step: number; total: number; label: string } | null>(null);
 
   const totals = useMemo(
     () => computeBillingTotals(lineItems, taxLocation, chargeCanadianTax),
@@ -193,47 +194,77 @@ export default function ProposalForm({
     setAiDone(null);
     // Sectioned: the AI places each line item in one of the sections (seeded first if there are none yet).
     const targetSections = layout === "SECTIONED" ? (sections.length > 0 ? sections : seedSections()) : null;
-    startAiTransition(async () => {
-      let result: Awaited<ReturnType<typeof draftProposalAI>>;
-      try {
-        result = await draftProposalAI(projectId, brief, targetSections?.map((s) => ({ title: s.title, kind: s.kind })));
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "";
-        setAiError(
-          /server action/i.test(msg)
-            ? lang === "fr"
-              ? "La page n'est plus à jour (nouvelle version déployée) — rechargez-la (Ctrl+Maj+R) et réessayez."
-              : "This page is out of date (a new version was deployed) — reload it (Ctrl+Shift+R) and try again."
-            : `The AI request didn't come back (it may have timed out) — try again.${msg ? ` (${msg.slice(0, 120)})` : ""}`
-        );
-        return;
-      }
-      if (!result || "error" in result) {
-        setAiError(result && "error" in result ? result.error : "The AI returned nothing — try again.");
-        return;
-      }
-      setAiError(null);
-      setAiDone(
-        lang === "fr"
-          ? `Brouillon appliqué : ${result.lineItems.length} ligne(s) — vérifiez la lettre et les lignes ci-dessous.`
-          : `Draft applied: ${result.lineItems.length} line item(s) — review the letter and lines below.`
+    const fr = lang === "fr";
+    const failure = (e: unknown) => {
+      const msg = e instanceof Error ? e.message : "";
+      setAiError(
+        /server action/i.test(msg)
+          ? fr
+            ? "La page n'est plus à jour (nouvelle version déployée) — rechargez-la (Ctrl+Maj+R) et réessayez."
+            : "This page is out of date (a new version was deployed) — reload it (Ctrl+Shift+R) and try again."
+          : `The AI request didn't come back (it may have timed out) — try again.${msg ? ` (${msg.slice(0, 120)})` : ""}`
       );
-      if (result.notice) setAiError(result.notice);
-      setCoverLetter(result.coverLetter);
-      if (targetSections) {
-        setSections(
-          targetSections.map((sec, i) => ({
-            ...sec,
-            lineItems: result.lineItems.filter((li) => (li.section ?? 0) === i).map(({ description, details, quantity, unitPrice }) => ({ description, details: details ?? "", quantity, unitPrice })),
-          }))
+      setAiProgress(null);
+    };
+
+    startAiTransition(async () => {
+      // The draft is built in steps so the progress is real: read the project, write the letter and
+      // lines, list the apps needed, then one price lookup per app. The total is an estimate until the
+      // apps are known.
+      let total = 10;
+      const progress = (step: number, label: string) => setAiProgress({ step, total, label });
+      try {
+        progress(1, fr ? "Lecture du projet et du client" : "Reading the project and client details");
+        const prep = await prepareProposalAI(projectId, brief, targetSections?.map((s) => ({ title: s.title, kind: s.kind })));
+        if ("error" in prep) return void (setAiError(prep.error), setAiProgress(null));
+
+        progress(2, fr ? "Rédaction de la lettre et des lignes de prix" : "Writing the cover letter and line items");
+        const draft = await aiProposalItems(prep);
+        if ("error" in draft) return void (setAiError(draft.error), setAiProgress(null));
+        setCoverLetter(draft.coverLetter);
+        if (targetSections) {
+          setSections(
+            targetSections.map((sec, i) => ({
+              ...sec,
+              lineItems: draft.lineItems.filter((li) => (li.section ?? 0) === i).map(({ description, details, quantity, unitPrice }) => ({ description, details: details ?? "", quantity, unitPrice })),
+            }))
+          );
+        } else {
+          setLineItems(draft.lineItems.map((li, tempKey) => ({ tempKey, ...li, details: li.details ?? "" })));
+          nextLineKey.current = draft.lineItems.length;
+        }
+
+        progress(3, fr ? "Recherche des applications et abonnements nécessaires" : "Listing the apps and memberships needed");
+        const found = await aiProposalApps(prep.ctx, draft.lineItems);
+        const apps = "error" in found ? [] : found.apps;
+        total = 3 + apps.length;
+
+        const priced: { name: string; amount: number; period: string; note: string }[] = [];
+        let notice: string | undefined;
+        for (const [i, app] of apps.entries()) {
+          progress(4 + i, fr ? `Recherche du prix : ${app.name}` : `Looking up the price of ${app.name}`);
+          const res = await aiProposalAppPrice(app, prep.ctx.currency, prep.ctx.language);
+          if ("error" in res) {
+            priced.push({ name: app.name, amount: 0, period: app.period, note: fr ? "Prix introuvable" : "Price not found" });
+            continue;
+          }
+          priced.push(res.subscription);
+          notice ??= res.notice;
+        }
+        if (priced.length > 0 && subs.length === 0) {
+          setSubs(priced.map((x, tempKey) => ({ tempKey, ...x })));
+          nextSubKey.current = priced.length;
+        }
+        setAiProgress({ step: total, total, label: fr ? "Terminé" : "Done" });
+        setAiDone(
+          fr
+            ? `Brouillon appliqué : ${draft.lineItems.length} ligne(s) et ${priced.length} application(s) — vérifiez la lettre, les lignes et les prix.`
+            : `Draft applied: ${draft.lineItems.length} line item(s) and ${priced.length} app(s) — review the letter, lines and prices.`
         );
-      } else {
-        setLineItems(result.lineItems.map((li, tempKey) => ({ tempKey, ...li, details: li.details ?? "" })));
-        nextLineKey.current = result.lineItems.length;
-      }
-      if (result.subscriptions && result.subscriptions.length > 0 && subs.length === 0) {
-        setSubs(result.subscriptions.map((x, tempKey) => ({ tempKey, ...x })));
-        nextSubKey.current = result.subscriptions.length;
+        if (notice) setAiError(notice);
+        if ("error" in found) setAiError(found.error);
+      } catch (e) {
+        failure(e);
       }
     });
   }
@@ -387,6 +418,19 @@ export default function ProposalForm({
             ? "Laissez la zone vide pour utiliser les détails du projet, du client et de sa marque. Nécessite la clé API Anthropic (Paramètres)."
             : "Leave the box empty to use the project, client and brand details. Needs the Anthropic API key (Settings)."}
         </p>
+        {aiProgress && (
+          <div className="mt-3" role="status" aria-live="polite">
+            <div className="flex items-center justify-between text-xs text-ink">
+              <span>{aiProgress.label}…</span>
+              <span className="font-semibold tabular-nums">
+                {aiProgress.step}/{aiProgress.total}
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-black/10">
+              <div className="h-full rounded-full bg-[#0fa38a] transition-all" style={{ width: `${Math.min(100, Math.round((aiProgress.step / aiProgress.total) * 100))}%` }} />
+            </div>
+          </div>
+        )}
         {aiError && <p className="mt-2 text-xs text-red-600">{aiError}</p>}
         {aiDone && <p className="mt-2 text-xs text-emerald-700">{aiDone}</p>}
       </div>
