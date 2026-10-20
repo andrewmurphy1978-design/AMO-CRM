@@ -6,16 +6,9 @@ import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import Card, { CARD_COLORS } from "@/components/section-card";
 import { EditCardButton } from "../../contacts/[id]/section-dialog";
 import PhaseList, { type PhaseRowData } from "../phase-list";
+import { PROJECT_STATUS_COLORS } from "@/lib/project-status";
 
-const STATUS_COLORS: Record<string, string> = {
-  PROPOSAL: "bg-violet-50 text-violet-700",
-  PLANNING: "bg-black/5 text-soft",
-  ACTIVE: "bg-emerald-50 text-emerald-700",
-  FINAL: "bg-orange-50 text-orange-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  COMPLETED: "bg-sky-50 text-sky-700",
-  CANCELLED: "bg-red-50 text-red-600",
-};
+const STATUS_COLORS: Record<string, string> = PROJECT_STATUS_COLORS;
 
 // The project page's Phases card: a read-only table, with a pencil that
 // opens the phase editor (add, change or delete phases) in its own dialog.

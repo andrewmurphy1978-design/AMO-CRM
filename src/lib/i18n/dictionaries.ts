@@ -244,7 +244,9 @@ export const dictionaries = {
     projectStatuses: {
       PROPOSAL: "Proposal",
       PLANNING: "Planning",
-      ACTIVE: "Active",
+      BUILDING: "Building",
+      PRESENTING: "Presenting",
+      LAUNCHING: "Launching",
       FINAL: "Final",
       ON_HOLD: "On hold",
       COMPLETED: "Completed",
@@ -1803,8 +1805,10 @@ export const dictionaries = {
     projectStatuses: {
       PROPOSAL: "Proposition",
       PLANNING: "Planification",
-      ACTIVE: "Actif",
-      FINAL: "Final",
+      BUILDING: "Construction",
+      PRESENTING: "Présentation",
+      LAUNCHING: "Lancement",
+      FINAL: "Finalisation",
       ON_HOLD: "En pause",
       COMPLETED: "Terminé",
       CANCELLED: "Annulé",

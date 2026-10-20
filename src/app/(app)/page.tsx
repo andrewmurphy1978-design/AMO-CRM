@@ -76,6 +76,7 @@ import { getUserMarketsPicks } from "@/lib/dashboard-markets-picks";
 import { getUserSportsPicks } from "@/lib/dashboard-sports-picks";
 import { getUserHiddenHeaderWidgets } from "@/lib/dashboard-header-widgets";
 import type { AutomationRun } from "@prisma/client";
+import { ACTIVE_PROJECT_STATUSES } from "@/lib/project-status";
 
 // Same full lockup used in the sidebar's expanded state elsewhere — the
 // Dashboard's own sidebar entry hides it (see Sidebar's hideLogo prop) and
@@ -258,8 +259,8 @@ export default async function DashboardPage() {
         // Feeds the Project Summary card. Same status set the removed
         // Open-Tasks stat used for "active" — TODO/IN_PROGRESS/BLOCKED,
         // everything short of DONE.
-        db.project.count({ where: { status: "ACTIVE" } }),
-        db.projectPhase.count({ where: { status: "ACTIVE" } }),
+        db.project.count({ where: { status: { in: ACTIVE_PROJECT_STATUSES } } }),
+        db.projectPhase.count({ where: { status: { in: ACTIVE_PROJECT_STATUSES } } }),
         db.task.count({ where: { status: { in: ["TODO", "IN_PROGRESS", "BLOCKED"] } } }),
         // Today/tomorrow/this-week deadline buckets (computed below, once
         // we're back on plain JS Dates) — every non-done task due in the
@@ -276,7 +277,7 @@ export default async function DashboardPage() {
           include: { project: { include: { contact: true } } },
         }),
         db.project.findMany({
-          where: { status: "ACTIVE" },
+          where: { status: { in: ACTIVE_PROJECT_STATUSES } },
           orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
           take: 5,
           include: { contact: true },

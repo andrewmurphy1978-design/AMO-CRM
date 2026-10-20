@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { phaseStatusFor } from "@/lib/project-status";
 
 const DAY = 86_400_000;
 
@@ -84,17 +85,19 @@ export async function onTaskDone(db: PrismaClient, taskId: string): Promise<void
 // next phase that isn't completed becomes Active (starting now); if a task of a completed phase is reopened,
 // the phase is Active again.
 export async function syncPhaseStatus(db: PrismaClient, phaseId: string): Promise<void> {
-  const phase = await db.projectPhase.findUnique({ where: { id: phaseId }, select: { id: true, projectId: true, order: true, status: true, tasks: { select: { status: true, completedAt: true } } } });
+  const phase = await db.projectPhase.findUnique({ where: { id: phaseId }, select: { id: true, name: true, projectId: true, order: true, status: true, tasks: { select: { status: true, completedAt: true } } } });
   if (!phase || phase.tasks.length === 0) return;
   const allDone = phase.tasks.every((t) => t.status === "DONE");
   if (allDone && phase.status !== "COMPLETED") {
     const last = phase.tasks.reduce<Date | null>((m, t) => (t.completedAt && (!m || t.completedAt > m) ? t.completedAt : m), null);
     const at = last ?? new Date();
     await db.projectPhase.update({ where: { id: phase.id }, data: { status: "COMPLETED", completedAt: at } });
-    const next = await db.projectPhase.findFirst({ where: { projectId: phase.projectId, order: { gt: phase.order }, NOT: { status: "COMPLETED" } }, orderBy: { order: "asc" }, select: { id: true, startDate: true } });
-    if (next) await db.projectPhase.update({ where: { id: next.id }, data: { status: "ACTIVE", ...(next.startDate ? {} : { startDate: at }) } });
+    const project = await db.project.findUnique({ where: { id: phase.projectId }, select: { status: true } });
+    const next = await db.projectPhase.findFirst({ where: { projectId: phase.projectId, order: { gt: phase.order }, NOT: { status: "COMPLETED" } }, orderBy: { order: "asc" }, select: { id: true, name: true, startDate: true } });
+    if (next) await db.projectPhase.update({ where: { id: next.id }, data: { status: phaseStatusFor(project?.status ?? "BUILDING", next.name), ...(next.startDate ? {} : { startDate: at }) } });
   } else if (!allDone && phase.status === "COMPLETED") {
-    await db.projectPhase.update({ where: { id: phase.id }, data: { status: "ACTIVE", completedAt: null } });
+    const owner = await db.project.findUnique({ where: { id: phase.projectId }, select: { status: true } });
+    await db.projectPhase.update({ where: { id: phase.id }, data: { status: phaseStatusFor(owner?.status ?? "BUILDING", phase.name), completedAt: null } });
   }
 }
 

@@ -15,12 +15,13 @@ import { brandPhaseTasks } from "@/lib/brand-items";
 import { TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, readFieldValues, typesOfProject, valuesOfType, type FieldValues, type TypeInput } from "@/lib/project-templates";
 import { getTypeLabels } from "@/lib/project-type-store";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
+import { PROJECT_STATUSES, BUILD_STAGE_STATUSES, phaseStatusFor, type ProjectStatusValue } from "@/lib/project-status";
 
 const ProjectSchema = z.object({
   name: z.string().trim().min(1, "Project name is required"),
   contactId: z.string().min(1, "Client is required"),
   description: z.string().trim().optional(),
-  status: z.enum(["PROPOSAL", "PLANNING", "ACTIVE", "FINAL", "ON_HOLD", "COMPLETED", "CANCELLED"]),
+  status: z.enum(PROJECT_STATUSES),
   types: z.array(z.string().min(1)).min(1, "Choose at least one project type"),
   ownerId: z.string().optional(),
   supervisorId: z.string().optional(),
@@ -63,7 +64,7 @@ function readProjectForm(formData: FormData) {
 
 export interface PhaseValues {
   name: string;
-  status: "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+  status: ProjectStatusValue;
   phaseType: string;
   teamMemberIds: string[];
   supervisorId: string;
@@ -75,7 +76,7 @@ export interface PhaseValues {
 
 const PhaseSchema = z.object({
   name: z.string().trim().min(1, "Phase name is required"),
-  status: z.enum(["PROPOSAL", "PLANNING", "ACTIVE", "FINAL", "ON_HOLD", "COMPLETED", "CANCELLED"]),
+  status: z.enum(PROJECT_STATUSES),
   phaseType: z.string().trim().optional(),
   teamMemberIds: z.array(z.string()),
   supervisorId: z.string().optional(),
@@ -168,7 +169,7 @@ interface NewProjectInput {
   name: string;
   description?: string;
   contactId: string;
-  status: "PROPOSAL" | "PLANNING" | "ACTIVE" | "FINAL" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+  status: ProjectStatusValue;
   ownerId: string;
   supervisorId: string | null;
   teamMemberIds: string[];
@@ -240,7 +241,7 @@ async function createProjectFromTemplate(db: PrismaClient, input: NewProjectInpu
     ...(input.teamMemberIds.length > 0 ? [db.projectTeamMember.createMany({ data: input.teamMemberIds.map((userId) => ({ projectId, userId })) })] : []),
     ...phaseRows.map(({ phase, id, index }) =>
       db.projectPhase.create({
-        data: { id, projectId, name: phase.name, order: index, ...phaseDates(projectStart, phase.delayDays), ...(managed ? { status: "ACTIVE" as const } : {}) },
+        data: { id, projectId, name: phase.name, order: index, ...phaseDates(projectStart, phase.delayDays), ...(managed ? { status: phaseStatusFor(input.status, phase.name) } : {}) },
       })
     ),
     ...phaseRows
@@ -321,7 +322,7 @@ async function syncPlanWithAnswers(db: PrismaClient, projectId: string) {
   const missing = plan.filter((p) => !have.has(norm(p.name)) && !waiting.has(norm(p.name)) && p.stage !== "PROPOSAL");
   if (missing.length === 0) return;
 
-  const reached = (stage: string) => (stage === "PLANNING" ? !["PROPOSAL"].includes(project.status) : stage === "ACTIVE" ? ["ACTIVE", "FINAL", "COMPLETED"].includes(project.status) : ["FINAL", "COMPLETED"].includes(project.status));
+  const reached = (stage: string) => (stage === "PLANNING" ? !["PROPOSAL"].includes(project.status) : stage === "ACTIVE" ? [...BUILD_STAGE_STATUSES, "FINAL", "COMPLETED"].includes(project.status) : ["FINAL", "COMPLETED"].includes(project.status));
   const createdNow = missing.filter((p) => project.lifecycleManaged === false || reached(p.stage));
   const later = missing.filter((p) => !createdNow.includes(p));
 
@@ -338,7 +339,7 @@ async function syncPlanWithAnswers(db: PrismaClient, projectId: string) {
     const phases = await db.projectPhase.findMany({ where: { projectId }, select: { id: true, order: true } });
     const at = nextExisting ? nextExisting.order : phases.reduce((m, p) => Math.max(m, p.order), -1) + 1;
     await db.projectPhase.updateMany({ where: { projectId, order: { gte: at } }, data: { order: { increment: 1 } } });
-    const created = await db.projectPhase.create({ data: { projectId, name: ph.name, order: at, status: project.status === "PROPOSAL" ? "PLANNING" : (["PLANNING", "ACTIVE", "FINAL", "COMPLETED"].includes(project.status) ? (project.status as "PLANNING" | "ACTIVE" | "FINAL" | "COMPLETED") : "PLANNING") } });
+    const created = await db.projectPhase.create({ data: { projectId, name: ph.name, order: at, status: project.status === "PROPOSAL" ? "PLANNING" : project.status === "COMPLETED" ? "COMPLETED" : phaseStatusFor(project.status, ph.name) } });
     await db.task.createMany({ data: taskRows(projectId, created.id, ph.tasks, ph.delays, null, await taskWho(db, projectId)) });
     project.phases.push({ id: created.id, name: ph.name, order: at });
     for (const x of project.phases) if (x.id !== created.id && x.order >= at) x.order += 1;

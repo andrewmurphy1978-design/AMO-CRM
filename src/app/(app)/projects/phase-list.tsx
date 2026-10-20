@@ -4,6 +4,7 @@ import { useState } from "react";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { createPhase, updatePhase, deletePhase, type PhaseValues } from "@/actions/projects";
 import PhaseDialog from "./phase-dialog";
+import { PROJECT_STATUS_COLORS } from "@/lib/project-status";
 
 export interface PhaseRowData {
   id: string;
@@ -18,15 +19,7 @@ export interface PhaseRowData {
   description: string | null;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  PROPOSAL: "bg-violet-50 text-violet-700",
-  PLANNING: "bg-black/5 text-soft",
-  ACTIVE: "bg-emerald-50 text-emerald-700",
-  FINAL: "bg-orange-50 text-orange-700",
-  ON_HOLD: "bg-amber-50 text-amber-700",
-  COMPLETED: "bg-sky-50 text-sky-700",
-  CANCELLED: "bg-red-50 text-red-600",
-};
+const STATUS_COLORS: Record<string, string> = PROJECT_STATUS_COLORS;
 
 const BLANK: PhaseValues = {
   name: "",

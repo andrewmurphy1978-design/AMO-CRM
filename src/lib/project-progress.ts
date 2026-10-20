@@ -2,6 +2,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { phaseDates, taskRows, taskWho } from "@/lib/task-schedule";
 import { billPendingSupplierCosts } from "@/lib/supplier-costs";
 import type { PhaseStage } from "@/lib/project-templates";
+import { BUILD_STAGE_STATUSES, buildStatusForPhase, type ProjectStatusValue } from "@/lib/project-status";
 
 // The project lifecycle, driven by approvals, payments and finished phases:
 //
@@ -12,8 +13,9 @@ import type { PhaseStage } from "@/lib/project-templates";
 //             are created at once, each with its tasks. When they're all finished
 //             -> ACTIVE. With no such phases it goes straight to ACTIVE.
 //   ACTIVE    ALL the Active phases (Building, Testing, Presenting, Deploying...)
-//             are created at once, each with its tasks. When they're all finished
-//             -> FINAL.
+//             are created at once, each with its tasks. While they run the project
+//             shows as BUILDING, PRESENTING or LAUNCHING, following the phase under
+//             way (see lib/project-status.ts). When they're all finished -> FINAL.
 //   FINAL     Awaiting the last instalment. Paid -> COMPLETED.
 //
 // Phases wait in Project.pendingPhases (each with its stage) and are created
@@ -28,7 +30,7 @@ export interface PendingPhase {
   delays?: (number | null)[];
 }
 
-const LIFECYCLE = ["PROPOSAL", "PLANNING", "ACTIVE", "FINAL"];
+const LIFECYCLE: string[] = ["PROPOSAL", "PLANNING", ...BUILD_STAGE_STATUSES, "FINAL"];
 const SECOND_INSTALMENT_TASK = "Collect the 2nd instalment";
 const FALLBACK_INSTALMENT_COUNT = 3;
 
@@ -95,13 +97,13 @@ async function releaseStage(db: PrismaClient, pr: Loaded, pending: PendingPhase[
   await db.projectPhase.updateMany({ where: { projectId: pr.id, NOT: { status: "COMPLETED" }, tasks: { none: { NOT: { status: "DONE" } } } }, data: { status: "COMPLETED", completedAt: now } });
   const baseOrder = (pr.phases[0]?.order ?? -1) + 1;
   let cursor = now;
-  const phaseRows: { id: string; projectId: string; name: string; order: number; status: "PLANNING" | "ACTIVE"; startDate: Date; dueDate?: Date }[] = [];
+  const phaseRows: { id: string; projectId: string; name: string; order: number; status: ProjectStatusValue; startDate: Date; dueDate?: Date }[] = [];
   const who = await taskWho(db, pr.id);
   const taskData: ReturnType<typeof taskRows> = [];
   batch.forEach((ph, i) => {
     const id = crypto.randomUUID();
     const dates = phaseDates(cursor, ph.delayDays);
-    phaseRows.push({ id, projectId: pr.id, name: ph.name, order: baseOrder + i, status, ...dates });
+    phaseRows.push({ id, projectId: pr.id, name: ph.name, order: baseOrder + i, status: status === "PLANNING" ? "PLANNING" : buildStatusForPhase(ph.name), ...dates });
     const first = i === 0;
     const titles = [...(first && extraFirstTask ? [extraFirstTask] : []), ...ph.tasks];
     const delays = [...(first && extraFirstTask ? [null] : []), ...(ph.delays ?? [])];
@@ -171,24 +173,32 @@ export async function ensureInstalmentInvoices(db: PrismaClient, projectId: stri
   await billPendingSupplierCosts(db, projectId);
 }
 
-async function setStatus(db: PrismaClient, projectId: string, status: "PLANNING" | "ACTIVE" | "FINAL" | "COMPLETED") {
+async function setStatus(db: PrismaClient, projectId: string, status: ProjectStatusValue) {
   await db.project.update({ where: { id: projectId }, data: { status, ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) } });
   // Linked projects (spawned from this one) follow the parent's status.
   await db.project.updateMany({ where: { parentProjectId: projectId, NOT: { status: "CANCELLED" } }, data: { status, ...(status === "COMPLETED" ? { completedAt: new Date() } : {}) } });
+}
+
+const phaseFinished = (ph: Loaded["phases"][number]) => ph.status === "COMPLETED" || (ph.tasks.length > 0 && ph.tasks.every((t) => t.status === "DONE"));
+
+// While the Active stage runs, the project's status follows the phase under way
+// (the first one, in order, that isn't finished yet).
+function buildStatusNow(pr: Loaded): ProjectStatusValue {
+  const open = [...pr.phases].reverse().find((ph) => !phaseFinished(ph));
+  return open ? buildStatusForPhase(open.name) : "BUILDING";
 }
 
 // One step of the lifecycle; true if something changed (so the caller loops).
 async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
   const pending = asPending(pr.pendingPhases);
   const hasPending = (stage: PhaseStage) => pending.some((p) => (p.stage ?? "ACTIVE") === stage);
-  const finished = (ph: Loaded["phases"][number]) => ph.status === "COMPLETED" || (ph.tasks.length > 0 && ph.tasks.every((t) => t.status === "DONE"));
-  const allFinished = pr.phases.every(finished);
+  const allFinished = pr.phases.every(phaseFinished);
   const money = await instalmentState(db, pr.id);
   // The "2nd Instalment" phase carries its own tasks; otherwise a reminder task is added to the first active phase.
   const reminder = money.paid >= 2 || pending.some((p) => /^(2nd instalment|present the reports( and mock-ups)?)$/i.test(p.name.trim())) || pr.phases.some((p) => /^(2nd instalment|present the reports( and mock-ups)?)$/i.test(p.name.trim())) ? undefined : SECOND_INSTALMENT_TASK;
 
   const goActive = async () => {
-    await setStatus(db, pr.id, "ACTIVE");
+    await setStatus(db, pr.id, "BUILDING");
     await ensureInstalmentInvoices(db, pr.id, "middle");
     if (hasPending("ACTIVE")) await releaseStage(db, pr, pending, "ACTIVE", "ACTIVE", reminder);
   };
@@ -221,12 +231,19 @@ async function step(db: PrismaClient, pr: Loaded): Promise<boolean> {
       await goActive();
       return true;
     }
-    case "ACTIVE": {
+    case "BUILDING":
+    case "PRESENTING":
+    case "LAUNCHING": {
       if (hasPending("ACTIVE")) {
         await releaseStage(db, pr, pending, "ACTIVE", "ACTIVE");
         return true;
       }
-      if (!allFinished) return false;
+      if (!allFinished) {
+        const now = buildStatusNow(pr);
+        if (now === pr.status) return false;
+        await setStatus(db, pr.id, now);
+        return true;
+      }
       // Deployed: waiting on the final instalment.
       await setStatus(db, pr.id, "FINAL");
       await ensureInstalmentInvoices(db, pr.id, "last");

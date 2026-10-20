@@ -833,18 +833,21 @@ model ContactFieldValue {
 // ---------------------------------------------------------------------------
 
 // Project lifecycle: PROPOSAL (proposal prepared/sent/answered, 1st instalment
-// awaited) -> PLANNING (research / mock-up; client now a Client) -> ACTIVE
-// (building, testing, presenting, deploying) -> FINAL (deployed, last
-// instalment awaited) -> COMPLETED. ON_HOLD / CANCELLED are set by hand. Phases
-// share this enum for their own status.
+// awaited) -> PLANNING (research / mock-up; client now a Client) -> BUILDING /
+// PRESENTING / LAUNCHING (the Active stage, following the phase under way) ->
+// FINAL (deployed, last instalment awaited) -> COMPLETED. ON_HOLD / CANCELLED
+// are set by hand. The first six count as "active" (src/lib/project-status.ts).
+// Phases share this enum for their own status.
 enum ProjectStatus {
+  PROPOSAL
   PLANNING
-  ACTIVE
+  BUILDING
+  PRESENTING
+  LAUNCHING
+  FINAL
   ON_HOLD
   COMPLETED
   CANCELLED
-  PROPOSAL
-  FINAL
 }
 
 // Based on Andrew's own service lines — drives no logic yet, just lets

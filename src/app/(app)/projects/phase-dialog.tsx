@@ -47,7 +47,9 @@ export default function PhaseDialog({
   const STATUSES = [
     { value: "PROPOSAL", label: t.projectStatuses.PROPOSAL },
     { value: "PLANNING", label: t.projectStatuses.PLANNING },
-    { value: "ACTIVE", label: t.projectStatuses.ACTIVE },
+    { value: "BUILDING", label: t.projectStatuses.BUILDING },
+    { value: "PRESENTING", label: t.projectStatuses.PRESENTING },
+    { value: "LAUNCHING", label: t.projectStatuses.LAUNCHING },
     { value: "FINAL", label: t.projectStatuses.FINAL },
     { value: "ON_HOLD", label: t.projectStatuses.ON_HOLD },
     { value: "COMPLETED", label: t.projectStatuses.COMPLETED },
