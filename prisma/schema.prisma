@@ -2128,6 +2128,8 @@ model AccAccount {
   gifi            String?
   // The code this account had in the chart template. The system finds its accounts (sales taxes, opening balances...) by it, so the user can renumber an account freely.
   templateCode    String?
+  // An opposite account: shown as an asset while its balance is a debit and as a liability (same section) while it is a credit, and back.
+  twoWay          Boolean        @default(false)
   parentId        String?
   parent          AccAccount?    @relation("AccParent", fields: [parentId], references: [id], onDelete: SetNull)
   children        AccAccount[]   @relation("AccParent")

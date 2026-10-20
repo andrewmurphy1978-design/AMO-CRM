@@ -14,6 +14,7 @@ export interface AccountRow {
   subtype: string;
   // Balance-sheet section (assets / liabilities only).
   section: string | null;
+  twoWay: boolean;
   parentId: string | null;
   gifi: string | null;
   taxLine: string | null;
@@ -47,7 +48,7 @@ export async function accountRows(db: PrismaClient, entityId: string, range: { f
     const s = byId.get(a.id);
     const debit = r2(s?.debit ?? 0);
     const credit = r2(s?.credit ?? 0);
-    return { id: a.id, code: a.code, templateCode: a.templateCode ?? a.code, name: a.name, nameFr: a.nameFr, type: a.type, subtype: a.subtype, section: a.section ?? defaultSection(a.type, a.subtype), parentId: a.parentId, gifi: a.gifi, taxLine: a.taxLine, deductiblePct: a.deductiblePct, debit, credit, balance: r2(natural(a.type, debit, credit)) };
+    return { id: a.id, code: a.code, templateCode: a.templateCode ?? a.code, name: a.name, nameFr: a.nameFr, type: a.type, subtype: a.subtype, section: a.section ?? defaultSection(a.type, a.subtype), twoWay: a.twoWay || isTwoWay(a.subtype), parentId: a.parentId, gifi: a.gifi, taxLine: a.taxLine, deductiblePct: a.deductiblePct, debit, credit, balance: r2(natural(a.type, debit, credit)) };
   });
   return includeEmpty ? rows : rows.filter((r) => r.debit !== 0 || r.credit !== 0);
 }
@@ -79,13 +80,16 @@ export async function balanceSheet(db: PrismaClient, entityId: string, asOf: Dat
   const assets: AccountRow[] = [];
   const liabilities: AccountRow[] = [];
   const equity: AccountRow[] = [];
+  // An opposite account sits on the side its balance falls on, in the matching section: a loan receivable that
+  // turns into a debt moves from assets to liabilities (and back), a tax refund becomes tax owed, and so on.
+  const toLiability: Record<string, string> = { TREASURY: "SHORT_TERM", CURRENT: "SHORT_TERM", LONG_TERM: "LONG_TERM", FIXED: "LONG_TERM", INTANGIBLE: "LONG_TERM" };
+  const toAsset: Record<string, string> = { SHORT_TERM: "CURRENT", LONG_TERM: "LONG_TERM" };
   for (const r of rows) {
     if (r.type === "ASSET") {
-      // A relationship account that is in credit (we owe) is shown as a liability, and vice versa.
-      if (isTwoWay(r.subtype) && r.balance < 0) liabilities.push({ ...r, balance: -r.balance, section: "SHORT_TERM" });
+      if (r.twoWay && r.balance < 0) liabilities.push({ ...r, balance: -r.balance, section: toLiability[r.section ?? "CURRENT"] ?? "SHORT_TERM" });
       else assets.push(r);
     } else if (r.type === "LIABILITY") {
-      if (isTwoWay(r.subtype) && r.balance < 0) assets.push({ ...r, balance: -r.balance, section: "CURRENT" });
+      if (r.twoWay && r.balance < 0) assets.push({ ...r, balance: -r.balance, section: toAsset[r.section ?? "SHORT_TERM"] ?? "CURRENT" });
       else liabilities.push(r);
     } else if (r.type === "EQUITY") equity.push(r);
   }

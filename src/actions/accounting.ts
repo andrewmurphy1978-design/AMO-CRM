@@ -265,6 +265,18 @@ export async function setAccountCode(id: string, code: string): Promise<Result> 
   }
 }
 
+export async function setAccountTwoWay(id: string, twoWay: boolean): Promise<Result> {
+  const me = await access();
+  await withScopedPrismaClient(async (db) => {
+    await ownAccount(db, me, id);
+    const acc = await db.accAccount.findUniqueOrThrow({ where: { id } });
+    if (acc.type !== "ASSET" && acc.type !== "LIABILITY") throw deny();
+    await db.accAccount.update({ where: { id }, data: { twoWay } });
+  });
+  refresh();
+  return {};
+}
+
 export async function setAccountNames(id: string, name: string, nameFr: string): Promise<Result> {
   const me = await access();
   if (!name.trim()) return { error: "The English name cannot be empty." };
@@ -299,7 +311,7 @@ export async function addAccount(_prev: Result | undefined, formData: FormData):
       const chosen = String(formData.get("section") ?? "");
       const section = type === "ASSET" || type === "LIABILITY" ? (parent ? parent.section ?? defaultSection(parent.type, parent.subtype) : chosen || defaultSection(type, sectionSubtype(chosen, type))) : null;
       return db.accAccount.create({
-        data: { entityId, code, name, nameFr: String(formData.get("nameFr") ?? "").trim() || null, section, type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : sectionSubtype(String(formData.get("section") ?? ""), type), taxLine: String(formData.get("taxLine") ?? "").trim() || null, gifi: /^\d{4}$/.test(String(formData.get("gifi") ?? "").trim()) ? String(formData.get("gifi")).trim() : await autoGifi(db, entityId, code, name, type, sectionSubtype(String(formData.get("section") ?? ""), type)), parentId },
+        data: { entityId, code, name, nameFr: String(formData.get("nameFr") ?? "").trim() || null, section, twoWay: (type === "ASSET" || type === "LIABILITY") && formData.get("twoWay") === "on", type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : sectionSubtype(String(formData.get("section") ?? ""), type), taxLine: String(formData.get("taxLine") ?? "").trim() || null, gifi: /^\d{4}$/.test(String(formData.get("gifi") ?? "").trim()) ? String(formData.get("gifi")).trim() : await autoGifi(db, entityId, code, name, type, sectionSubtype(String(formData.get("section") ?? ""), type)), parentId },
       });
     });
   } catch (error) {

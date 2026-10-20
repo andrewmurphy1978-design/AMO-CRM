@@ -86,6 +86,7 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
       gifi: usesGifi(entity.kind, entity.country) ? suggestGifi(entity.kind, { code: c.code, name: c.en, type: c.type, subtype: c.subtype }) : null,
       deductiblePct: c.deductiblePct ?? 100,
       isSystem: Boolean(c.system),
+      twoWay: Boolean(c.twoWay),
       order,
     })),
     skipDuplicates: true,

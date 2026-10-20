@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setAccountCode, setAccountGifi, setAccountNames, setAccountParent, setAccountSection } from "@/actions/accounting";
+import { setAccountCode, setAccountGifi, setAccountTwoWay, setAccountNames, setAccountParent, setAccountSection } from "@/actions/accounting";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
 
 export interface EditableAccount {
@@ -15,6 +15,7 @@ export interface EditableAccount {
   gifi: string | null;
   hasChildren: boolean;
   isGroup: boolean;
+  twoWay: boolean;
   bank: boolean;
   parentChoices: { id: string; label: string }[];
 }
@@ -59,10 +60,23 @@ export default function AccountEditor({ account: a, lang, showGifi, depth = 0 }:
       <input value={en} onChange={(e) => setEn(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="English" aria-label="English description" className={`${cls} w-full min-w-0 text-sm ${depth === 0 ? "font-semibold" : ""}`} />
       <input value={frName} onChange={(e) => setFrName(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="Français" aria-label="Description française" className={`${cls} w-full min-w-0 text-sm ${depth === 0 ? "font-semibold" : ""}`} />
       {sections && !a.parentId ? (
+        <div className="flex min-w-0 items-center gap-1">
         <select disabled={pending} value={a.section ?? ""} onChange={(e) => start(() => setAccountSection(a.id, e.target.value || null))} className={`${cls} w-full min-w-0`} title={fr ? "Section du bilan" : "Balance-sheet section"}>
           <option value="">{fr ? "Section automatique" : "Automatic section"}</option>
           {sections.map((s) => <option key={s.key} value={s.key}>{s[lang]}</option>)}
         </select>
+        {!a.bank && !isGroup && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => start(async () => setError((await setAccountTwoWay(a.id, !a.twoWay)).error ?? null))}
+            title={fr ? "Compte opposé : passe de l'actif au passif (même section) quand le solde change de sens" : "Opposite account: moves between assets and liabilities (same section) when its balance changes sign"}
+            className={`shrink-0 rounded-md border px-1.5 py-1 text-xs ${a.twoWay ? "border-amo-gold bg-amo-gold/20 font-bold text-ink" : "border-card-border text-soft hover:bg-black/5"}`}
+          >
+            ⇄
+          </button>
+        )}
+        </div>
       ) : (
         <span className="hidden lg:block" />
       )}

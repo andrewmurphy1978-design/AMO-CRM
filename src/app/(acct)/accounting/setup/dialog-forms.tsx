@@ -158,6 +158,12 @@ export function AccountFields({ lang, entities, options, defaultEntityId, defaul
           </select>
         </F>
       )}
+      {sectionDefs && (
+        <Check
+          name="twoWay"
+          label={fr ? "Compte opposé : passe aux passifs (même section) quand son solde devient créditeur, et inversement (prêt à un proche, remboursement ou solde d'impôt)" : "Opposite account: moves to liabilities (same section) when its balance turns into a credit, and back (a loan to someone, a tax refund or amount owed)"}
+        />
+      )}
       <F label={fr ? "Ligne d'impôt" : "Tax line"}><input name="taxLine" className={FIELD_CLASS} /></F>
       {entity && usesGifi(entity.kind, entity.country) && <F label="GIFI"><input name="gifi" maxLength={4} className={FIELD_CLASS} /></F>}
     </Grid>

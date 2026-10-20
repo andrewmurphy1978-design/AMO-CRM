@@ -151,7 +151,7 @@ export default async function SetupPage() {
                     lang={lang}
                     showGifi={gifi}
                     depth={depth}
-                    account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), isGroup: o.isGroup, bank: o.bank, parentChoices: parentChoicesOf(o, list).map((p) => ({ id: p.id, label: pathLabel(p) })) }}
+                    account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), isGroup: o.isGroup, twoWay: o.twoWay, bank: o.bank, parentChoices: parentChoicesOf(o, list).map((p) => ({ id: p.id, label: pathLabel(p) })) }}
                   />
                 );
                 // Assets and liabilities: grouped under their second-level section; an account whose section is changed moves there.

@@ -18,6 +18,8 @@ export interface ChartAccount {
   system?: boolean;
   // Chart code of the account this one sits under (second level).
   parent?: string;
+  // An opposite account (a loan that can flip between receivable and payable, a tax refund / amount owed...).
+  twoWay?: boolean;
 }
 
 const a = (code: string, en: string, fr: string, type: AccType, subtype: string, taxLine?: string, extra: Partial<ChartAccount> = {}): ChartAccount => ({ code, en, fr, type, subtype, taxLine, ...extra });
@@ -43,7 +45,8 @@ const PERSONAL_CA: ChartAccount[] = [
   a("1300", "Investments (non-registered)", "Placements (non enregistrés)", "ASSET", "INVESTMENT"),
   a("1400", "Principal residence", "Résidence principale", "ASSET", "FIXED_ASSET"),
   a("1410", "Vehicle", "Véhicule", "ASSET", "FIXED_ASSET"),
-  a("1500", "Tax refunds receivable", "Remboursements d'impôt à recevoir", "ASSET", "RECEIVABLE"),
+  a("1500", "Tax refunds receivable / income tax owed", "Remboursements d'impôt à recevoir / impôt à payer", "ASSET", "RECEIVABLE", undefined, { twoWay: true }),
+  a("1510", "Loans to family & friends", "Prêts à la famille et aux amis", "ASSET", "RECEIVABLE", undefined, { twoWay: true }),
   a("2100", "Mortgage", "Hypothèque", "LIABILITY", "LOAN"),
   a("2110", "Car loan", "Prêt auto", "LIABILITY", "LOAN"),
   a("2120", "Line of credit", "Marge de crédit", "LIABILITY", "LOAN"),
@@ -92,6 +95,7 @@ const PERSONAL_CA: ChartAccount[] = [
 const SOLE_PROP_CA: ChartAccount[] = [
   a("1100", "Accounts receivable", "Comptes clients", "ASSET", "RECEIVABLE"),
   a("1200", "Prepaid expenses", "Charges payées d'avance", "ASSET", "OTHER"),
+  a("1210", "Loans to affiliates & others", "Prêts aux entreprises liées et autres", "ASSET", "RECEIVABLE", undefined, { twoWay: true }),
   ...CA_SALES_TAX.filter((x) => x.type === "ASSET"),
   a("1500", "Computer equipment (CCA class 50)", "Matériel informatique (DPA catégorie 50)", "ASSET", "FIXED_ASSET"),
   a("1510", "Furniture & fixtures (CCA class 8)", "Mobilier et agencements (DPA catégorie 8)", "ASSET", "FIXED_ASSET"),
@@ -134,6 +138,7 @@ const SOLE_PROP_CA: ChartAccount[] = [
 const CORP_CA: ChartAccount[] = [
   a("1100", "Accounts receivable", "Comptes clients", "ASSET", "RECEIVABLE"),
   a("1200", "Prepaid expenses", "Charges payées d'avance", "ASSET", "OTHER"),
+  a("1210", "Loans to affiliates & others", "Prêts aux entreprises liées et autres", "ASSET", "RECEIVABLE", undefined, { twoWay: true }),
   ...CA_SALES_TAX.filter((x) => x.type === "ASSET"),
   a("1500", "Computer equipment (CCA class 50)", "Matériel informatique (DPA catégorie 50)", "ASSET", "FIXED_ASSET"),
   a("1510", "Furniture & fixtures (CCA class 8)", "Mobilier et agencements (DPA catégorie 8)", "ASSET", "FIXED_ASSET"),
@@ -142,7 +147,7 @@ const CORP_CA: ChartAccount[] = [
   a("1595", "Accumulated amortization — intangibles", "Amortissement cumulé — actifs incorporels", "ASSET", "INTANGIBLE"),
   a("2000", "Accounts payable", "Comptes fournisseurs", "LIABILITY", "PAYABLE"),
   ...CA_SALES_TAX.filter((x) => x.type === "LIABILITY"),
-  a("2400", "Corporate income taxes payable", "Impôts des sociétés à payer", "LIABILITY", "TAX_PAYABLE"),
+  a("2400", "Corporate income taxes payable / refundable", "Impôts des sociétés à payer / à recevoir", "LIABILITY", "TAX_PAYABLE", undefined, { twoWay: true }),
   a("2410", "Payroll deductions payable (source deductions)", "Retenues à la source à payer", "LIABILITY", "TAX_PAYABLE"),
   a("2420", "Dividends payable", "Dividendes à payer", "LIABILITY", "PAYABLE"),
   a("2500", "Business loan / line of credit", "Prêt / marge de crédit d'entreprise", "LIABILITY", "LOAN"),
@@ -176,6 +181,7 @@ const CORP_CA: ChartAccount[] = [
 const LLC_US: ChartAccount[] = [
   a("1100", "Accounts receivable", "Comptes clients", "ASSET", "RECEIVABLE"),
   a("1200", "Prepaid expenses", "Charges payées d'avance", "ASSET", "OTHER"),
+  a("1210", "Loans to affiliates & others", "Prêts aux entreprises liées et autres", "ASSET", "RECEIVABLE", undefined, { twoWay: true }),
   a("1500", "Equipment", "Équipement", "ASSET", "FIXED_ASSET"),
   a("1590", "Accumulated depreciation", "Amortissement cumulé", "ASSET", "FIXED_ASSET"),
   a("1520", "Intangible assets (website, software, trademarks)", "Actifs incorporels (site web, logiciels, marques)", "ASSET", "INTANGIBLE"),

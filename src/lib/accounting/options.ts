@@ -30,6 +30,7 @@ export interface AccountOption {
   section: string | null;
   parentId: string | null;
   gifi: string | null;
+  twoWay: boolean;
   // "Parent › Name" for a sub-category.
   label: string;
   labelFr: string;
@@ -59,6 +60,7 @@ export async function loadBooks(db: PrismaClient, ownerId: string): Promise<{ en
       section: a.type === "ASSET" || a.type === "LIABILITY" ? (a.section ?? defaultSection(a.type, a.subtype)) : null,
       parentId: a.parentId,
       gifi: a.gifi,
+      twoWay: a.twoWay,
       label: a.parentId && byId.get(a.parentId) ? `${byId.get(a.parentId)!.name} › ${a.name}` : a.name,
       labelFr: a.parentId && byId.get(a.parentId) ? `${byId.get(a.parentId)!.nameFr ?? byId.get(a.parentId)!.name} › ${a.nameFr ?? a.name}` : a.nameFr ?? a.name,
       bank,
