@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setAccountCode, setAccountGifi, setAccountTwoWay, setAccountNames, setAccountParent, setAccountSection } from "@/actions/accounting";
+import { deleteAccount, setAccountCode, setAccountGifi, setAccountTwoWay, setAccountNames, setAccountParent, setAccountSection } from "@/actions/accounting";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
 
 export interface EditableAccount {
@@ -109,6 +109,23 @@ export default function AccountEditor({ account: a, lang, showGifi, depth = 0 }:
             title="GIFI"
           />
         ))}
+      {a.hasChildren ? (
+        <span className="hidden lg:block" />
+      ) : (
+        <button
+          type="button"
+          disabled={pending}
+          title={fr ? "Retirer ce compte (seulement s'il n'a aucune transaction)" : "Remove this account (only if it has no transactions)"}
+          aria-label={fr ? "Retirer le compte" : "Remove the account"}
+          onClick={() => {
+            if (!confirm(fr ? `Retirer le compte ${a.code} ?` : `Remove account ${a.code}?`)) return;
+            start(async () => setError((await deleteAccount(a.id)).error ?? null));
+          }}
+          className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
+        >
+          ✕
+        </button>
+      )}
       {error && <span className="text-xs text-red-600 lg:col-span-full">{error}</span>}
     </div>
   );
@@ -117,8 +134,8 @@ export default function AccountEditor({ account: a, lang, showGifi, depth = 0 }:
 // One grid for the header and every row, so the columns line up and fill the card.
 export function rowGrid(showGifi: boolean): string {
   return showGifi
-    ? "grid grid-cols-1 items-center gap-2 lg:grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_12rem_12rem_4.5rem]"
-    : "grid grid-cols-1 items-center gap-2 lg:grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_12rem_12rem]";
+    ? "grid grid-cols-1 items-center gap-2 lg:grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_12rem_12rem_4.5rem_1.5rem]"
+    : "grid grid-cols-1 items-center gap-2 lg:grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_12rem_12rem_1.5rem]";
 }
 
 export function AccountColumnsHeader({ lang, showGifi }: { lang: "en" | "fr"; showGifi: boolean }) {
@@ -131,6 +148,7 @@ export function AccountColumnsHeader({ lang, showGifi }: { lang: "en" | "fr"; sh
       <span>{fr ? "Section du bilan" : "Balance-sheet section"}</span>
       <span>{fr ? "Deuxième niveau" : "Second level"}</span>
       {showGifi && <span>GIFI</span>}
+      <span />
     </div>
   );
 }

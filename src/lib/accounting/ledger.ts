@@ -60,7 +60,7 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
     }
   }
   // Registered / investment bank accounts sit under their own chart account (TFSA, RRSP...).
-  const orphans = await db.accAccount.findMany({ where: { entityId, registeredType: { not: null }, parentId: null }, select: { id: true, registeredType: true } });
+  const orphans = await db.accAccount.findMany({ where: { entityId, archived: false, registeredType: { not: null }, parentId: null }, select: { id: true, registeredType: true } });
   for (const o of orphans) {
     const parentId = await ensureRegisteredParent(db, entityId, o.registeredType as string);
     await db.accAccount.update({ where: { id: o.id }, data: { parentId, section: "LONG_TERM" } });

@@ -277,6 +277,44 @@ export async function setAccountTwoWay(id: string, twoWay: boolean): Promise<Res
   return {};
 }
 
+// Accounts the books themselves rely on (sales taxes, opening-balance equity...): they cannot be removed.
+const REQUIRED_KEYS = new Set(["2300", "2301", "2310", "2311", "3000", "3200"]);
+
+/**
+ * Removes an account that has no transactions or entries. Accounts of the standard chart are archived (renumbered out
+ * of the way) rather than deleted so they are not created again; the user's own accounts are deleted.
+ */
+export async function deleteAccount(id: string): Promise<Result> {
+  const me = await access();
+  const out = await withScopedPrismaClient(async (db) => {
+    await ownAccount(db, me, id);
+    const acc = await db.accAccount.findUniqueOrThrow({ where: { id } });
+    if (REQUIRED_KEYS.has(keyOf(acc)) || acc.counterEntityId) return { error: "The books need this account (sales taxes, opening balances or a link with another entity), so it cannot be removed." };
+    const [lines, txs, kids, recs] = await Promise.all([
+      db.accJournalLine.count({ where: { accountId: id } }),
+      db.accTransaction.count({ where: { accountId: id } }),
+      db.accAccount.count({ where: { parentId: id, archived: false } }),
+      db.accReconciliation.count({ where: { accountId: id } }),
+    ]);
+    if (lines > 0 || txs > 0 || recs > 0) return { error: "This account has transactions, so it cannot be removed." };
+    if (kids > 0) return { error: "This account has sub-accounts: move or remove them first." };
+    // Remembered suppliers that pointed at it are forgotten.
+    const rules = await db.accRule.findMany({ where: { ownerId: me.id }, select: { id: true, allocations: true } });
+    const stale = rules.filter((r) => ((r.allocations as { accountId?: string }[] | null) ?? []).some((a) => a.accountId === id)).map((r) => r.id);
+    if (stale.length > 0) await db.accRule.deleteMany({ where: { id: { in: stale } } });
+    if (acc.templateCode || acc.isSystem) {
+      await db.accImportBatch.deleteMany({ where: { accountId: id } });
+      await db.accAccount.update({ where: { id }, data: { archived: true, templateCode: keyOf(acc), code: `${acc.code}~${id.slice(-5)}`, parentId: null } });
+    } else {
+      await db.accImportBatch.deleteMany({ where: { accountId: id } });
+      await db.accAccount.delete({ where: { id } });
+    }
+    return {};
+  });
+  refresh();
+  return out;
+}
+
 export async function setAccountNames(id: string, name: string, nameFr: string): Promise<Result> {
   const me = await access();
   if (!name.trim()) return { error: "The English name cannot be empty." };
