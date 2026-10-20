@@ -875,41 +875,63 @@ export async function saveOpeningBalances(input: { entityId: string; date: strin
   const me = await access();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { error: "Enter the date of the opening balances." };
   try {
-    const saved = await withScopedPrismaClient(async (db) => {
+    const result = await withScopedPrismaClient(async (db) => {
       await ownEntity(db, me, input.entityId);
       const entity = await db.accEntity.findUniqueOrThrow({ where: { id: input.entityId } });
+      // Corporations and LLCs enter their equity accounts too, so the opening balance sheet balances on its own.
+      const withEquity = entity.kind === "CORPORATION" || entity.kind === "LLC";
       const ids = input.balances.map((b) => b.accountId);
-      const accs = await db.accAccount.findMany({ where: { id: { in: ids }, entityId: input.entityId, type: { in: ["ASSET", "LIABILITY"] }, subtype: { not: "GROUP" } } });
+      const accs = await db.accAccount.findMany({ where: { id: { in: ids }, entityId: input.entityId, type: { in: withEquity ? ["ASSET", "LIABILITY", "EQUITY"] : ["ASSET", "LIABILITY"] }, subtype: { not: "GROUP" } } });
       const byId = new Map(accs.map((a) => [a.id, a]));
-      // Corporations open against retained earnings, everyone else against the opening-balance equity account.
+      // The default balancing account: retained earnings for a corporation, the opening-balance equity account otherwise.
       const equity = (entity.kind === "CORPORATION" ? await db.accAccount.findFirst({ where: { entityId: entity.id, ...byTemplate("3200") } }) : null) ?? (await db.accAccount.findFirst({ where: { entityId: entity.id, ...byTemplate("3000") } }));
       if (!equity) throw new Error("The entity has no opening-balance account.");
       const date = new Date(`${input.date}T00:00:00.000Z`);
-      let count = 0;
+
+      if (!withEquity) {
+        let count = 0;
+        for (const b of input.balances) {
+          const acc = byId.get(b.accountId);
+          if (!acc) continue;
+          await db.accJournalEntry.deleteMany({ where: { entityId: entity.id, source: "OPENING", lines: { some: { accountId: acc.id } } } });
+          const amount = Number.isFinite(b.amount) ? r2(b.amount) : 0;
+          if (amount === 0) continue;
+          // Asset: debit when positive. Liability: credit when positive.
+          const accountDebit = acc.type === "ASSET" ? amount > 0 : amount < 0;
+          const abs = Math.abs(amount);
+          await db.accJournalEntry.create({
+            data: {
+              entityId: entity.id,
+              date,
+              memo: `Opening balance — ${acc.name}`,
+              source: "OPENING",
+              lines: { create: [{ accountId: acc.id, debit: accountDebit ? abs : 0, credit: accountDebit ? 0 : abs }, { accountId: equity.id, debit: accountDebit ? 0 : abs, credit: accountDebit ? abs : 0 }] },
+            },
+          });
+          count++;
+        }
+        return `${count} opening balance(s) saved.`;
+      }
+
+      // One opening entry for the whole balance sheet: assets debit, liabilities and equity credit.
+      const lines: { accountId: string; debit: number; credit: number }[] = [];
       for (const b of input.balances) {
         const acc = byId.get(b.accountId);
-        if (!acc) continue;
-        await db.accJournalEntry.deleteMany({ where: { entityId: entity.id, source: "OPENING", lines: { some: { accountId: acc.id } } } });
         const amount = Number.isFinite(b.amount) ? r2(b.amount) : 0;
-        if (amount === 0) continue;
-        // Asset: debit when positive. Liability: credit when positive.
-        const accountDebit = acc.type === "ASSET" ? amount > 0 : amount < 0;
-        const abs = Math.abs(amount);
-        await db.accJournalEntry.create({
-          data: {
-            entityId: entity.id,
-            date,
-            memo: `Opening balance — ${acc.name}`,
-            source: "OPENING",
-            lines: { create: [{ accountId: acc.id, debit: accountDebit ? abs : 0, credit: accountDebit ? 0 : abs }, { accountId: equity.id, debit: accountDebit ? 0 : abs, credit: accountDebit ? abs : 0 }] },
-          },
-        });
-        count++;
+        if (!acc || amount === 0) continue;
+        const debitSide = acc.type === "ASSET" ? amount > 0 : amount < 0;
+        lines.push({ accountId: acc.id, debit: debitSide ? Math.abs(amount) : 0, credit: debitSide ? 0 : Math.abs(amount) });
       }
-      return count;
+      const debit = r2(lines.reduce((x, l) => x + l.debit, 0));
+      const credit = r2(lines.reduce((x, l) => x + l.credit, 0));
+      const diff = r2(debit - credit);
+      if (Math.abs(diff) > 0.005) lines.push({ accountId: equity.id, debit: diff < 0 ? Math.abs(diff) : 0, credit: diff > 0 ? diff : 0 });
+      await db.accJournalEntry.deleteMany({ where: { entityId: entity.id, source: "OPENING" } });
+      if (lines.length > 0) await db.accJournalEntry.create({ data: { entityId: entity.id, date, memo: "Opening balances", source: "OPENING", lines: { create: lines } } });
+      return Math.abs(diff) > 0.005 ? `Opening balances saved. The ${diff > 0 ? "" : "negative "}difference of ${Math.abs(diff).toFixed(2)} was put in ${equity.name}.` : "Opening balances saved: the balance sheet balances.";
     });
     refresh();
-    return { success: `${saved} opening balance(s) saved.` };
+    return { success: result };
   } catch (error) {
     if (error instanceof Error && error.message === "Not found") throw error;
     return { error: error instanceof Error ? error.message : "Could not save." };

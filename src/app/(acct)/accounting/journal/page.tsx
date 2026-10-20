@@ -33,19 +33,19 @@ export default async function JournalPage() {
   const defaultDate = `${new Date().getUTCFullYear() - 1}-12-31`;
   const openingTabs = books.entities.map((e) => {
     const accounts: OpeningAccount[] = books.options
-      .filter((o) => o.entityId === e.id && (o.type === "ASSET" || o.type === "LIABILITY") && !o.isGroup)
-      .sort((a, b) => (a.type === b.type ? a.code.localeCompare(b.code) : a.type === "ASSET" ? -1 : 1))
+      .filter((o) => o.entityId === e.id && (o.type === "ASSET" || o.type === "LIABILITY" || (o.type === "EQUITY" && (e.kind === "CORPORATION" || e.kind === "LLC"))) && !o.isGroup)
+      .sort((a, b) => (a.type === b.type ? a.code.localeCompare(b.code) : ["ASSET", "LIABILITY", "EQUITY"].indexOf(a.type) - ["ASSET", "LIABILITY", "EQUITY"].indexOf(b.type)))
       .map((o) => {
         const l = opening.get(o.id);
         const amount = l ? Math.round((o.type === "ASSET" ? l.debit - l.credit : l.credit - l.debit) * 100) / 100 : null;
-        const defs = o.type === "ASSET" ? ASSET_SECTIONS : LIABILITY_SECTIONS;
+        const defs = o.type === "ASSET" ? ASSET_SECTIONS : o.type === "LIABILITY" ? LIABILITY_SECTIONS : [];
         const sectionLabel = defs.find((d) => d.key === o.section)?.[lang] ?? "";
-        return { id: o.id, code: o.code, label: fr ? o.labelFr : o.label, type: o.type as "ASSET" | "LIABILITY", sectionLabel, amount };
+        return { id: o.id, code: o.code, label: fr ? o.labelFr : o.label, type: o.type as "ASSET" | "LIABILITY" | "EQUITY", sectionLabel, amount };
       });
     return {
       id: e.id,
       label: e.name,
-      content: <OpeningBalances key={e.id} lang={lang} entityId={e.id} currency={e.currency} defaultDate={openingDates.get(e.id)?.toISOString().slice(0, 10) ?? defaultDate} accounts={accounts} />,
+      content: <OpeningBalances key={e.id} lang={lang} entityId={e.id} withEquity={e.kind === "CORPORATION" || e.kind === "LLC"} currency={e.currency} defaultDate={openingDates.get(e.id)?.toISOString().slice(0, 10) ?? defaultDate} accounts={accounts} />,
     };
   });
   return (
