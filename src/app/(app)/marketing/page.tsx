@@ -55,9 +55,9 @@ function AffiliateProgramCard({
       color={color}
       title={
         <>
-          {/* The number of programs in this card, in a circle at the top of it. */}
-          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold normal-case tracking-normal text-ink shadow-sm">{programs.length}</span>
           {title}
+          {/* The number of programs in this card — same count badge as the other cards in the app. */}
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{programs.length}</span>
         </>
       }
     >
