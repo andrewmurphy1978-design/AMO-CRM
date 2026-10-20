@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { readExpiry, recordInVault } from "@/lib/api-key-expiry";
 import { encryptSecret } from "@/lib/crypto";
 import { runBufferSync } from "@/lib/buffer";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -29,16 +30,20 @@ export async function saveBufferApiKey(
   if (!apiKey) {
     return { error: t.settings.bufferKeyRequired };
   }
+  const expiry = readExpiry(formData, session.user.language === "FR");
+  if ("error" in expiry) return { error: expiry.error };
 
   const encrypted = await encryptSecret(apiKey);
+  const labels: Record<string, string> = { buffer_en: "Buffer (English)", buffer_fr: "Buffer (French)", buffer_fb: "Buffer (Facebook)", buffer_li: "Buffer (LinkedIn)" };
 
-  await withScopedPrismaClient((db) =>
-    db.integrationSetting.upsert({
+  await withScopedPrismaClient(async (db) => {
+    await db.integrationSetting.upsert({
       where: { provider },
-      update: { apiKeyEncrypted: encrypted, lastSyncStatus: null, lastSyncError: null },
-      create: { provider, apiKeyEncrypted: encrypted },
-    })
-  );
+      update: { apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry, lastSyncStatus: null, lastSyncError: null },
+      create: { provider, apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry },
+    });
+    await recordInVault(db, { source: provider, label: `${labels[provider]} API key`, value: apiKey, expiry });
+  });
 
   revalidatePath("/settings");
   return { success: t.settings.bufferKeySaved };

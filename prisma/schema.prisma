@@ -1837,6 +1837,9 @@ model IntegrationSetting {
   id              String    @id @default(cuid())
   provider        String    @unique // "systeme_io" | "make"
   apiKeyEncrypted String?
+  // When the pasted key expires (asked every time a key is pasted; also copied to the API vault).
+  apiKeyExpiresAt DateTime?
+  apiKeyNoExpiry  Boolean   @default(false)
   lastSyncedAt    DateTime?
   lastSyncStatus  String?
   lastSyncError   String?   @db.Text
@@ -1861,6 +1864,11 @@ model ApiKeyVaultEntry {
   label          String
   valueEncrypted String
   notes          String?  @db.Text
+  // Keys pasted in Settings are saved here automatically: `source` names where from
+  // (e.g. "anthropic"), so pasting a renewed key updates the entry instead of duplicating it.
+  source         String?  @unique
+  expiresAt      DateTime?
+  noExpiry       Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

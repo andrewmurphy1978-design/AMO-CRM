@@ -55,6 +55,7 @@ import SportsPicksForm from "./sports-picks-form";
 import { effectiveHiddenHeaderWidgets } from "@/lib/dashboard-header-widgets";
 import HeaderWidgetsForm from "./header-widgets-form";
 import PageHeader from "../page-header";
+import type { ExpiryInfo } from "@/lib/api-key-expiry-shared";
 
 interface MakeMetadata {
   zone?: string;
@@ -89,6 +90,7 @@ export default async function SettingsPage({
     anthropicIntegration,
     stripeIntegration,
     twilioConfig,
+    twilioIntegration,
     shortioIntegration,
     bufferSettings,
     socialLinksSetting,
@@ -143,6 +145,7 @@ export default async function SettingsPage({
       });
       const stripeIntegration = isAdmin ? await db.integrationSetting.findUnique({ where: { provider: "stripe" } }) : null;
       const twilioConfig = isAdmin ? await getTwilioConfig(db) : null;
+      const twilioIntegration = isAdmin ? await db.integrationSetting.findUnique({ where: { provider: "twilio" } }) : null;
       const shortioIntegration = await db.integrationSetting.findUnique({
         where: { provider: "shortio" },
       });
@@ -164,7 +167,7 @@ export default async function SettingsPage({
       // Never select valueEncrypted here — the ciphertext has no reason to
       // reach the client at all until an admin explicitly reveals one entry.
       const vaultEntries = isAdmin
-        ? await db.apiKeyVaultEntry.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, label: true, notes: true } })
+        ? await db.apiKeyVaultEntry.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, label: true, notes: true, expiresAt: true, noExpiry: true, source: true } })
         : [];
       const serviceItems = isAdmin ? await db.servicePriceListItem.findMany({ orderBy: { name: "asc" } }) : [];
       const billingSettings = isAdmin
@@ -179,6 +182,7 @@ export default async function SettingsPage({
         anthropicIntegration,
         stripeIntegration,
         twilioConfig,
+        twilioIntegration,
         shortioIntegration,
         bufferSettings,
         socialLinksSetting,
@@ -232,6 +236,9 @@ export default async function SettingsPage({
     buffer_fb: t.settings.bufferFbLabel,
     buffer_li: t.settings.bufferLiLabel,
   };
+  // The expiry date asked when the key was pasted (shown under each key field).
+  const expiryOf = (row: { apiKeyExpiresAt: Date | null; apiKeyNoExpiry: boolean } | null | undefined): ExpiryInfo =>
+    row && (row.apiKeyExpiresAt || row.apiKeyNoExpiry) ? { expiresAt: row.apiKeyExpiresAt?.toISOString() ?? null, noExpiry: row.apiKeyNoExpiry } : null;
   const bufferAccounts: BufferAccountStatus[] = (Object.keys(bufferLabels) as BufferProvider[]).map((provider) => {
     const setting = bufferSettings.find((s) => s.provider === provider);
     return {
@@ -241,6 +248,7 @@ export default async function SettingsPage({
       lastSyncedAt: setting?.lastSyncedAt?.toISOString() ?? null,
       lastSyncStatus: setting?.lastSyncStatus ?? null,
       lastSyncError: setting?.lastSyncError ?? null,
+      expiry: expiryOf(setting),
     };
   });
   const socialLinks = (socialLinksSetting?.metadata as Record<string, string> | null) ?? {};
@@ -449,6 +457,7 @@ export default async function SettingsPage({
       <SettingsCard title={t.settings.systemeioTitle} description={t.settings.systemeioDesc}>
         <SystemeIoForm
           connected={Boolean(integration?.apiKeyEncrypted)}
+          expiry={expiryOf(integration)}
           lastSyncedAt={integration?.lastSyncedAt?.toISOString() ?? null}
           lastSyncStatus={integration?.lastSyncStatus ?? null}
           lastSyncError={integration?.lastSyncError ?? null}
@@ -460,6 +469,7 @@ export default async function SettingsPage({
       <SettingsCard title={t.settings.makeTitle} description={t.settings.makeDesc}>
         <MakeForm
           connected={Boolean(makeIntegration?.apiKeyEncrypted)}
+          expiry={expiryOf(makeIntegration)}
           zone={makeMetadata.zone ?? "us2.make.com"}
           teamId={makeMetadata.teamId ?? ""}
           lastSyncedAt={makeIntegration?.lastSyncedAt?.toISOString() ?? null}
@@ -471,6 +481,7 @@ export default async function SettingsPage({
       <SettingsCard title={t.shortio.title}>
         <ShortIoForm
           connected={Boolean(shortioIntegration?.apiKeyEncrypted)}
+          expiry={expiryOf(shortioIntegration)}
           domain={shortioMetadata.domain ?? ""}
           domainFr={shortioMetadata.domainFr ?? ""}
           lang={lang}
@@ -513,7 +524,7 @@ export default async function SettingsPage({
 
       <SettingsGroupLabel>{t.settings.groupAiSecurity}</SettingsGroupLabel>
       <SettingsCard title={t.anthropicKey.title} description={t.anthropicKey.description}>
-        <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} lang={lang} />
+        <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} expiry={expiryOf(anthropicIntegration)} lang={lang} />
       </SettingsCard>
       {isAdmin && (
         <SettingsCard
@@ -522,6 +533,7 @@ export default async function SettingsPage({
         >
           <StripeForm
             connected={Boolean(stripeIntegration?.apiKeyEncrypted)}
+            expiry={expiryOf(stripeIntegration)}
             webhookSet={Boolean((stripeIntegration?.metadata as { webhookSecretEnc?: string } | null)?.webhookSecretEnc)}
             webhookUrl={`${publicBaseUrl() ?? "https://your-crm-address"}/api/stripe/webhook`}
             lang={lang}
@@ -532,6 +544,7 @@ export default async function SettingsPage({
         <SettingsCard title={t.twilioSettings.title} description={t.twilioSettings.description}>
           <TwilioForm
             connected={Boolean(twilioConfig)}
+            expiry={expiryOf(twilioIntegration)}
             accountSid={twilioConfig?.accountSid ?? ""}
             fromNumber={twilioConfig?.fromNumber ?? ""}
             baseUrl={publicBaseUrl() ?? ""}
@@ -540,7 +553,7 @@ export default async function SettingsPage({
         </SettingsCard>
       )}
       <SettingsCard title={t.apiVault.title} description={t.apiVault.description}>
-        <ApiKeyVaultForm entries={vaultEntries} lang={lang} />
+        <ApiKeyVaultForm entries={vaultEntries.map((e) => ({ id: e.id, label: e.label, notes: e.notes, source: e.source, expiresAt: e.expiresAt?.toISOString() ?? null, noExpiry: e.noExpiry }))} lang={lang} />
       </SettingsCard>
 
       <SettingsGroupLabel>{t.settings.groupDataTools}</SettingsGroupLabel>

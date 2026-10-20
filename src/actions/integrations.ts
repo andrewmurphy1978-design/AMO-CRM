@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret } from "@/lib/crypto";
+import { readExpiry, recordInVault } from "@/lib/api-key-expiry";
 import { getTwilioConfig, verifyTwilioCredentials } from "@/lib/twilio";
 import { toE164 } from "@/lib/phone-display";
 import { runSystemeIoSync } from "@/lib/sync";
@@ -37,16 +38,19 @@ export async function saveAnthropicApiKey(
   if (!apiKey) {
     return { error: t.anthropicKey.keyRequired };
   }
+  const expiry = readExpiry(formData, session.user.language === "FR");
+  if ("error" in expiry) return { error: expiry.error };
 
   const encrypted = await encryptSecret(apiKey);
 
-  await withScopedPrismaClient((db) =>
-    db.integrationSetting.upsert({
+  await withScopedPrismaClient(async (db) => {
+    await db.integrationSetting.upsert({
       where: { provider: "anthropic" },
-      update: { apiKeyEncrypted: encrypted },
-      create: { provider: "anthropic", apiKeyEncrypted: encrypted },
-    })
-  );
+      update: { apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry },
+      create: { provider: "anthropic", apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry },
+    });
+    await recordInVault(db, { source: "anthropic", label: "Anthropic API key", value: apiKey, expiry });
+  });
 
   revalidatePath("/settings");
   return { success: t.anthropicKey.keySaved };
@@ -62,16 +66,19 @@ export async function saveSystemeIoApiKey(
   if (!apiKey) {
     return { error: t.actions.systemeioKeyRequired };
   }
+  const expiry = readExpiry(formData, session.user.language === "FR");
+  if ("error" in expiry) return { error: expiry.error };
 
   const encrypted = await encryptSecret(apiKey);
 
-  await withScopedPrismaClient((db) =>
-    db.integrationSetting.upsert({
+  await withScopedPrismaClient(async (db) => {
+    await db.integrationSetting.upsert({
       where: { provider: "systeme_io" },
-      update: { apiKeyEncrypted: encrypted, lastSyncStatus: null, lastSyncError: null },
-      create: { provider: "systeme_io", apiKeyEncrypted: encrypted },
-    })
-  );
+      update: { apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry, lastSyncStatus: null, lastSyncError: null },
+      create: { provider: "systeme_io", apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry },
+    });
+    await recordInVault(db, { source: "systeme_io", label: "Systeme.io API key", value: apiKey, expiry });
+  });
 
   revalidatePath("/settings");
   return { success: t.actions.systemeioKeySaved };
@@ -157,17 +164,20 @@ export async function saveShortIoApiKey(
 
   if (!apiKey) return { error: t.shortio.keyRequired };
   if (!domain) return { error: t.shortio.domainRequired };
+  const expiry = readExpiry(formData, session.user.language === "FR");
+  if ("error" in expiry) return { error: expiry.error };
 
   const encrypted = await encryptSecret(apiKey);
   const metadata = domainFr ? { domain, domainFr } : { domain };
 
-  await withScopedPrismaClient((db) =>
-    db.integrationSetting.upsert({
+  await withScopedPrismaClient(async (db) => {
+    await db.integrationSetting.upsert({
       where: { provider: "shortio" },
-      update: { apiKeyEncrypted: encrypted, metadata },
-      create: { provider: "shortio", apiKeyEncrypted: encrypted, metadata },
-    })
-  );
+      update: { apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry, metadata },
+      create: { provider: "shortio", apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry, metadata },
+    });
+    await recordInVault(db, { source: "shortio", label: "Short.io API key", value: apiKey, expiry });
+  });
 
   revalidatePath("/settings");
   return { success: t.shortio.keySaved };
@@ -287,7 +297,7 @@ export async function saveTwilioSettings(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const accountSid = String(formData.get("accountSid") ?? "").trim();
   const authTokenInput = String(formData.get("authToken") ?? "").trim();
   const fromRaw = String(formData.get("fromNumber") ?? "").trim();
@@ -298,19 +308,27 @@ export async function saveTwilioSettings(
   const existing = await withScopedPrismaClient((db) => getTwilioConfig(db));
   const authToken = authTokenInput || existing?.authToken || "";
   if (!authToken) return { error: "Enter your Twilio Auth Token." };
+  // A newly pasted Auth Token needs its expiry date; saving only the number keeps the one on file.
+  let expiry: ReturnType<typeof readExpiry> | null = null;
+  if (authTokenInput) {
+    expiry = readExpiry(formData, session.user.language === "FR");
+    if ("error" in expiry) return { error: expiry.error };
+  }
 
   if (!(await verifyTwilioCredentials(accountSid, authToken))) {
     return { error: "Twilio rejected that Account SID / Auth Token." };
   }
 
   const encrypted = await encryptSecret(JSON.stringify({ accountSid, authToken }));
-  await withScopedPrismaClient((db) =>
-    db.integrationSetting.upsert({
+  await withScopedPrismaClient(async (db) => {
+    const expiryFields = expiry && !("error" in expiry) ? { apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry } : {};
+    await db.integrationSetting.upsert({
       where: { provider: "twilio" },
-      update: { apiKeyEncrypted: encrypted, metadata: { fromNumber } },
-      create: { provider: "twilio", apiKeyEncrypted: encrypted, metadata: { fromNumber } },
-    })
-  );
+      update: { apiKeyEncrypted: encrypted, metadata: { fromNumber }, ...expiryFields },
+      create: { provider: "twilio", apiKeyEncrypted: encrypted, metadata: { fromNumber }, ...expiryFields },
+    });
+    if (expiry && !("error" in expiry)) await recordInVault(db, { source: "twilio", label: "Twilio Auth Token", value: `Account SID: ${accountSid}\nAuth Token: ${authToken}`, expiry });
+  });
 
   revalidatePath("/settings");
   return { success: "Twilio connected." };
@@ -334,6 +352,12 @@ export async function saveStripeSettings(
   const webhookSecret = String(formData.get("webhookSecret") ?? "").trim();
   if (secretKey && !/^(sk|rk)_(live|test)_/.test(secretKey)) return { error: fr ? "La clé secrète doit commencer par sk_live_ ou sk_test_." : "The secret key should start with sk_live_ or sk_test_." };
   if (webhookSecret && !webhookSecret.startsWith("whsec_")) return { error: fr ? "Le secret du webhook doit commencer par whsec_." : "The webhook secret should start with whsec_." };
+  // A newly pasted secret key needs its expiry date.
+  let expiry: ReturnType<typeof readExpiry> | null = null;
+  if (secretKey) {
+    expiry = readExpiry(formData, fr);
+    if ("error" in expiry) return { error: expiry.error };
+  }
 
   await withScopedPrismaClient(async (db) => {
     const existing = await db.integrationSetting.findUnique({ where: { provider: "stripe" } });
@@ -341,11 +365,13 @@ export async function saveStripeSettings(
     const meta = ((existing?.metadata ?? {}) as { webhookSecretEnc?: string });
     const next = { ...meta, ...(webhookSecret ? { webhookSecretEnc: await encryptSecret(webhookSecret) } : {}) };
     const apiKeyEncrypted = secretKey ? await encryptSecret(secretKey) : existing?.apiKeyEncrypted;
+    const expiryFields = expiry && !("error" in expiry) ? { apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry } : {};
     await db.integrationSetting.upsert({
       where: { provider: "stripe" },
-      update: { apiKeyEncrypted, metadata: next },
-      create: { provider: "stripe", apiKeyEncrypted, metadata: next },
+      update: { apiKeyEncrypted, metadata: next, ...expiryFields },
+      create: { provider: "stripe", apiKeyEncrypted, metadata: next, ...expiryFields },
     });
+    if (secretKey && expiry && !("error" in expiry)) await recordInVault(db, { source: "stripe", label: "Stripe secret key", value: secretKey, expiry });
   });
   revalidatePath("/settings");
   return { success: fr ? "Paramètres Stripe enregistrés." : "Stripe settings saved." };

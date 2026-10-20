@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { readExpiry, recordInVault } from "@/lib/api-key-expiry";
 import { encryptSecret } from "@/lib/crypto";
 import { runMakeSync } from "@/lib/automations";
 import { getDict } from "@/lib/i18n/dictionaries";
@@ -27,16 +28,19 @@ export async function saveMakeApiKey(
 
   if (!apiKey) return { error: t.automations.makeKeyRequired };
   if (!teamId) return { error: t.automations.makeTeamIdRequired };
+  const expiry = readExpiry(formData, session.user.language === "FR");
+  if ("error" in expiry) return { error: expiry.error };
 
   const encrypted = await encryptSecret(apiKey);
 
-  await withScopedPrismaClient((db) =>
-    db.integrationSetting.upsert({
+  await withScopedPrismaClient(async (db) => {
+    await db.integrationSetting.upsert({
       where: { provider: "make" },
-      update: { apiKeyEncrypted: encrypted, metadata: { zone, teamId }, lastSyncStatus: null, lastSyncError: null },
-      create: { provider: "make", apiKeyEncrypted: encrypted, metadata: { zone, teamId } },
-    })
-  );
+      update: { apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry, metadata: { zone, teamId }, lastSyncStatus: null, lastSyncError: null },
+      create: { provider: "make", apiKeyEncrypted: encrypted, apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry, metadata: { zone, teamId } },
+    });
+    await recordInVault(db, { source: "make", label: "Make API key", value: apiKey, expiry });
+  });
 
   revalidatePath("/settings");
   return { success: t.automations.makeKeySaved };

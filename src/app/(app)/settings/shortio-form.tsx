@@ -3,17 +3,21 @@
 import { useActionState } from "react";
 import { saveShortIoApiKey } from "@/actions/integrations";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import ExpiryField from "./expiry-field";
+import type { ExpiryInfo } from "@/lib/api-key-expiry-shared";
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 
 export default function ShortIoForm({
   connected,
+  expiry,
   domain,
   domainFr,
   lang,
 }: {
   connected: boolean;
+  expiry?: ExpiryInfo;
   domain: string;
   domainFr: string;
   lang: Lang;
@@ -49,6 +53,7 @@ export default function ShortIoForm({
             <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.shortio.domainFrLabel}</label>
             <input name="domainFr" defaultValue={domainFr} placeholder={t.shortio.domainFrPlaceholder} className={FIELD_CLASS} />
           </div>
+          <ExpiryField lang={lang} current={expiry} />
         </div>
         <button
           type="submit"

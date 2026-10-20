@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { readExpiry } from "@/lib/api-key-expiry";
 
 async function requireAdmin() {
   const session = await auth();
@@ -26,16 +27,34 @@ export async function addVaultEntry(
   if (!label || !value) {
     return { error: t.apiVault.fieldsRequired };
   }
+  const expiry = readExpiry(formData, session.user.language === "FR");
+  if ("error" in expiry) return { error: expiry.error };
 
   const valueEncrypted = await encryptSecret(value);
   await withScopedPrismaClient((db) =>
     db.apiKeyVaultEntry.create({
-      data: { label, valueEncrypted, notes: notes || null },
+      data: { label, valueEncrypted, notes: notes || null, expiresAt: expiry.expiresAt, noExpiry: expiry.noExpiry },
     })
   );
 
   revalidatePath("/settings");
   return { success: t.apiVault.saved };
+}
+
+// Renewing or correcting a key's expiry date without pasting the key again.
+export async function updateVaultExpiry(id: string, formData: FormData): Promise<{ error?: string }> {
+  const session = await requireAdmin();
+  const expiry = readExpiry(formData, session.user.language === "FR");
+  if ("error" in expiry) return { error: expiry.error };
+  await withScopedPrismaClient(async (db) => {
+    const entry = await db.apiKeyVaultEntry.update({ where: { id }, data: { expiresAt: expiry.expiresAt, noExpiry: expiry.noExpiry } });
+    // An entry saved from a Settings key form keeps that integration's own expiry in step.
+    if (entry.source) {
+      await db.integrationSetting.updateMany({ where: { provider: entry.source }, data: { apiKeyExpiresAt: expiry.expiresAt, apiKeyNoExpiry: expiry.noExpiry } });
+    }
+  });
+  revalidatePath("/settings");
+  return {};
 }
 
 export async function deleteVaultEntry(id: string): Promise<void> {

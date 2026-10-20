@@ -3,11 +3,13 @@
 import { useActionState } from "react";
 import { saveStripeSettings } from "@/actions/integrations";
 import type { Lang } from "@/lib/i18n/dictionaries";
+import ExpiryField from "./expiry-field";
+import type { ExpiryInfo } from "@/lib/api-key-expiry-shared";
 
 const FIELD = "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL = "block text-xs font-semibold uppercase tracking-wide text-soft";
 
-export default function StripeForm({ connected, webhookSet, webhookUrl, lang }: { connected: boolean; webhookSet: boolean; webhookUrl: string; lang: Lang }) {
+export default function StripeForm({ connected, webhookSet, webhookUrl, expiry, lang }: { connected: boolean; webhookSet: boolean; webhookUrl: string; expiry?: ExpiryInfo; lang: Lang }) {
   const [state, action, pending] = useActionState(saveStripeSettings, undefined);
   const fr = lang === "fr";
   return (
@@ -34,6 +36,7 @@ export default function StripeForm({ connected, webhookSet, webhookUrl, lang }: 
           <label className={LABEL}>{fr ? "Secret de signature du webhook" : "Webhook signing secret"}</label>
           <input name="webhookSecret" type="password" placeholder={webhookSet ? "••••••••  (leave empty to keep)" : "whsec_…"} className={FIELD} autoComplete="off" />
         </div>
+        <ExpiryField lang={lang} current={expiry} />
         <div className="sm:col-span-2">
           <button type="submit" disabled={pending} className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60">
             {pending ? (fr ? "Enregistrement…" : "Saving…") : fr ? "Enregistrer" : "Save"}

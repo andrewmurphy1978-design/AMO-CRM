@@ -3,8 +3,10 @@
 import { useActionState } from "react";
 import { saveAnthropicApiKey } from "@/actions/integrations";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import ExpiryField from "./expiry-field";
+import type { ExpiryInfo } from "@/lib/api-key-expiry-shared";
 
-export default function AnthropicKeyForm({ connected, lang }: { connected: boolean; lang: Lang }) {
+export default function AnthropicKeyForm({ connected, expiry, lang }: { connected: boolean; expiry?: ExpiryInfo; lang: Lang }) {
   const [saveState, saveAction, savePending] = useActionState(saveAnthropicApiKey, undefined);
   const t = getDict(lang);
 
@@ -32,6 +34,7 @@ export default function AnthropicKeyForm({ connected, lang }: { connected: boole
             className="mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30"
           />
         </div>
+        <ExpiryField lang={lang} current={expiry} />
         <button
           type="submit"
           disabled={savePending}

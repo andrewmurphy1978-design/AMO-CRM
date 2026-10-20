@@ -3,6 +3,8 @@
 import { useActionState, useTransition } from "react";
 import { saveTwilioSettings, disconnectTwilio } from "@/actions/integrations";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import ExpiryField from "./expiry-field";
+import type { ExpiryInfo } from "@/lib/api-key-expiry-shared";
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -10,12 +12,14 @@ const LABEL_CLASS = "block text-xs font-semibold uppercase tracking-wide text-so
 
 export default function TwilioForm({
   connected,
+  expiry,
   accountSid,
   fromNumber,
   baseUrl,
   lang,
 }: {
   connected: boolean;
+  expiry?: ExpiryInfo;
   accountSid: string;
   fromNumber: string;
   baseUrl: string;
@@ -49,6 +53,7 @@ export default function TwilioForm({
           <label className={LABEL_CLASS}>{t.twilioSettings.fromNumber}</label>
           <input name="fromNumber" defaultValue={fromNumber} placeholder="+18195551234" className={FIELD_CLASS} />
         </div>
+        <ExpiryField lang={lang} current={expiry} />
         <div className="flex items-center gap-3 sm:col-span-3">
           <button
             type="submit"

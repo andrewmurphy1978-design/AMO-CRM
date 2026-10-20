@@ -3,12 +3,15 @@
 import { useActionState, useState, useTransition } from "react";
 import { saveMakeApiKey, triggerMakeSync } from "@/actions/automations";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
+import ExpiryField from "./expiry-field";
+import type { ExpiryInfo } from "@/lib/api-key-expiry-shared";
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 
 export default function MakeForm({
   connected,
+  expiry,
   zone,
   teamId,
   lastSyncedAt,
@@ -17,6 +20,7 @@ export default function MakeForm({
   lang,
 }: {
   connected: boolean;
+  expiry?: ExpiryInfo;
   zone: string;
   teamId: string;
   lastSyncedAt: string | null;
@@ -72,6 +76,7 @@ export default function MakeForm({
             </label>
             <input name="teamId" defaultValue={teamId} className={FIELD_CLASS} />
           </div>
+          <ExpiryField lang={lang} current={expiry} />
         </div>
         <button
           type="submit"
