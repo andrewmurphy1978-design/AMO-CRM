@@ -3,17 +3,19 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks, KIND_LABEL } from "@/lib/accounting/options";
 import { AddAccountForm, AddBankForm, AddEntityForm, EditEntityForm } from "./setup-forms";
+import BankRow from "./bank-row";
 import DeleteRuleButton from "./delete-rule-button";
 
 export default async function SetupPage() {
   const lang = await getLang();
   const fr = lang === "fr";
-  const { books, rules, banks, entityName } = await withScopedPrismaClient(async (db) => {
+  const { books, rules, banks, entityName, txCounts } = await withScopedPrismaClient(async (db) => {
     await ensureAccountingSetup(db);
     const books = await loadBooks(db);
     const rules = await db.accRule.findMany({ orderBy: [{ hits: "desc" }, { pattern: "asc" }], take: 300 });
     const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] } }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
-    return { books, rules, banks, entityName: new Map(books.entities.map((e) => [e.id, e.name])) };
+    const counts = await db.accTransaction.groupBy({ by: ["accountId"], _count: { _all: true } });
+    return { books, rules, banks, entityName: new Map(books.entities.map((e) => [e.id, e.name])), txCounts: new Map(counts.map((c) => [c.accountId, c._count._all])) };
   });
   const accName = new Map(books.options.map((o) => [o.id, o.name]));
   const card = "space-y-3 rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm";
@@ -45,13 +47,19 @@ export default async function SetupPage() {
         {banks.length > 0 && (
           <ul className="divide-y divide-card-border text-sm">
             {banks.map((b) => (
-              <li key={b.id} className="flex justify-between py-1.5">
-                <span className="text-ink">{b.name}{b.last4 ? ` ••${b.last4}` : ""} <span className="text-soft">· {entityName.get(b.entityId)} · {b.code}{b.importSign === -1 ? (fr ? " · signes inversés" : " · signs inverted") : ""}</span></span>
-                <span className="text-soft">{b.subtype === "CREDIT_CARD" ? (fr ? "Carte de crédit" : "Credit card") : fr ? "Compte" : "Account"}</span>
-              </li>
+              <BankRow
+                key={b.id}
+                lang={lang}
+                bank={{ id: b.id, name: b.name, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: entityName.get(b.entityId) ?? "", code: b.code, txCount: txCounts.get(b.id) ?? 0 }}
+              />
             ))}
           </ul>
         )}
+        <p className="text-xs text-soft">
+          {fr
+            ? "Un compte personnel peut aussi servir à l'entreprise individuelle : importez-le sous « Personnel », puis choisissez l'entreprise comme catégorie (ou répartissez 60/40) ; les écritures de transfert avec le propriétaire sont créées automatiquement."
+            : "A personal account can also be used for the sole proprietorship: import it under Personal, then pick the business as the category (or split 60/40) — the owner contribution / draw entries are created automatically."}
+        </p>
         <AddBankForm lang={lang} entities={books.entities} />
       </section>
 

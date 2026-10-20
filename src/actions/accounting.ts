@@ -99,6 +99,38 @@ export async function addBankAccount(_prev: Result | undefined, formData: FormDa
   return { success: "Account added." };
 }
 
+export async function updateBankAccount(id: string, _prev: Result | undefined, formData: FormData): Promise<Result> {
+  await requireAdmin();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { error: "Enter a name." };
+  await withScopedPrismaClient((db) =>
+    db.accAccount.update({
+      where: { id },
+      data: {
+        name,
+        institution: String(formData.get("institution") ?? "").trim() || null,
+        last4: String(formData.get("last4") ?? "").trim() || null,
+        importSign: formData.get("invertSign") === "on" ? -1 : 1,
+      },
+    })
+  );
+  refresh();
+  return { success: "Saved." };
+}
+
+export async function deleteBankAccount(id: string): Promise<Result> {
+  await requireAdmin();
+  const result = await withScopedPrismaClient(async (db) => {
+    const [txs, lines] = await Promise.all([db.accTransaction.count({ where: { accountId: id } }), db.accJournalLine.count({ where: { accountId: id } })]);
+    if (txs > 0 || lines > 0) return { error: "This account has transactions, so it cannot be deleted. You can edit its details instead." };
+    await db.accImportBatch.deleteMany({ where: { accountId: id } });
+    await db.accAccount.delete({ where: { id } });
+    return {};
+  });
+  refresh();
+  return result;
+}
+
 export async function addAccount(_prev: Result | undefined, formData: FormData): Promise<Result> {
   await requireAdmin();
   const entityId = String(formData.get("entityId") ?? "");
