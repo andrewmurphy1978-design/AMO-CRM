@@ -16,6 +16,7 @@ import {
   type AffiliateStatusGroup,
 } from "@/lib/affiliate-status";
 import PageHeader from "../page-header";
+import AffiliateProgramsIcon from "../affiliate-programs-icon";
 import Card, { type CardColor } from "@/components/section-card";
 import SyncShortIoButton from "./programs/sync-shortio-button";
 import AffiliateProgramFilters from "./programs/filters";
@@ -50,7 +51,16 @@ function AffiliateProgramCard({
   dateLocale: Locale | undefined;
 }) {
   return (
-    <Card color={color} title={title}>
+    <Card
+      color={color}
+      title={
+        <>
+          {/* The number of programs in this card, in a circle at the top of it. */}
+          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold normal-case tracking-normal text-ink shadow-sm">{programs.length}</span>
+          {title}
+        </>
+      }
+    >
       {/* Mobile: Card's own p-4 is a lot of dead space between the card's
           border and the list right at the point where mobile most needs
           to fit more on screen — cancel it (-m-4) and put back a smaller,
@@ -238,7 +248,12 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
     // to sit a full 24px below it for no reason. Desktop keeps gap-6.
     <div className="flex flex-col gap-2 sm:gap-6">
       <PageHeader
-        title={t.marketing.title}
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <AffiliateProgramsIcon />
+            <span className="truncate">{t.marketing.title}</span>
+          </span>
+        }
         hour12={hour12}
         lang={lang}
         location={t.dashboard.myLocation}
@@ -282,8 +297,8 @@ export default async function MarketingPage({ searchParams }: { searchParams: Pr
           desktop instead, at the end of the filter row). */}
       <div className="flex sm:hidden">{shownPill}</div>
 
-      <AffiliateProgramCard color="marketingActive" title={t.marketing.activeLinksTitle} programs={grouped.ACTIVE} t={t} dateLocale={dateLocale} />
       <AffiliateProgramCard color="marketingPending" title={t.marketing.pendingLinksTitle} programs={grouped.PENDING} t={t} dateLocale={dateLocale} />
+      <AffiliateProgramCard color="marketingActive" title={t.marketing.activeLinksTitle} programs={grouped.ACTIVE} t={t} dateLocale={dateLocale} />
       <AffiliateProgramCard
         color="marketingNoProgram"
         title={t.marketing.noProgramOrDeclinedTitle}
