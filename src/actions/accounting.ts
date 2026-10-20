@@ -23,7 +23,7 @@ import { defaultSection, suggestGifi, usesGifi } from "@/lib/accounting/charts";
 import { parseTaxNumbers } from "@/lib/accounting/tax-numbers";
 import { accountingUserFor, type AccountingUser } from "@/lib/accounting/access";
 import { assertUnlocked, monthRange, reconcileSummary } from "@/lib/accounting/reconcile";
-import { supplierKey } from "@/lib/accounting/supplier";
+import { supplierName, supplierKey } from "@/lib/accounting/supplier";
 
 // Accounting holds personal bank data: admins, and team members who were given access. Each user has their own
 // books, so every id received from the browser is checked to belong to the signed-in user before it is used.
@@ -770,5 +770,33 @@ export async function saveOpeningBalances(input: { entityId: string; date: strin
   } catch (error) {
     if (error instanceof Error && error.message === "Not found") throw error;
     return { error: error instanceof Error ? error.message : "Could not save." };
+  }
+}
+
+/** Adds a transaction that is missing from the imports (e.g. found while reconciling). It goes to "to categorize", or is categorized by a remembered supplier. */
+export async function addManualTransaction(input: { accountId: string; date: string; description: string; amount: number; direction: "in" | "out" }): Promise<Result> {
+  const me = await access();
+  const description = input.description.trim();
+  if (!description) return { error: "Enter a description." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { error: "Enter a valid date." };
+  if (!Number.isFinite(input.amount) || input.amount <= 0) return { error: "Enter an amount above 0." };
+  const amount = r2(input.direction === "in" ? input.amount : -input.amount);
+  try {
+    const out = await withScopedPrismaClient(async (db) => {
+      await ownAccount(db, me, input.accountId);
+      const date = new Date(`${input.date}T00:00:00.000Z`);
+      const lock = await db.accReconciliation.findFirst({ where: { accountId: input.accountId }, orderBy: { periodEnd: "desc" }, select: { periodEnd: true } });
+      if (lock && date <= lock.periodEnd) return { error: `The month ending ${lock.periodEnd.toISOString().slice(0, 10)} is reconciled and locked: unlock it first.` };
+      const tx = await db.accTransaction.create({
+        data: { accountId: input.accountId, date, description, supplier: supplierName(description), amount, dedupeKey: `manual-${crypto.randomUUID()}`, notes: "Added by hand" },
+      });
+      const auto = await applyRules(db, me.id, [tx.id]);
+      return { success: auto.posted > 0 ? "Transaction added and categorized from a remembered supplier." : "Transaction added: it is in Transactions, to categorize." };
+    });
+    refresh();
+    return out;
+  } catch (error) {
+    if (error instanceof Error && error.message === "Not found") throw error;
+    return { error: error instanceof Error ? error.message : "Could not add the transaction." };
   }
 }

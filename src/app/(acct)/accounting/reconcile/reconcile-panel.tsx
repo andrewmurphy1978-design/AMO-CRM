@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Card from "@/components/section-card";
 import { reconcileMonth, recordInvestmentAdjustment, setOpeningBalance } from "@/actions/accounting";
 import { differenceHints, type ReconcileSummary } from "@/lib/accounting/reconcile";
+import AddTransactionButton from "./add-transaction-button";
 import { money } from "@/lib/accounting/format";
 
 export default function ReconcilePanel({ lang, month, summary: s }: { lang: "en" | "fr"; month: string; summary: ReconcileSummary }) {
@@ -113,6 +114,11 @@ export default function ReconcilePanel({ lang, month, summary: s }: { lang: "en"
         </div>
       )}
 
+      {!locked && (
+        <div>
+          <AddTransactionButton lang={lang} accountId={s.accountId} periodStart={s.periodStart} periodEnd={s.periodEnd} currency={s.currency} />
+        </div>
+      )}
       <details open={!locked}>
         <summary className="cursor-pointer text-sm font-medium text-ink">{fr ? `Transactions du mois (${s.txs.length})` : `This month's transactions (${s.txs.length})`}</summary>
         <table className="mt-2 w-full text-sm">
