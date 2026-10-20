@@ -6,6 +6,9 @@ import { buildReminderDraft } from "@/lib/invoice-reminders";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
+import { paymentInfo } from "@/lib/invoice-payment-info";
+import { getStripeConfig, payLinkFor } from "@/lib/stripe";
+import { publicBaseUrl } from "@/lib/twilio";
 import MarkPaidButton from "./mark-paid-button";
 import SendReminderButton from "./send-reminder-button";
 
@@ -28,13 +31,19 @@ export default async function InvoiceDetailPage({
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
-  const { project, invoice } = await withScopedPrismaClient(async (db) => {
+  const { project, invoice, billing, payUrl, instalmentOf } = await withScopedPrismaClient(async (db) => {
     const project = await db.project.findUnique({ where: { id }, include: { contact: true } });
     const invoice = await db.invoice.findUnique({
       where: { id: invoiceId },
-      include: { lineItems: { orderBy: { order: "asc" } } },
+      include: { lineItems: { orderBy: { order: "asc" } }, instalment: { include: { proposal: { select: { paymentSchedule: { select: { id: true }, orderBy: { order: "asc" } } } } } } },
     });
-    return { project, invoice };
+    const billing = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
+    // The CRM's own card-payment page (signed link) when Stripe is connected.
+    const origin = publicBaseUrl();
+    const payUrl = origin && invoice && (await getStripeConfig(db)) ? await payLinkFor(origin, invoice.id) : null;
+    const ids = invoice?.instalment?.proposal.paymentSchedule.map((r) => r.id) ?? [];
+    const instalmentOf = invoice?.instalmentId && ids.length > 0 ? { n: ids.indexOf(invoice.instalmentId) + 1, of: ids.length } : null;
+    return { project, invoice, billing, payUrl, instalmentOf };
   });
 
   if (!project || !invoice || invoice.projectId !== id) notFound();
@@ -46,6 +55,19 @@ export default async function InvoiceDetailPage({
     invoice.status === "OVERDUE" && project.contact.email
       ? buildReminderDraft(invoice, { email: project.contact.email, firstName: project.contact.firstName })
       : null;
+
+  // "How to pay", in the client's language like the invoice itself.
+  const docFr = (project.contact.locale ?? "").toLowerCase().startsWith("fr");
+  const amountDue = invoice.totalAmount || invoice.amount;
+  const info = paymentInfo({
+    lang: docFr ? "fr" : "en",
+    amount: `${amountDue.toFixed(2)} ${invoice.currency}`,
+    due: invoice.dueDate ? format(invoice.dueDate, "MMMM d, yyyy", { locale: getDateLocale(docFr ? "fr" : "en") }) : null,
+    paid: invoice.status === "PAID",
+    interacEmail: billing.interacEmail,
+    cardUrl: payUrl ?? billing.cardPaymentUrl,
+    instalment: instalmentOf && instalmentOf.n > 0 ? instalmentOf : null,
+  });
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -149,6 +171,37 @@ export default async function InvoiceDetailPage({
           </p>
         )}
       </section>
+
+      {invoice.status !== "CANCELED" && (
+        <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+          <h2 className="font-display text-lg font-semibold text-ink">{info.title}</h2>
+          <p className="mt-2 text-sm text-ink">{info.intro}</p>
+          {info.methods.length > 0 && (
+            <ul className="mt-3 space-y-2">
+              {info.methods.map((m) => (
+                <li key={m.label} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-card-border bg-field-bg px-3 py-2 text-sm">
+                  <span className="font-semibold text-ink">{m.label}</span>
+                  {m.href ? (
+                    <a href={m.href} target="_blank" rel="noreferrer" className="font-medium text-emerald-700 hover:underline">
+                      {m.value}
+                    </a>
+                  ) : (
+                    <span className="text-ink">{m.value}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {info.noMethods && <p className="mt-2 text-sm text-soft">{info.noMethods}</p>}
+          <h3 className="mt-4 border-b border-card-border pb-1 text-sm font-semibold text-ink">{info.nextTitle}</h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink">
+            {info.next.map((n, i) => (
+              <li key={i}>{n}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {reminderDraft && (
         <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
