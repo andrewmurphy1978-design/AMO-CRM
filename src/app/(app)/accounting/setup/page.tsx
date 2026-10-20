@@ -128,7 +128,7 @@ export default async function SetupPage() {
                       key={o.id}
                       lang={lang}
                       showGifi={gifi}
-                      account={{ id: o.id, code: o.code, name: fr ? (o.nameFr ?? o.name) : o.name, type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), bank: o.bank, parentChoices: parents.filter((p) => p.id !== o.id).map((p) => ({ id: p.id, label: fr ? (p.nameFr ?? p.name) : p.name })) }}
+                      account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), bank: o.bank, parentChoices: parents.filter((p) => p.id !== o.id).map((p) => ({ id: p.id, label: fr ? (p.nameFr ?? p.name) : p.name })) }}
                     />
                   );
                   // Assets and liabilities: grouped under their second-level section; an account whose section is changed moves there.

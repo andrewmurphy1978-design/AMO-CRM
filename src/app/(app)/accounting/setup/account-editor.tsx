@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setAccountGifi, setAccountParent, setAccountSection } from "@/actions/accounting";
+import { setAccountGifi, setAccountNames, setAccountParent, setAccountSection } from "@/actions/accounting";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
 
 export interface EditableAccount {
   id: string;
   code: string;
   name: string;
+  nameFr: string;
   type: string;
   section: string | null;
   parentId: string | null;
@@ -23,12 +24,16 @@ export default function AccountEditor({ account: a, lang, showGifi }: { account:
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [gifi, setGifi] = useState(a.gifi ?? "");
+  const [en, setEn] = useState(a.name);
+  const [frName, setFrName] = useState(a.nameFr);
+  const saveNames = () => (en !== a.name || frName !== a.nameFr) && start(async () => setError((await setAccountNames(a.id, en, frName)).error ?? null));
   const sections = a.type === "ASSET" ? ASSET_SECTIONS : a.type === "LIABILITY" ? LIABILITY_SECTIONS : null;
   const cls = "rounded-lg border border-card-border bg-white px-2 py-1 text-xs text-ink";
   return (
     <div className={`flex flex-wrap items-center gap-2 py-1.5 ${a.parentId ? "pl-6" : ""}`}>
       <span className="w-14 shrink-0 text-xs text-soft">{a.code}</span>
-      <span className="min-w-40 flex-1 text-sm text-ink">{a.name}</span>
+      <input value={en} onChange={(e) => setEn(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="English" aria-label="English description" className={`${cls} min-w-48 flex-1 text-sm`} />
+      <input value={frName} onChange={(e) => setFrName(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="Français" aria-label="Description française" className={`${cls} min-w-48 flex-1 text-sm`} />
       {sections && (
         <select disabled={pending} value={a.section ?? ""} onChange={(e) => start(() => setAccountSection(a.id, e.target.value || null))} className={cls} title={fr ? "Section du bilan" : "Balance-sheet section"}>
           <option value="">{fr ? "Section automatique" : "Automatic section"}</option>

@@ -191,6 +191,14 @@ export async function setAccountParent(id: string, parentId: string | null): Pro
   return result;
 }
 
+export async function setAccountNames(id: string, name: string, nameFr: string): Promise<Result> {
+  await requireAdmin();
+  if (!name.trim()) return { error: "The English name cannot be empty." };
+  await withScopedPrismaClient((db) => db.accAccount.update({ where: { id }, data: { name: name.trim(), nameFr: nameFr.trim() || null } }));
+  refresh();
+  return {};
+}
+
 export async function setAccountGifi(id: string, gifi: string): Promise<Result> {
   await requireAdmin();
   const code = gifi.trim();

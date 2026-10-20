@@ -30,10 +30,10 @@ const CA_SALES_TAX: ChartAccount[] = [
 ];
 
 const PERSONAL_CA: ChartAccount[] = [
-  a("1200", "TFSA (CELI)", "CELI", "ASSET", "INVESTMENT"),
-  a("1210", "RRSP (REER)", "REER", "ASSET", "INVESTMENT", "T1 line 20800 (RRSP deduction)"),
-  a("1220", "FHSA (CELIAPP)", "CELIAPP", "ASSET", "INVESTMENT", "T1 line 20805 (FHSA deduction)"),
-  a("1230", "RESP (REEE)", "REEE", "ASSET", "INVESTMENT"),
+  a("1200", "Tax-Free Savings Account (TFSA)", "Compte d'épargne libre d'impôt (CELI)", "ASSET", "INVESTMENT"),
+  a("1210", "Registered Retirement Savings Plan (RRSP)", "Régime enregistré d'épargne-retraite (REER)", "ASSET", "INVESTMENT", "T1 line 20800 (RRSP deduction)"),
+  a("1220", "First Home Savings Account (FHSA)", "Compte d'épargne libre d'impôt pour l'achat d'une première propriété (CELIAPP)", "ASSET", "INVESTMENT", "T1 line 20805 (FHSA deduction)"),
+  a("1230", "Registered Education Savings Plan (RESP)", "Régime enregistré d'épargne-études (REEE)", "ASSET", "INVESTMENT"),
   a("1300", "Investments (non-registered)", "Placements (non enregistrés)", "ASSET", "INVESTMENT"),
   a("1400", "Principal residence", "Résidence principale", "ASSET", "FIXED_ASSET"),
   a("1410", "Vehicle", "Véhicule", "ASSET", "FIXED_ASSET"),
@@ -377,4 +377,12 @@ export const REGISTERED_TYPES: Record<string, { en: string; fr: string }> = {
   LIRA: { en: "LIRA / Lock-in RRSP (Locked-In Retirement Account)", fr: "CRI / REER immobilisé (compte de retraite immobilisé)" },
   RRIF: { en: "RRIF (Registered Retirement Income Fund)", fr: "FERR (fonds enregistré de revenu de retraite)" },
   LIF: { en: "LIF (Life Income Fund / lock-in fund)", fr: "FRV (fonds de revenu viager)" },
+};
+
+// Earlier versions of the Personal chart mixed English and French in one name: these are replaced in existing books.
+export const LEGACY_NAME_FIXES: Record<string, { oldName: string; en: string; fr: string }> = {
+  "1200": { oldName: "TFSA (CELI)", en: "Tax-Free Savings Account (TFSA)", fr: "Compte d'épargne libre d'impôt (CELI)" },
+  "1210": { oldName: "RRSP (REER)", en: "Registered Retirement Savings Plan (RRSP)", fr: "Régime enregistré d'épargne-retraite (REER)" },
+  "1220": { oldName: "FHSA (CELIAPP)", en: "First Home Savings Account (FHSA)", fr: "Compte d'épargne libre d'impôt pour l'achat d'une première propriété (CELIAPP)" },
+  "1230": { oldName: "RESP (REEE)", en: "Registered Education Savings Plan (RESP)", fr: "Régime enregistré d'épargne-études (REEE)" },
 };

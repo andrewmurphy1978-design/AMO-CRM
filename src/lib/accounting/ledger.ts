@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { lockedThrough } from "./reconcile";
-import { REGISTERED_TYPES, chartFor, suggestGifi, usesGifi, entityDefaults, intercoSpec, type EntityKind } from "./charts";
+import { LEGACY_NAME_FIXES, REGISTERED_TYPES, chartFor, suggestGifi, usesGifi, entityDefaults, intercoSpec, type EntityKind } from "./charts";
 import { buildPosting, r2, type AllocationInput, type PostAccount, type PostEntity, type PostingEntry } from "./posting";
 import { parseCsv } from "./csv";
 import { supplierKey, supplierName } from "./supplier";
@@ -34,6 +34,12 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
     for (const a of existing) {
       const g = a.gifi ? null : suggestGifi(entity.kind, a);
       if (g) await db.accAccount.update({ where: { id: a.id }, data: { gifi: g } });
+    }
+  }
+  if (entity.kind === "PERSONAL") {
+    for (const a of existing) {
+      const fix = LEGACY_NAME_FIXES[a.code];
+      if (fix && a.name === fix.oldName) await db.accAccount.update({ where: { id: a.id }, data: { name: fix.en, nameFr: fix.fr } });
     }
   }
   const missing = chart.map((c, order) => ({ c, order })).filter(({ c }) => !haveCodes.has(c.code));
