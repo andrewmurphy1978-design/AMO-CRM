@@ -77,17 +77,24 @@ export function AddAccountForm({ lang, entities, options, defaultEntityId }: { l
   const fr = lang === "fr";
   const [entityId, setEntityId] = useState(defaultEntityId ?? entities[0]?.id ?? "");
   const [type, setType] = useState("EXPENSE");
+  const [section, setSection] = useState("");
+  const [level, setLevel] = useState<"top" | "second">("top");
   const entity = entities.find((e) => e.id === entityId);
-  const parents = options.filter((o) => o.entityId === entityId && o.type === type && !o.parentId && !o.bank);
+  const sectionDefs = type === "ASSET" ? ASSET_SECTIONS : type === "LIABILITY" ? LIABILITY_SECTIONS : null;
+  const effectiveSection = sectionDefs ? (sectionDefs.some((d) => d.key === section) ? section : sectionDefs[0].key) : "";
+  // A second-level account sits under a top-level account of the same entity and type (and, for assets and
+  // liabilities, of the same section: a fixed asset's accumulated amortization goes under that fixed asset).
+  const parents = options.filter((o) => o.entityId === entityId && o.type === type && !o.parentId && !o.bank && (!sectionDefs || o.section === effectiveSection));
   return (
     <ActionForm action={addAccount} submitLabel={fr ? "Ajouter" : "Add"}>
       <Field label={fr ? "Entité" : "Entity"}>
         <select name="entityId" value={entityId} onChange={(e) => setEntityId(e.target.value)} className={inputCls}>{entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
       </Field>
       <Field label="Code"><input name="code" required placeholder="8800" className={`${inputCls} w-24`} /></Field>
-      <Field label={fr ? "Nom" : "Name"}><input name="name" required className={inputCls} /></Field>
+      <Field label={fr ? "Description anglaise" : "English description"}><input name="name" required className={`${inputCls} w-52`} /></Field>
+      <Field label={fr ? "Description française" : "French description"}><input name="nameFr" className={`${inputCls} w-52`} /></Field>
       <Field label={fr ? "Type" : "Type"}>
-        <select name="type" value={type} onChange={(e) => setType(e.target.value)} className={inputCls}>
+        <select name="type" value={type} onChange={(e) => { setType(e.target.value); setLevel("top"); }} className={inputCls}>
           <option value="EXPENSE">{fr ? "Dépense" : "Expense"}</option>
           <option value="INCOME">{fr ? "Revenu" : "Income"}</option>
           <option value="ASSET">{fr ? "Actif" : "Asset"}</option>
@@ -95,21 +102,23 @@ export function AddAccountForm({ lang, entities, options, defaultEntityId }: { l
           <option value="EQUITY">{fr ? "Capitaux propres" : "Equity"}</option>
         </select>
       </Field>
-      {type === "ASSET" && (
+      {sectionDefs && (
         <Field label={fr ? "Section du bilan" : "Balance-sheet section"}>
-          <select name="section" className={inputCls}>{ASSET_SECTIONS.map((s) => <option key={s.key} value={s.key}>{s[lang].split(" (")[0]}</option>)}</select>
+          <select name="section" value={effectiveSection} onChange={(e) => setSection(e.target.value)} className={inputCls}>
+            {sectionDefs.map((d) => <option key={d.key} value={d.key}>{d[lang]}</option>)}
+          </select>
         </Field>
       )}
-      {type === "LIABILITY" && (
-        <Field label={fr ? "Section du bilan" : "Balance-sheet section"}>
-          <select name="section" className={inputCls}>{LIABILITY_SECTIONS.map((s) => <option key={s.key} value={s.key}>{s[lang]}</option>)}</select>
-        </Field>
-      )}
-      {parents.length > 0 && (
-        <Field label={fr ? "Sous-catégorie de" : "Sub-category of"}>
-          <select name="parentId" className={inputCls}>
-            <option value="">{fr ? "— Aucune —" : "— None —"}</option>
-            {parents.map((p) => <option key={p.id} value={p.id}>{p.code} {fr && p.nameFr ? p.nameFr : p.name}</option>)}
+      <Field label={fr ? "Niveau" : "Level"}>
+        <select value={level} onChange={(e) => setLevel(e.target.value as "top" | "second")} className={inputCls}>
+          <option value="top">{fr ? "Premier niveau" : "Top level"}</option>
+          <option value="second" disabled={parents.length === 0}>{fr ? "Deuxième niveau (sous un compte)" : "Second level (under an account)"}</option>
+        </select>
+      </Field>
+      {level === "second" && parents.length > 0 && (
+        <Field label={fr ? "Sous le compte" : "Under"}>
+          <select name="parentId" required className={inputCls}>
+            {parents.map((p) => <option key={p.id} value={p.id}>{p.code} {fr ? p.labelFr : p.label}</option>)}
           </select>
         </Field>
       )}

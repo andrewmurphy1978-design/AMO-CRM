@@ -252,10 +252,10 @@ export type AssetSection = "TREASURY" | "CURRENT" | "LONG_TERM" | "FIXED" | "INT
 export type LiabilitySection = "SHORT_TERM" | "LONG_TERM";
 
 export const ASSET_SECTIONS: { key: AssetSection; en: string; fr: string }[] = [
-  { key: "TREASURY", en: "Treasury (cash & bank)", fr: "Trésorerie (encaisse et banque)" },
-  { key: "CURRENT", en: "Other current assets (receivables, prepaid, taxes recoverable)", fr: "Autres actifs à court terme (clients, charges payées d'avance, taxes à recouvrer)" },
-  { key: "LONG_TERM", en: "Long-term assets (investments)", fr: "Actifs à long terme (placements)" },
-  { key: "FIXED", en: "Fixed assets", fr: "Immobilisations corporelles" },
+  { key: "TREASURY", en: "Treasury", fr: "Trésorerie" },
+  { key: "CURRENT", en: "Other current assets", fr: "Autres actifs à court terme" },
+  { key: "LONG_TERM", en: "Long-term assets", fr: "Actifs à long terme" },
+  { key: "FIXED", en: "Fixed assets", fr: "Immobilisations" },
   { key: "INTANGIBLE", en: "Intangible assets", fr: "Actifs incorporels" },
 ];
 export const LIABILITY_SECTIONS: { key: LiabilitySection; en: string; fr: string }[] = [

@@ -30,14 +30,14 @@ export default function AccountEditor({ account: a, lang, showGifi }: { account:
   const sections = a.type === "ASSET" ? ASSET_SECTIONS : a.type === "LIABILITY" ? LIABILITY_SECTIONS : null;
   const cls = "rounded-lg border border-card-border bg-white px-2 py-1 text-xs text-ink";
   return (
-    <div className={`flex flex-wrap items-center gap-2 py-1.5 ${a.parentId ? "pl-6" : ""}`}>
-      <span className="w-14 shrink-0 text-xs text-soft">{a.code}</span>
-      <input value={en} onChange={(e) => setEn(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="English" aria-label="English description" className={`${cls} min-w-48 flex-1 text-sm`} />
-      <input value={frName} onChange={(e) => setFrName(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="Français" aria-label="Description française" className={`${cls} min-w-48 flex-1 text-sm`} />
-      {sections && (
+    <div className={`flex flex-wrap items-center gap-2 py-1.5 xl:flex-nowrap ${a.parentId ? "pl-6" : ""}`}>
+      <span className="w-12 shrink-0 text-xs text-soft">{a.code}</span>
+      <input value={en} onChange={(e) => setEn(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="English" aria-label="English description" className={`${cls} w-44 text-sm xl:w-52`} />
+      <input value={frName} onChange={(e) => setFrName(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="Français" aria-label="Description française" className={`${cls} w-44 text-sm xl:w-52`} />
+      {sections && !a.parentId && (
         <select disabled={pending} value={a.section ?? ""} onChange={(e) => start(() => setAccountSection(a.id, e.target.value || null))} className={cls} title={fr ? "Section du bilan" : "Balance-sheet section"}>
           <option value="">{fr ? "Section automatique" : "Automatic section"}</option>
-          {sections.map((s) => <option key={s.key} value={s.key}>{s[lang].split(" (")[0]}</option>)}
+          {sections.map((s) => <option key={s.key} value={s.key}>{s[lang]}</option>)}
         </select>
       )}
       {!a.bank && !a.hasChildren && (

@@ -19,7 +19,7 @@ import {
 import type { EntityKind } from "@/lib/accounting/charts";
 import { r2 } from "@/lib/accounting/posting";
 import { suggestForSuppliers, keywordAccountCode, readPdfStatement, type AiAccountOption } from "@/lib/accounting/ai";
-import { suggestGifi, usesGifi } from "@/lib/accounting/charts";
+import { defaultSection, suggestGifi, usesGifi } from "@/lib/accounting/charts";
 import { parseTaxNumbers } from "@/lib/accounting/tax-numbers";
 import { accountingUserFor, type AccountingUser } from "@/lib/accounting/access";
 import { assertUnlocked, monthRange, reconcileSummary } from "@/lib/accounting/reconcile";
@@ -181,7 +181,7 @@ async function validParent(db: import("@/lib/prisma").PrismaClient, entityId: st
 
 // The balance-sheet section chosen for a new account sets the subtype that places it there.
 function sectionSubtype(section: string, type: string): string {
-  if (type === "ASSET") return ({ TREASURY: "BANK", LONG_TERM: "INVESTMENT", FIXED: "FIXED_ASSET", INTANGIBLE: "INTANGIBLE" } as Record<string, string>)[section] ?? "OTHER";
+  if (type === "ASSET") return ({ LONG_TERM: "INVESTMENT", FIXED: "FIXED_ASSET", INTANGIBLE: "INTANGIBLE" } as Record<string, string>)[section] ?? "OTHER";
   if (type === "LIABILITY") return section === "LONG_TERM" ? "LOAN" : "PAYABLE";
   return "OTHER";
 }
@@ -189,7 +189,7 @@ function sectionSubtype(section: string, type: string): string {
 export async function setAccountSection(id: string, section: string | null): Promise<void> {
   const me = await access();
   const valid = ["TREASURY", "CURRENT", "LONG_TERM", "FIXED", "INTANGIBLE", "SHORT_TERM"];
-  await withScopedPrismaClient(async (db) => { await ownAccount(db, me, id); return db.accAccount.update({ where: { id }, data: { section: section && valid.includes(section) ? section : null } }); });
+  await withScopedPrismaClient(async (db) => { await ownAccount(db, me, id); const next = section && valid.includes(section) ? section : null; await db.accAccount.updateMany({ where: { parentId: id }, data: { section: next } }); return db.accAccount.update({ where: { id }, data: { section: next } }); });
   refresh();
 }
 
@@ -204,6 +204,7 @@ export async function setAccountParent(id: string, parentId: string | null): Pro
       const parent = await db.accAccount.findUniqueOrThrow({ where: { id: parentId } });
       if (parent.id === acc.id) return { error: "An account cannot be its own parent." };
       if (parent.entityId !== acc.entityId || parent.type !== acc.type) return { error: "A sub-category must be in the same entity and of the same type as its parent." };
+      if ((parent.type === "ASSET" || parent.type === "LIABILITY") && (parent.section ?? defaultSection(parent.type, parent.subtype)) !== (acc.section ?? defaultSection(acc.type, acc.subtype))) return { error: "A second-level account must be in the same section as the account above it." };
       if (parent.parentId) return { error: "Only one level of sub-categories is supported: choose a top-level parent." };
       if (acc.children.length > 0) return { error: "This account already has sub-categories, so it cannot become one itself." };
       if (acc.subtype === "BANK" || acc.subtype === "CREDIT_CARD") return { error: "Bank and card accounts cannot be sub-categories." };
@@ -243,8 +244,13 @@ export async function addAccount(_prev: Result | undefined, formData: FormData):
   try {
     await withScopedPrismaClient(async (db) => {
       await ownEntity(db, me, entityId);
+      const parentId = await validParent(db, entityId, type, String(formData.get("parentId") ?? ""));
+      const parent = parentId ? await db.accAccount.findUnique({ where: { id: parentId } }) : null;
+      // A second-level account lives in its parent's balance-sheet section.
+      const chosen = String(formData.get("section") ?? "");
+      const section = type === "ASSET" || type === "LIABILITY" ? (parent ? parent.section ?? defaultSection(parent.type, parent.subtype) : chosen || defaultSection(type, sectionSubtype(chosen, type))) : null;
       return db.accAccount.create({
-        data: { entityId, code, name, type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : sectionSubtype(String(formData.get("section") ?? ""), type), taxLine: String(formData.get("taxLine") ?? "").trim() || null, gifi: /^\d{4}$/.test(String(formData.get("gifi") ?? "").trim()) ? String(formData.get("gifi")).trim() : await autoGifi(db, entityId, code, name, type, sectionSubtype(String(formData.get("section") ?? ""), type)), parentId: await validParent(db, entityId, type, String(formData.get("parentId") ?? "")) },
+        data: { entityId, code, name, nameFr: String(formData.get("nameFr") ?? "").trim() || null, section, type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : sectionSubtype(String(formData.get("section") ?? ""), type), taxLine: String(formData.get("taxLine") ?? "").trim() || null, gifi: /^\d{4}$/.test(String(formData.get("gifi") ?? "").trim()) ? String(formData.get("gifi")).trim() : await autoGifi(db, entityId, code, name, type, sectionSubtype(String(formData.get("section") ?? ""), type)), parentId },
       });
     });
   } catch (error) {

@@ -90,11 +90,6 @@ export default async function SetupPage() {
 
   const chartSection = (
     <>
-      <p className="text-sm text-soft">
-          {fr
-            ? "Les plans comptables sont créés automatiquement (T2125 pour l'entreprise individuelle, GIFI pour les sociétés, Annexe C pour la LLC). Les actifs se répartissent en trésorerie, actifs à court terme, à long terme, immobilisations et actifs incorporels ; les passifs en court et long terme ; les revenus et dépenses peuvent avoir des sous-catégories."
-            : "Charts are created automatically (T2125 for the sole proprietorship, GIFI for corporations, Schedule C for the LLC). Assets split into treasury, other current, long-term, fixed and intangible assets; liabilities into short-term and long-term; income and expenses can have sub-categories."}
-        </p>
       <EntityTabs
         tabs={books.entities.map((e) => {
           const gifi = usesGifi(e.kind, e.country);
@@ -106,6 +101,11 @@ export default async function SetupPage() {
             sub: String(own.length),
             content: (
               <>
+                    <p className="text-sm text-soft">
+          {fr
+            ? "Les plans comptables sont créés automatiquement (T2125 pour l'entreprise individuelle, GIFI pour les sociétés, Annexe C pour la LLC). Les actifs se répartissent en trésorerie, actifs à court terme, à long terme, immobilisations et actifs incorporels ; les passifs en court et long terme ; les revenus et dépenses peuvent avoir des sous-catégories."
+            : "Charts are created automatically (T2125 for the sole proprietorship, GIFI for corporations, Schedule C for the LLC). Assets split into treasury, other current, long-term, fixed and intangible assets; liabilities into short-term and long-term; income and expenses can have sub-categories."}
+        </p>
               <Card color="other" title={fr ? "Ajouter un compte" : "Add an account"}>
                 <AddAccountForm key={e.id} lang={lang} entities={books.entities} options={books.options} defaultEntityId={e.id} />
               </Card>
@@ -127,7 +127,7 @@ export default async function SetupPage() {
                       key={o.id}
                       lang={lang}
                       showGifi={gifi}
-                      account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), bank: o.bank, parentChoices: parents.filter((p) => p.id !== o.id).map((p) => ({ id: p.id, label: fr ? (p.nameFr ?? p.name) : p.name })) }}
+                      account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), bank: o.bank, parentChoices: parents.filter((p) => p.id !== o.id && (o.type !== "ASSET" && o.type !== "LIABILITY" ? true : optionOf(p.id)?.section === optionOf(o.id)?.section)).map((p) => ({ id: p.id, label: fr ? (p.nameFr ?? p.name) : p.name })) }}
                     />
                   );
                   // Assets and liabilities: grouped under their second-level section; an account whose section is changed moves there.
