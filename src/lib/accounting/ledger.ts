@@ -54,6 +54,12 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
       if (fix && a.name === fix.oldName) await db.accAccount.update({ where: { id: a.id }, data: { name: fix.en, nameFr: fix.fr } });
     }
   }
+  // Registered / investment bank accounts sit under their own chart account (TFSA, RRSP...).
+  const orphans = await db.accAccount.findMany({ where: { entityId, registeredType: { not: null }, parentId: null }, select: { id: true, registeredType: true } });
+  for (const o of orphans) {
+    const parentId = await ensureRegisteredParent(db, entityId, o.registeredType as string);
+    await db.accAccount.update({ where: { id: o.id }, data: { parentId, section: "LONG_TERM" } });
+  }
   const missing = chart.map((c, order) => ({ c, order })).filter(({ c }) => !haveCodes.has(c.code));
   // Income / expense sub-categories: a group is created once (with at least one of its accounts in the chart) and
   // adopts those of its accounts that have no parent yet. Groups that already exist are left as the user has them.
@@ -156,6 +162,46 @@ async function nextCode(db: PrismaClient, entityId: string, from: number, to: nu
   throw new Error("No free account code left in that range.");
 }
 
+// The chart account a registered account sits under: the template TFSA / RRSP / FHSA / RESP / investment account
+// of the Personal chart, or one of the same kind created on the spot (e.g. LIRA, RRIF, LIF).
+const REGISTERED_PARENT_CODE: Record<string, string> = { TFSA: "1200", RRSP: "1210", FHSA: "1220", RESP: "1230", NON_REG: "1300" };
+
+export async function ensureRegisteredParent(db: PrismaClient, entityId: string, registeredType: string): Promise<string> {
+  const marker = `REG:${registeredType}`;
+  const templateCode = REGISTERED_PARENT_CODE[registeredType];
+  if (templateCode) {
+    const template = await db.accAccount.findFirst({ where: { entityId, code: templateCode, subtype: "INVESTMENT" } });
+    if (template) return template.id;
+  }
+  const made = await db.accAccount.findFirst({ where: { entityId, subtype: "INVESTMENT", taxLine: marker } });
+  if (made) return made.id;
+  const names: Record<string, { en: string; fr: string }> = {
+    TFSA: { en: "Tax-Free Savings Account (TFSA)", fr: "Compte d'épargne libre d'impôt (CELI)" },
+    RRSP: { en: "Registered Retirement Savings Plan (RRSP)", fr: "Régime enregistré d'épargne-retraite (REER)" },
+    FHSA: { en: "First Home Savings Account (FHSA)", fr: "Compte d'épargne libre d'impôt pour l'achat d'une première propriété (CELIAPP)" },
+    RESP: { en: "Registered Education Savings Plan (RESP)", fr: "Régime enregistré d'épargne-études (REEE)" },
+    NON_REG: { en: "Investments (non-registered)", fr: "Placements (non enregistrés)" },
+    LIRA: { en: "Locked-In Retirement Account (LIRA / lock-in RRSP)", fr: "Compte de retraite immobilisé (CRI / REER immobilisé)" },
+    RRIF: { en: "Registered Retirement Income Fund (RRIF)", fr: "Fonds enregistré de revenu de retraite (FERR)" },
+    LIF: { en: "Life Income Fund (LIF / lock-in fund)", fr: "Fonds de revenu viager (FRV)" },
+  };
+  const label = names[registeredType] ?? { en: REGISTERED_TYPES[registeredType].en, fr: REGISTERED_TYPES[registeredType].fr };
+  const created = await db.accAccount.create({
+    data: {
+      entityId,
+      code: await nextCode(db, entityId, 1240, 1299),
+      name: label.en,
+      nameFr: label.fr,
+      type: "ASSET",
+      subtype: "INVESTMENT",
+      section: "LONG_TERM",
+      taxLine: marker,
+      isSystem: true,
+    },
+  });
+  return created.id;
+}
+
 export async function createBankAccount(
   db: PrismaClient,
   input: { entityId: string; name: string; kind: string; institution?: string; last4?: string; importSign?: number; currency?: string; nameFr?: string }
@@ -165,10 +211,12 @@ export async function createBankAccount(
   // account, shown under long-term assets.
   const registeredType = input.kind in REGISTERED_TYPES ? input.kind : null;
   const code = card ? await nextCode(db, input.entityId, 2010, 2099) : await nextCode(db, input.entityId, 1010, 1099);
+  const parentId = registeredType ? await ensureRegisteredParent(db, input.entityId, registeredType) : null;
   return db.accAccount.create({
     data: {
       entityId: input.entityId,
       code,
+      parentId,
       name: input.name,
       nameFr: input.nameFr ?? null,
       type: card ? "LIABILITY" : "ASSET",

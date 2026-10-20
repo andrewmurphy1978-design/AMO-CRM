@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import SectionDialog from "@/app/(app)/contacts/[id]/section-dialog";
 import { CARD_COLORS, type CardColor } from "@/components/section-card";
 
@@ -27,10 +28,15 @@ export default function AccountingDialog({
   children: ReactNode;
 }) {
   const fr = lang === "fr";
+  const router = useRouter();
   return (
     <SectionDialog
       open={open}
-      onOpenChange={onOpenChange}
+      // Closing (after a save or a cancel) re-reads the page so a new or changed account shows right away.
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) router.refresh();
+      }}
       title={title}
       action={action}
       wide
