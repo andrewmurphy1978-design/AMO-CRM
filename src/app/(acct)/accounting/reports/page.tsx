@@ -8,6 +8,7 @@ import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks } from "@/lib/accounting/options";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
 import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
+import MoveAccountButton from "./move-account-button";
 import RecategorizeButton, { type RecatTx } from "./recategorize-button";
 import { isoDate, money } from "@/lib/accounting/format";
 
@@ -283,6 +284,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               </select>
               <button className="btn-primary rounded-lg px-3 py-1.5 font-semibold">OK</button>
             </form>
+            {data.gl ? (() => {
+              const cur = options.find((o) => o.id === (data.gl as Awaited<ReturnType<typeof generalLedger>>).account.id);
+              return cur ? <div><MoveAccountButton lang={lang} from={cur} options={options} /></div> : null;
+            })() : null}
             {data.gl ? (() => {
               const g = data.gl as Awaited<ReturnType<typeof generalLedger>>;
               return (

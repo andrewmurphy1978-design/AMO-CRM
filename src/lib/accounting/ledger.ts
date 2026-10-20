@@ -242,6 +242,9 @@ export async function createBankAccount(
 /** The account in `entityId`'s books for the relationship with `otherId` (created the first time it is needed). */
 export async function ensureInterco(db: PrismaClient, entityId: string, otherId: string): Promise<string> {
   const [entity, other] = await Promise.all([db.accEntity.findUniqueOrThrow({ where: { id: entityId } }), db.accEntity.findUniqueOrThrow({ where: { id: otherId } })]);
+  // The account the user chose for money with this entity (Entities > Accounts between entities), or one made earlier.
+  const chosen = await db.accAccount.findFirst({ where: { entityId, counterEntityId: otherId, archived: false } });
+  if (chosen) return chosen.id;
   const spec = intercoSpec({ kind: entity.kind as EntityKind }, { kind: other.kind as EntityKind, name: other.name });
   if (spec.unique) {
     const found = await db.accAccount.findFirst({ where: { entityId, ...byTemplate(spec.code) } });

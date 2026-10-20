@@ -38,6 +38,11 @@ async function access(): Promise<AccountingUser> {
 
 type Db = import("@/lib/prisma").PrismaClient;
 const deny = () => new Error("Not found");
+function chunks<T>(list: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
 async function ownEntity(db: Db, me: AccountingUser, id: string) {
   if (!id || (await db.accEntity.count({ where: { id, ownerId: me.id } })) === 0) throw deny();
 }
@@ -936,5 +941,77 @@ export async function addManualTransaction(input: { accountId: string; date: str
   } catch (error) {
     if (error instanceof Error && error.message === "Not found") throw error;
     return { error: error instanceof Error ? error.message : "Could not add the transaction." };
+  }
+}
+
+/**
+ * Moves every journal line of one account to another account of the same entity (e.g. all of 1900 to 1901 once 1901
+ * exists). The transactions keep their categorization, now pointing at the new account; remembered suppliers that
+ * pointed at the old one follow, and a relationship account hands its link with the other entity over.
+ */
+export async function moveAccountTransactions(input: { fromId: string; toId: string; updateRules: boolean }): Promise<Result> {
+  const me = await access();
+  try {
+    const out = await withScopedPrismaClient(async (db) => {
+      await ownAccount(db, me, input.fromId);
+      await ownAccount(db, me, input.toId);
+      if (input.fromId === input.toId) return { error: "Choose a different account." };
+      const [from, to] = await Promise.all([db.accAccount.findUniqueOrThrow({ where: { id: input.fromId } }), db.accAccount.findUniqueOrThrow({ where: { id: input.toId } })]);
+      if (from.entityId !== to.entityId) return { error: "Both accounts must belong to the same entity." };
+      if (from.subtype === "GROUP" || to.subtype === "GROUP") return { error: "A sub-category header cannot hold transactions." };
+      if (["BANK", "CREDIT_CARD"].includes(from.subtype) || ["BANK", "CREDIT_CARD"].includes(to.subtype)) return { error: "Bank and card accounts cannot be merged this way." };
+      // Transactions whose categorization touched the old account (their "allocations" are updated too).
+      const entries = await db.accJournalEntry.findMany({ where: { entityId: from.entityId, transactionId: { not: null }, lines: { some: { accountId: from.id } } }, select: { transactionId: true } });
+      const txIds = [...new Set(entries.map((e) => e.transactionId as string))];
+      const moved = await db.accJournalLine.updateMany({ where: { accountId: from.id }, data: { accountId: to.id } });
+      for (const c of chunks(txIds, 200)) {
+        const txs = await db.accTransaction.findMany({ where: { id: { in: c } }, select: { id: true, allocations: true } });
+        for (const t of txs) {
+          const a = t.allocations as { accountId?: string }[] | null;
+          if (a?.some((x) => x.accountId === from.id)) await db.accTransaction.update({ where: { id: t.id }, data: { allocations: a.map((x) => (x.accountId === from.id ? { ...x, accountId: to.id } : x)) as never } });
+        }
+      }
+      if (input.updateRules) {
+        const rules = await db.accRule.findMany({ where: { ownerId: me.id }, select: { id: true, allocations: true } });
+        for (const r of rules) {
+          const a = r.allocations as { accountId?: string }[] | null;
+          if (a?.some((x) => x.accountId === from.id)) await db.accRule.update({ where: { id: r.id }, data: { allocations: a.map((x) => (x.accountId === from.id ? { ...x, accountId: to.id } : x)) as never } });
+        }
+      }
+      // A relationship account (money between entities) hands its link over so new postings use the new one.
+      if (from.counterEntityId && !to.counterEntityId) {
+        await db.accAccount.update({ where: { id: from.id }, data: { counterEntityId: null } });
+        await db.accAccount.update({ where: { id: to.id }, data: { counterEntityId: from.counterEntityId } });
+      }
+      return { success: `${moved.count} line(s) moved from ${from.code} to ${to.code}.` };
+    });
+    refresh();
+    return out;
+  } catch (error) {
+    if (error instanceof Error && error.message === "Not found") throw error;
+    return { error: error instanceof Error ? error.message : "Could not move the transactions." };
+  }
+}
+
+/** Chooses the account of an entity's books that holds the money going to / from another entity (a loan to or from it). */
+export async function setRelationshipAccount(entityId: string, otherId: string, accountId: string | null): Promise<Result> {
+  const me = await access();
+  try {
+    await withScopedPrismaClient(async (db) => {
+      await ownEntity(db, me, entityId);
+      await ownEntity(db, me, otherId);
+      if (entityId === otherId) throw deny();
+      await db.accAccount.updateMany({ where: { entityId, counterEntityId: otherId }, data: { counterEntityId: null } });
+      if (accountId) {
+        const acc = await db.accAccount.findFirst({ where: { id: accountId, entityId, subtype: { notIn: ["GROUP", "BANK", "CREDIT_CARD"] }, type: { in: ["ASSET", "LIABILITY", "EQUITY"] } } });
+        if (!acc) throw deny();
+        await db.accAccount.update({ where: { id: acc.id }, data: { counterEntityId: otherId } });
+      }
+    });
+    refresh();
+    return { success: "Saved." };
+  } catch (error) {
+    if (error instanceof Error && error.message === "Not found") throw error;
+    return { error: error instanceof Error ? error.message : "Could not save." };
   }
 }

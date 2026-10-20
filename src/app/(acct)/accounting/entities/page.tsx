@@ -6,6 +6,7 @@ import Card, { type CardColor } from "@/components/section-card";
 import EditEntityDialog from "./edit-entity-dialog";
 import { TAX_NUMBER_TYPES } from "@/lib/accounting/tax-numbers";
 import AddEntityDialog from "./add-entity-dialog";
+import RelationshipAccounts, { type RelationshipRow } from "./relationship-accounts";
 import { requireAccountingUser } from "../session";
 
 export default async function EntitiesPage() {
@@ -14,8 +15,25 @@ export default async function EntitiesPage() {
   const fr = lang === "fr";
   const books = await withScopedPrismaClient(async (db) => {
     await ensureAccountingSetup(db, me);
-    return loadBooks(db, me.id);
+    const b = await loadBooks(db, me.id);
+    const links = await db.accAccount.findMany({ where: { counterEntityId: { not: null }, archived: false, entity: { ownerId: me.id } }, select: { id: true, entityId: true, counterEntityId: true } });
+    return { ...b, links };
   });
+  // For each ordered pair of entities: the books' account that holds the money with the other entity.
+  const pairs: RelationshipRow[] = books.entities.flatMap((e) =>
+    books.entities
+      .filter((o) => o.id !== e.id)
+      .map((o) => ({
+        entityId: e.id,
+        entityName: e.name,
+        otherId: o.id,
+        otherName: o.name,
+        current: books.links.find((l) => l.entityId === e.id && l.counterEntityId === o.id)?.id ?? "",
+        choices: books.options
+          .filter((a) => a.entityId === e.id && !a.bank && !a.isGroup && (a.type === "ASSET" || a.type === "LIABILITY" || a.type === "EQUITY"))
+          .map((a) => ({ id: a.id, label: `${a.code} ${fr ? a.labelFr : a.label}` })),
+      }))
+  );
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -26,6 +44,11 @@ export default async function EntitiesPage() {
         </p>
         {me.admin && <AddEntityDialog lang={lang} />}
       </div>
+      {pairs.length > 0 && (
+        <Card color="billing" title={fr ? "Comptes entre entités (prêts et apports)" : "Accounts between entities (loans and contributions)"}>
+          <RelationshipAccounts lang={lang} rows={pairs} />
+        </Card>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
         {books.entities.map((e) => (
           <Card
