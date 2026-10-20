@@ -17,6 +17,8 @@ export interface ReconcileTx {
 export interface ReconcileSummary {
   accountId: string;
   isCard: boolean;
+  // A TFSA / RRSP / investment account...: its statement balance includes market gains and losses.
+  registered: boolean;
   currency: string;
   periodStart: string;
   periodEnd: string;
@@ -84,6 +86,7 @@ export async function reconcileSummary(db: PrismaClient, accountId: string, mont
   return {
     accountId,
     isCard,
+    registered: Boolean(account.registeredType),
     currency: account.currency ?? account.entity.currency,
     periodStart: iso(start),
     periodEnd: iso(end),

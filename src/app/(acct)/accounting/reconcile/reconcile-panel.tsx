@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Card from "@/components/section-card";
-import { reconcileMonth, setOpeningBalance } from "@/actions/accounting";
+import { reconcileMonth, recordInvestmentAdjustment, setOpeningBalance } from "@/actions/accounting";
 import { differenceHints, type ReconcileSummary } from "@/lib/accounting/reconcile";
 import { money } from "@/lib/accounting/format";
 
@@ -82,6 +82,24 @@ export default function ReconcilePanel({ lang, month, summary: s }: { lang: "en"
                 className="rounded-lg border border-card-border px-3 py-1.5 font-medium text-ink hover:bg-black/5 disabled:opacity-50"
               >
                 {fr ? `Enregistrer un solde d'ouverture de ${m(s.opening + (difference as number))}` : `Record an opening balance of ${m(s.opening + (difference as number))}`}
+              </button>
+            </div>
+          )}
+          {s.registered && difference !== null && !balanced && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-card-border bg-field-bg/40 p-3 text-sm">
+              <p className="w-full text-xs text-soft">
+                {fr
+                  ? "Le solde d'un compte de placement inclut le rendement du marché. Si l'écart est un gain ou une perte, enregistrez-le : une écriture (gains et pertes de placement) est ajoutée à la fin du mois."
+                  : "An investment account's balance includes market gains and losses. If the difference is a gain or loss, record it: an entry (investment gains and losses) is added at the end of the month."}
+              </p>
+              <button
+                disabled={pending}
+                onClick={() => start(async () => { const r = await recordInvestmentAdjustment({ accountId: s.accountId, month, amount: difference }); setMsg({ ok: !r.error, text: r.error ?? r.success ?? "" }); })}
+                className="rounded-lg border border-card-border px-3 py-1.5 font-medium text-ink hover:bg-black/5 disabled:opacity-50"
+              >
+                {difference > 0
+                  ? fr ? `Enregistrer un gain de placement de ${m(difference)}` : `Record an investment gain of ${m(difference)}`
+                  : fr ? `Enregistrer une perte de placement de ${m(Math.abs(difference))}` : `Record an investment loss of ${m(Math.abs(difference))}`}
               </button>
             </div>
           )}

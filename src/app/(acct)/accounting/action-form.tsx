@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, type ReactNode } from "react";
+import { useActionState, useEffect, type ReactNode } from "react";
 
 type Result = { error?: string; success?: string };
 
@@ -10,13 +10,19 @@ export default function ActionForm({
   children,
   submitLabel,
   className,
+  onDone,
 }: {
   action: (prev: Result | undefined, formData: FormData) => Promise<Result>;
   children: ReactNode;
   submitLabel: string;
   className?: string;
+  // Called once the action succeeded (e.g. to close the dialog the form is in).
+  onDone?: () => void;
 }) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  useEffect(() => {
+    if (state?.success) onDone?.();
+  }, [state, onDone]);
   return (
     <form action={formAction} className={className ?? "flex flex-wrap items-end gap-3 text-sm"}>
       {children}

@@ -600,3 +600,48 @@ export async function setOpeningBalance(input: { accountId: string; date: string
   refresh();
   return { success: "Opening balance saved." };
 }
+
+/**
+ * Records the market gain (or loss) that explains the difference between an investment account's statement balance
+ * and the CRM's computed balance, as a manual entry dated at the end of the month (against an "Investment gains and
+ * losses" income account, created the first time it is needed).
+ */
+export async function recordInvestmentAdjustment(input: { accountId: string; month: string; amount: number }): Promise<Result> {
+  const me = await access();
+  if (!/^\d{4}-\d{2}$/.test(input.month) || !Number.isFinite(input.amount)) return { error: "Enter an amount." };
+  const amount = r2(input.amount);
+  if (amount === 0) return { error: "There is no difference to record." };
+  try {
+    await withScopedPrismaClient(async (db) => {
+      await ownAccount(db, me, input.accountId);
+      const acc = await db.accAccount.findUniqueOrThrow({ where: { id: input.accountId } });
+      if (!acc.registeredType) throw new Error("Only investment and registered accounts take a gain / loss adjustment.");
+      const { end } = monthRange(input.month);
+      const lock = await db.accReconciliation.findFirst({ where: { accountId: acc.id }, orderBy: { periodEnd: "desc" }, select: { periodEnd: true } });
+      if (lock && lock.periodEnd >= end) throw new Error("This month is reconciled and locked: unlock it first.");
+      let gain = await db.accAccount.findFirst({ where: { entityId: acc.entityId, subtype: "INVESTMENT_GAIN" } });
+      if (!gain) {
+        const used = new Set((await db.accAccount.findMany({ where: { entityId: acc.entityId, code: { gte: "4800", lte: "4899" } }, select: { code: true } })).map((a) => a.code));
+        let code = 4800;
+        while (used.has(String(code)) && code < 4899) code++;
+        gain = await db.accAccount.create({ data: { entityId: acc.entityId, code: String(code), name: "Investment gains and losses", nameFr: "Gains et pertes de placement", type: "INCOME", subtype: "INVESTMENT_GAIN", isSystem: true } });
+      }
+      const abs = Math.abs(amount);
+      // Gain: the account grows (debit) against income (credit). Loss: the reverse.
+      await db.accJournalEntry.create({
+        data: {
+          entityId: acc.entityId,
+          date: end,
+          memo: `Investment ${amount > 0 ? "gain" : "loss"} — ${acc.name} (${input.month})`,
+          source: "MANUAL",
+          lines: { create: [{ accountId: acc.id, debit: amount > 0 ? abs : 0, credit: amount > 0 ? 0 : abs }, { accountId: gain.id, debit: amount > 0 ? 0 : abs, credit: amount > 0 ? abs : 0 }] },
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Not found") throw error;
+    return { error: error instanceof Error ? error.message : "Could not save." };
+  }
+  refresh();
+  return { success: "Adjustment recorded." };
+}

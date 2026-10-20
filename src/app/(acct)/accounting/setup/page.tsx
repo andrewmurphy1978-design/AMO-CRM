@@ -1,13 +1,14 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { requireAccountingUser } from "../session";
-import Card from "@/components/section-card";
+import Card, { type CardColor } from "@/components/section-card";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks, KIND_LABEL } from "@/lib/accounting/options";
-import { AddAccountForm, AddBankForm, AddEntityForm, EditEntityForm } from "./setup-forms";
+import { AddBankForm, AddEntityForm, EditEntityForm } from "./setup-forms";
 import BankRow from "./bank-row";
 import DeleteRuleButton from "./delete-rule-button";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS, REGISTERED_TYPES, usesGifi } from "@/lib/accounting/charts";
+import AddAccountDialog from "./add-account-dialog";
 import EntityTabs from "./entity-tabs";
 import SetupLayout, { type SetupSection } from "./setup-layout";
 import AccountEditor from "./account-editor";
@@ -88,6 +89,7 @@ export default async function SetupPage() {
     </Card>
   );
 
+  const CARD_OF: Record<string, CardColor> = { ASSET: "contact", LIABILITY: "addresses", EQUITY: "personal", INCOME: "marketingActive", EXPENSE: "projects" };
   const chartSection = (
     <>
       <EntityTabs
@@ -100,63 +102,64 @@ export default async function SetupPage() {
             label: e.name,
             sub: String(own.length),
             content: (
-              <>
+              <div className="space-y-4">
                     <p className="text-sm text-soft">
           {fr
             ? "Les plans comptables sont créés automatiquement (T2125 pour l'entreprise individuelle, GIFI pour les sociétés, Annexe C pour la LLC). Les actifs se répartissent en trésorerie, actifs à court terme, à long terme, immobilisations et actifs incorporels ; les passifs en court et long terme ; les revenus et dépenses peuvent avoir des sous-catégories."
             : "Charts are created automatically (T2125 for the sole proprietorship, GIFI for corporations, Schedule C for the LLC). Assets split into treasury, other current, long-term, fixed and intangible assets; liabilities into short-term and long-term; income and expenses can have sub-categories."}
         </p>
-              <Card color="other" title={fr ? "Ajouter un compte" : "Add an account"}>
-                <AddAccountForm key={e.id} lang={lang} entities={books.entities} options={books.options} defaultEntityId={e.id} />
-              </Card>
-              <Card color="statistics" title={<>{e.name} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{own.length}</span></>}>
-                {gifi && (
-                  <p className="text-xs text-soft">
-                    {fr
-                      ? "Codes GIFI (Indice général des renseignements financiers) suggérés automatiquement : vérifiez-les avec le guide RC4088 de l'ARC ou votre comptable, et corrigez-les au besoin."
-                      : "GIFI codes (General Index of Financial Information) are suggested automatically: check them against the CRA's RC4088 guide or your accountant, and edit any."}
-                  </p>
-                )}
-                {TYPES.map((t) => {
-                  const list = own.filter((o) => o.type === t.key).sort((x, y) => x.code.localeCompare(y.code));
-                  if (list.length === 0) return null;
-                  const parents = list.filter((o) => !o.parentId && !o.bank);
-                  const hasChildren = new Set(list.map((o) => o.parentId).filter(Boolean));
-                  const renderRow = (o: (typeof list)[number]) => (
-                    <AccountEditor
-                      key={o.id}
-                      lang={lang}
-                      showGifi={gifi}
-                      account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), bank: o.bank, parentChoices: parents.filter((p) => p.id !== o.id && (o.type !== "ASSET" && o.type !== "LIABILITY" ? true : optionOf(p.id)?.section === optionOf(o.id)?.section)).map((p) => ({ id: p.id, label: fr ? (p.nameFr ?? p.name) : p.name })) }}
-                    />
-                  );
-                  // Assets and liabilities: grouped under their second-level section; an account whose section is changed moves there.
-                  const sectionDefs = t.key === "ASSET" ? ASSET_SECTIONS : t.key === "LIABILITY" ? LIABILITY_SECTIONS : null;
-                  return (
-                    <div key={t.key} className="space-y-1">
-                      <p className="mt-3 border-b border-card-border pb-1 text-sm font-semibold uppercase tracking-wide text-ink">{t[lang]}</p>
-                      {sectionDefs
-                        ? sectionDefs.map((d) => {
-                            const inSection = list.filter((o) => !o.parentId && o.section === d.key);
-                            const rows = inSection.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]);
-                            if (rows.length === 0) return null;
-                            return (
-                              <div key={d.key} className="pl-3">
-                                <p className="mt-2 text-xs font-semibold text-soft">{d[lang]} <span className="font-normal">({rows.length})</span></p>
-                                <div className="divide-y divide-card-border">{rows.map(renderRow)}</div>
-                              </div>
-                            );
-                          })
-                        : (
-                          <div className="divide-y divide-card-border pl-3">
-                            {parents.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]).map(renderRow)}
-                          </div>
-                        )}
-                    </div>
-                  );
-                })}
-              </Card>
-              </>
+              {gifi && (
+                <p className="text-xs text-soft">
+                  {fr
+                    ? "Codes GIFI (Indice général des renseignements financiers) suggérés automatiquement : vérifiez-les avec le guide RC4088 de l'ARC ou votre comptable, et corrigez-les au besoin."
+                    : "GIFI codes (General Index of Financial Information) are suggested automatically: check them against the CRA's RC4088 guide or your accountant, and edit any."}
+                </p>
+              )}
+              {TYPES.map((t) => {
+                const list = own.filter((o) => o.type === t.key).sort((x, y) => x.code.localeCompare(y.code));
+                const parents = list.filter((o) => !o.parentId && !o.bank);
+                const hasChildren = new Set(list.map((o) => o.parentId).filter(Boolean));
+                const renderRow = (o: (typeof list)[number]) => (
+                  <AccountEditor
+                    key={o.id}
+                    lang={lang}
+                    showGifi={gifi}
+                    account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), bank: o.bank, parentChoices: parents.filter((p) => p.id !== o.id && (o.type !== "ASSET" && o.type !== "LIABILITY" ? true : optionOf(p.id)?.section === optionOf(o.id)?.section)).map((p) => ({ id: p.id, label: fr ? (p.nameFr ?? p.name) : p.name })) }}
+                  />
+                );
+                // Assets and liabilities: grouped under their second-level section; an account whose section is changed moves there.
+                const sectionDefs = t.key === "ASSET" ? ASSET_SECTIONS : t.key === "LIABILITY" ? LIABILITY_SECTIONS : null;
+                // Equity is "Net worth" for the personal books.
+                const title = t.key === "EQUITY" && e.kind === "PERSONAL" ? (fr ? "Avoir net" : "Net worth") : t[lang];
+                return (
+                  <Card
+                    key={t.key}
+                    color={CARD_OF[t.key]}
+                    title={<>{title} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{list.length}</span></>}
+                    actions={<AddAccountDialog lang={lang} entities={books.entities} options={books.options} entityId={e.id} type={t.key} />}
+                  >
+                    {list.length === 0 && <p className="text-sm text-soft">{fr ? "Aucun compte." : "No accounts."}</p>}
+                    {sectionDefs
+                      ? sectionDefs.map((d) => {
+                          const inSection = list.filter((o) => !o.parentId && o.section === d.key);
+                          const rows = inSection.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]);
+                          if (rows.length === 0) return null;
+                          return (
+                            <div key={d.key}>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-soft">{d[lang]} <span className="font-normal">({rows.length})</span></p>
+                              <div className="divide-y divide-card-border">{rows.map(renderRow)}</div>
+                            </div>
+                          );
+                        })
+                      : (
+                        <div className="divide-y divide-card-border">
+                          {parents.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]).map(renderRow)}
+                        </div>
+                      )}
+                  </Card>
+                );
+              })}
+              </div>
             ),
           };
         })}

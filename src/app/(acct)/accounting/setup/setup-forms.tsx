@@ -73,10 +73,10 @@ export function AddBankForm({ lang, entities }: { lang: Lang; entities: EntityIn
   );
 }
 
-export function AddAccountForm({ lang, entities, options, defaultEntityId }: { lang: Lang; entities: EntityInfo[]; options: AccountOption[]; defaultEntityId?: string }) {
+export function AddAccountForm({ lang, entities, options, defaultEntityId, defaultType, onDone }: { lang: Lang; entities: EntityInfo[]; options: AccountOption[]; defaultEntityId?: string; defaultType?: string; onDone?: () => void }) {
   const fr = lang === "fr";
   const [entityId, setEntityId] = useState(defaultEntityId ?? entities[0]?.id ?? "");
-  const [type, setType] = useState("EXPENSE");
+  const [type, setType] = useState(defaultType ?? "EXPENSE");
   const [section, setSection] = useState("");
   const [level, setLevel] = useState<"top" | "second">("top");
   const entity = entities.find((e) => e.id === entityId);
@@ -86,7 +86,7 @@ export function AddAccountForm({ lang, entities, options, defaultEntityId }: { l
   // liabilities, of the same section: a fixed asset's accumulated amortization goes under that fixed asset).
   const parents = options.filter((o) => o.entityId === entityId && o.type === type && !o.parentId && !o.bank && (!sectionDefs || o.section === effectiveSection));
   return (
-    <ActionForm action={addAccount} submitLabel={fr ? "Ajouter" : "Add"}>
+    <ActionForm action={addAccount} submitLabel={fr ? "Ajouter" : "Add"} onDone={onDone}>
       <Field label={fr ? "Entité" : "Entity"}>
         <select name="entityId" value={entityId} onChange={(e) => setEntityId(e.target.value)} className={inputCls}>{entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
       </Field>
