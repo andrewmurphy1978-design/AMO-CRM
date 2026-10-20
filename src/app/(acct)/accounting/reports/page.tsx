@@ -11,7 +11,10 @@ import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, salesTax
 import RecategorizeButton, { type RecatTx } from "./recategorize-button";
 import { isoDate, money } from "@/lib/accounting/format";
 
-type Sp = { entity?: string; year?: string; r?: string; account?: string };
+type Sp = { entity?: string; year?: string; r?: string; account?: string; month?: string; from?: string; to?: string };
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const me = await requireAccountingUser();
@@ -25,12 +28,26 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     await ensureAccountingSetup(db, me);
     const { entities, options } = await loadBooks(db, me.id);
     const entity = entities.find((e) => e.id === sp.entity) ?? entities[0];
-    const range = fiscalYearRange(entity.fiscalYearEndMonth, year);
+    // The period: a date interval, a single month, or the fiscal year (the default).
+    const interval = DATE_RE.test(sp.from ?? "") && DATE_RE.test(sp.to ?? "") && (sp.from as string) <= (sp.to as string);
+    const monthly = !interval && MONTH_RE.test(sp.month ?? "");
+    const range = interval
+      ? { from: new Date(`${sp.from}T00:00:00.000Z`), to: new Date(`${sp.to}T00:00:00.000Z`) }
+      : monthly
+        ? (() => {
+            const [y, mo] = (sp.month as string).split("-").map(Number);
+            return { from: new Date(Date.UTC(y, mo - 1, 1)), to: new Date(Date.UTC(y, mo, 0)) };
+          })()
+        : fiscalYearRange(entity.fiscalYearEndMonth, year);
+    // The balance sheet's current-year earnings run from the start of the fiscal year the period ends in.
+    const endY = range.to.getUTCFullYear() + (range.to.getUTCMonth() + 1 > entity.fiscalYearEndMonth ? 1 : 0);
+    const fyStart = fiscalYearRange(entity.fiscalYearEndMonth, endY).from;
+    const periodMode: "interval" | "month" | "year" = interval ? "interval" : monthly ? "month" : "year";
     const cur = entity.currency;
     const data: Record<string, unknown> = {};
     if (report === "tb") data.tb = await trialBalance(db, entity.id, range.to);
     else if (report === "is") data.is = await incomeStatement(db, entity.id, range.from, range.to);
-    else if (report === "bs") data.bs = await balanceSheet(db, entity.id, range.to, range.from);
+    else if (report === "bs") data.bs = await balanceSheet(db, entity.id, range.to, fyStart);
     else if (report === "tax") data.tax = await taxSummary(db, entity.id, range.from, range.to);
     else if (report === "st") data.st = await salesTaxReport(db, entity.id, range.from, range.to);
     else if (report === "gl") {
@@ -43,9 +60,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         data.glTx = txs.map((t) => ({ id: t.id, supplier: t.supplier, date: isoDate(t.date), amount: t.amount, accountId: t.accountId }));
       }
     }
-    return { entities, options, entity, range, cur, data };
+    return { entities, options, entity, range, cur, data, periodMode };
   });
-  const { entities, options, entity, range, cur, data } = out;
+  const { entities, options, entity, range, cur, data, periodMode } = out;
   const m = (n: number) => money(n, cur, lang);
   const glTx = new Map(((data.glTx as RecatTx[] | undefined) ?? []).map((t) => [t.id, t]));
   const name = (r: { name: string; nameFr: string | null }) => (fr && r.nameFr ? r.nameFr : r.name);
@@ -59,7 +76,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     ["st", fr ? "Taxes de vente" : "Sales taxes"],
   ];
   const href = (over: Partial<Sp>) => {
-    const p = new URLSearchParams({ entity: entity.id, year: String(year), r: report, ...(sp.account ? { account: sp.account } : {}), ...over } as Record<string, string>);
+    const base: Record<string, string | undefined> = { entity: entity.id, year: String(year), r: report, account: sp.account, month: sp.month, from: sp.from, to: sp.to, ...over };
+    const p = new URLSearchParams(Object.entries(base).filter(([, v]) => v) as [string, string][]);
     return `/accounting/reports?${p}`;
   };
 
@@ -174,11 +192,32 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         ))}
         <span className="ml-3 text-soft">{fr ? "Année" : "Year"}:</span>
         {[year + 1, year, year - 1, year - 2].map((y) => (
-          <Link key={y} href={href({ year: String(y) })} className={y === year ? "btn-primary rounded-lg px-3 py-1 font-semibold" : "rounded-lg border border-card-border px-3 py-1 hover:bg-black/5"}>
+          <Link key={y} href={href({ year: String(y), month: "", from: "", to: "" })} className={y === year && periodMode === "year" ? "btn-primary rounded-lg px-3 py-1 font-semibold" : "rounded-lg border border-card-border px-3 py-1 hover:bg-black/5"}>
             {y}
           </Link>
         ))}
       </div>
+      <form method="get" action="/accounting/reports" className="flex flex-wrap items-end gap-3 text-sm">
+        <input type="hidden" name="entity" value={entity.id} />
+        <input type="hidden" name="r" value={report} />
+        <input type="hidden" name="year" value={year} />
+        {sp.account && <input type="hidden" name="account" value={sp.account} />}
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-soft">{fr ? "Un mois" : "A month"}</span>
+          <input type="month" name="month" defaultValue={periodMode === "month" ? sp.month : ""} className="rounded-lg border border-card-border bg-white px-2 py-1.5" />
+        </label>
+        <span className="pb-2 text-soft">{fr ? "ou un intervalle :" : "or an interval:"}</span>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-soft">{fr ? "Du" : "From"}</span>
+          <input type="date" name="from" defaultValue={periodMode === "interval" ? sp.from : ""} className="rounded-lg border border-card-border bg-white px-2 py-1.5" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-soft">{fr ? "Au" : "To"}</span>
+          <input type="date" name="to" defaultValue={periodMode === "interval" ? sp.to : ""} className="rounded-lg border border-card-border bg-white px-2 py-1.5" />
+        </label>
+        <button className="btn-primary rounded-lg px-4 py-1.5 font-semibold">{fr ? "Afficher la période" : "Show period"}</button>
+        {periodMode !== "year" && <Link href={href({ month: "", from: "", to: "" })} className="pb-2 text-soft underline">{fr ? "Retour à l'exercice" : "Back to the fiscal year"}</Link>}
+      </form>
       <div className="flex flex-wrap gap-2 text-sm">
         {tabs.map(([k, label]) => (
           <Link key={k} href={href({ r: k })} className={k === report ? "rounded-lg bg-ink px-3 py-1 font-medium text-white" : "rounded-lg border border-card-border px-3 py-1 text-ink hover:bg-black/5"}>
