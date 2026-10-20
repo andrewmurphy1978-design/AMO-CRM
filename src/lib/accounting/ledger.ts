@@ -46,7 +46,7 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
 
 export async function createEntity(
   db: PrismaClient,
-  input: { name: string; kind: EntityKind; country?: string; province?: string | null; currency?: string; fiscalYearEndMonth?: number; basis?: string; salesTaxRegistered?: boolean; legalName?: string; taxNumber?: string }
+  input: { name: string; kind: EntityKind; country?: string; province?: string | null; currency?: string; fiscalYearEndMonth?: number; basis?: string; salesTaxRegistered?: boolean; legalName?: string; taxNumber?: string; taxNumbers?: unknown }
 ) {
   const d = entityDefaults(input.kind);
   const order = await db.accEntity.count();
@@ -62,6 +62,7 @@ export async function createEntity(
       salesTaxRegistered: input.salesTaxRegistered ?? false,
       legalName: input.legalName ?? null,
       taxNumber: input.taxNumber ?? null,
+      taxNumbers: (input.taxNumbers as never) ?? undefined,
       order,
     },
   });
@@ -85,7 +86,7 @@ async function nextCode(db: PrismaClient, entityId: string, from: number, to: nu
 
 export async function createBankAccount(
   db: PrismaClient,
-  input: { entityId: string; name: string; kind: "CHEQUING" | "SAVINGS" | "CREDIT_CARD"; institution?: string; last4?: string; importSign?: number; currency?: string }
+  input: { entityId: string; name: string; kind: "CHEQUING" | "SAVINGS" | "CREDIT_CARD"; institution?: string; last4?: string; importSign?: number; currency?: string; nameFr?: string }
 ) {
   const card = input.kind === "CREDIT_CARD";
   const code = card ? await nextCode(db, input.entityId, 2010, 2099) : await nextCode(db, input.entityId, 1010, 1099);
@@ -94,6 +95,7 @@ export async function createBankAccount(
       entityId: input.entityId,
       code,
       name: input.name,
+      nameFr: input.nameFr ?? null,
       type: card ? "LIABILITY" : "ASSET",
       subtype: card ? "CREDIT_CARD" : "BANK",
       institution: input.institution ?? null,

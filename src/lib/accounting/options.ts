@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { readTaxNumbers, type TaxNumber } from "./tax-numbers";
 
 // What the pages and pickers need to know about the books: entities, and every account that can be chosen as
 // the "other side" of a transaction (each grouped under its entity).
@@ -14,6 +15,7 @@ export interface EntityInfo {
   basis: string;
   salesTaxRegistered: boolean;
   taxNumber: string | null;
+  taxNumbers: TaxNumber[];
 }
 
 export interface AccountOption {
@@ -50,7 +52,7 @@ export async function loadBooks(db: PrismaClient): Promise<{ entities: EntityInf
   });
   options.sort((x, y) => GROUP_ORDER.indexOf(x.group) - GROUP_ORDER.indexOf(y.group) || x.code.localeCompare(y.code));
   return {
-    entities: entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, country: e.country, province: e.province, currency: e.currency, fiscalYearEndMonth: e.fiscalYearEndMonth, basis: e.basis, salesTaxRegistered: e.salesTaxRegistered, taxNumber: e.taxNumber })),
+    entities: entities.map((e) => ({ id: e.id, name: e.name, kind: e.kind, country: e.country, province: e.province, currency: e.currency, fiscalYearEndMonth: e.fiscalYearEndMonth, basis: e.basis, salesTaxRegistered: e.salesTaxRegistered, taxNumber: e.taxNumber, taxNumbers: readTaxNumbers(e.taxNumbers, e.taxNumber, e.country) })),
     options,
   };
 }

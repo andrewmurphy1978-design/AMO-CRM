@@ -21,7 +21,7 @@ export default async function ImportPage() {
           <Link href="/accounting/setup" className="underline">{fr ? "Configuration" : "Setup"}</Link>.
         </div>
       ) : (
-        <ImportForm lang={lang} accounts={banks.map((b) => ({ id: b.id, label: `${b.entity.name} — ${b.name}${b.last4 ? ` ••${b.last4}` : ""}`, card: b.subtype === "CREDIT_CARD", currency: b.currency ?? b.entity.currency, entityCurrency: b.entity.currency }))} />
+        <ImportForm lang={lang} accounts={banks.map((b) => ({ id: b.id, label: `${b.entity.name} — ${fr && b.nameFr ? b.nameFr : b.name}${b.last4 ? ` ••${b.last4}` : ""}`, card: b.subtype === "CREDIT_CARD", currency: b.currency ?? b.entity.currency, entityCurrency: b.entity.currency }))} />
       )}
       {batches.length > 0 && (
         <section className="rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">

@@ -2063,6 +2063,8 @@ model AccEntity {
   salesTaxRegistered Boolean       @default(false)
   legalName          String?
   taxNumber          String? // NEQ / business number / EIN
+  // Every registration number the entity holds: [{ type, number, region? }] (see src/lib/accounting/tax-numbers.ts).
+  taxNumbers         Json?
   order              Int           @default(0)
   archived           Boolean       @default(false)
   createdAt          DateTime      @default(now())

@@ -64,7 +64,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       lang={lang}
       entities={data.books.entities}
       options={data.books.options}
-      banks={data.banks.map((b) => ({ id: b.id, name: b.name + (b.last4 ? ` ••${b.last4}` : ""), entityId: b.entityId }))}
+      banks={data.banks.map((b) => ({ id: b.id, name: (lang === "fr" && b.nameFr ? b.nameFr : b.name) + (b.last4 ? ` ••${b.last4}` : ""), entityId: b.entityId }))}
       pending={data.pending}
       done={data.done}
       doneCount={data.doneCount}

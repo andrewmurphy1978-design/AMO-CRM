@@ -19,6 +19,7 @@ import {
 import type { EntityKind } from "@/lib/accounting/charts";
 import { r2 } from "@/lib/accounting/posting";
 import { suggestForSuppliers, readPdfStatement, type AiAccountOption } from "@/lib/accounting/ai";
+import { parseTaxNumbers } from "@/lib/accounting/tax-numbers";
 import { supplierKey } from "@/lib/accounting/supplier";
 
 // Accounting holds personal bank data: admin only, like every other stored secret in this app.
@@ -57,7 +58,7 @@ export async function addEntity(_prev: Result | undefined, formData: FormData): 
       name,
       kind,
       province: String(formData.get("province") ?? "").trim() || undefined,
-      taxNumber: String(formData.get("taxNumber") ?? "").trim() || undefined,
+      taxNumbers: parseTaxNumbers(formData),
       salesTaxRegistered: formData.get("salesTaxRegistered") === "on",
       fiscalYearEndMonth: Number(formData.get("fiscalYearEndMonth") ?? 12) || 12,
     })
@@ -74,7 +75,8 @@ export async function updateEntity(id: string, _prev: Result | undefined, formDa
       data: {
         name: String(formData.get("name") ?? "").trim() || undefined,
         province: String(formData.get("province") ?? "").trim() || null,
-        taxNumber: String(formData.get("taxNumber") ?? "").trim() || null,
+        taxNumber: null,
+        taxNumbers: parseTaxNumbers(formData) as never,
         salesTaxRegistered: formData.get("salesTaxRegistered") === "on",
         basis: String(formData.get("basis") ?? "CASH") === "ACCRUAL" ? "ACCRUAL" : "CASH",
         fiscalYearEndMonth: Number(formData.get("fiscalYearEndMonth") ?? 12) || 12,
@@ -100,6 +102,7 @@ export async function addBankAccount(_prev: Result | undefined, formData: FormDa
       last4: String(formData.get("last4") ?? "").trim() || undefined,
       importSign: formData.get("invertSign") === "on" ? -1 : 1,
       currency: cleanCurrency(formData.get("currency")),
+      nameFr: String(formData.get("nameFr") ?? "").trim() || undefined,
     })
   );
   refresh();
@@ -119,6 +122,7 @@ export async function updateBankAccount(id: string, _prev: Result | undefined, f
         last4: String(formData.get("last4") ?? "").trim() || null,
         importSign: formData.get("invertSign") === "on" ? -1 : 1,
         currency: cleanCurrency(formData.get("currency")),
+        nameFr: String(formData.get("nameFr") ?? "").trim() || null,
       },
     })
   );
