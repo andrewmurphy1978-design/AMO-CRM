@@ -6,6 +6,8 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import { loadProposalPdfData } from "@/lib/document-data";
+import { afterAccept } from "@/lib/proposal-after-accept";
+import { getStripeConfig } from "@/lib/stripe";
 import ConvertToInvoiceButton from "./convert-to-invoice-button";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -26,7 +28,7 @@ export default async function ProposalDetailPage({
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
-  const { project, proposal } = await withScopedPrismaClient(async (db) => {
+  const { project, proposal, payment } = await withScopedPrismaClient(async (db) => {
     const project = await db.project.findUnique({ where: { id }, include: { contact: true } });
     const proposal = await db.proposal.findUnique({
       where: { id: proposalId },
@@ -37,7 +39,10 @@ export default async function ProposalDetailPage({
         invoices: true,
       },
     });
-    return { project, proposal };
+    // How the client can pay (Interac / card), for the "After you accept" steps.
+    const billing = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
+    const payment = { interac: Boolean(billing.interacEmail), card: Boolean(billing.cardPaymentUrl) || Boolean(await getStripeConfig(db)) };
+    return { project, proposal, payment };
   });
 
   if (!project || !proposal || proposal.projectId !== id) notFound();
@@ -46,6 +51,22 @@ export default async function ProposalDetailPage({
   const money = (n: number) => `${n.toFixed(2)} ${proposal.currency}`;
   // The same data the PDF is built from, so the sectioned page mirrors it.
   const sd = sectioned ? ((await withScopedPrismaClient((db) => loadProposalPdfData(db, id, proposalId)))?.data ?? null) : null;
+  // Shown in the proposal's own language (the client's), like the PDF it mirrors.
+  const after = afterAccept((project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en", { sectioned, payment, validDays: 30 });
+  const afterCard = (
+    <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+      <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+      <h2 className="font-display text-lg font-semibold text-ink">{after.title}</h2>
+      <ol className="mt-3 space-y-3">
+        {after.steps.map((step, i) => (
+          <li key={i} className="flex gap-3">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-[#2ecc71] text-xs font-bold text-[#0d2b1a]">{i + 1}</span>
+            <p className="text-sm text-ink">{step}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
   const sectionTexts = (tpl: string, vars: Record<string, string>) => tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
 
   return (
@@ -285,7 +306,13 @@ export default async function ProposalDetailPage({
                 </li>
               ))}
             </ul>
-            <h3 className={"mt-5 border-b border-card-border pb-1 text-sm font-semibold text-ink"}>{t.proposals.acceptAllTitle}</h3>
+          </section>
+
+          {afterCard}
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.acceptAllTitle}</h2>
             <p className="mt-2 text-sm text-ink">{t.proposals.acceptAllBody}</p>
             <SignatureLines t={t} />
           </section>
@@ -377,6 +404,7 @@ export default async function ProposalDetailPage({
         </section>
       )}
 
+      {afterCard}
         </>
       )}
 
