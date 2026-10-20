@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAccountingUser } from "./session";
 import Card from "@/components/section-card";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -8,6 +9,7 @@ import { fiscalYearRange, incomeStatement, salesTaxReport, smallSupplierStatus }
 import { money } from "@/lib/accounting/format";
 
 export default async function AccountingOverview({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
+  const me = await requireAccountingUser();
   const { year: yearParam } = await searchParams;
   const lang = await getLang();
   const fr = lang === "fr";
@@ -15,11 +17,11 @@ export default async function AccountingOverview({ searchParams }: { searchParam
   const year = Number(yearParam) || now.getUTCFullYear();
 
   const data = await withScopedPrismaClient(async (db) => {
-    await ensureAccountingSetup(db);
-    const { entities } = await loadBooks(db);
+    await ensureAccountingSetup(db, me);
+    const { entities } = await loadBooks(db, me.id);
     const [toCategorize, suggested] = await Promise.all([
-      db.accTransaction.count({ where: { status: "NEW" } }),
-      db.accTransaction.count({ where: { status: "SUGGESTED" } }),
+      db.accTransaction.count({ where: { status: "NEW", account: { entity: { ownerId: me.id } } } }),
+      db.accTransaction.count({ where: { status: "SUGGESTED", account: { entity: { ownerId: me.id } } } }),
     ]);
     const cards = [];
     for (const e of entities) {

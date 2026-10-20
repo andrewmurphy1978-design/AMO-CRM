@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { accountingUserFor } from "@/lib/accounting/access";
+import { withScopedPrismaClient } from "@/lib/prisma";
 import { isPersonalSectionUser } from "@/lib/personal-watch";
 import AppShell from "./app-shell";
 import { LangProvider } from "@/components/lang-context";
@@ -26,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const lang = await getLang();
   const t = getDict(lang);
+  const accountingUser = await withScopedPrismaClient((db) => accountingUserFor(db, session));
   const NAV_ITEMS = [
     { href: "/", label: t.nav.dashboard },
     { href: "/email", label: t.nav.email },
@@ -38,7 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/contacts", label: t.nav.contacts },
     { href: "/projects", label: t.nav.projects },
     { href: "/invoices", label: t.nav.invoices },
-    ...(session.user.role === "ADMIN" ? [{ href: "/accounting", label: t.nav.accounting }] : []),
+    ...(accountingUser ? [{ href: "/accounting", label: t.nav.accounting }] : []),
     { href: "/marketing", label: t.nav.marketing },
     { href: "/social-analytics", label: t.nav.socialAnalytics },
     { href: "/bookings", label: t.nav.bookings },

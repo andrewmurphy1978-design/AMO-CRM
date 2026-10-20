@@ -1,4 +1,5 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccountingUser } from "../session";
 import Card from "@/components/section-card";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
@@ -12,14 +13,15 @@ import SetupLayout, { type SetupSection } from "./setup-layout";
 import AccountEditor from "./account-editor";
 
 export default async function SetupPage() {
+  const me = await requireAccountingUser();
   const lang = await getLang();
   const fr = lang === "fr";
   const { books, rules, banks, entityName, txCounts } = await withScopedPrismaClient(async (db) => {
-    await ensureAccountingSetup(db);
-    const books = await loadBooks(db);
-    const rules = await db.accRule.findMany({ orderBy: [{ hits: "desc" }, { pattern: "asc" }], take: 300 });
-    const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] } }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
-    const counts = await db.accTransaction.groupBy({ by: ["accountId"], _count: { _all: true } });
+    await ensureAccountingSetup(db, me);
+    const books = await loadBooks(db, me.id);
+    const rules = await db.accRule.findMany({ where: { ownerId: me.id }, orderBy: [{ hits: "desc" }, { pattern: "asc" }], take: 300 });
+    const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] }, entity: { ownerId: me.id } }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
+    const counts = await db.accTransaction.groupBy({ by: ["accountId"], where: { account: { entity: { ownerId: me.id } } }, _count: { _all: true } });
     return { books, rules, banks, entityName: new Map(books.entities.map((e) => [e.id, e.name])), txCounts: new Map(counts.map((c) => [c.accountId, c._count._all])) };
   });
   const accName = new Map(books.options.map((o) => [o.id, o.name]));

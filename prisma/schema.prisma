@@ -45,6 +45,8 @@ model User {
   email                      String     @unique
   passwordHash               String
   role                       UserRole   @default(MEMBER)
+  // Team members only (admins always have it): may use the Accounting section, with their own separate books.
+  accountingAccess           Boolean    @default(false)
   phone                      String?
   whatsapp                   String?
   country                    String     @default("CA")
@@ -2065,6 +2067,8 @@ model AccEntity {
   taxNumber          String? // NEQ / business number / EIN
   // Every registration number the entity holds: [{ type, number, region? }] (see src/lib/accounting/tax-numbers.ts).
   taxNumbers         Json?
+  // The user whose books these are (every user, admin or member, has their own; null = not claimed yet).
+  ownerId            String?
   order              Int           @default(0)
   archived           Boolean       @default(false)
   createdAt          DateTime      @default(now())
@@ -2072,6 +2076,7 @@ model AccEntity {
   accounts AccAccount[]
   entries  AccJournalEntry[]
 
+  @@index([ownerId])
   @@map("acc_entities")
 }
 
@@ -2229,12 +2234,15 @@ model AccJournalLine {
 model AccRule {
   id          String   @id @default(cuid())
   // The supplier key (see supplierKey in lib/accounting/supplier.ts) this rule applies to.
-  pattern     String   @unique
+  pattern     String
+  // Remembered suppliers are per user.
+  ownerId     String?
   // [{ entityId, accountId, pct }] — percentages add up to 100 (a phone bill can be 60% business).
   allocations Json
   hits        Int      @default(0)
   createdAt   DateTime @default(now())
 
+  @@unique([ownerId, pattern])
   @@map("acc_rules")
 }
 

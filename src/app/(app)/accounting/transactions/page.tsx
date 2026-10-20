@@ -1,4 +1,5 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccountingUser } from "../session";
 import { getLang } from "@/lib/i18n/get-lang";
 import { loadBooks } from "@/lib/accounting/options";
 import { isoDate } from "@/lib/accounting/format";
@@ -7,15 +8,17 @@ import TransactionsTable, { type TxRow } from "./transactions-table";
 const PAGE = 300;
 
 export default async function TransactionsPage({ searchParams }: { searchParams: Promise<{ account?: string; q?: string; year?: string; show?: string }> }) {
+  const me = await requireAccountingUser();
   const sp = await searchParams;
   const lang = await getLang();
   const year = sp.year ? Number(sp.year) : undefined;
   const q = sp.q?.trim();
 
   const data = await withScopedPrismaClient(async (db) => {
-    const books = await loadBooks(db);
-    const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] }, archived: false }, orderBy: { code: "asc" } });
+    const books = await loadBooks(db, me.id);
+    const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] }, archived: false, entity: { ownerId: me.id } }, orderBy: { code: "asc" } });
     const base = {
+      account: { entity: { ownerId: me.id } },
       ...(sp.account ? { accountId: sp.account } : {}),
       ...(q ? { OR: [{ supplier: { contains: q, mode: "insensitive" as const } }, { description: { contains: q, mode: "insensitive" as const } }] } : {}),
       ...(year ? { date: { gte: new Date(Date.UTC(year, 0, 1)), lte: new Date(Date.UTC(year, 11, 31)) } } : {}),

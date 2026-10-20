@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAccountingUser } from "../session";
 import Card from "@/components/section-card";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -17,6 +18,7 @@ function monthOptions(): string[] {
 }
 
 export default async function ReconcilePage({ searchParams }: { searchParams: Promise<{ account?: string; month?: string }> }) {
+  const me = await requireAccountingUser();
   const sp = await searchParams;
   const lang = await getLang();
   const fr = lang === "fr";
@@ -24,8 +26,8 @@ export default async function ReconcilePage({ searchParams }: { searchParams: Pr
   const month = sp.month && months.includes(sp.month) ? sp.month : months[1];
 
   const data = await withScopedPrismaClient(async (db) => {
-    await ensureAccountingSetup(db);
-    const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] }, archived: false }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
+    await ensureAccountingSetup(db, me);
+    const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] }, archived: false, entity: { ownerId: me.id } }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
     if (banks.length === 0) return { banks, summary: null, history: [] };
     const accountId = banks.find((b) => b.id === sp.account)?.id ?? banks[0].id;
     const summary = await reconcileSummary(db, accountId, month);

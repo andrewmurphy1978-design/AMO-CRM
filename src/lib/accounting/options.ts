@@ -40,8 +40,8 @@ export interface AccountOption {
 
 const GROUP_ORDER = ["EXPENSE", "INCOME", "TRANSFER", "LIABILITY", "ASSET", "EQUITY"] as const;
 
-export async function loadBooks(db: PrismaClient): Promise<{ entities: EntityInfo[]; options: AccountOption[] }> {
-  const entities = await db.accEntity.findMany({ where: { archived: false }, orderBy: { order: "asc" } });
+export async function loadBooks(db: PrismaClient, ownerId: string): Promise<{ entities: EntityInfo[]; options: AccountOption[] }> {
+  const entities = await db.accEntity.findMany({ where: { archived: false, ownerId }, orderBy: { order: "asc" } });
   const accounts = await db.accAccount.findMany({ where: { archived: false, entityId: { in: entities.map((e) => e.id) } }, orderBy: [{ code: "asc" }] });
   const byId = new Map(accounts.map((a) => [a.id, a]));
   const options: AccountOption[] = accounts.map((a) => {

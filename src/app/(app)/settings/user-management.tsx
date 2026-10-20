@@ -15,6 +15,7 @@ type TeamUser = {
   whatsapp: string | null;
   country: string;
   language: "EN" | "FR";
+  accountingAccess?: boolean;
 };
 
 const FIELD_CLASS =
@@ -191,6 +192,19 @@ export default function UserManagement({
               <option value="MEMBER">{t.team.member}</option>
               <option value="ADMIN">{t.team.admin}</option>
             </select>
+          </div>
+          <div className="sm:col-span-2 rounded-md border border-card-border bg-field-bg/40 p-3">
+            <label className="flex items-start gap-2 text-sm text-ink">
+              <input type="checkbox" name="accountingAccess" defaultChecked={selected?.accountingAccess ?? false} className="mt-0.5 accent-amo-lime" />
+              <span>
+                <span className="font-semibold">{lang === "fr" ? "Comptabilité personnelle" : "Personal accounting"}</span>
+                <span className="block text-xs text-soft">
+                  {lang === "fr"
+                    ? "Donne accès à la section Comptabilité, avec ses propres livres personnels (séparés des vôtres). Les administrateurs y ont toujours accès."
+                    : "Gives access to the Accounting section with their own personal books, separate from yours. Admins always have access."}
+                </span>
+              </span>
+            </label>
           </div>
           <div>
             <label className={LABEL_CLASS}>{t.team.language}</label>

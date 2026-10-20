@@ -1,4 +1,5 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccountingUser } from "../session";
 import Card from "@/components/section-card";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
@@ -8,13 +9,14 @@ import JournalForm from "./journal-form";
 import DeleteEntryButton from "./delete-entry-button";
 
 export default async function JournalPage() {
+  const me = await requireAccountingUser();
   const lang = await getLang();
   const fr = lang === "fr";
   const { books, entries } = await withScopedPrismaClient(async (db) => {
-    await ensureAccountingSetup(db);
-    const books = await loadBooks(db);
+    await ensureAccountingSetup(db, me);
+    const books = await loadBooks(db, me.id);
     const entries = await db.accJournalEntry.findMany({
-      where: { source: { in: ["MANUAL", "OPENING"] } },
+      where: { source: { in: ["MANUAL", "OPENING"] }, entity: { ownerId: me.id } },
       orderBy: { date: "desc" },
       take: 100,
       include: { entity: true, lines: { include: { account: true } } },

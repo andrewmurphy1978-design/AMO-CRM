@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { requireAccountingUser } from "../session";
 import Card from "@/components/section-card";
 import Link from "next/link";
 import { withScopedPrismaClient } from "@/lib/prisma";
@@ -12,6 +13,7 @@ import { isoDate, money } from "@/lib/accounting/format";
 type Sp = { entity?: string; year?: string; r?: string; account?: string };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<Sp> }) {
+  const me = await requireAccountingUser();
   const sp = await searchParams;
   const lang = await getLang();
   const fr = lang === "fr";
@@ -19,8 +21,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const year = Number(sp.year) || new Date().getUTCFullYear();
 
   const out = await withScopedPrismaClient(async (db) => {
-    await ensureAccountingSetup(db);
-    const { entities, options } = await loadBooks(db);
+    await ensureAccountingSetup(db, me);
+    const { entities, options } = await loadBooks(db, me.id);
     const entity = entities.find((e) => e.id === sp.entity) ?? entities[0];
     const range = fiscalYearRange(entity.fiscalYearEndMonth, year);
     const cur = entity.currency;
@@ -31,7 +33,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     else if (report === "tax") data.tax = await taxSummary(db, entity.id, range.from, range.to);
     else if (report === "st") data.st = await salesTaxReport(db, entity.id, range.from, range.to);
     else if (report === "gl") {
-      const accountId = sp.account ?? options.find((o) => o.entityId === entity.id && !o.bank)?.id;
+      const accountId = options.find((o) => o.id === sp.account && o.entityId === entity.id)?.id ?? options.find((o) => o.entityId === entity.id && !o.bank)?.id;
       if (accountId) data.gl = await generalLedger(db, accountId, range.from, range.to);
     }
     return { entities, options, entity, range, cur, data };

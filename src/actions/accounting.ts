@@ -21,14 +21,30 @@ import { r2 } from "@/lib/accounting/posting";
 import { suggestForSuppliers, keywordAccountCode, readPdfStatement, type AiAccountOption } from "@/lib/accounting/ai";
 import { suggestGifi, usesGifi } from "@/lib/accounting/charts";
 import { parseTaxNumbers } from "@/lib/accounting/tax-numbers";
+import { accountingUserFor, type AccountingUser } from "@/lib/accounting/access";
 import { assertUnlocked, monthRange, reconcileSummary } from "@/lib/accounting/reconcile";
 import { supplierKey } from "@/lib/accounting/supplier";
 
-// Accounting holds personal bank data: admin only, like every other stored secret in this app.
-async function requireAdmin() {
+// Accounting holds personal bank data: admins, and team members who were given access. Each user has their own
+// books, so every id received from the browser is checked to belong to the signed-in user before it is used.
+async function access(): Promise<AccountingUser> {
   const session = await auth();
-  if (!session || session.user.role !== "ADMIN") throw new Error("Only admins can use Accounting");
-  return session;
+  const me = await withScopedPrismaClient((db) => accountingUserFor(db, session));
+  if (!me) throw new Error("Accounting is not enabled for your account");
+  return me;
+}
+
+type Db = import("@/lib/prisma").PrismaClient;
+const deny = () => new Error("Not found");
+async function ownEntity(db: Db, me: AccountingUser, id: string) {
+  if (!id || (await db.accEntity.count({ where: { id, ownerId: me.id } })) === 0) throw deny();
+}
+async function ownAccount(db: Db, me: AccountingUser, id: string) {
+  if (!id || (await db.accAccount.count({ where: { id, entity: { ownerId: me.id } } })) === 0) throw deny();
+}
+async function ownTxIds(db: Db, me: AccountingUser, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  return (await db.accTransaction.findMany({ where: { id: { in: ids }, account: { entity: { ownerId: me.id } } }, select: { id: true } })).map((t) => t.id);
 }
 
 // "" or the entity's own currency means "same as the entity" (stored as null by the caller's comparison below).
@@ -44,19 +60,21 @@ type Result = { error?: string; success?: string };
 // ---------------------------------------------------------------- setup
 
 export async function setupAccounting(): Promise<void> {
-  await requireAdmin();
-  await withScopedPrismaClient((db) => ensureAccountingSetup(db));
+  const me = await access();
+  await withScopedPrismaClient((db) => ensureAccountingSetup(db, me));
   refresh();
 }
 
 export async function addEntity(_prev: Result | undefined, formData: FormData): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const name = String(formData.get("name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "") as EntityKind;
   if (!name) return { error: "Enter a name." };
   if (!["PERSONAL", "SOLE_PROPRIETORSHIP", "CORPORATION", "LLC"].includes(kind)) return { error: "Choose a type." };
+  if (!me.admin) return { error: "Your account has personal accounting only." };
   await withScopedPrismaClient((db) =>
     createEntity(db, {
+      ownerId: me.id,
       name,
       kind,
       province: String(formData.get("province") ?? "").trim() || undefined,
@@ -70,9 +88,10 @@ export async function addEntity(_prev: Result | undefined, formData: FormData): 
 }
 
 export async function updateEntity(id: string, _prev: Result | undefined, formData: FormData): Promise<Result> {
-  await requireAdmin();
-  await withScopedPrismaClient((db) =>
-    db.accEntity.update({
+  const me = await access();
+  await withScopedPrismaClient(async (db) => {
+    await ownEntity(db, me, id);
+    return db.accEntity.update({
       where: { id },
       data: {
         name: String(formData.get("name") ?? "").trim() || undefined,
@@ -83,20 +102,21 @@ export async function updateEntity(id: string, _prev: Result | undefined, formDa
         basis: String(formData.get("basis") ?? "CASH") === "ACCRUAL" ? "ACCRUAL" : "CASH",
         fiscalYearEndMonth: Number(formData.get("fiscalYearEndMonth") ?? 12) || 12,
       },
-    })
-  );
+    });
+  });
   refresh();
   return { success: "Saved." };
 }
 
 export async function addBankAccount(_prev: Result | undefined, formData: FormData): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const entityId = String(formData.get("entityId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "CHEQUING");
   if (!entityId || !name) return { error: "Choose whose account it is and name it." };
-  await withScopedPrismaClient((db) =>
-    createBankAccount(db, {
+  await withScopedPrismaClient(async (db) => {
+    await ownEntity(db, me, entityId);
+    return createBankAccount(db, {
       entityId,
       name,
       kind,
@@ -105,18 +125,19 @@ export async function addBankAccount(_prev: Result | undefined, formData: FormDa
       importSign: formData.get("invertSign") === "on" ? -1 : 1,
       currency: cleanCurrency(formData.get("currency")),
       nameFr: String(formData.get("nameFr") ?? "").trim() || undefined,
-    })
-  );
+    });
+  });
   refresh();
   return { success: "Account added." };
 }
 
 export async function updateBankAccount(id: string, _prev: Result | undefined, formData: FormData): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Enter a name." };
-  await withScopedPrismaClient((db) =>
-    db.accAccount.update({
+  await withScopedPrismaClient(async (db) => {
+    await ownAccount(db, me, id);
+    return db.accAccount.update({
       where: { id },
       data: {
         name,
@@ -126,15 +147,16 @@ export async function updateBankAccount(id: string, _prev: Result | undefined, f
         currency: cleanCurrency(formData.get("currency")),
         nameFr: String(formData.get("nameFr") ?? "").trim() || null,
       },
-    })
-  );
+    });
+  });
   refresh();
   return { success: "Saved." };
 }
 
 export async function deleteBankAccount(id: string): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const result = await withScopedPrismaClient(async (db) => {
+    await ownAccount(db, me, id);
     const [txs, lines] = await Promise.all([db.accTransaction.count({ where: { accountId: id } }), db.accJournalLine.count({ where: { accountId: id } })]);
     if (txs > 0 || lines > 0) return { error: "This account has transactions, so it cannot be deleted. You can edit its details instead." };
     await db.accImportBatch.deleteMany({ where: { accountId: id } });
@@ -165,16 +187,18 @@ function sectionSubtype(section: string, type: string): string {
 }
 
 export async function setAccountSection(id: string, section: string | null): Promise<void> {
-  await requireAdmin();
+  const me = await access();
   const valid = ["TREASURY", "CURRENT", "LONG_TERM", "FIXED", "INTANGIBLE", "SHORT_TERM"];
-  await withScopedPrismaClient((db) => db.accAccount.update({ where: { id }, data: { section: section && valid.includes(section) ? section : null } }));
+  await withScopedPrismaClient(async (db) => { await ownAccount(db, me, id); return db.accAccount.update({ where: { id }, data: { section: section && valid.includes(section) ? section : null } }); });
   refresh();
 }
 
 /** Makes an account a sub-category of another (same entity and type, one level), or a top-level account again. */
 export async function setAccountParent(id: string, parentId: string | null): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const result = await withScopedPrismaClient(async (db) => {
+    await ownAccount(db, me, id);
+    if (parentId) await ownAccount(db, me, parentId);
     const acc = await db.accAccount.findUniqueOrThrow({ where: { id }, include: { children: { select: { id: true } } } });
     if (parentId) {
       const parent = await db.accAccount.findUniqueOrThrow({ where: { id: parentId } });
@@ -192,24 +216,24 @@ export async function setAccountParent(id: string, parentId: string | null): Pro
 }
 
 export async function setAccountNames(id: string, name: string, nameFr: string): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   if (!name.trim()) return { error: "The English name cannot be empty." };
-  await withScopedPrismaClient((db) => db.accAccount.update({ where: { id }, data: { name: name.trim(), nameFr: nameFr.trim() || null } }));
+  await withScopedPrismaClient(async (db) => { await ownAccount(db, me, id); return db.accAccount.update({ where: { id }, data: { name: name.trim(), nameFr: nameFr.trim() || null } }); });
   refresh();
   return {};
 }
 
 export async function setAccountGifi(id: string, gifi: string): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const code = gifi.trim();
   if (code && !/^\d{4}$/.test(code)) return { error: "A GIFI code has 4 digits." };
-  await withScopedPrismaClient((db) => db.accAccount.update({ where: { id }, data: { gifi: code || null } }));
+  await withScopedPrismaClient(async (db) => { await ownAccount(db, me, id); return db.accAccount.update({ where: { id }, data: { gifi: code || null } }); });
   refresh();
   return {};
 }
 
 export async function addAccount(_prev: Result | undefined, formData: FormData): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const entityId = String(formData.get("entityId") ?? "");
   const code = String(formData.get("code") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
@@ -217,12 +241,14 @@ export async function addAccount(_prev: Result | undefined, formData: FormData):
   if (!entityId || !code || !name) return { error: "Enter a code and a name." };
   if (!["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"].includes(type)) return { error: "Choose a type." };
   try {
-    await withScopedPrismaClient(async (db) =>
-      db.accAccount.create({
+    await withScopedPrismaClient(async (db) => {
+      await ownEntity(db, me, entityId);
+      return db.accAccount.create({
         data: { entityId, code, name, type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : sectionSubtype(String(formData.get("section") ?? ""), type), taxLine: String(formData.get("taxLine") ?? "").trim() || null, gifi: /^\d{4}$/.test(String(formData.get("gifi") ?? "").trim()) ? String(formData.get("gifi")).trim() : await autoGifi(db, entityId, code, name, type, sectionSubtype(String(formData.get("section") ?? ""), type)), parentId: await validParent(db, entityId, type, String(formData.get("parentId") ?? "")) },
-      })
-    );
-  } catch {
+      });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Not found") throw error;
     return { error: "That code is already used in this entity's chart." };
   }
   refresh();
@@ -231,27 +257,28 @@ export async function addAccount(_prev: Result | undefined, formData: FormData):
 
 /** Sets the exchange rate of not-yet-categorized transactions in a foreign-currency account. */
 export async function setFxRate(txIds: string[], rate: number): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   if (!(rate > 0)) return { error: "Enter a rate above 0." };
-  await withScopedPrismaClient((db) => db.accTransaction.updateMany({ where: { id: { in: txIds }, status: { in: ["NEW", "SUGGESTED"] } }, data: { fxRate: rate } }));
+  await withScopedPrismaClient(async (db) => { const ids = await ownTxIds(db, me, txIds); return db.accTransaction.updateMany({ where: { id: { in: ids }, status: { in: ["NEW", "SUGGESTED"] } }, data: { fxRate: rate } }); });
   refresh();
   return { success: "Rate saved." };
 }
 
 export async function deleteRule(id: string): Promise<void> {
-  await requireAdmin();
-  await withScopedPrismaClient((db) => db.accRule.delete({ where: { id } }));
+  const me = await access();
+  await withScopedPrismaClient((db) => db.accRule.deleteMany({ where: { id, ownerId: me.id } }));
   refresh();
 }
 
 // ---------------------------------------------------------------- import
 
 export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1, format?: { signature: string; map: unknown } | null): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number } }> {
-  await requireAdmin();
+  const me = await access();
   if (rows.length === 0) return { error: "There is nothing to import." };
   if (rows.length > 20000) return { error: "That file is too large — import it in parts." };
   try {
     const counts = await withScopedPrismaClient(async (db) => {
+      await ownAccount(db, me, accountId);
       const c = await importTransactions(db, accountId, rows, fileName, fxRate);
       // Remember how this account's statements are laid out (columns, date order) for the next import.
       if (format) await db.accAccount.update({ where: { id: accountId }, data: { importFormat: format as never } });
@@ -266,9 +293,10 @@ export async function importStatement(accountId: string, rows: ImportRow[], file
 
 // A PDF statement: the AI reads it and returns the rows for the user to check before importing.
 export async function readStatementPdf(accountId: string, base64: string): Promise<{ rows?: ImportRow[]; warning?: string; error?: string }> {
-  await requireAdmin();
+  const me = await access();
   if (base64.length > 9_000_000) return { error: "That PDF is too large (max about 6 MB)." };
   return withScopedPrismaClient(async (db) => {
+    await ownAccount(db, me, accountId);
     const account = await db.accAccount.findUniqueOrThrow({ where: { id: accountId } });
     const out = await readPdfStatement(db, base64, account.subtype === "CREDIT_CARD" ? "CREDIT_CARD" : "BANK");
     if ("error" in out) return { error: out.error };
@@ -287,14 +315,20 @@ export type AllocationPayload = { entityId: string; accountId: string; pct?: num
  * the same way.
  */
 export async function categorizeTransactions(input: { txIds: string[]; allocations: AllocationPayload[]; remember: boolean }): Promise<Result & { posted?: number; autoPosted?: number }> {
-  await requireAdmin();
+  const me = await access();
   if (input.txIds.length === 0 || input.allocations.length === 0) return { error: "Choose an account." };
   const byPct = input.allocations.every((a) => typeof a.pct === "number");
   if (byPct && Math.abs(input.allocations.reduce((s, a) => s + (a.pct ?? 0), 0) - 100) > 0.01) return { error: "The percentages must add up to 100." };
   if (!byPct && input.txIds.length > 1) return { error: "Splitting by amount works on one transaction at a time." };
 
   return withScopedPrismaClient(async (db) => {
-    const txs = await db.accTransaction.findMany({ where: { id: { in: input.txIds } } });
+    // Every transaction and every account chosen must belong to this user.
+    const ownIds = await ownTxIds(db, me, input.txIds);
+    const chosen = [...new Set(input.allocations.map((a) => a.accountId))];
+    const ownChosen = await db.accAccount.findMany({ where: { id: { in: chosen }, entity: { ownerId: me.id } }, select: { id: true, entityId: true } });
+    const entityOf = new Map(ownChosen.map((a) => [a.id, a.entityId]));
+    if (ownChosen.length !== chosen.length || input.allocations.some((a) => entityOf.get(a.accountId) !== a.entityId)) throw deny();
+    const txs = await db.accTransaction.findMany({ where: { id: { in: ownIds } } });
     const items = txs.map((t) => {
       const total = r2(Math.abs(t.amount));
       const allocations = byPct
@@ -317,9 +351,9 @@ export async function categorizeTransactions(input: { txIds: string[]; allocatio
         const key = supplierKey(t.supplier);
         if (!key || seen.has(key)) continue;
         seen.add(key);
-        await saveRule(db, t.supplier, pctRule);
+        await saveRule(db, me.id, t.supplier, pctRule);
       }
-      autoPosted = (await applyRules(db)).posted;
+      autoPosted = (await applyRules(db, me.id)).posted;
     }
     refresh();
     return { success: "Categorized.", posted: res.posted, autoPosted };
@@ -328,8 +362,9 @@ export async function categorizeTransactions(input: { txIds: string[]; allocatio
 
 /** Removes an import and its transactions (posted ones are first taken out of the books). */
 export async function deleteImportBatch(batchId: string): Promise<void> {
-  await requireAdmin();
+  const me = await access();
   await withScopedPrismaClient(async (db) => {
+    if ((await db.accImportBatch.count({ where: { id: batchId, account: { entity: { ownerId: me.id } } } })) === 0) throw deny();
     const ids = (await db.accTransaction.findMany({ where: { batchId }, select: { id: true } })).map((t) => t.id);
     await assertUnlocked(db, ids);
     await unpostTransactions(db, ids);
@@ -340,14 +375,15 @@ export async function deleteImportBatch(batchId: string): Promise<void> {
 }
 
 export async function uncategorizeTransactions(txIds: string[]): Promise<void> {
-  await requireAdmin();
-  await withScopedPrismaClient((db) => unpostTransactions(db, txIds));
+  const me = await access();
+  await withScopedPrismaClient(async (db) => unpostTransactions(db, await ownTxIds(db, me, txIds)));
   refresh();
 }
 
-export async function ignoreTransactions(txIds: string[], ignore: boolean): Promise<void> {
-  await requireAdmin();
+export async function ignoreTransactions(allIds: string[], ignore: boolean): Promise<void> {
+  const me = await access();
   await withScopedPrismaClient(async (db) => {
+    const txIds = await ownTxIds(db, me, allIds);
     await assertUnlocked(db, txIds);
     if (ignore) {
       await unpostTransactions(db, txIds);
@@ -360,22 +396,24 @@ export async function ignoreTransactions(txIds: string[], ignore: boolean): Prom
 }
 
 export async function updateSupplier(txId: string, name: string): Promise<void> {
-  await requireAdmin();
+  const me = await access();
   const clean = name.trim();
   if (!clean) return;
   await withScopedPrismaClient(async (db) => {
+    if ((await ownTxIds(db, me, [txId])).length === 0) throw deny();
     const tx = await db.accTransaction.findUniqueOrThrow({ where: { id: txId } });
     // Renaming applies to every not-yet-categorized transaction of the same supplier.
-    await db.accTransaction.updateMany({ where: { supplier: tx.supplier, status: { in: ["NEW", "SUGGESTED"] } }, data: { supplier: clean } });
+    await db.accTransaction.updateMany({ where: { supplier: tx.supplier, status: { in: ["NEW", "SUGGESTED"] }, account: { entity: { ownerId: me.id } } }, data: { supplier: clean } });
     await db.accTransaction.update({ where: { id: txId }, data: { supplier: clean } });
-    await applyRules(db);
+    await applyRules(db, me.id);
   });
   refresh();
 }
 
-export async function deleteTransactions(txIds: string[]): Promise<void> {
-  await requireAdmin();
+export async function deleteTransactions(allIds: string[]): Promise<void> {
+  const me = await access();
   await withScopedPrismaClient(async (db) => {
+    const txIds = await ownTxIds(db, me, allIds);
     await assertUnlocked(db, txIds);
     await unpostTransactions(db, txIds);
     await db.accTransaction.deleteMany({ where: { id: { in: txIds } } });
@@ -387,10 +425,10 @@ export async function deleteTransactions(txIds: string[]): Promise<void> {
 
 /** Suggests a categorization for every supplier that has none yet (one AI call per 30 suppliers). */
 export async function suggestWithAI(): Promise<Result & { suggested?: number }> {
-  await requireAdmin();
+  const me = await access();
   try {
     return await withScopedPrismaClient(async (db) => {
-      const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] } }, select: { id: true, supplier: true, description: true, amount: true } });
+      const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] }, account: { entity: { ownerId: me.id } } }, select: { id: true, supplier: true, description: true, amount: true } });
       if (open.length === 0) return { success: "Nothing to categorize.", suggested: 0 };
       const groups = new Map<string, { name: string; sample: string; amount: number; count: number; ids: string[] }>();
       for (const t of open) {
@@ -399,7 +437,7 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
         g.ids.push(t.id);
         groups.set(t.supplier, g);
       }
-      const accounts = await db.accAccount.findMany({ where: { archived: false }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
+      const accounts = await db.accAccount.findMany({ where: { archived: false, entity: { ownerId: me.id } }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
       const options: AiAccountOption[] = accounts
         .filter((a) => !a.entity.archived)
         .map((a) => ({ id: a.id, entityId: a.entityId, entityName: a.entity.name, entityKind: a.entity.kind, code: a.code, name: a.name, type: a.type }));
@@ -431,9 +469,9 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
 
 /** Posts the AI / rule suggestions of the given transactions (and remembers each supplier). */
 export async function confirmSuggestions(txIds: string[]): Promise<Result & { posted?: number }> {
-  await requireAdmin();
+  const me = await access();
   return withScopedPrismaClient(async (db) => {
-    const txs = await db.accTransaction.findMany({ where: { id: { in: txIds }, status: "SUGGESTED" } });
+    const txs = await db.accTransaction.findMany({ where: { id: { in: await ownTxIds(db, me, txIds) }, status: "SUGGESTED" } });
     const items = txs.flatMap((t) => {
       const s = t.suggestion as { allocations?: RuleAllocation[] } | null;
       if (!s?.allocations?.length) return [];
@@ -442,9 +480,9 @@ export async function confirmSuggestions(txIds: string[]): Promise<Result & { po
     const res = await postTransactions(db, items);
     for (const t of txs) {
       const s = t.suggestion as { allocations?: RuleAllocation[] } | null;
-      if (s?.allocations?.length) await saveRule(db, t.supplier, s.allocations);
+      if (s?.allocations?.length) await saveRule(db, me.id, t.supplier, s.allocations);
     }
-    const auto = await applyRules(db);
+    const auto = await applyRules(db, me.id);
     refresh();
     return { success: "Confirmed.", posted: res.posted + auto.posted };
   });
@@ -453,7 +491,7 @@ export async function confirmSuggestions(txIds: string[]): Promise<Result & { po
 // ---------------------------------------------------------------- manual entries
 
 export async function addManualEntry(input: { entityId: string; date: string; memo: string; opening?: boolean; lines: { accountId: string; debit: number; credit: number }[] }): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const lines = input.lines.map((l) => ({ ...l, debit: r2(Math.max(0, l.debit || 0)), credit: r2(Math.max(0, l.credit || 0)) })).filter((l) => l.debit > 0 || l.credit > 0);
   const d = r2(lines.reduce((s, l) => s + l.debit, 0));
   const c = r2(lines.reduce((s, l) => s + l.credit, 0));
@@ -462,6 +500,7 @@ export async function addManualEntry(input: { entityId: string; date: string; me
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { error: "Enter a valid date." };
   try {
     await withScopedPrismaClient(async (db) => {
+      await ownEntity(db, me, input.entityId);
       const accs = await db.accAccount.findMany({ where: { id: { in: lines.map((l) => l.accountId) } }, select: { entityId: true } });
       if (accs.some((a) => a.entityId !== input.entityId)) throw new Error("Every line must use an account of the same entity.");
       await db.accJournalEntry.create({
@@ -476,8 +515,8 @@ export async function addManualEntry(input: { entityId: string; date: string; me
 }
 
 export async function deleteManualEntry(id: string): Promise<void> {
-  await requireAdmin();
-  await withScopedPrismaClient((db) => db.accJournalEntry.deleteMany({ where: { id, transactionId: null } }));
+  const me = await access();
+  await withScopedPrismaClient((db) => db.accJournalEntry.deleteMany({ where: { id, transactionId: null, entity: { ownerId: me.id } } }));
   refresh();
 }
 
@@ -485,10 +524,11 @@ export async function deleteManualEntry(id: string): Promise<void> {
 
 /** Locks the month once the statement balance equals what the CRM computed. */
 export async function reconcileMonth(input: { accountId: string; month: string; statementBalance: number; notes?: string }): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   if (!/^\d{4}-\d{2}$/.test(input.month) || !Number.isFinite(input.statementBalance)) return { error: "Enter the statement's closing balance." };
   try {
     const out = await withScopedPrismaClient(async (db) => {
+      await ownAccount(db, me, input.accountId);
       const sum = await reconcileSummary(db, input.accountId, input.month);
       if (Math.abs(r2(input.statementBalance) - sum.computed) > 0.005) return { error: "The balances do not match yet." };
       if (sum.lockedThrough && sum.lockedThrough > sum.periodEnd) return { error: "A later month is already reconciled: unlock it first." };
@@ -509,9 +549,9 @@ export async function reconcileMonth(input: { accountId: string; month: string; 
 
 /** Reopens the latest reconciled month. */
 export async function unlockReconciliation(id: string): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   const result = await withScopedPrismaClient(async (db) => {
-    const rec = await db.accReconciliation.findUniqueOrThrow({ where: { id } });
+    const rec = await db.accReconciliation.findFirstOrThrow({ where: { id, account: { entity: { ownerId: me.id } } } });
     const later = await db.accReconciliation.count({ where: { accountId: rec.accountId, periodEnd: { gt: rec.periodEnd } } });
     if (later > 0) return { error: "Unlock the later months first (latest first)." };
     await db.accReconciliation.delete({ where: { id } });
@@ -523,12 +563,13 @@ export async function unlockReconciliation(id: string): Promise<Result> {
 
 /** Records the account's balance on a date as an opening-balance entry (against the entity's opening-balance equity). */
 export async function setOpeningBalance(input: { accountId: string; date: string; amount: number }): Promise<Result> {
-  await requireAdmin();
+  const me = await access();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !Number.isFinite(input.amount)) return { error: "Enter a date and a balance." };
   const amount = r2(input.amount);
   if (amount === 0) return { error: "The balance is zero: nothing to record." };
   try {
     await withScopedPrismaClient(async (db) => {
+      await ownAccount(db, me, input.accountId);
       const acc = await db.accAccount.findUniqueOrThrow({ where: { id: input.accountId } });
       if (await db.accJournalLine.count({ where: { accountId: acc.id, entry: { source: "OPENING" } } })) throw new Error("This account already has an opening balance (see Journal).");
       const equity = await db.accAccount.findUnique({ where: { entityId_code: { entityId: acc.entityId, code: "3000" } } });

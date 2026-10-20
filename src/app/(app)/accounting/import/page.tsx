@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAccountingUser } from "../session";
 import Card from "@/components/section-card";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
@@ -8,12 +9,13 @@ import type { ColumnMap } from "@/lib/accounting/csv";
 import ImportForm from "./import-form";
 
 export default async function ImportPage() {
+  const me = await requireAccountingUser();
   const lang = await getLang();
   const fr = lang === "fr";
   const { banks, batches } = await withScopedPrismaClient(async (db) => {
-    await ensureAccountingSetup(db);
-    const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] }, archived: false }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
-    const batches = await db.accImportBatch.findMany({ orderBy: { createdAt: "desc" }, take: 8, include: { account: true } });
+    await ensureAccountingSetup(db, me);
+    const banks = await db.accAccount.findMany({ where: { subtype: { in: ["BANK", "CREDIT_CARD"] }, archived: false, entity: { ownerId: me.id } }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
+    const batches = await db.accImportBatch.findMany({ where: { account: { entity: { ownerId: me.id } } }, orderBy: { createdAt: "desc" }, take: 8, include: { account: true } });
     return { banks, batches };
   });
   return (

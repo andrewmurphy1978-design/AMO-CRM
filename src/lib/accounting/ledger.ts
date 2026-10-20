@@ -64,10 +64,10 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
 
 export async function createEntity(
   db: PrismaClient,
-  input: { name: string; kind: EntityKind; country?: string; province?: string | null; currency?: string; fiscalYearEndMonth?: number; basis?: string; salesTaxRegistered?: boolean; legalName?: string; taxNumber?: string; taxNumbers?: unknown }
+  input: { name: string; kind: EntityKind; country?: string; province?: string | null; currency?: string; fiscalYearEndMonth?: number; basis?: string; salesTaxRegistered?: boolean; legalName?: string; taxNumber?: string; taxNumbers?: unknown; ownerId?: string | null }
 ) {
   const d = entityDefaults(input.kind);
-  const order = await db.accEntity.count();
+  const order = await db.accEntity.count({ where: { ownerId: input.ownerId ?? null } });
   const entity = await db.accEntity.create({
     data: {
       name: input.name,
@@ -81,6 +81,7 @@ export async function createEntity(
       legalName: input.legalName ?? null,
       taxNumber: input.taxNumber ?? null,
       taxNumbers: (input.taxNumbers as never) ?? undefined,
+      ownerId: input.ownerId ?? null,
       order,
     },
   });
@@ -88,15 +89,22 @@ export async function createEntity(
   return entity;
 }
 
-/** First visit: the owner's personal books and the sole proprietorship (Andrew Murphy Online). */
-export async function ensureAccountingSetup(db: PrismaClient): Promise<void> {
-  const entities = await db.accEntity.findMany({ select: { id: true } });
+/**
+ * First visit of a user: their own books. Everyone gets a Personal entity; the admin also gets the sole
+ * proprietorship (Andrew Murphy Online). Books created before ownership existed are claimed by the first admin visit.
+ */
+export async function ensureAccountingSetup(db: PrismaClient, user: { id: string; admin: boolean }): Promise<void> {
+  if (user.admin) {
+    await db.accEntity.updateMany({ where: { ownerId: null }, data: { ownerId: user.id } });
+    await db.accRule.updateMany({ where: { ownerId: null }, data: { ownerId: user.id } });
+  }
+  const entities = await db.accEntity.findMany({ where: { ownerId: user.id }, select: { id: true } });
   if (entities.length > 0) {
     for (const e of entities) await ensureEntityChart(db, e.id);
     return;
   }
-  await createEntity(db, { name: "Personal", kind: "PERSONAL" });
-  await createEntity(db, { name: "Andrew Murphy Online", kind: "SOLE_PROPRIETORSHIP", legalName: "Andrew Murphy Online (sole proprietorship)" });
+  await createEntity(db, { name: "Personal", kind: "PERSONAL", ownerId: user.id });
+  if (user.admin) await createEntity(db, { name: "Andrew Murphy Online", kind: "SOLE_PROPRIETORSHIP", legalName: "Andrew Murphy Online (sole proprietorship)", ownerId: user.id });
 }
 
 async function nextCode(db: PrismaClient, entityId: string, from: number, to: number): Promise<string> {
@@ -266,10 +274,10 @@ export async function unpostTransactions(db: PrismaClient, txIds: string[]): Pro
 // ---------------------------------------------------------------- remembered suppliers
 
 /** Remembers how a supplier is categorized: the next transactions from it are posted the same way. */
-export async function saveRule(db: PrismaClient, supplier: string, allocations: RuleAllocation[]): Promise<void> {
+export async function saveRule(db: PrismaClient, ownerId: string, supplier: string, allocations: RuleAllocation[]): Promise<void> {
   const pattern = supplierKey(supplier);
   if (!pattern) return;
-  await db.accRule.upsert({ where: { pattern }, update: { allocations: allocations as never }, create: { pattern, allocations: allocations as never } });
+  await db.accRule.upsert({ where: { ownerId_pattern: { ownerId, pattern } }, update: { allocations: allocations as never }, create: { ownerId, pattern, allocations: allocations as never } });
 }
 
 /** Turns a rule's percentages into amounts for one transaction (the last line takes the rounding cents). */
@@ -284,11 +292,11 @@ export function allocationsFromRule(rule: RuleAllocation[], amount: number): All
 }
 
 /** Posts every not-yet-categorized transaction whose supplier has a remembered rule. */
-export async function applyRules(db: PrismaClient, txIds?: string[]): Promise<{ posted: number; errors: PostResult["errors"] }> {
-  const rules = await db.accRule.findMany();
+export async function applyRules(db: PrismaClient, ownerId: string | null, txIds?: string[]): Promise<{ posted: number; errors: PostResult["errors"] }> {
+  const rules = await db.accRule.findMany({ where: { ownerId } });
   if (rules.length === 0) return { posted: 0, errors: [] };
   const byPattern = new Map(rules.map((r) => [r.pattern, r]));
-  const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] }, ...(txIds ? { id: { in: txIds } } : {}) }, select: { id: true, supplier: true, description: true, amount: true } });
+  const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] }, account: { entity: { ownerId } }, ...(txIds ? { id: { in: txIds } } : {}) }, select: { id: true, supplier: true, description: true, amount: true } });
   const items: PostItem[] = [];
   const used = new Set<string>();
   for (const t of open) {
@@ -392,7 +400,8 @@ export async function importTransactions(db: PrismaClient, accountId: string, ro
     }
   }
 
-  const auto = await applyRules(db, created);
+  const owner = await db.accEntity.findUnique({ where: { id: account.entityId }, select: { ownerId: true } });
+  const auto = await applyRules(db, owner?.ownerId ?? null, created);
   return { rows: rows.length, added: fresh.length, duplicates: rows.length - fresh.length, dateMismatches: sameWithSwappedDate.size, autoPosted: auto.posted, transfersLinked };
 }
 

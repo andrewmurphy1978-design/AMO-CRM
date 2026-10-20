@@ -97,6 +97,7 @@ export async function createUser(
         whatsapp: data.whatsapp,
         country: data.country,
         language: data.language,
+        accountingAccess: formData.get("accountingAccess") === "on",
       },
     });
     return {};
@@ -145,6 +146,7 @@ export async function updateUser(
         country: data.country,
         language: data.language,
         role,
+        accountingAccess: formData.get("accountingAccess") === "on",
       },
     });
     return {};
