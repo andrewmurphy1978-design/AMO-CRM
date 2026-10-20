@@ -85,3 +85,11 @@ export const GROUP_LABEL: Record<AccountOption["group"], { en: string; fr: strin
   ASSET: { en: "Assets", fr: "Actifs" },
   EQUITY: { en: "Equity", fr: "Capitaux propres" },
 };
+
+// Entity card colour: Personal has its own; businesses take the colour of their province / state, and the US another.
+export function entityCardColor(e: { kind: string; country: string; province: string | null }): string {
+  if (e.kind === "PERSONAL") return "personal";
+  if (e.country === "US") return "credentials";
+  const byProvince: Record<string, string> = { QC: "contact", ON: "addresses", BC: "general", AB: "proposals", MB: "billing", SK: "tasks", NS: "calendarEvents", NB: "calendarEvents", PE: "calendarEvents", NL: "calendarEvents", YT: "research", NT: "research", NU: "research" };
+  return byProvince[e.province ?? ""] ?? "techStack";
+}

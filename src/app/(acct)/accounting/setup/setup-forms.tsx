@@ -9,10 +9,10 @@ import type { AccountOption, EntityInfo } from "@/lib/accounting/options";
 
 type Lang = "en" | "fr";
 
-export function AddEntityForm({ lang }: { lang: Lang }) {
+export function AddEntityForm({ lang, onDone }: { lang: Lang; onDone?: () => void }) {
   const fr = lang === "fr";
   return (
-    <ActionForm action={addEntity} submitLabel={fr ? "Créer" : "Create"}>
+    <ActionForm action={addEntity} submitLabel={fr ? "Créer" : "Create"} onDone={onDone}>
       <Field label={fr ? "Nom" : "Name"}><input name="name" required className={inputCls} /></Field>
       <Field label={fr ? "Type" : "Type"}>
         <select name="kind" className={inputCls} defaultValue="CORPORATION">
@@ -48,12 +48,12 @@ export function EditEntityForm({ entity, lang }: { entity: EntityInfo; lang: Lan
   );
 }
 
-export function AddBankForm({ lang, entities }: { lang: Lang; entities: EntityInfo[] }) {
+export function AddBankForm({ lang, entities, defaultEntityId, onDone }: { lang: Lang; entities: EntityInfo[]; defaultEntityId?: string; onDone?: () => void }) {
   const fr = lang === "fr";
   return (
-    <ActionForm action={addBankAccount} submitLabel={fr ? "Ajouter" : "Add"}>
+    <ActionForm action={addBankAccount} submitLabel={fr ? "Ajouter" : "Add"} onDone={onDone}>
       <Field label={fr ? "Appartient à" : "Belongs to"}>
-        <select name="entityId" className={inputCls}>{entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
+        <select name="entityId" defaultValue={defaultEntityId} className={inputCls}>{entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
       </Field>
       <Field label={fr ? "Nom du compte" : "Account name"}><input name="name" required placeholder="Desjardins chequing" className={inputCls} /></Field>
       <Field label={fr ? "Nom en français" : "French name"}><input name="nameFr" placeholder="Desjardins chèques" className={inputCls} /></Field>

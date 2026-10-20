@@ -3,11 +3,11 @@ import { requireAccountingUser } from "../session";
 import Card, { type CardColor } from "@/components/section-card";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
-import { loadBooks, KIND_LABEL } from "@/lib/accounting/options";
-import { AddBankForm, AddEntityForm, EditEntityForm } from "./setup-forms";
+import { entityCardColor, loadBooks } from "@/lib/accounting/options";
 import BankRow from "./bank-row";
 import DeleteRuleButton from "./delete-rule-button";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS, REGISTERED_TYPES, usesGifi } from "@/lib/accounting/charts";
+import AddBankDialog from "./add-bank-dialog";
 import AddAccountDialog from "./add-account-dialog";
 import EntityTabs from "./entity-tabs";
 import SetupLayout, { type SetupSection } from "./setup-layout";
@@ -34,61 +34,70 @@ export default async function SetupPage() {
     { key: "EXPENSE", en: "Expenses", fr: "Dépenses" },
   ];
 
-  const entitiesSection = (
-    <Card color="general" title={<>{fr ? "Entités" : "Entities"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{books.entities.length}</span></>}>
-      <p className="text-sm text-soft">
-        {fr
-          ? "Chaque entité a ses propres livres (actifs, passifs, capitaux propres, revenus, dépenses). Les transactions entre entités passent par des comptes inter-entités / prêt d'actionnaire, comme un comptable le ferait."
-          : "Each entity has its own books (assets, liabilities, equity, income, expenses). Money between entities goes through inter-entity / shareholder-loan accounts, the way an accountant would do it."}
-      </p>
-      {books.entities.map((e) => (
-        <div key={e.id} className="space-y-2 rounded-lg border border-card-border p-3">
-          <p className="text-sm font-semibold text-ink">{e.name} <span className="font-normal text-soft">· {KIND_LABEL[e.kind]?.[lang] ?? e.kind} · {e.country}</span></p>
-          <EditEntityForm entity={e} lang={lang} />
-        </div>
-      ))}
-      <details className="rounded-lg border border-card-border p-3">
-        <summary className="cursor-pointer text-sm font-medium text-ink">{fr ? "+ Ajouter une société / LLC" : "+ Add a corporation / LLC"}</summary>
-        <div className="mt-3"><AddEntityForm lang={lang} /></div>
-      </details>
-    </Card>
-  );
-
   const banksSection = (
-    <Card color="contact" title={<>{fr ? "Comptes bancaires, cartes et comptes enregistrés" : "Bank accounts, cards and registered accounts"} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{banks.length}</span></>}>
-      <p className="text-xs text-soft">
-        {fr
-          ? "Comptes chèques, épargne, cartes de crédit, CELI, REER, CELIAPP, REEE, comptes de placement, CRI, FERR et FRV : tous peuvent recevoir des relevés importés."
-          : "Chequing, savings, credit cards, TFSA, RRSP, FHSA, RESP, investment accounts, LIRA, RRIF and LIF: all can receive imported statements."}
-      </p>
-      <EntityTabs
-        tabs={books.entities.map((e) => ({
+    <EntityTabs
+      tabs={books.entities.map((e) => {
+        const mine = banks.filter((b) => b.entityId === e.id);
+        return {
           id: e.id,
           label: e.name,
-          sub: String(banks.filter((b) => b.entityId === e.id).length),
+          sub: String(mine.length),
           content: (
-            <ul className="divide-y divide-card-border text-sm">
-              {banks.filter((b) => b.entityId === e.id).length === 0 && <li className="py-2 text-soft">{fr ? "Aucun compte pour cette entité." : "No accounts for this entity yet."}</li>}
-              {banks.filter((b) => b.entityId === e.id).map((b) => (
-                <BankRow
-                  key={b.id}
-                  lang={lang}
-                  bank={{ id: b.id, name: b.name, nameFr: b.nameFr, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: entityName.get(b.entityId) ?? "", code: b.code, txCount: txCounts.get(b.id) ?? 0, currency: b.currency ?? e.currency, registeredLabel: b.registeredType ? REGISTERED_TYPES[b.registeredType]?.[lang].split(" (")[0] : undefined }}
-                />
-              ))}
-            </ul>
+            <div className="space-y-4">
+              <p className="text-sm text-soft">
+                {fr
+                  ? "Comptes chèques, épargne, cartes de crédit, CELI, REER, CELIAPP, REEE, comptes de placement, CRI, FERR et FRV : tous peuvent recevoir des relevés importés."
+                  : "Chequing, savings, credit cards, TFSA, RRSP, FHSA, RESP, investment accounts, LIRA, RRIF and LIF: all can receive imported statements."}
+              </p>
+              <Card
+                color={entityCardColor(e) as CardColor}
+                title={<>{e.name} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{mine.length}</span></>}
+                actions={<AddBankDialog lang={lang} entities={books.entities} entityId={e.id} />}
+              >
+                <ul className="divide-y divide-card-border text-sm">
+                  {mine.length === 0 && <li className="py-2 text-soft">{fr ? "Aucun compte pour cette entité : utilisez le + pour en ajouter un." : "No accounts for this entity yet: use the + to add one."}</li>}
+                  {mine.map((b) => (
+                    <BankRow
+                      key={b.id}
+                      lang={lang}
+                      bank={{ id: b.id, name: b.name, nameFr: b.nameFr, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: e.name, code: b.code, txCount: txCounts.get(b.id) ?? 0, currency: b.currency ?? e.currency, registeredLabel: b.registeredType ? REGISTERED_TYPES[b.registeredType]?.[lang].split(" (")[0] : undefined }}
+                    />
+                  ))}
+                </ul>
+                <p className="text-xs text-soft">
+                  {e.kind === "PERSONAL"
+                    ? fr
+                      ? "Un compte personnel peut aussi servir à l'entreprise individuelle : importez-le ici, puis choisissez l'entreprise comme catégorie (ou répartissez 60/40) ; les écritures de transfert avec le propriétaire sont créées automatiquement. Pour un compte de placement, le solde du relevé inclut le rendement du marché : enregistrez-le dans Rapprochement."
+                      : "A personal account can also be used for the sole proprietorship: import it here, then pick the business as the category (or split 60/40) — the owner contribution / draw entries are created automatically. For an investment account, the statement balance includes market gains: record them in Reconcile."
+                    : fr
+                      ? "Les comptes de cette entité reçoivent leurs propres relevés ; un virement vers un autre de vos comptes est reconnu comme transfert."
+                      : "This entity's accounts take their own statements; a payment to another of your accounts is recognized as a transfer."}
+                </p>
+              </Card>
+            </div>
           ),
-        }))}
-      />
-      <p className="text-xs text-soft">
-        {fr
-          ? "Un compte personnel peut aussi servir à l'entreprise individuelle : importez-le sous « Personnel », puis choisissez l'entreprise comme catégorie (ou répartissez 60/40) ; les écritures de transfert avec le propriétaire sont créées automatiquement. Pour un compte de placement, le solde du relevé inclut le rendement du marché : enregistrez-le dans Journal pour rapprocher."
-          : "A personal account can also be used for the sole proprietorship: import it under Personal, then pick the business as the category (or split 60/40) — the owner contribution / draw entries are created automatically. For an investment account, the statement balance includes market gains: record them in Journal to reconcile."}
-      </p>
-      <AddBankForm lang={lang} entities={books.entities} />
-    </Card>
+        };
+      })}
+    />
   );
 
+  const chartIntro = (kind: string, country: string, l: "en" | "fr") => {
+    const sections =
+      l === "fr"
+        ? "Les actifs se répartissent en trésorerie, actifs à court terme, à long terme, immobilisations et actifs incorporels ; les passifs en court et long terme ; les revenus et dépenses peuvent avoir des sous-catégories."
+        : "Assets split into treasury, other current, long-term, fixed and intangible assets; liabilities into short-term and long-term; income and expenses can have sub-categories.";
+    const first =
+      kind === "PERSONAL"
+        ? l === "fr" ? "Plan comptable personnel créé automatiquement (références aux lignes de la déclaration T1)." : "Personal chart created automatically (references to the T1 return lines)."
+        : kind === "SOLE_PROPRIETORSHIP"
+          ? l === "fr" ? "Plan comptable de l'entreprise individuelle créé automatiquement (lignes du formulaire T2125 et codes IGRF)." : "Sole-proprietorship chart created automatically (T2125 lines and GIFI codes)."
+          : kind === "CORPORATION"
+            ? l === "fr" ? "Plan comptable de la société créé automatiquement (codes IGRF/GIFI de l'annexe 100 et 125)." : "Corporation chart created automatically (GIFI codes, Schedules 100 and 125)."
+            : country === "US"
+              ? l === "fr" ? "Plan comptable de la LLC créé automatiquement (lignes de l'annexe C)." : "LLC chart created automatically (Schedule C lines)."
+              : l === "fr" ? "Plan comptable créé automatiquement." : "Chart created automatically.";
+    return `${first} ${sections}`;
+  };
   const CARD_OF: Record<string, CardColor> = { ASSET: "contact", LIABILITY: "addresses", EQUITY: "personal", INCOME: "marketingActive", EXPENSE: "projects" };
   const chartSection = (
     <>
@@ -103,11 +112,7 @@ export default async function SetupPage() {
             sub: String(own.length),
             content: (
               <div className="space-y-4">
-                    <p className="text-sm text-soft">
-          {fr
-            ? "Les plans comptables sont créés automatiquement (T2125 pour l'entreprise individuelle, GIFI pour les sociétés, Annexe C pour la LLC). Les actifs se répartissent en trésorerie, actifs à court terme, à long terme, immobilisations et actifs incorporels ; les passifs en court et long terme ; les revenus et dépenses peuvent avoir des sous-catégories."
-            : "Charts are created automatically (T2125 for the sole proprietorship, GIFI for corporations, Schedule C for the LLC). Assets split into treasury, other current, long-term, fixed and intangible assets; liabilities into short-term and long-term; income and expenses can have sub-categories."}
-        </p>
+<p className="text-sm text-soft">{chartIntro(e.kind, e.country, lang)}</p>
               {gifi && (
                 <p className="text-xs text-soft">
                   {fr
@@ -188,7 +193,6 @@ export default async function SetupPage() {
   );
 
   const sections: SetupSection[] = [
-    { id: "entities", label: fr ? "Entités" : "Entities", count: books.entities.length, content: entitiesSection },
     { id: "banks", label: fr ? "Comptes bancaires" : "Bank accounts", count: banks.length, content: banksSection },
     { id: "chart", label: fr ? "Plan comptable" : "Chart of accounts", count: books.options.filter((o) => !o.bank).length, content: chartSection },
     { id: "suppliers", label: fr ? "Fournisseurs mémorisés" : "Remembered suppliers", count: rules.length, content: suppliersSection },
