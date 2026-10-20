@@ -11,6 +11,7 @@ export default function AccountingNav({ lang, toCategorize }: { lang: "en" | "fr
     { href: "/accounting", label: fr ? "Aperçu" : "Overview", exact: true },
     { href: "/accounting/transactions", label: fr ? "Transactions" : "Transactions", badge: toCategorize },
     { href: "/accounting/import", label: fr ? "Importer" : "Import" },
+    { href: "/accounting/reconcile", label: fr ? "Rapprochement" : "Reconcile" },
     { href: "/accounting/reports", label: fr ? "Rapports" : "Reports" },
     { href: "/accounting/journal", label: fr ? "Journal" : "Journal" },
     { href: "/accounting/setup", label: fr ? "Configuration" : "Setup" },

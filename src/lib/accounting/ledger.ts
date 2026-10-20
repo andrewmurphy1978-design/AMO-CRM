@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { lockedThrough } from "./reconcile";
 import { chartFor, entityDefaults, intercoSpec, type EntityKind } from "./charts";
 import { buildPosting, r2, type AllocationInput, type PostAccount, type PostEntity, type PostingEntry } from "./posting";
 import { parseCsv } from "./csv";
@@ -336,6 +337,12 @@ export async function importTransactions(db: PrismaClient, accountId: string, ro
     }
   }
   const fresh = prepared.filter((p) => !existing.has(p.dedupeKey) && !sameWithSwappedDate.has(p.dedupeKey));
+  // A reconciled month is closed: new transactions cannot appear in it.
+  const lock = await lockedThrough(db, accountId);
+  if (lock) {
+    const inLocked = fresh.filter((f) => f.date <= lock).length;
+    if (inLocked > 0) throw new Error(`${inLocked} transaction(s) in the file are dated in a month that is already reconciled and locked (up to ${lock.toISOString().slice(0, 10)}). Unlock that month in Reconcile, or check the date order.`);
+  }
   const batch = await db.accImportBatch.create({ data: { accountId, fileName, rowCount: rows.length, newCount: fresh.length, dupCount: rows.length - fresh.length } });
   const created: string[] = [];
   for (const c of chunks(fresh, 500)) {

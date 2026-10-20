@@ -20,6 +20,7 @@ import type { EntityKind } from "@/lib/accounting/charts";
 import { r2 } from "@/lib/accounting/posting";
 import { suggestForSuppliers, keywordAccountCode, readPdfStatement, type AiAccountOption } from "@/lib/accounting/ai";
 import { parseTaxNumbers } from "@/lib/accounting/tax-numbers";
+import { assertUnlocked, monthRange, reconcileSummary } from "@/lib/accounting/reconcile";
 import { supplierKey } from "@/lib/accounting/supplier";
 
 // Accounting holds personal bank data: admin only, like every other stored secret in this app.
@@ -266,6 +267,7 @@ export async function deleteImportBatch(batchId: string): Promise<void> {
   await requireAdmin();
   await withScopedPrismaClient(async (db) => {
     const ids = (await db.accTransaction.findMany({ where: { batchId }, select: { id: true } })).map((t) => t.id);
+    await assertUnlocked(db, ids);
     await unpostTransactions(db, ids);
     await db.accTransaction.deleteMany({ where: { batchId } });
     await db.accImportBatch.delete({ where: { id: batchId } });
@@ -282,6 +284,7 @@ export async function uncategorizeTransactions(txIds: string[]): Promise<void> {
 export async function ignoreTransactions(txIds: string[], ignore: boolean): Promise<void> {
   await requireAdmin();
   await withScopedPrismaClient(async (db) => {
+    await assertUnlocked(db, txIds);
     if (ignore) {
       await unpostTransactions(db, txIds);
       await db.accTransaction.updateMany({ where: { id: { in: txIds } }, data: { status: "IGNORED" } });
@@ -309,6 +312,7 @@ export async function updateSupplier(txId: string, name: string): Promise<void> 
 export async function deleteTransactions(txIds: string[]): Promise<void> {
   await requireAdmin();
   await withScopedPrismaClient(async (db) => {
+    await assertUnlocked(db, txIds);
     await unpostTransactions(db, txIds);
     await db.accTransaction.deleteMany({ where: { id: { in: txIds } } });
   });
@@ -411,4 +415,77 @@ export async function deleteManualEntry(id: string): Promise<void> {
   await requireAdmin();
   await withScopedPrismaClient((db) => db.accJournalEntry.deleteMany({ where: { id, transactionId: null } }));
   refresh();
+}
+
+// ---------------------------------------------------------------- reconciliation
+
+/** Locks the month once the statement balance equals what the CRM computed. */
+export async function reconcileMonth(input: { accountId: string; month: string; statementBalance: number; notes?: string }): Promise<Result> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(input.month) || !Number.isFinite(input.statementBalance)) return { error: "Enter the statement's closing balance." };
+  try {
+    const out = await withScopedPrismaClient(async (db) => {
+      const sum = await reconcileSummary(db, input.accountId, input.month);
+      if (Math.abs(r2(input.statementBalance) - sum.computed) > 0.005) return { error: "The balances do not match yet." };
+      if (sum.lockedThrough && sum.lockedThrough > sum.periodEnd) return { error: "A later month is already reconciled: unlock it first." };
+      const periodEnd = monthRange(input.month).end;
+      await db.accReconciliation.upsert({
+        where: { accountId_periodEnd: { accountId: input.accountId, periodEnd } },
+        update: { statementBalance: r2(input.statementBalance), computedBalance: sum.computed, notes: input.notes || null },
+        create: { accountId: input.accountId, periodEnd, statementBalance: r2(input.statementBalance), computedBalance: sum.computed, notes: input.notes || null },
+      });
+      return {};
+    });
+    refresh();
+    return out.error ? out : { success: "Month reconciled and locked." };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not reconcile." };
+  }
+}
+
+/** Reopens the latest reconciled month. */
+export async function unlockReconciliation(id: string): Promise<Result> {
+  await requireAdmin();
+  const result = await withScopedPrismaClient(async (db) => {
+    const rec = await db.accReconciliation.findUniqueOrThrow({ where: { id } });
+    const later = await db.accReconciliation.count({ where: { accountId: rec.accountId, periodEnd: { gt: rec.periodEnd } } });
+    if (later > 0) return { error: "Unlock the later months first (latest first)." };
+    await db.accReconciliation.delete({ where: { id } });
+    return {};
+  });
+  refresh();
+  return result;
+}
+
+/** Records the account's balance on a date as an opening-balance entry (against the entity's opening-balance equity). */
+export async function setOpeningBalance(input: { accountId: string; date: string; amount: number }): Promise<Result> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !Number.isFinite(input.amount)) return { error: "Enter a date and a balance." };
+  const amount = r2(input.amount);
+  if (amount === 0) return { error: "The balance is zero: nothing to record." };
+  try {
+    await withScopedPrismaClient(async (db) => {
+      const acc = await db.accAccount.findUniqueOrThrow({ where: { id: input.accountId } });
+      if (await db.accJournalLine.count({ where: { accountId: acc.id, entry: { source: "OPENING" } } })) throw new Error("This account already has an opening balance (see Journal).");
+      const equity = await db.accAccount.findUnique({ where: { entityId_code: { entityId: acc.entityId, code: "3000" } } });
+      if (!equity) throw new Error("The entity has no opening-balance account (3000).");
+      const card = acc.subtype === "CREDIT_CARD";
+      // Bank: debit the account when money is there. Card: credit the account when money is owed.
+      const accountDebit = card ? amount < 0 : amount > 0;
+      const abs = Math.abs(amount);
+      await db.accJournalEntry.create({
+        data: {
+          entityId: acc.entityId,
+          date: new Date(`${input.date}T00:00:00.000Z`),
+          memo: `Opening balance — ${acc.name}`,
+          source: "OPENING",
+          lines: { create: [{ accountId: acc.id, debit: accountDebit ? abs : 0, credit: accountDebit ? 0 : abs }, { accountId: equity.id, debit: accountDebit ? 0 : abs, credit: accountDebit ? abs : 0 }] },
+        },
+      });
+    });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not save." };
+  }
+  refresh();
+  return { success: "Opening balance saved." };
 }

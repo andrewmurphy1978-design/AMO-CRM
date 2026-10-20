@@ -2118,6 +2118,7 @@ model AccAccount {
   createdAt DateTime @default(now())
 
   lines        AccJournalLine[]
+  reconciliations AccReconciliation[]
   transactions AccTransaction[]
   batches      AccImportBatch[]
 
@@ -2225,4 +2226,21 @@ model AccRule {
   createdAt   DateTime @default(now())
 
   @@map("acc_rules")
+}
+
+// A bank / credit-card account reconciled to its statement at the end of a month. A row exists only once the
+// difference was zero; it locks the account's transactions up to periodEnd.
+model AccReconciliation {
+  id               String     @id @default(cuid())
+  accountId        String
+  account          AccAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  periodEnd        DateTime   @db.Date
+  // The closing balance printed on the statement, and what the CRM computed, in the account's currency.
+  statementBalance Float
+  computedBalance  Float
+  notes            String?    @db.Text
+  createdAt        DateTime   @default(now())
+
+  @@unique([accountId, periodEnd])
+  @@map("acc_reconciliations")
 }
