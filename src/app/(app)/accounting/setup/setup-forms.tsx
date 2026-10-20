@@ -73,9 +73,9 @@ export function AddBankForm({ lang, entities }: { lang: Lang; entities: EntityIn
   );
 }
 
-export function AddAccountForm({ lang, entities, options }: { lang: Lang; entities: EntityInfo[]; options: AccountOption[] }) {
+export function AddAccountForm({ lang, entities, options, defaultEntityId }: { lang: Lang; entities: EntityInfo[]; options: AccountOption[]; defaultEntityId?: string }) {
   const fr = lang === "fr";
-  const [entityId, setEntityId] = useState(entities[0]?.id ?? "");
+  const [entityId, setEntityId] = useState(defaultEntityId ?? entities[0]?.id ?? "");
   const [type, setType] = useState("EXPENSE");
   const entity = entities.find((e) => e.id === entityId);
   const parents = options.filter((o) => o.entityId === entityId && o.type === type && !o.parentId && !o.bank);
