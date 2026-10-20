@@ -144,6 +144,55 @@ export async function deleteBankAccount(id: string): Promise<Result> {
   return result;
 }
 
+async function validParent(db: import("@/lib/prisma").PrismaClient, entityId: string, type: string, parentId: string): Promise<string | null> {
+  if (!parentId) return null;
+  const p = await db.accAccount.findUnique({ where: { id: parentId } });
+  return p && p.entityId === entityId && p.type === type && !p.parentId ? p.id : null;
+}
+
+// The balance-sheet section chosen for a new account sets the subtype that places it there.
+function sectionSubtype(section: string, type: string): string {
+  if (type === "ASSET") return ({ TREASURY: "BANK", LONG_TERM: "INVESTMENT", FIXED: "FIXED_ASSET", INTANGIBLE: "INTANGIBLE" } as Record<string, string>)[section] ?? "OTHER";
+  if (type === "LIABILITY") return section === "LONG_TERM" ? "LOAN" : "PAYABLE";
+  return "OTHER";
+}
+
+export async function setAccountSection(id: string, section: string | null): Promise<void> {
+  await requireAdmin();
+  const valid = ["TREASURY", "CURRENT", "LONG_TERM", "FIXED", "INTANGIBLE", "SHORT_TERM"];
+  await withScopedPrismaClient((db) => db.accAccount.update({ where: { id }, data: { section: section && valid.includes(section) ? section : null } }));
+  refresh();
+}
+
+/** Makes an account a sub-category of another (same entity and type, one level), or a top-level account again. */
+export async function setAccountParent(id: string, parentId: string | null): Promise<Result> {
+  await requireAdmin();
+  const result = await withScopedPrismaClient(async (db) => {
+    const acc = await db.accAccount.findUniqueOrThrow({ where: { id }, include: { children: { select: { id: true } } } });
+    if (parentId) {
+      const parent = await db.accAccount.findUniqueOrThrow({ where: { id: parentId } });
+      if (parent.id === acc.id) return { error: "An account cannot be its own parent." };
+      if (parent.entityId !== acc.entityId || parent.type !== acc.type) return { error: "A sub-category must be in the same entity and of the same type as its parent." };
+      if (parent.parentId) return { error: "Only one level of sub-categories is supported: choose a top-level parent." };
+      if (acc.children.length > 0) return { error: "This account already has sub-categories, so it cannot become one itself." };
+      if (acc.subtype === "BANK" || acc.subtype === "CREDIT_CARD") return { error: "Bank and card accounts cannot be sub-categories." };
+    }
+    await db.accAccount.update({ where: { id }, data: { parentId } });
+    return {};
+  });
+  refresh();
+  return result;
+}
+
+export async function setAccountGifi(id: string, gifi: string): Promise<Result> {
+  await requireAdmin();
+  const code = gifi.trim();
+  if (code && !/^\d{4}$/.test(code)) return { error: "A GIFI code has 4 digits." };
+  await withScopedPrismaClient((db) => db.accAccount.update({ where: { id }, data: { gifi: code || null } }));
+  refresh();
+  return {};
+}
+
 export async function addAccount(_prev: Result | undefined, formData: FormData): Promise<Result> {
   await requireAdmin();
   const entityId = String(formData.get("entityId") ?? "");
@@ -153,9 +202,9 @@ export async function addAccount(_prev: Result | undefined, formData: FormData):
   if (!entityId || !code || !name) return { error: "Enter a code and a name." };
   if (!["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"].includes(type)) return { error: "Choose a type." };
   try {
-    await withScopedPrismaClient((db) =>
+    await withScopedPrismaClient(async (db) =>
       db.accAccount.create({
-        data: { entityId, code, name, type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : "OTHER", taxLine: String(formData.get("taxLine") ?? "").trim() || null },
+        data: { entityId, code, name, type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : sectionSubtype(String(formData.get("section") ?? ""), type), taxLine: String(formData.get("taxLine") ?? "").trim() || null, gifi: /^\d{4}$/.test(String(formData.get("gifi") ?? "").trim()) ? String(formData.get("gifi")).trim() : null, parentId: await validParent(db, entityId, type, String(formData.get("parentId") ?? "")) },
       })
     );
   } catch {

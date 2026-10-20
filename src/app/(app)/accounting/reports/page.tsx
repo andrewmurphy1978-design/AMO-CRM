@@ -1,8 +1,10 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks } from "@/lib/accounting/options";
+import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
 import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
 import { isoDate, money } from "@/lib/accounting/format";
 
@@ -50,15 +52,74 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     return `/accounting/reports?${p}`;
   };
 
-  const Rows = ({ rows }: { rows: AccountRow[] }) => (
+  const optById = new Map(options.map((o) => [o.id, o]));
+  // Sub-categories are shown under their parent with a subtotal, even when the parent itself has no balance.
+  const Rows = ({ rows }: { rows: AccountRow[] }) => {
+    const ids = new Set(rows.map((r) => r.id));
+    const kids = new Map<string, AccountRow[]>();
+    const top: (AccountRow | { heading: string; id: string })[] = [];
+    for (const r of rows) {
+      if (r.parentId && optById.has(r.parentId)) kids.set(r.parentId, [...(kids.get(r.parentId) ?? []), r]);
+      else top.push(r);
+    }
+    for (const pid of kids.keys()) if (!ids.has(pid)) top.push({ heading: fr ? optById.get(pid)!.labelFr.split(" › ")[0] : optById.get(pid)!.name, id: pid });
+    top.sort((a, b) => ("code" in a ? a.code : optById.get(a.id)!.code).localeCompare("code" in b ? b.code : optById.get(b.id)!.code));
+    return (
+      <>
+        {top.map((t) => {
+          const children = kids.get(t.id) ?? [];
+          const own = "code" in t ? t : null;
+          const subtotal = (own?.balance ?? 0) + children.reduce((s, c) => s + c.balance, 0);
+          return (
+            <Fragment key={t.id}>
+              {own && (
+                <tr>
+                  <td className="py-1 pr-3 text-soft">{own.code}</td>
+                  <td className="pr-3 text-ink">{name(own)}</td>
+                  <td className="text-right text-ink">{m(own.balance)}</td>
+                </tr>
+              )}
+              {!own && (
+                <tr>
+                  <td />
+                  <td className="py-1 pr-3 font-medium text-ink">{(t as { heading: string }).heading}</td>
+                  <td />
+                </tr>
+              )}
+              {children.map((c) => (
+                <tr key={c.id}>
+                  <td className="py-1 pr-3 text-soft">{c.code}</td>
+                  <td className="pr-3 pl-5 text-ink">{name(c)}</td>
+                  <td className="text-right text-ink">{m(c.balance)}</td>
+                </tr>
+              ))}
+              {children.length > 0 && (
+                <tr className="text-xs text-soft">
+                  <td />
+                  <td className="pr-3 pb-1 pl-5">{fr ? "Sous-total" : "Subtotal"}</td>
+                  <td className="pb-1 text-right">{m(subtotal)}</td>
+                </tr>
+              )}
+            </Fragment>
+          );
+        })}
+      </>
+    );
+  };
+  // Balance-sheet sections with their own subtotals.
+  const Sections = ({ rows, defs }: { rows: AccountRow[]; defs: { key: string; en: string; fr: string }[] }) => (
     <>
-      {rows.map((r) => (
-        <tr key={r.id}>
-          <td className="py-1 pr-3 text-soft">{r.code}</td>
-          <td className="pr-3 text-ink">{name(r)}</td>
-          <td className="text-right text-ink">{m(r.balance)}</td>
-        </tr>
-      ))}
+      {defs.map((d) => {
+        const list = rows.filter((r) => r.section === d.key);
+        if (list.length === 0) return null;
+        return (
+          <Fragment key={d.key}>
+            <tr><td colSpan={3} className="pt-2 pb-0.5 text-xs font-medium text-ink">{d[lang]}</td></tr>
+            <Rows rows={list} />
+            <tr className="text-xs text-soft"><td /><td className="py-0.5">{fr ? "Total" : "Total"} — {d[lang].split(" (")[0]}</td><td className="text-right">{m(list.reduce((s, r) => s + r.balance, 0))}</td></tr>
+          </Fragment>
+        );
+      })}
     </>
   );
   const Total = ({ label, value, strong }: { label: string; value: number; strong?: boolean }) => (
@@ -118,8 +179,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           return (
             <>
               <table className="mt-3 w-full max-w-2xl text-sm"><tbody>
-                <Head>{fr ? "Actifs" : "Assets"}</Head><Rows rows={b.assets} /><Total label={fr ? "Total des actifs" : "Total assets"} value={b.totalAssets} />
-                <Head>{fr ? "Passifs" : "Liabilities"}</Head><Rows rows={b.liabilities} /><Total label={fr ? "Total des passifs" : "Total liabilities"} value={b.totalLiabilities} />
+                <Head>{fr ? "Actifs" : "Assets"}</Head><Sections rows={b.assets} defs={ASSET_SECTIONS} /><Total label={fr ? "Total des actifs" : "Total assets"} value={b.totalAssets} />
+                <Head>{fr ? "Passifs" : "Liabilities"}</Head><Sections rows={b.liabilities} defs={LIABILITY_SECTIONS} /><Total label={fr ? "Total des passifs" : "Total liabilities"} value={b.totalLiabilities} />
                 <Head>{fr ? "Capitaux propres" : "Equity"}</Head><Rows rows={b.equity} />
                 <tr><td /><td className="py-1 text-ink">{fr ? "Bénéfices non répartis" : "Retained earnings"}</td><td className="text-right">{m(b.retained)}</td></tr>
                 <tr><td /><td className="py-1 text-ink">{fr ? "Résultat de l'exercice" : "Current-year earnings"}</td><td className="text-right">{m(b.currentEarnings)}</td></tr>
@@ -149,7 +210,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <form className="flex items-center gap-2 text-sm">
               <input type="hidden" name="entity" value={entity.id} /><input type="hidden" name="year" value={year} /><input type="hidden" name="r" value="gl" />
               <select name="account" defaultValue={sp.account} className="rounded-lg border border-card-border bg-white px-2 py-1.5">
-                {options.filter((o) => o.entityId === entity.id).map((o) => (<option key={o.id} value={o.id}>{o.code} {fr && o.nameFr ? o.nameFr : o.name}</option>))}
+                {options.filter((o) => o.entityId === entity.id).map((o) => (<option key={o.id} value={o.id}>{o.code} {fr ? o.labelFr : o.label}</option>))}
               </select>
               <button className="btn-primary rounded-lg px-3 py-1.5 font-semibold">OK</button>
             </form>

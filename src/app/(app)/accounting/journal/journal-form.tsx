@@ -46,7 +46,7 @@ export default function JournalForm({ lang, entities, options }: { lang: "en" | 
         <div key={i} className="flex flex-wrap gap-2">
           <select value={l.accountId} onChange={(e) => set(i, { accountId: e.target.value })} className={`${cls} min-w-64 flex-1`}>
             <option value="">—</option>
-            {accts.map((o) => <option key={o.id} value={o.id}>{o.code} {fr && o.nameFr ? o.nameFr : o.name}</option>)}
+            {accts.map((o) => <option key={o.id} value={o.id}>{o.code} {fr ? o.labelFr : o.label}</option>)}
           </select>
           <input type="number" step="0.01" min="0" value={l.debit} onChange={(e) => set(i, { debit: e.target.value })} placeholder={fr ? "Débit" : "Debit"} className={`${cls} w-32`} />
           <input type="number" step="0.01" min="0" value={l.credit} onChange={(e) => set(i, { credit: e.target.value })} placeholder={fr ? "Crédit" : "Credit"} className={`${cls} w-32`} />

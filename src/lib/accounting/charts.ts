@@ -90,6 +90,8 @@ const SOLE_PROP_CA: ChartAccount[] = [
   a("1500", "Computer equipment (CCA class 50)", "Matériel informatique (DPA catégorie 50)", "ASSET", "FIXED_ASSET"),
   a("1510", "Furniture & fixtures (CCA class 8)", "Mobilier et agencements (DPA catégorie 8)", "ASSET", "FIXED_ASSET"),
   a("1590", "Accumulated capital cost allowance", "Déduction pour amortissement cumulée", "ASSET", "FIXED_ASSET"),
+  a("1520", "Intangible assets (website, software, trademarks)", "Actifs incorporels (site web, logiciels, marques)", "ASSET", "INTANGIBLE"),
+  a("1595", "Accumulated amortization — intangibles", "Amortissement cumulé — actifs incorporels", "ASSET", "INTANGIBLE"),
   a("2000", "Accounts payable", "Comptes fournisseurs", "LIABILITY", "PAYABLE"),
   ...CA_SALES_TAX.filter((x) => x.type === "LIABILITY"),
   a("2500", "Business loan / line of credit", "Prêt / marge de crédit d'entreprise", "LIABILITY", "LOAN"),
@@ -130,6 +132,8 @@ const CORP_CA: ChartAccount[] = [
   a("1500", "Computer equipment (CCA class 50)", "Matériel informatique (DPA catégorie 50)", "ASSET", "FIXED_ASSET"),
   a("1510", "Furniture & fixtures (CCA class 8)", "Mobilier et agencements (DPA catégorie 8)", "ASSET", "FIXED_ASSET"),
   a("1590", "Accumulated amortization", "Amortissement cumulé", "ASSET", "FIXED_ASSET"),
+  a("1520", "Intangible assets (website, software, trademarks)", "Actifs incorporels (site web, logiciels, marques)", "ASSET", "INTANGIBLE"),
+  a("1595", "Accumulated amortization — intangibles", "Amortissement cumulé — actifs incorporels", "ASSET", "INTANGIBLE"),
   a("2000", "Accounts payable", "Comptes fournisseurs", "LIABILITY", "PAYABLE"),
   ...CA_SALES_TAX.filter((x) => x.type === "LIABILITY"),
   a("2400", "Corporate income taxes payable", "Impôts des sociétés à payer", "LIABILITY", "TAX_PAYABLE"),
@@ -168,6 +172,8 @@ const LLC_US: ChartAccount[] = [
   a("1200", "Prepaid expenses", "Charges payées d'avance", "ASSET", "OTHER"),
   a("1500", "Equipment", "Équipement", "ASSET", "FIXED_ASSET"),
   a("1590", "Accumulated depreciation", "Amortissement cumulé", "ASSET", "FIXED_ASSET"),
+  a("1520", "Intangible assets (website, software, trademarks)", "Actifs incorporels (site web, logiciels, marques)", "ASSET", "INTANGIBLE"),
+  a("1595", "Accumulated amortization — intangibles", "Amortissement cumulé — actifs incorporels", "ASSET", "INTANGIBLE"),
   a("2000", "Accounts payable", "Comptes fournisseurs", "LIABILITY", "PAYABLE"),
   a("2200", "Sales tax payable (state)", "Taxe de vente à payer (État)", "LIABILITY", "TAX_PAYABLE"),
   a("2500", "Loans payable", "Emprunts à payer", "LIABILITY", "LOAN"),
@@ -239,3 +245,68 @@ export function intercoSpec(entity: { kind: EntityKind }, other: { kind: EntityK
 export function isTwoWay(subtype: string): boolean {
   return subtype === "SHAREHOLDER_LOAN" || subtype === "INTERCO";
 }
+
+// ---------------------------------------------------------------- balance-sheet sections
+
+export type AssetSection = "TREASURY" | "CURRENT" | "LONG_TERM" | "FIXED" | "INTANGIBLE";
+export type LiabilitySection = "SHORT_TERM" | "LONG_TERM";
+
+export const ASSET_SECTIONS: { key: AssetSection; en: string; fr: string }[] = [
+  { key: "TREASURY", en: "Treasury (cash & bank)", fr: "Trésorerie (encaisse et banque)" },
+  { key: "CURRENT", en: "Other current assets (receivables, prepaid, taxes recoverable)", fr: "Autres actifs à court terme (clients, charges payées d'avance, taxes à recouvrer)" },
+  { key: "LONG_TERM", en: "Long-term assets (investments)", fr: "Actifs à long terme (placements)" },
+  { key: "FIXED", en: "Fixed assets", fr: "Immobilisations corporelles" },
+  { key: "INTANGIBLE", en: "Intangible assets", fr: "Actifs incorporels" },
+];
+export const LIABILITY_SECTIONS: { key: LiabilitySection; en: string; fr: string }[] = [
+  { key: "SHORT_TERM", en: "Short-term liabilities", fr: "Passifs à court terme" },
+  { key: "LONG_TERM", en: "Long-term liabilities", fr: "Passifs à long terme" },
+];
+
+/** The section an account falls in unless the user chose another one. */
+export function defaultSection(type: string, subtype: string): string | null {
+  if (type === "ASSET") {
+    if (subtype === "BANK") return "TREASURY";
+    if (subtype === "INVESTMENT") return "LONG_TERM";
+    if (subtype === "FIXED_ASSET") return "FIXED";
+    if (subtype === "INTANGIBLE") return "INTANGIBLE";
+    return "CURRENT";
+  }
+  if (type === "LIABILITY") return subtype === "LOAN" ? "LONG_TERM" : "SHORT_TERM";
+  return null;
+}
+
+// ---------------------------------------------------------------- GIFI (Canadian corporations)
+
+// Suggested General Index of Financial Information codes (CRA, Schedules 100 / 125) for the corporation chart, by
+// chart code. Filled in from the schedules; the CRA's RC4088 guide (Appendix A) is the reference, so verify them
+// with your accountant and edit any in Setup. Accounts without a clear code are left empty.
+export const CORP_GIFI: Record<string, string> = {
+  "1100": "1060",
+  "1510": "1740",
+  "2000": "2600",
+  "2400": "2680",
+  "3000": "3500",
+  "3200": "3600",
+  "4000": "8000",
+  "4900": "8230",
+  "5000": "8320",
+  "5010": "8518",
+  "6010": "8521",
+  "6020": "8523",
+  "6040": "8690",
+  "6050": "8710",
+  "6060": "8760",
+  "6070": "8810",
+  "6075": "8810",
+  "6090": "8860",
+  "6110": "8910",
+  "6120": "8960",
+  "6130": "9060",
+  "6150": "9200",
+  "6160": "9220",
+  "6190": "9281",
+  "6210": "8670",
+  "6900": "9270",
+  "7000": "9990",
+};

@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
-import { isTwoWay } from "./charts";
+import { defaultSection, isTwoWay } from "./charts";
 import { r2 } from "./posting";
 
 // Reports are read straight off the journal lines: nothing is stored twice, so a report is always the books.
@@ -11,6 +11,10 @@ export interface AccountRow {
   nameFr: string | null;
   type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
   subtype: string;
+  // Balance-sheet section (assets / liabilities only).
+  section: string | null;
+  parentId: string | null;
+  gifi: string | null;
   taxLine: string | null;
   deductiblePct: number;
   debit: number;
@@ -42,7 +46,7 @@ export async function accountRows(db: PrismaClient, entityId: string, range: { f
     const s = byId.get(a.id);
     const debit = r2(s?.debit ?? 0);
     const credit = r2(s?.credit ?? 0);
-    return { id: a.id, code: a.code, name: a.name, nameFr: a.nameFr, type: a.type, subtype: a.subtype, taxLine: a.taxLine, deductiblePct: a.deductiblePct, debit, credit, balance: r2(natural(a.type, debit, credit)) };
+    return { id: a.id, code: a.code, name: a.name, nameFr: a.nameFr, type: a.type, subtype: a.subtype, section: a.section ?? defaultSection(a.type, a.subtype), parentId: a.parentId, gifi: a.gifi, taxLine: a.taxLine, deductiblePct: a.deductiblePct, debit, credit, balance: r2(natural(a.type, debit, credit)) };
   });
   return includeEmpty ? rows : rows.filter((r) => r.debit !== 0 || r.credit !== 0);
 }
@@ -77,10 +81,10 @@ export async function balanceSheet(db: PrismaClient, entityId: string, asOf: Dat
   for (const r of rows) {
     if (r.type === "ASSET") {
       // A relationship account that is in credit (we owe) is shown as a liability, and vice versa.
-      if (isTwoWay(r.subtype) && r.balance < 0) liabilities.push({ ...r, balance: -r.balance });
+      if (isTwoWay(r.subtype) && r.balance < 0) liabilities.push({ ...r, balance: -r.balance, section: "SHORT_TERM" });
       else assets.push(r);
     } else if (r.type === "LIABILITY") {
-      if (isTwoWay(r.subtype) && r.balance < 0) assets.push({ ...r, balance: -r.balance });
+      if (isTwoWay(r.subtype) && r.balance < 0) assets.push({ ...r, balance: -r.balance, section: "CURRENT" });
       else liabilities.push(r);
     } else if (r.type === "EQUITY") equity.push(r);
   }
@@ -120,7 +124,7 @@ export async function taxSummary(db: PrismaClient, entityId: string, from: Date,
   const group = (list: AccountRow[]) => {
     const map = new Map<string, { taxLine: string; amount: number; deductible: number; accounts: string[] }>();
     for (const r of list) {
-      const key = r.taxLine ?? "—";
+      const key = r.gifi ? `GIFI ${r.gifi}` : r.taxLine ?? "—";
       const g = map.get(key) ?? { taxLine: key, amount: 0, deductible: 0, accounts: [] };
       g.amount = r2(g.amount + r.balance);
       g.deductible = r2(g.deductible + (r.balance * r.deductiblePct) / 100);

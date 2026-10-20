@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/lib/prisma";
+import { defaultSection } from "./charts";
 import { readTaxNumbers, type TaxNumber } from "./tax-numbers";
 
 // What the pages and pickers need to know about the books: entities, and every account that can be chosen as
@@ -26,6 +27,12 @@ export interface AccountOption {
   nameFr: string | null;
   type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
   subtype: string;
+  section: string | null;
+  parentId: string | null;
+  gifi: string | null;
+  // "Parent › Name" for a sub-category.
+  label: string;
+  labelFr: string;
   // The group heading in a picker.
   group: "EXPENSE" | "INCOME" | "TRANSFER" | "LIABILITY" | "ASSET" | "EQUITY";
   bank: boolean;
@@ -36,6 +43,7 @@ const GROUP_ORDER = ["EXPENSE", "INCOME", "TRANSFER", "LIABILITY", "ASSET", "EQU
 export async function loadBooks(db: PrismaClient): Promise<{ entities: EntityInfo[]; options: AccountOption[] }> {
   const entities = await db.accEntity.findMany({ where: { archived: false }, orderBy: { order: "asc" } });
   const accounts = await db.accAccount.findMany({ where: { archived: false, entityId: { in: entities.map((e) => e.id) } }, orderBy: [{ code: "asc" }] });
+  const byId = new Map(accounts.map((a) => [a.id, a]));
   const options: AccountOption[] = accounts.map((a) => {
     const bank = a.subtype === "BANK" || a.subtype === "CREDIT_CARD";
     return {
@@ -46,6 +54,11 @@ export async function loadBooks(db: PrismaClient): Promise<{ entities: EntityInf
       nameFr: a.nameFr,
       type: a.type,
       subtype: a.subtype,
+      section: a.type === "ASSET" || a.type === "LIABILITY" ? (a.section ?? defaultSection(a.type, a.subtype)) : null,
+      parentId: a.parentId,
+      gifi: a.gifi,
+      label: a.parentId && byId.get(a.parentId) ? `${byId.get(a.parentId)!.name} › ${a.name}` : a.name,
+      labelFr: a.parentId && byId.get(a.parentId) ? `${byId.get(a.parentId)!.nameFr ?? byId.get(a.parentId)!.name} › ${a.nameFr ?? a.name}` : a.nameFr ?? a.name,
       bank,
       group: bank ? "TRANSFER" : a.type,
     };

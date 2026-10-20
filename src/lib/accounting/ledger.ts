@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { lockedThrough } from "./reconcile";
-import { chartFor, entityDefaults, intercoSpec, type EntityKind } from "./charts";
+import { CORP_GIFI, chartFor, entityDefaults, intercoSpec, type EntityKind } from "./charts";
 import { buildPosting, r2, type AllocationInput, type PostAccount, type PostEntity, type PostingEntry } from "./posting";
 import { parseCsv } from "./csv";
 import { supplierKey, supplierName } from "./supplier";
@@ -27,7 +27,12 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
   const entity = await db.accEntity.findUniqueOrThrow({ where: { id: entityId } });
   const chart = chartFor(entity.kind as EntityKind, entity.country);
   // Also adds accounts that were added to the template after the entity was created.
-  const haveCodes = new Set((await db.accAccount.findMany({ where: { entityId }, select: { code: true } })).map((a) => a.code));
+  const existing = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, gifi: true } });
+  const haveCodes = new Set(existing.map((a) => a.code));
+  // Canadian corporations: fill in the suggested GIFI code on accounts that have none yet.
+  if (entity.kind === "CORPORATION" && entity.country === "CA") {
+    for (const a of existing) if (!a.gifi && CORP_GIFI[a.code]) await db.accAccount.update({ where: { id: a.id }, data: { gifi: CORP_GIFI[a.code] } });
+  }
   const missing = chart.map((c, order) => ({ c, order })).filter(({ c }) => !haveCodes.has(c.code));
   if (missing.length === 0) return;
   await db.accAccount.createMany({
@@ -39,6 +44,7 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
       type: c.type,
       subtype: c.subtype,
       taxLine: c.taxLine ?? null,
+      gifi: entity.kind === "CORPORATION" && entity.country === "CA" ? CORP_GIFI[c.code] ?? null : null,
       deductiblePct: c.deductiblePct ?? 100,
       isSystem: Boolean(c.system),
       order,

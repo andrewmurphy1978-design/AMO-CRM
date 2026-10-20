@@ -1,9 +1,11 @@
 "use client";
 
 import { addAccount, addBankAccount, addEntity, updateEntity } from "@/actions/accounting";
+import { useState } from "react";
+import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
 import ActionForm, { CurrencyField, Field, inputCls } from "../action-form";
 import TaxNumbersField from "./tax-numbers-field";
-import type { EntityInfo } from "@/lib/accounting/options";
+import type { AccountOption, EntityInfo } from "@/lib/accounting/options";
 
 type Lang = "en" | "fr";
 
@@ -70,17 +72,21 @@ export function AddBankForm({ lang, entities }: { lang: Lang; entities: EntityIn
   );
 }
 
-export function AddAccountForm({ lang, entities }: { lang: Lang; entities: EntityInfo[] }) {
+export function AddAccountForm({ lang, entities, options }: { lang: Lang; entities: EntityInfo[]; options: AccountOption[] }) {
   const fr = lang === "fr";
+  const [entityId, setEntityId] = useState(entities[0]?.id ?? "");
+  const [type, setType] = useState("EXPENSE");
+  const entity = entities.find((e) => e.id === entityId);
+  const parents = options.filter((o) => o.entityId === entityId && o.type === type && !o.parentId && !o.bank);
   return (
     <ActionForm action={addAccount} submitLabel={fr ? "Ajouter" : "Add"}>
       <Field label={fr ? "Entité" : "Entity"}>
-        <select name="entityId" className={inputCls}>{entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
+        <select name="entityId" value={entityId} onChange={(e) => setEntityId(e.target.value)} className={inputCls}>{entities.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select>
       </Field>
       <Field label="Code"><input name="code" required placeholder="8800" className={`${inputCls} w-24`} /></Field>
       <Field label={fr ? "Nom" : "Name"}><input name="name" required className={inputCls} /></Field>
       <Field label={fr ? "Type" : "Type"}>
-        <select name="type" className={inputCls}>
+        <select name="type" value={type} onChange={(e) => setType(e.target.value)} className={inputCls}>
           <option value="EXPENSE">{fr ? "Dépense" : "Expense"}</option>
           <option value="INCOME">{fr ? "Revenu" : "Income"}</option>
           <option value="ASSET">{fr ? "Actif" : "Asset"}</option>
@@ -88,7 +94,26 @@ export function AddAccountForm({ lang, entities }: { lang: Lang; entities: Entit
           <option value="EQUITY">{fr ? "Capitaux propres" : "Equity"}</option>
         </select>
       </Field>
+      {type === "ASSET" && (
+        <Field label={fr ? "Section du bilan" : "Balance-sheet section"}>
+          <select name="section" className={inputCls}>{ASSET_SECTIONS.map((s) => <option key={s.key} value={s.key}>{s[lang].split(" (")[0]}</option>)}</select>
+        </Field>
+      )}
+      {type === "LIABILITY" && (
+        <Field label={fr ? "Section du bilan" : "Balance-sheet section"}>
+          <select name="section" className={inputCls}>{LIABILITY_SECTIONS.map((s) => <option key={s.key} value={s.key}>{s[lang]}</option>)}</select>
+        </Field>
+      )}
+      {parents.length > 0 && (
+        <Field label={fr ? "Sous-catégorie de" : "Sub-category of"}>
+          <select name="parentId" className={inputCls}>
+            <option value="">{fr ? "— Aucune —" : "— None —"}</option>
+            {parents.map((p) => <option key={p.id} value={p.id}>{p.code} {fr && p.nameFr ? p.nameFr : p.name}</option>)}
+          </select>
+        </Field>
+      )}
       <Field label={fr ? "Ligne d'impôt" : "Tax line"}><input name="taxLine" className={`${inputCls} w-28`} /></Field>
+      {entity?.kind === "CORPORATION" && entity.country === "CA" && <Field label="GIFI"><input name="gifi" maxLength={4} className={`${inputCls} w-20`} /></Field>}
     </ActionForm>
   );
 }

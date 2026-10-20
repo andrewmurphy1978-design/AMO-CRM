@@ -39,7 +39,7 @@ function CategoryPicker({ value, onChange, entities, options, lang }: { value: s
             <optgroup key={`${e.id}${g}`} label={`${e.name} — ${GROUP_LABEL[g][lang]}`}>
               {list.map((o) => (
                 <option key={o.id} value={enc(e.id, o.id)}>
-                  {o.code} {fr && o.nameFr ? o.nameFr : o.name}
+                  {o.code} {fr ? o.labelFr : o.label}
                 </option>
               ))}
             </optgroup>

@@ -2112,6 +2112,14 @@ model AccAccount {
   currency        String?
   // How this account's statements are laid out, remembered from the last import: { signature, map }.
   importFormat    Json?
+  // Balance-sheet section (assets: TREASURY | CURRENT | LONG_TERM | FIXED | INTANGIBLE; liabilities: SHORT_TERM | LONG_TERM); null = the default for its subtype.
+  section         String?
+  // A sub-category: the account this one is a part of (same entity and type, one level).
+  // GIFI code (CRA General Index of Financial Information) for Canadian corporations.
+  gifi            String?
+  parentId        String?
+  parent          AccAccount?    @relation("AccParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children        AccAccount[]   @relation("AccParent")
   // Accounts that stand for a relationship with another entity (owner contributions, shareholder loan...).
   counterEntityId String?
 
