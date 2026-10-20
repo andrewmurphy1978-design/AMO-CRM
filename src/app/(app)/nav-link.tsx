@@ -17,6 +17,7 @@ import SocialIcon from "./social-icon";
 import BookingsIcon from "./bookings-icon";
 import PersonalIcon from "./personal-icon";
 import SettingsIcon from "./settings-icon";
+import AccountingIcon from "./accounting-icon";
 
 // Keyed by href so the icon follows the route regardless of the (localized)
 // label text. Every nav item gets the same colored-pill badge style used on
@@ -34,6 +35,7 @@ const NAV_PILL_ICONS: Record<
   "/contacts": ContactsIcon,
   "/projects": ProjectsIcon,
   "/invoices": InvoicesIcon,
+  "/accounting": AccountingIcon,
   "/marketing": MarketingIcon,
   "/social-analytics": SocialIcon,
   "/bookings": BookingsIcon,

@@ -518,8 +518,12 @@ export default function EmailComposeDialog({
   async function handleDiscard() {
     if (!target?.draft) return;
     setDiscarding(true);
-    await discardDraftAction(target.draft.id, target.draft.source);
+    const result = await discardDraftAction(target.draft.id, target.draft.source);
     setDiscarding(false);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
     (onDiscarded ?? onSent)();
   }
 

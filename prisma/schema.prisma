@@ -2035,3 +2035,186 @@ model TranslationCache {
   @@unique([lang, sourceHash])
   @@map("translation_cache")
 }
+
+// ---------------------------------------------------------------------------
+// Accounting — double-entry books for several entities (see docs/accounting.md)
+// ---------------------------------------------------------------------------
+
+// The person and each business whose books are kept separately. A sole proprietorship is not a separate legal
+// person from its owner, but it is kept as its own set of books (and declared on the owner's personal return).
+enum AccEntityKind {
+  PERSONAL
+  SOLE_PROPRIETORSHIP
+  CORPORATION
+  LLC
+}
+
+model AccEntity {
+  id                 String        @id @default(cuid())
+  name               String
+  kind               AccEntityKind
+  country            String        @default("CA") // CA | US
+  province           String? // e.g. QC (sales-tax rates, Quebec forms)
+  currency           String        @default("CAD")
+  fiscalYearEndMonth Int           @default(12)
+  // CASH (revenue and expenses when the money moves) or ACCRUAL.
+  basis              String        @default("CASH")
+  // When registered for GST/QST (or HST), taxable purchases are split into the expense and the recoverable tax.
+  salesTaxRegistered Boolean       @default(false)
+  legalName          String?
+  taxNumber          String? // NEQ / business number / EIN
+  order              Int           @default(0)
+  archived           Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+
+  accounts AccAccount[]
+  entries  AccJournalEntry[]
+
+  @@map("acc_entities")
+}
+
+enum AccAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+// The chart of accounts: what used to be "categories". Real bank / credit-card accounts are accounts too
+// (subtype BANK / CREDIT_CARD) — that is where imported statements attach.
+model AccAccount {
+  id              String         @id @default(cuid())
+  entityId        String
+  entity          AccEntity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  nameFr          String?
+  type            AccAccountType
+  // BANK, CREDIT_CARD, RECEIVABLE, FIXED_ASSET, TAX_RECOVERABLE, PAYABLE, TAX_PAYABLE, LOAN, SHAREHOLDER_LOAN,
+  // INTERCO, OWNER_CAPITAL, EQUITY, REVENUE, COGS, OPERATING, OTHER...
+  subtype         String         @default("OTHER")
+  // Where the balance of this account lands on a tax return (T2125 line, Schedule C line, T1 line...).
+  taxLine         String?
+  // Share of an expense that is deductible (meals are 50%).
+  deductiblePct   Float          @default(100)
+  isSystem        Boolean        @default(false)
+  archived        Boolean        @default(false)
+  order           Int            @default(0)
+  // Bank / credit-card accounts.
+  institution     String?
+  last4           String?
+  // Normalizes a statement's sign: 1 = deposits positive; -1 when the statement shows purchases as positive.
+  importSign      Int            @default(1)
+  // Accounts that stand for a relationship with another entity (owner contributions, shareholder loan...).
+  counterEntityId String?
+
+  createdAt DateTime @default(now())
+
+  lines        AccJournalLine[]
+  transactions AccTransaction[]
+  batches      AccImportBatch[]
+
+  @@unique([entityId, code])
+  @@index([entityId])
+  @@map("acc_accounts")
+}
+
+model AccImportBatch {
+  id        String     @id @default(cuid())
+  accountId String
+  account   AccAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  fileName  String
+  rowCount  Int        @default(0)
+  newCount  Int        @default(0)
+  dupCount  Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  transactions AccTransaction[]
+
+  @@map("acc_import_batches")
+}
+
+// One line of an imported bank / card statement. `amount` is normalized: positive = money in (or debt paid down),
+// negative = money out (or debt added). It stays NEW until categorized, then POSTED to the books.
+model AccTransaction {
+  id                   String          @id @default(cuid())
+  accountId            String
+  account              AccAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  batchId              String?
+  batch                AccImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  date                 DateTime        @db.Date
+  description          String          @db.Text
+  // The supplier / company name shown in the transaction list, cleaned from the bank\'s description (editable);
+  // categorizations are remembered per supplier.
+  supplier             String          @default("")
+  amount               Float
+  // NEW | SUGGESTED | POSTED | IGNORED
+  status               String          @default("NEW")
+  // Who categorized it once posted: USER | RULE (a remembered supplier) | AI
+  categorizedBy        String?
+  // A proposed categorization from a rule or the AI, awaiting confirmation:
+  // { source: "RULE" | "AI", allocations: [{ entityId, accountId, pct }] }
+  suggestion           Json?
+  // What it was posted as: [{ entityId, accountId, amount, tax }] (shown in the list, prefilled when editing).
+  allocations          Json?
+  notes                String?         @db.Text
+  dedupeKey            String
+  // The transaction on the other account when this one is the other half of a transfer already posted.
+  matchedTransactionId String?
+  createdAt            DateTime        @default(now())
+
+  entries AccJournalEntry[]
+
+  @@unique([accountId, dedupeKey])
+  @@index([accountId, date])
+  @@index([status])
+  @@map("acc_transactions")
+}
+
+model AccJournalEntry {
+  id            String          @id @default(cuid())
+  entityId      String
+  entity        AccEntity       @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  date          DateTime        @db.Date
+  memo          String          @default("")
+  // BANK (from an imported transaction) | INTERCO (the other entity's side) | MANUAL | OPENING
+  source        String          @default("MANUAL")
+  transactionId String?
+  transaction   AccTransaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime        @default(now())
+
+  lines AccJournalLine[]
+
+  @@index([entityId, date])
+  @@index([transactionId])
+  @@map("acc_journal_entries")
+}
+
+model AccJournalLine {
+  id        String          @id @default(cuid())
+  entryId   String
+  entry     AccJournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   AccAccount      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  debit     Float           @default(0)
+  credit    Float           @default(0)
+  memo      String?
+
+  @@index([entryId])
+  @@index([accountId])
+  @@map("acc_journal_lines")
+}
+
+// "When the description contains X, post it like this" — learned from the user's own categorizations.
+model AccRule {
+  id          String   @id @default(cuid())
+  // The supplier key (see supplierKey in lib/accounting/supplier.ts) this rule applies to.
+  pattern     String   @unique
+  // [{ entityId, accountId, pct }] — percentages add up to 100 (a phone bill can be 60% business).
+  allocations Json
+  hits        Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@map("acc_rules")
+}

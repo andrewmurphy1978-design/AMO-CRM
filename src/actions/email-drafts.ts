@@ -246,33 +246,39 @@ export async function sendDraftAction(id: string, source: DraftSource, input: Se
   });
 }
 
-// Deletes a draft without sending it — the Discard action.
-export async function discardDraftAction(id: string, source: DraftSource): Promise<void> {
+// Deletes a draft without sending it — the Discard action. Returns an error
+// message instead of failing silently when the provider refuses the delete.
+export async function discardDraftAction(id: string, source: DraftSource): Promise<{ error?: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
-  await withScopedPrismaClient(async (db) => {
+  return withScopedPrismaClient(async (db) => {
     if (source === "ionos") {
       const uid = parseIonosDraftUid(id);
-      if (uid === null) return;
+      if (uid === null) return { error: "Unknown draft." };
       const mailbox = await getIonosMailbox(session.user.id, db);
-      if (!mailbox) return;
-      await deleteImapMessage(
-        {
-          host: mailbox.credentials.imapHost,
-          port: mailbox.credentials.imapPort,
-          security: mailbox.credentials.imapSecurity,
-          username: mailbox.credentials.username,
-          password: mailbox.credentials.password,
-        },
-        uid,
-        "Drafts"
-      );
-      return;
+      if (!mailbox) return { error: "The IONOS mailbox is not connected." };
+      try {
+        await deleteImapMessage(
+          {
+            host: mailbox.credentials.imapHost,
+            port: mailbox.credentials.imapPort,
+            security: mailbox.credentials.imapSecurity,
+            username: mailbox.credentials.username,
+            password: mailbox.credentials.password,
+          },
+          uid,
+          "Drafts"
+        );
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : "Could not delete the draft." };
+      }
+      return {};
     }
     const accessToken = await getValidAccessToken(session.user.id, db);
-    if (!accessToken) return;
-    await deleteGmailDraft(accessToken, id);
+    if (!accessToken) return { error: "Google is not connected." };
+    const ok = await deleteGmailDraft(accessToken, id);
+    return ok ? {} : { error: "Gmail refused to delete the draft. Reconnect Google in Settings to grant draft access, then try again." };
   });
 }
 

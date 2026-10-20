@@ -1,0 +1,239 @@
+// Chart-of-accounts templates, one per kind of entity. Every entity gets its own copy when it is created; the
+// user can add accounts but the system ones (sales tax, owner / shareholder relationships) stay.
+//
+// Tax-line references are a guide to where a balance lands on a return (T1 / T2125 for a Canadian sole
+// proprietorship, Schedule C for a US single-member LLC) — confirm them with an accountant before filing.
+
+export type AccType = "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
+export type EntityKind = "PERSONAL" | "SOLE_PROPRIETORSHIP" | "CORPORATION" | "LLC";
+
+export interface ChartAccount {
+  code: string;
+  en: string;
+  fr: string;
+  type: AccType;
+  subtype: string;
+  taxLine?: string;
+  deductiblePct?: number;
+  system?: boolean;
+}
+
+const a = (code: string, en: string, fr: string, type: AccType, subtype: string, taxLine?: string, extra: Partial<ChartAccount> = {}): ChartAccount => ({ code, en, fr, type, subtype, taxLine, ...extra });
+
+// Sales taxes (Canada): GST/HST goes to the CRA, QST to Revenu Québec. Collected on sales = payable; paid on
+// purchases = recoverable (input tax credits / input tax refunds). Remittances are plain payments to the payable accounts.
+const CA_SALES_TAX: ChartAccount[] = [
+  a("1300", "GST/HST recoverable (input tax credits)", "TPS/TVH à recouvrer (crédits de taxe sur les intrants)", "ASSET", "TAX_RECOVERABLE", "GST34 line 106", { system: true }),
+  a("1310", "QST recoverable (input tax refunds)", "TVQ à recouvrer (remboursements de taxe sur les intrants)", "ASSET", "TAX_RECOVERABLE", "Revenu Québec QST return", { system: true }),
+  a("2300", "GST/HST payable", "TPS/TVH à payer", "LIABILITY", "TAX_PAYABLE", "GST34 line 103", { system: true }),
+  a("2310", "QST payable", "TVQ à payer", "LIABILITY", "TAX_PAYABLE", "Revenu Québec QST return", { system: true }),
+];
+
+const PERSONAL_CA: ChartAccount[] = [
+  a("1200", "TFSA (CELI)", "CELI", "ASSET", "INVESTMENT"),
+  a("1210", "RRSP (REER)", "REER", "ASSET", "INVESTMENT", "T1 line 20800 (RRSP deduction)"),
+  a("1220", "FHSA (CELIAPP)", "CELIAPP", "ASSET", "INVESTMENT", "T1 line 20805 (FHSA deduction)"),
+  a("1230", "RESP (REEE)", "REEE", "ASSET", "INVESTMENT"),
+  a("1300", "Investments (non-registered)", "Placements (non enregistrés)", "ASSET", "INVESTMENT"),
+  a("1400", "Principal residence", "Résidence principale", "ASSET", "FIXED_ASSET"),
+  a("1410", "Vehicle", "Véhicule", "ASSET", "FIXED_ASSET"),
+  a("1500", "Tax refunds receivable", "Remboursements d'impôt à recevoir", "ASSET", "RECEIVABLE"),
+  a("2100", "Mortgage", "Hypothèque", "LIABILITY", "LOAN"),
+  a("2110", "Car loan", "Prêt auto", "LIABILITY", "LOAN"),
+  a("2120", "Line of credit", "Marge de crédit", "LIABILITY", "LOAN"),
+  a("2130", "Student loan", "Prêt étudiant", "LIABILITY", "LOAN"),
+  a("2200", "Income tax owing (CRA / Revenu Québec)", "Impôt à payer (ARC / Revenu Québec)", "LIABILITY", "TAX_PAYABLE"),
+  a("3000", "Net worth (opening balance)", "Avoir net (solde d'ouverture)", "EQUITY", "EQUITY", undefined, { system: true }),
+  a("4000", "Employment income", "Revenu d'emploi", "INCOME", "REVENUE", "T1 line 10100"),
+  a("4010", "Child benefits (CCB / ACE)", "Allocations pour enfants (ACE / ACFE)", "INCOME", "REVENUE", "T1 line 11700 (benefits)"),
+  a("4020", "EI / QPIP benefits", "Prestations d'AE / RQAP", "INCOME", "REVENUE", "T1 line 11900"),
+  a("4100", "Interest income", "Revenu d'intérêts", "INCOME", "REVENUE", "T1 line 12100"),
+  a("4110", "Dividends", "Dividendes", "INCOME", "REVENUE", "T1 line 12000"),
+  a("4120", "Capital gains", "Gains en capital", "INCOME", "REVENUE", "T1 line 12700"),
+  a("4200", "Rental income", "Revenus de location", "INCOME", "REVENUE", "T1 line 12600"),
+  a("4900", "Other income", "Autres revenus", "INCOME", "REVENUE", "T1 line 13000"),
+  a("5000", "Rent", "Loyer", "EXPENSE", "OPERATING"),
+  a("5010", "Mortgage interest", "Intérêts hypothécaires", "EXPENSE", "OPERATING"),
+  a("5020", "Property taxes", "Taxes foncières", "EXPENSE", "OPERATING"),
+  a("5030", "Home insurance", "Assurance habitation", "EXPENSE", "OPERATING"),
+  a("5040", "Electricity & heating", "Électricité et chauffage", "EXPENSE", "OPERATING"),
+  a("5050", "Internet, phone & TV", "Internet, téléphone et télé", "EXPENSE", "OPERATING"),
+  a("5100", "Groceries", "Épicerie", "EXPENSE", "OPERATING"),
+  a("5110", "Restaurants & takeout", "Restaurants et commandes", "EXPENSE", "OPERATING"),
+  a("5200", "Fuel", "Essence", "EXPENSE", "OPERATING"),
+  a("5210", "Vehicle insurance & registration", "Assurance et immatriculation du véhicule", "EXPENSE", "OPERATING"),
+  a("5220", "Vehicle maintenance & parking", "Entretien et stationnement", "EXPENSE", "OPERATING"),
+  a("5230", "Public transit & taxis", "Transport en commun et taxis", "EXPENSE", "OPERATING"),
+  a("5300", "Medical & dental", "Frais médicaux et dentaires", "EXPENSE", "OPERATING", "T1 line 33099 (medical expenses credit)"),
+  a("5310", "Pharmacy", "Pharmacie", "EXPENSE", "OPERATING", "T1 line 33099 (medical expenses credit)"),
+  a("5320", "Life & health insurance", "Assurance vie et maladie", "EXPENSE", "OPERATING"),
+  a("5400", "Children (clothing, activities)", "Enfants (vêtements, activités)", "EXPENSE", "OPERATING"),
+  a("5410", "Childcare", "Frais de garde", "EXPENSE", "OPERATING", "T1 line 21400 (child care expenses)"),
+  a("5420", "Education & tuition", "Éducation et frais de scolarité", "EXPENSE", "OPERATING", "T1 tuition credit"),
+  a("5500", "Clothing", "Vêtements", "EXPENSE", "OPERATING"),
+  a("5510", "Personal care", "Soins personnels", "EXPENSE", "OPERATING"),
+  a("5600", "Entertainment & leisure", "Divertissement et loisirs", "EXPENSE", "OPERATING"),
+  a("5610", "Subscriptions", "Abonnements", "EXPENSE", "OPERATING"),
+  a("5620", "Travel & vacation", "Voyages et vacances", "EXPENSE", "OPERATING"),
+  a("5700", "Gifts", "Cadeaux", "EXPENSE", "OPERATING"),
+  a("5710", "Charitable donations", "Dons de bienfaisance", "EXPENSE", "OPERATING", "T1 line 34900 (donations credit)"),
+  a("5800", "Bank fees & interest", "Frais bancaires et intérêts", "EXPENSE", "OPERATING"),
+  a("5990", "Other personal expenses", "Autres dépenses personnelles", "EXPENSE", "OPERATING"),
+];
+
+const SOLE_PROP_CA: ChartAccount[] = [
+  a("1100", "Accounts receivable", "Comptes clients", "ASSET", "RECEIVABLE"),
+  a("1200", "Prepaid expenses", "Charges payées d'avance", "ASSET", "OTHER"),
+  ...CA_SALES_TAX.filter((x) => x.type === "ASSET"),
+  a("1500", "Computer equipment (CCA class 50)", "Matériel informatique (DPA catégorie 50)", "ASSET", "FIXED_ASSET"),
+  a("1510", "Furniture & fixtures (CCA class 8)", "Mobilier et agencements (DPA catégorie 8)", "ASSET", "FIXED_ASSET"),
+  a("1590", "Accumulated capital cost allowance", "Déduction pour amortissement cumulée", "ASSET", "FIXED_ASSET"),
+  a("2000", "Accounts payable", "Comptes fournisseurs", "LIABILITY", "PAYABLE"),
+  ...CA_SALES_TAX.filter((x) => x.type === "LIABILITY"),
+  a("2500", "Business loan / line of credit", "Prêt / marge de crédit d'entreprise", "LIABILITY", "LOAN"),
+  a("3000", "Owner's capital (opening balance)", "Capital du propriétaire (solde d'ouverture)", "EQUITY", "EQUITY", undefined, { system: true }),
+  a("4000", "Service revenue", "Revenus de services", "INCOME", "REVENUE", "T2125 line 8000"),
+  a("4010", "Affiliate commissions", "Commissions d'affiliation", "INCOME", "REVENUE", "T2125 line 8000"),
+  a("4020", "Courses, coaching & consulting", "Cours, coaching et consultation", "INCOME", "REVENUE", "T2125 line 8000"),
+  a("4900", "Other business income", "Autres revenus d'entreprise", "INCOME", "REVENUE", "T2125 line 8230"),
+  a("5000", "Purchases & cost of goods", "Achats et coût des marchandises", "EXPENSE", "COGS", "T2125 line 8320"),
+  a("5010", "Subcontracts", "Sous-traitance", "EXPENSE", "COGS", "T2125 line 8360"),
+  a("6010", "Advertising", "Publicité", "EXPENSE", "OPERATING", "T2125 line 8521"),
+  a("6020", "Meals & entertainment (50% deductible)", "Repas et divertissement (50 % déductible)", "EXPENSE", "OPERATING", "T2125 line 8523", { deductiblePct: 50 }),
+  a("6030", "Bad debts", "Créances irrécouvrables", "EXPENSE", "OPERATING", "T2125 line 8590"),
+  a("6040", "Insurance", "Assurances", "EXPENSE", "OPERATING", "T2125 line 8690"),
+  a("6050", "Interest & bank charges", "Intérêts et frais bancaires", "EXPENSE", "OPERATING", "T2125 line 8710"),
+  a("6060", "Business taxes, licences & memberships", "Taxes d'affaires, permis et cotisations", "EXPENSE", "OPERATING", "T2125 line 8760"),
+  a("6070", "Office expenses", "Frais de bureau", "EXPENSE", "OPERATING", "T2125 line 8810"),
+  a("6075", "Software & online subscriptions", "Logiciels et abonnements en ligne", "EXPENSE", "OPERATING", "T2125 line 8810"),
+  a("6080", "Office stationery & supplies", "Papeterie et fournitures", "EXPENSE", "OPERATING", "T2125 line 8811"),
+  a("6090", "Professional fees (legal, accounting)", "Honoraires professionnels (juridique, comptable)", "EXPENSE", "OPERATING", "T2125 line 8860"),
+  a("6100", "Management & administration fees", "Frais de gestion et d'administration", "EXPENSE", "OPERATING", "T2125 line 8871"),
+  a("6110", "Rent", "Loyer", "EXPENSE", "OPERATING", "T2125 line 8910"),
+  a("6120", "Repairs & maintenance", "Réparations et entretien", "EXPENSE", "OPERATING", "T2125 line 8960"),
+  a("6130", "Salaries, wages & benefits", "Salaires, traitements et avantages", "EXPENSE", "OPERATING", "T2125 line 9060"),
+  a("6150", "Travel", "Frais de déplacement", "EXPENSE", "OPERATING", "T2125 line 9200"),
+  a("6160", "Telephone & utilities", "Téléphone et services publics", "EXPENSE", "OPERATING", "T2125 line 9220"),
+  a("6180", "Delivery, freight & express", "Livraison, fret et messagerie", "EXPENSE", "OPERATING", "T2125 line 9275"),
+  a("6190", "Motor vehicle expenses", "Frais de véhicule à moteur", "EXPENSE", "OPERATING", "T2125 line 9281"),
+  a("6200", "Business-use-of-home", "Frais d'utilisation de la maison", "EXPENSE", "OPERATING", "T2125 line 9945"),
+  a("6210", "Capital cost allowance (CCA)", "Déduction pour amortissement (DPA)", "EXPENSE", "OPERATING", "T2125 line 9936"),
+  a("6900", "Other expenses (training, fees…)", "Autres dépenses (formation, frais…)", "EXPENSE", "OPERATING", "T2125 line 9270"),
+];
+
+const CORP_CA: ChartAccount[] = [
+  a("1100", "Accounts receivable", "Comptes clients", "ASSET", "RECEIVABLE"),
+  a("1200", "Prepaid expenses", "Charges payées d'avance", "ASSET", "OTHER"),
+  ...CA_SALES_TAX.filter((x) => x.type === "ASSET"),
+  a("1500", "Computer equipment (CCA class 50)", "Matériel informatique (DPA catégorie 50)", "ASSET", "FIXED_ASSET"),
+  a("1510", "Furniture & fixtures (CCA class 8)", "Mobilier et agencements (DPA catégorie 8)", "ASSET", "FIXED_ASSET"),
+  a("1590", "Accumulated amortization", "Amortissement cumulé", "ASSET", "FIXED_ASSET"),
+  a("2000", "Accounts payable", "Comptes fournisseurs", "LIABILITY", "PAYABLE"),
+  ...CA_SALES_TAX.filter((x) => x.type === "LIABILITY"),
+  a("2400", "Corporate income taxes payable", "Impôts des sociétés à payer", "LIABILITY", "TAX_PAYABLE"),
+  a("2410", "Payroll deductions payable (source deductions)", "Retenues à la source à payer", "LIABILITY", "TAX_PAYABLE"),
+  a("2420", "Dividends payable", "Dividendes à payer", "LIABILITY", "PAYABLE"),
+  a("2500", "Business loan / line of credit", "Prêt / marge de crédit d'entreprise", "LIABILITY", "LOAN"),
+  a("3000", "Share capital", "Capital-actions", "EQUITY", "EQUITY", undefined, { system: true }),
+  a("3200", "Retained earnings (opening)", "Bénéfices non répartis (ouverture)", "EQUITY", "EQUITY", undefined, { system: true }),
+  a("3300", "Dividends declared", "Dividendes déclarés", "EQUITY", "EQUITY"),
+  a("4000", "Sales / service revenue", "Ventes / revenus de services", "INCOME", "REVENUE", "GIFI: trade sales of goods and services"),
+  a("4900", "Other income", "Autres revenus", "INCOME", "REVENUE", "GIFI: other revenue"),
+  a("5000", "Cost of goods sold / purchases", "Coût des marchandises vendues / achats", "EXPENSE", "COGS", "GIFI: purchases / cost of sales"),
+  a("5010", "Subcontracts", "Sous-traitance", "EXPENSE", "COGS", "GIFI: subcontracts"),
+  a("6010", "Advertising & promotion", "Publicité et promotion", "EXPENSE", "OPERATING", "GIFI: advertising and promotion"),
+  a("6020", "Meals & entertainment (50% deductible)", "Repas et divertissement (50 % déductible)", "EXPENSE", "OPERATING", "GIFI: meals and entertainment", { deductiblePct: 50 }),
+  a("6040", "Insurance", "Assurances", "EXPENSE", "OPERATING", "GIFI: insurance"),
+  a("6050", "Interest & bank charges", "Intérêts et frais bancaires", "EXPENSE", "OPERATING", "GIFI: interest and bank charges"),
+  a("6060", "Business taxes, licences & memberships", "Taxes d'affaires, permis et cotisations", "EXPENSE", "OPERATING", "GIFI: business taxes, licences and memberships"),
+  a("6070", "Office expenses", "Frais de bureau", "EXPENSE", "OPERATING", "GIFI: office expenses"),
+  a("6075", "Software & online subscriptions", "Logiciels et abonnements en ligne", "EXPENSE", "OPERATING", "GIFI: office expenses"),
+  a("6090", "Professional fees (legal, accounting)", "Honoraires professionnels (juridique, comptable)", "EXPENSE", "OPERATING", "GIFI: professional fees"),
+  a("6110", "Rent", "Loyer", "EXPENSE", "OPERATING", "GIFI: rent"),
+  a("6120", "Repairs & maintenance", "Réparations et entretien", "EXPENSE", "OPERATING", "GIFI: repairs and maintenance"),
+  a("6130", "Salaries & wages", "Salaires et traitements", "EXPENSE", "OPERATING", "GIFI: salaries and wages"),
+  a("6135", "Employer payroll contributions", "Cotisations de l'employeur", "EXPENSE", "OPERATING", "GIFI: employer contributions"),
+  a("6150", "Travel", "Frais de déplacement", "EXPENSE", "OPERATING", "GIFI: travel"),
+  a("6160", "Telephone & utilities", "Téléphone et services publics", "EXPENSE", "OPERATING", "GIFI: utilities"),
+  a("6190", "Motor vehicle expenses", "Frais de véhicule à moteur", "EXPENSE", "OPERATING", "GIFI: motor vehicle expenses"),
+  a("6210", "Amortization / CCA", "Amortissement / DPA", "EXPENSE", "OPERATING", "GIFI: amortization"),
+  a("6900", "Other expenses", "Autres dépenses", "EXPENSE", "OPERATING", "GIFI: other expenses"),
+  a("7000", "Corporate income tax expense", "Charge d'impôts des sociétés", "EXPENSE", "OPERATING", "GIFI: income taxes"),
+];
+
+const LLC_US: ChartAccount[] = [
+  a("1100", "Accounts receivable", "Comptes clients", "ASSET", "RECEIVABLE"),
+  a("1200", "Prepaid expenses", "Charges payées d'avance", "ASSET", "OTHER"),
+  a("1500", "Equipment", "Équipement", "ASSET", "FIXED_ASSET"),
+  a("1590", "Accumulated depreciation", "Amortissement cumulé", "ASSET", "FIXED_ASSET"),
+  a("2000", "Accounts payable", "Comptes fournisseurs", "LIABILITY", "PAYABLE"),
+  a("2200", "Sales tax payable (state)", "Taxe de vente à payer (État)", "LIABILITY", "TAX_PAYABLE"),
+  a("2500", "Loans payable", "Emprunts à payer", "LIABILITY", "LOAN"),
+  a("3000", "Member's capital (opening balance)", "Capital du membre (solde d'ouverture)", "EQUITY", "EQUITY", undefined, { system: true }),
+  a("4000", "Gross receipts or sales", "Recettes brutes ou ventes", "INCOME", "REVENUE", "Schedule C line 1"),
+  a("4900", "Other income", "Autres revenus", "INCOME", "REVENUE", "Schedule C line 6"),
+  a("5000", "Cost of goods sold", "Coût des marchandises vendues", "EXPENSE", "COGS", "Schedule C line 4"),
+  a("6010", "Advertising", "Publicité", "EXPENSE", "OPERATING", "Schedule C line 8"),
+  a("6020", "Car & truck expenses", "Frais de voiture et camion", "EXPENSE", "OPERATING", "Schedule C line 9"),
+  a("6030", "Commissions & fees", "Commissions et frais", "EXPENSE", "OPERATING", "Schedule C line 10"),
+  a("6040", "Contract labor", "Main-d'œuvre contractuelle", "EXPENSE", "OPERATING", "Schedule C line 11"),
+  a("6050", "Depreciation", "Amortissement", "EXPENSE", "OPERATING", "Schedule C line 13"),
+  a("6060", "Employee benefit programs", "Avantages sociaux", "EXPENSE", "OPERATING", "Schedule C line 14"),
+  a("6070", "Insurance (other than health)", "Assurances (autres que santé)", "EXPENSE", "OPERATING", "Schedule C line 15"),
+  a("6080", "Interest — mortgage", "Intérêts — hypothèque", "EXPENSE", "OPERATING", "Schedule C line 16a"),
+  a("6090", "Interest — other", "Intérêts — autres", "EXPENSE", "OPERATING", "Schedule C line 16b"),
+  a("6100", "Legal & professional services", "Services juridiques et professionnels", "EXPENSE", "OPERATING", "Schedule C line 17"),
+  a("6110", "Office expense", "Frais de bureau", "EXPENSE", "OPERATING", "Schedule C line 18"),
+  a("6120", "Pension & profit-sharing plans", "Régimes de retraite", "EXPENSE", "OPERATING", "Schedule C line 19"),
+  a("6130", "Rent — vehicles, machinery & equipment", "Location — véhicules et équipement", "EXPENSE", "OPERATING", "Schedule C line 20a"),
+  a("6140", "Rent — other business property", "Location — autres biens", "EXPENSE", "OPERATING", "Schedule C line 20b"),
+  a("6150", "Repairs & maintenance", "Réparations et entretien", "EXPENSE", "OPERATING", "Schedule C line 21"),
+  a("6160", "Supplies", "Fournitures", "EXPENSE", "OPERATING", "Schedule C line 22"),
+  a("6170", "Taxes & licenses", "Taxes et permis", "EXPENSE", "OPERATING", "Schedule C line 23"),
+  a("6180", "Travel", "Déplacements", "EXPENSE", "OPERATING", "Schedule C line 24a"),
+  a("6190", "Meals (50% deductible)", "Repas (50 % déductible)", "EXPENSE", "OPERATING", "Schedule C line 24b", { deductiblePct: 50 }),
+  a("6200", "Utilities", "Services publics", "EXPENSE", "OPERATING", "Schedule C line 25"),
+  a("6210", "Wages", "Salaires", "EXPENSE", "OPERATING", "Schedule C line 26"),
+  a("6220", "Other expenses (software, bank fees…)", "Autres dépenses (logiciels, frais bancaires…)", "EXPENSE", "OPERATING", "Schedule C line 27a"),
+  a("6230", "Business use of home", "Utilisation de la maison à des fins d'affaires", "EXPENSE", "OPERATING", "Schedule C line 30"),
+];
+
+export function chartFor(kind: EntityKind, country: string): ChartAccount[] {
+  if (kind === "PERSONAL") return PERSONAL_CA;
+  if (kind === "SOLE_PROPRIETORSHIP") return SOLE_PROP_CA;
+  if (kind === "CORPORATION") return CORP_CA;
+  return country === "US" ? LLC_US : SOLE_PROP_CA;
+}
+
+// Defaults for a new entity of each kind.
+export function entityDefaults(kind: EntityKind): { country: string; currency: string; basis: string } {
+  if (kind === "LLC") return { country: "US", currency: "USD", basis: "CASH" };
+  if (kind === "CORPORATION") return { country: "CA", currency: "CAD", basis: "ACCRUAL" };
+  return { country: "CA", currency: "CAD", basis: "CASH" };
+}
+
+// The account (in `entity`'s books) that stands for the relationship with `other`: what the owner put in or took
+// out of a sole proprietorship / LLC (equity), the shareholder loan of a corporation, an amount due to / from
+// another entity. Created the first time money moves between the two.
+export function intercoSpec(entity: { kind: EntityKind }, other: { kind: EntityKind; name: string }): { code: string; en: string; fr: string; type: AccType; subtype: string; unique: boolean } {
+  const ownerLike = entity.kind === "SOLE_PROPRIETORSHIP" || entity.kind === "LLC";
+  if (ownerLike && other.kind === "PERSONAL") {
+    return { code: "3100", en: entity.kind === "LLC" ? "Member contributions & draws" : "Owner contributions & draws", fr: entity.kind === "LLC" ? "Apports et retraits du membre" : "Apports et retraits du propriétaire", type: "EQUITY", subtype: "OWNER_CAPITAL", unique: true };
+  }
+  if (entity.kind === "CORPORATION" && other.kind === "PERSONAL") {
+    return { code: "2100", en: "Due to / from shareholder", fr: "Dû à / par l'actionnaire", type: "LIABILITY", subtype: "SHAREHOLDER_LOAN", unique: true };
+  }
+  if (entity.kind === "PERSONAL") {
+    const asset = other.kind === "CORPORATION" ? `Loan to ${other.name}` : `Investment in ${other.name}`;
+    const assetFr = other.kind === "CORPORATION" ? `Prêt à ${other.name}` : `Investissement dans ${other.name}`;
+    // The owner's own sole proprietorship / disregarded LLC is the same person: an investment, never a debt.
+    const sameOwner = other.kind === "SOLE_PROPRIETORSHIP" || other.kind === "LLC";
+    return { code: "", en: asset, fr: assetFr, type: "ASSET", subtype: sameOwner ? "OWNER_INVESTMENT" : "INTERCO", unique: false };
+  }
+  return { code: "", en: `Due to / from ${other.name}`, fr: `Dû à / par ${other.name}`, type: "LIABILITY", subtype: "INTERCO", unique: false };
+}
+
+// Balance-sheet side of an account that can go either way (shareholder loan, due to / from).
+export function isTwoWay(subtype: string): boolean {
+  return subtype === "SHAREHOLDER_LOAN" || subtype === "INTERCO";
+}

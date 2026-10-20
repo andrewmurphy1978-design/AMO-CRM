@@ -37,6 +37,9 @@ export async function GET(request: NextRequest) {
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.send",
+    // Saving, reading back and deleting drafts (Email page > Drafts) needs compose access; send/readonly alone
+    // cannot delete a draft.
+    "https://www.googleapis.com/auth/gmail.compose",
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/contacts",
     // Google Tasks sync (Settings > Google integration): read/write tasks.

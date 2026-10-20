@@ -38,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/contacts", label: t.nav.contacts },
     { href: "/projects", label: t.nav.projects },
     { href: "/invoices", label: t.nav.invoices },
+    ...(session.user.role === "ADMIN" ? [{ href: "/accounting", label: t.nav.accounting }] : []),
     { href: "/marketing", label: t.nav.marketing },
     { href: "/social-analytics", label: t.nav.socialAnalytics },
     { href: "/bookings", label: t.nav.bookings },
