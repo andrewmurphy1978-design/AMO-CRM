@@ -110,15 +110,33 @@ export default function ReconcilePanel({ lang, month, summary: s }: { lang: "en"
       <details open={!locked}>
         <summary className="cursor-pointer text-sm font-medium text-ink">{fr ? `Transactions du mois (${s.txs.length})` : `This month's transactions (${s.txs.length})`}</summary>
         <table className="mt-2 w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs uppercase text-soft">
+              <th className="py-1 pr-3">Date</th>
+              <th className="pr-3">{fr ? "Description" : "Description"}</th>
+              <th className="pr-3" />
+              <th className="pr-3 text-right">{fr ? "Montant" : "Amount"}</th>
+              <th className="text-right">{s.isCard ? (fr ? "Solde dû" : "Balance owed") : fr ? "Solde" : "Balance"}</th>
+            </tr>
+          </thead>
           <tbody className="divide-y divide-card-border">
-            {s.txs.map((t) => (
-              <tr key={t.id}>
-                <td className="py-1 pr-3 whitespace-nowrap text-soft">{t.date}</td>
-                <td className="pr-3 text-ink">{t.supplier}<span className="block text-xs text-soft">{t.description}</span></td>
-                <td className="pr-3 text-xs text-soft">{t.status === "POSTED" ? "✓" : t.status === "IGNORED" ? (fr ? "ignorée" : "ignored") : fr ? "à catégoriser" : "to categorize"}</td>
-                <td className={`text-right whitespace-nowrap ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{m(t.amount)}</td>
-              </tr>
-            ))}
+            {(() => {
+              // Balance after each transaction, starting from the month's opening balance. The last line of each day is the day's closing balance.
+              let running = s.opening;
+              return s.txs.map((t, i) => {
+                running = Math.round((running + (s.isCard ? -t.amount : t.amount)) * 100) / 100;
+                const lastOfDay = i === s.txs.length - 1 || s.txs[i + 1].date !== t.date;
+                return (
+                  <tr key={t.id}>
+                    <td className="py-1 pr-3 whitespace-nowrap text-soft">{t.date}</td>
+                    <td className="pr-3 text-ink">{t.supplier}<span className="block text-xs text-soft">{t.description}</span></td>
+                    <td className="pr-3 text-xs text-soft">{t.status === "POSTED" ? "✓" : t.status === "IGNORED" ? (fr ? "ignorée" : "ignored") : fr ? "à catégoriser" : "to categorize"}</td>
+                    <td className={`pr-3 text-right whitespace-nowrap ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{m(t.amount)}</td>
+                    <td className={`text-right whitespace-nowrap ${lastOfDay ? "font-bold text-ink" : "text-soft"}`}>{m(running)}</td>
+                  </tr>
+                );
+              });
+            })()}
           </tbody>
         </table>
       </details>
