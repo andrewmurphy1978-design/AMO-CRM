@@ -21,6 +21,15 @@ function parseJson(text: string): unknown {
   return JSON.parse(text.slice(start, end + 1));
 }
 
+// Spending that always belongs to a particular personal account, whatever the AI would say. Returns the account code
+// in the Personal chart.
+export function keywordAccountCode(text: string): string | null {
+  const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/\b(vet|veto|veterinaire|veterinarian|vets|clinique veterinaire|animal hospital|hopital veterinaire)\b/.test(t) || /veterinair/.test(t)) return "5330";
+  if (/bonisoir|bonsoir|couche[- ]?tard|depanneur|\bdep\b|\bmac'?s\b|7[- ]?eleven|circle k|voisin|dollarama tabac|tabagie|tabac|\bsaq\b|\bsaq\s*(express|classique|selection)|alcool|beer|biere|vin\b|cigar|cigaret|smoke shop|vape/.test(t)) return "5120";
+  return null;
+}
+
 /** One suggestion per supplier: which entity and account it most likely belongs to (null = unsure). */
 export async function suggestForSuppliers(
   db: PrismaClient,
@@ -37,7 +46,7 @@ export async function suggestForSuppliers(
     const batch = suppliers.slice(i, i + 30);
     const prompt = `You are a Canadian bookkeeper (Quebec) doing the books of one person who has a personal set of books, a sole proprietorship (web / funnel / AI consulting and affiliate marketing), and possibly corporations and a US LLC. All their bank statements are from their PERSONAL bank accounts, so personal and business spending are mixed.
 
-For each supplier below pick the most likely account: the entity it belongs to and one account of that entity's chart. Business-looking software, advertising, hosting, domain, professional and office spending goes to the business; groceries, restaurants for family, clothing, health, school and leisure go to Personal; credit-card payments and transfers go to the matching bank / credit-card account; payments to CRA / Revenu Québec for GST/QST go to the sales-tax payable accounts of the business. If you cannot tell, answer null for that supplier.
+For each supplier below pick the most likely account: the entity it belongs to and one account of that entity's chart. Business-looking software, advertising, hosting, domain, professional and office spending goes to the business; groceries, restaurants for family, clothing, health, school and leisure go to Personal; convenience stores (dépanneur, Bonisoir, Couche-Tard, Mac's...), liquor and tobacco go to Personal "Alcohol and cigarettes"; veterinarians and animal clinics go to Personal "Veterinarian expense"; credit-card payments and transfers go to the matching bank / credit-card account; payments to CRA / Revenu Québec for GST/QST go to the sales-tax payable accounts of the business. If you cannot tell, answer null for that supplier.
 
 Entities:
 ${entities.map(([id, label]) => `${id} = ${label}`).join("\n")}

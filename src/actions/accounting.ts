@@ -18,7 +18,7 @@ import {
 } from "@/lib/accounting/ledger";
 import type { EntityKind } from "@/lib/accounting/charts";
 import { r2 } from "@/lib/accounting/posting";
-import { suggestForSuppliers, readPdfStatement, type AiAccountOption } from "@/lib/accounting/ai";
+import { suggestForSuppliers, keywordAccountCode, readPdfStatement, type AiAccountOption } from "@/lib/accounting/ai";
 import { parseTaxNumbers } from "@/lib/accounting/tax-numbers";
 import { supplierKey } from "@/lib/accounting/supplier";
 
@@ -322,7 +322,7 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
   await requireAdmin();
   try {
     return await withScopedPrismaClient(async (db) => {
-      const open = await db.accTransaction.findMany({ where: { status: "NEW" }, select: { id: true, supplier: true, description: true, amount: true } });
+      const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] } }, select: { id: true, supplier: true, description: true, amount: true } });
       if (open.length === 0) return { success: "Nothing to categorize.", suggested: 0 };
       const groups = new Map<string, { name: string; sample: string; amount: number; count: number; ids: string[] }>();
       for (const t of open) {
@@ -335,7 +335,17 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
       const options: AiAccountOption[] = accounts
         .filter((a) => !a.entity.archived)
         .map((a) => ({ id: a.id, entityId: a.entityId, entityName: a.entity.name, entityKind: a.entity.kind, code: a.code, name: a.name, type: a.type }));
-      const found = await suggestForSuppliers(db, [...groups.values()].map(({ name, sample, amount, count }) => ({ name, sample, amount, count })), options);
+      // Fixed keyword rules first (convenience stores, vets...), the AI for the rest.
+      const personal = accounts.find((a) => a.entity.kind === "PERSONAL");
+      const forced = new Map<string, { accountId: string; entityId: string }>();
+      for (const g of groups.values()) {
+        const code = keywordAccountCode(`${g.name} ${g.sample}`);
+        const acc = code && personal ? accounts.find((a) => a.entityId === personal.entityId && a.code === code) : null;
+        if (acc) forced.set(g.name, { accountId: acc.id, entityId: acc.entityId });
+      }
+      const rest = [...groups.values()].filter((g) => !forced.has(g.name));
+      const found = new Map(forced);
+      if (rest.length > 0) for (const [k, v] of await suggestForSuppliers(db, rest.map(({ name, sample, amount, count }) => ({ name, sample, amount, count })), options)) found.set(k, v);
       let suggested = 0;
       for (const [supplier, pick] of found) {
         const g = groups.get(supplier);

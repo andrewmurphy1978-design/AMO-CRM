@@ -24,11 +24,13 @@ const chunks = <T,>(list: T[], size: number): T[][] => {
 
 export async function ensureEntityChart(db: PrismaClient, entityId: string): Promise<void> {
   const entity = await db.accEntity.findUniqueOrThrow({ where: { id: entityId } });
-  const have = await db.accAccount.count({ where: { entityId } });
-  if (have > 0) return;
   const chart = chartFor(entity.kind as EntityKind, entity.country);
+  // Also adds accounts that were added to the template after the entity was created.
+  const haveCodes = new Set((await db.accAccount.findMany({ where: { entityId }, select: { code: true } })).map((a) => a.code));
+  const missing = chart.map((c, order) => ({ c, order })).filter(({ c }) => !haveCodes.has(c.code));
+  if (missing.length === 0) return;
   await db.accAccount.createMany({
-    data: chart.map((c, order) => ({
+    data: missing.map(({ c, order }) => ({
       entityId,
       code: c.code,
       name: c.en,
@@ -72,7 +74,11 @@ export async function createEntity(
 
 /** First visit: the owner's personal books and the sole proprietorship (Andrew Murphy Online). */
 export async function ensureAccountingSetup(db: PrismaClient): Promise<void> {
-  if ((await db.accEntity.count()) > 0) return;
+  const entities = await db.accEntity.findMany({ select: { id: true } });
+  if (entities.length > 0) {
+    for (const e of entities) await ensureEntityChart(db, e.id);
+    return;
+  }
   await createEntity(db, { name: "Personal", kind: "PERSONAL" });
   await createEntity(db, { name: "Andrew Murphy Online", kind: "SOLE_PROPRIETORSHIP", legalName: "Andrew Murphy Online (sole proprietorship)" });
 }
