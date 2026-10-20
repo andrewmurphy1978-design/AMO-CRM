@@ -99,24 +99,32 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             <td className="py-1 pr-3 text-soft">{codeOf(id)}</td>
             <td className="pr-3 text-ink" style={pad}>{nameOf(id)}</td>
             <td className="text-right text-ink">{m(own?.balance ?? 0)}</td>
+            <td />
           </tr>
         );
       }
+      // A header with its accounts (amounts in the middle column), then its total below them in the right-hand column.
       return (
         <Fragment key={id}>
           <tr>
             <td className="py-1 pr-3 text-soft">{codeOf(id)}</td>
-            <td className={`pr-3 text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`} style={pad}>{nameOf(id)}</td>
-            <td className="text-right font-medium text-ink">{m(total(id))}</td>
+            <td className={`pr-3 text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`} style={pad} colSpan={3}>{nameOf(id)}</td>
           </tr>
           {own && own.balance !== 0 && (
-            <tr className="text-soft">
+            <tr>
               <td />
-              <td className="pr-3 text-xs" style={{ paddingLeft: (depth + 1) * 16 }}>{nameOf(id)}</td>
-              <td className="text-right text-xs">{m(own.balance)}</td>
+              <td className="pr-3 text-ink" style={{ paddingLeft: (depth + 1) * 16 }}>{nameOf(id)}</td>
+              <td className="text-right text-ink">{m(own.balance)}</td>
+              <td />
             </tr>
           )}
           {children.map((c) => render(c, depth + 1))}
+          <tr className="border-t border-card-border">
+            <td />
+            <td className={`py-1 pr-3 text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`} style={pad}>{fr ? "Total" : "Total"} — {nameOf(id)}</td>
+            <td />
+            <td className={`text-right text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`}>{m(total(id))}</td>
+          </tr>
         </Fragment>
       );
     };
@@ -130,9 +138,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         if (list.length === 0) return null;
         return (
           <Fragment key={d.key}>
-            <tr><td colSpan={3} className="pt-2 pb-0.5 text-xs font-medium text-ink">{d[lang]}</td></tr>
+            <tr><td colSpan={4} className="pt-2 pb-0.5 text-xs font-medium text-ink">{d[lang]}</td></tr>
             <Rows rows={list} />
-            <tr className="text-xs text-soft"><td /><td className="py-0.5">{fr ? "Total" : "Total"} — {d[lang].split(" (")[0]}</td><td className="text-right">{m(list.reduce((s, r) => s + r.balance, 0))}</td></tr>
+            <tr className="text-xs text-soft"><td /><td className="py-0.5">{fr ? "Total" : "Total"} — {d[lang]}</td><td /><td className="text-right">{m(list.reduce((s, r) => s + r.balance, 0))}</td></tr>
           </Fragment>
         );
       })}
@@ -142,12 +150,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <tr className={strong ? "border-t-2 border-ink font-bold" : "border-t border-card-border font-semibold"}>
       <td />
       <td className="py-1.5 pr-3 text-ink">{label}</td>
+      <td />
       <td className="text-right text-ink">{m(value)}</td>
     </tr>
   );
   const Head = ({ children }: { children: string }) => (
     <tr>
-      <td colSpan={3} className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-soft">{children}</td>
+      <td colSpan={4} className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-soft">{children}</td>
     </tr>
   );
 
@@ -197,8 +206,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                 <Head>{fr ? "Actifs" : "Assets"}</Head><Sections rows={b.assets} defs={ASSET_SECTIONS} /><Total label={fr ? "Total des actifs" : "Total assets"} value={b.totalAssets} />
                 <Head>{fr ? "Passifs" : "Liabilities"}</Head><Sections rows={b.liabilities} defs={LIABILITY_SECTIONS} /><Total label={fr ? "Total des passifs" : "Total liabilities"} value={b.totalLiabilities} />
                 <Head>{fr ? "Capitaux propres" : "Equity"}</Head><Rows rows={b.equity} />
-                <tr><td /><td className="py-1 text-ink">{fr ? "Bénéfices non répartis" : "Retained earnings"}</td><td className="text-right">{m(b.retained)}</td></tr>
-                <tr><td /><td className="py-1 text-ink">{fr ? "Résultat de l'exercice" : "Current-year earnings"}</td><td className="text-right">{m(b.currentEarnings)}</td></tr>
+                <tr><td /><td className="py-1 text-ink">{fr ? "Bénéfices non répartis" : "Retained earnings"}</td><td className="text-right">{m(b.retained)}</td><td /></tr>
+                <tr><td /><td className="py-1 text-ink">{fr ? "Résultat de l'exercice" : "Current-year earnings"}</td><td className="text-right">{m(b.currentEarnings)}</td><td /></tr>
                 <Total label={fr ? "Total des capitaux propres" : "Total equity"} value={b.totalEquity} />
                 <Total strong label={fr ? "Passifs + capitaux propres" : "Liabilities + equity"} value={b.totalLiabilities + b.totalEquity} />
               </tbody></table>
@@ -249,7 +258,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           const Block = ({ title, list }: { title: string; list: typeof t.income }) => (
             <>
               <Head>{title}</Head>
-              {list.map((g) => (<tr key={g.taxLine}><td className="py-1 pr-3 text-soft">{g.taxLine}</td><td className="pr-3 text-ink">{g.accounts.join(", ")}</td><td className="text-right text-ink">{m(g.deductible)}</td></tr>))}
+              {list.map((g) => (<tr key={g.taxLine}><td className="py-1 pr-3 text-soft">{g.taxLine}</td><td className="pr-3 text-ink">{g.accounts.join(", ")}</td><td className="text-right text-ink">{m(g.deductible)}</td><td /></tr>))}
             </>
           );
           return (
@@ -269,10 +278,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           const Part = ({ title, p }: { title: string; p: typeof s.gstHst }) => (
             <tbody>
               <Head>{title}</Head>
-              <tr><td /><td className="py-1 text-ink">{fr ? "Perçue sur les ventes" : "Collected on sales"}</td><td className="text-right">{m(p.collected)}</td></tr>
-              <tr><td /><td className="py-1 text-ink">{fr ? "Payée sur les achats (récupérable)" : "Paid on purchases (recoverable)"}</td><td className="text-right">{m(p.recoverable)}</td></tr>
+              <tr><td /><td className="py-1 text-ink">{fr ? "Perçue sur les ventes" : "Collected on sales"}</td><td className="text-right">{m(p.collected)}</td><td /></tr>
+              <tr><td /><td className="py-1 text-ink">{fr ? "Payée sur les achats (récupérable)" : "Paid on purchases (recoverable)"}</td><td className="text-right">{m(p.recoverable)}</td><td /></tr>
               <Total label={fr ? "Net de la période" : "Net for the period"} value={p.netForPeriod} />
-              <tr><td /><td className="py-1 text-ink">{fr ? "Remise payée" : "Remitted"}</td><td className="text-right">{m(p.remitted)}</td></tr>
+              <tr><td /><td className="py-1 text-ink">{fr ? "Remise payée" : "Remitted"}</td><td className="text-right">{m(p.remitted)}</td><td /></tr>
               <Total strong label={fr ? "Solde à remettre" : "Balance owing"} value={p.owing} />
             </tbody>
           );
