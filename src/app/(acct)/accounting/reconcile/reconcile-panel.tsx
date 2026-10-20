@@ -20,6 +20,12 @@ export default function ReconcilePanel({ lang, month, summary: s }: { lang: "en"
   const difference = valid ? Math.round((typed - s.computed) * 100) / 100 : null;
   const balanced = difference !== null && Math.abs(difference) < 0.005;
   const locked = s.lockedThrough !== null && s.lockedThrough >= s.periodEnd;
+  // Balance after each transaction, from the month's opening balance (a card's balance is what is owed).
+  const balances = s.txs.reduce<number[]>((acc, t) => {
+    const prev = acc.length ? acc[acc.length - 1] : s.opening;
+    acc.push(Math.round((prev + (s.isCard ? -t.amount : t.amount)) * 100) / 100);
+    return acc;
+  }, []);
   const hints = difference !== null && !balanced ? differenceHints(s.txs, difference, s.isCard, lang) : [];
   const cls = "rounded-lg border border-card-border bg-white px-2 py-1.5 text-sm text-ink";
 
@@ -120,23 +126,18 @@ export default function ReconcilePanel({ lang, month, summary: s }: { lang: "en"
             </tr>
           </thead>
           <tbody className="divide-y divide-card-border">
-            {(() => {
-              // Balance after each transaction, starting from the month's opening balance. The last line of each day is the day's closing balance.
-              let running = s.opening;
-              return s.txs.map((t, i) => {
-                running = Math.round((running + (s.isCard ? -t.amount : t.amount)) * 100) / 100;
-                const lastOfDay = i === s.txs.length - 1 || s.txs[i + 1].date !== t.date;
-                return (
-                  <tr key={t.id}>
-                    <td className="py-1 pr-3 whitespace-nowrap text-soft">{t.date}</td>
-                    <td className="pr-3 text-ink">{t.supplier}<span className="block text-xs text-soft">{t.description}</span></td>
-                    <td className="pr-3 text-xs text-soft">{t.status === "POSTED" ? "✓" : t.status === "IGNORED" ? (fr ? "ignorée" : "ignored") : fr ? "à catégoriser" : "to categorize"}</td>
-                    <td className={`pr-3 text-right whitespace-nowrap ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{m(t.amount)}</td>
-                    <td className={`text-right whitespace-nowrap ${lastOfDay ? "font-bold text-ink" : "text-soft"}`}>{m(running)}</td>
-                  </tr>
-                );
-              });
-            })()}
+            {s.txs.map((t, i) => {
+              const lastOfDay = i === s.txs.length - 1 || s.txs[i + 1].date !== t.date;
+              return (
+                <tr key={t.id}>
+                  <td className="py-1 pr-3 whitespace-nowrap text-soft">{t.date}</td>
+                  <td className="pr-3 text-ink">{t.supplier}<span className="block text-xs text-soft">{t.description}</span></td>
+                  <td className="pr-3 text-xs text-soft">{t.status === "POSTED" ? "✓" : t.status === "IGNORED" ? (fr ? "ignorée" : "ignored") : fr ? "à catégoriser" : "to categorize"}</td>
+                  <td className={`pr-3 text-right whitespace-nowrap ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{m(t.amount)}</td>
+                  <td className={`text-right whitespace-nowrap ${lastOfDay ? "font-bold text-ink" : "text-soft"}`}>{m(balances[i])}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </details>
