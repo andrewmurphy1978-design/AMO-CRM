@@ -7,6 +7,7 @@ import { r2 } from "./posting";
 export interface AccountRow {
   id: string;
   code: string;
+  templateCode: string;
   name: string;
   nameFr: string | null;
   type: "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
@@ -46,7 +47,7 @@ export async function accountRows(db: PrismaClient, entityId: string, range: { f
     const s = byId.get(a.id);
     const debit = r2(s?.debit ?? 0);
     const credit = r2(s?.credit ?? 0);
-    return { id: a.id, code: a.code, name: a.name, nameFr: a.nameFr, type: a.type, subtype: a.subtype, section: a.section ?? defaultSection(a.type, a.subtype), parentId: a.parentId, gifi: a.gifi, taxLine: a.taxLine, deductiblePct: a.deductiblePct, debit, credit, balance: r2(natural(a.type, debit, credit)) };
+    return { id: a.id, code: a.code, templateCode: a.templateCode ?? a.code, name: a.name, nameFr: a.nameFr, type: a.type, subtype: a.subtype, section: a.section ?? defaultSection(a.type, a.subtype), parentId: a.parentId, gifi: a.gifi, taxLine: a.taxLine, deductiblePct: a.deductiblePct, debit, credit, balance: r2(natural(a.type, debit, credit)) };
   });
   return includeEmpty ? rows : rows.filter((r) => r.debit !== 0 || r.credit !== 0);
 }
@@ -146,7 +147,7 @@ export async function taxSummary(db: PrismaClient, entityId: string, from: Date,
  */
 export async function salesTaxReport(db: PrismaClient, entityId: string, from: Date, to: Date) {
   const [period, upTo, revenue] = await Promise.all([accountRows(db, entityId, { from, to }), accountRows(db, entityId, { to }), incomeStatement(db, entityId, from, to)]);
-  const pick = (rows: AccountRow[], code: string) => rows.find((r) => r.code === code);
+  const pick = (rows: AccountRow[], code: string) => rows.find((r) => r.templateCode === code);
   const part = (payableCode: string, recoverableCode: string) => {
     const pay = pick(period, payableCode);
     const rec = pick(period, recoverableCode);

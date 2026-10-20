@@ -6,6 +6,8 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import {
   allocationsFromRule,
   applyRules,
+  byTemplate,
+  keyOf,
   createBankAccount,
   createEntity,
   ensureAccountingSetup,
@@ -240,6 +242,27 @@ export async function setAccountParent(id: string, parentId: string | null): Pro
   });
   refresh();
   return result;
+}
+
+/** Renumbers an account. The system keeps finding it by its template code, so sales taxes, opening balances etc. keep working. */
+export async function setAccountCode(id: string, code: string): Promise<Result> {
+  const me = await access();
+  const next = code.trim();
+  if (!/^\d{3,6}$/.test(next)) return { error: "A code is 3 to 6 digits." };
+  try {
+    const out = await withScopedPrismaClient(async (db) => {
+      await ownAccount(db, me, id);
+      const acc = await db.accAccount.findUniqueOrThrow({ where: { id } });
+      if (acc.code === next) return {};
+      await db.accAccount.update({ where: { id }, data: { code: next, templateCode: keyOf(acc) } });
+      return {};
+    });
+    refresh();
+    return out;
+  } catch (error) {
+    if (error instanceof Error && error.message === "Not found") throw error;
+    return { error: "That code is already used in this entity's chart." };
+  }
 }
 
 export async function setAccountNames(id: string, name: string, nameFr: string): Promise<Result> {
@@ -479,7 +502,7 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
       const forced = new Map<string, { accountId: string; entityId: string }>();
       for (const g of groups.values()) {
         const code = keywordAccountCode(`${g.name} ${g.sample}`);
-        const acc = code && personal ? accounts.find((a) => a.entityId === personal.entityId && a.code === code) : null;
+        const acc = code && personal ? accounts.find((a) => a.entityId === personal.entityId && keyOf(a) === code) : null;
         if (acc) forced.set(g.name, { accountId: acc.id, entityId: acc.entityId });
       }
       const rest = [...groups.values()].filter((g) => !forced.has(g.name));
@@ -618,7 +641,7 @@ export async function setOpeningBalance(input: { accountId: string; date: string
       await ownAccount(db, me, input.accountId);
       const acc = await db.accAccount.findUniqueOrThrow({ where: { id: input.accountId } });
       if (await db.accJournalLine.count({ where: { accountId: acc.id, entry: { source: "OPENING" } } })) throw new Error("This account already has an opening balance (see Journal).");
-      const equity = await db.accAccount.findUnique({ where: { entityId_code: { entityId: acc.entityId, code: "3000" } } });
+      const equity = await db.accAccount.findFirst({ where: { entityId: acc.entityId, ...byTemplate("3000") } });
       if (!equity) throw new Error("The entity has no opening-balance account (3000).");
       const card = acc.subtype === "CREDIT_CARD";
       // Bank: debit the account when money is there. Card: credit the account when money is owed.
@@ -739,7 +762,7 @@ export async function saveOpeningBalances(input: { entityId: string; date: strin
       const accs = await db.accAccount.findMany({ where: { id: { in: ids }, entityId: input.entityId, type: { in: ["ASSET", "LIABILITY"] }, subtype: { not: "GROUP" } } });
       const byId = new Map(accs.map((a) => [a.id, a]));
       // Corporations open against retained earnings, everyone else against the opening-balance equity account.
-      const equity = (entity.kind === "CORPORATION" ? await db.accAccount.findUnique({ where: { entityId_code: { entityId: entity.id, code: "3200" } } }) : null) ?? (await db.accAccount.findUnique({ where: { entityId_code: { entityId: entity.id, code: "3000" } } }));
+      const equity = (entity.kind === "CORPORATION" ? await db.accAccount.findFirst({ where: { entityId: entity.id, ...byTemplate("3200") } }) : null) ?? (await db.accAccount.findFirst({ where: { entityId: entity.id, ...byTemplate("3000") } }));
       if (!equity) throw new Error("The entity has no opening-balance account.");
       const date = new Date(`${input.date}T00:00:00.000Z`);
       let count = 0;

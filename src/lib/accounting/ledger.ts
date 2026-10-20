@@ -23,20 +23,25 @@ const chunks = <T,>(list: T[], size: number): T[][] => {
 
 // ---------------------------------------------------------------- entities & accounts
 
+/** The code an account has in the chart template (what the system looks it up by), whatever the user renumbered it to. */
+export const keyOf = (a: { code: string; templateCode?: string | null }) => a.templateCode ?? a.code;
+/** Prisma filter for "the account whose template code is `code`". */
+export const byTemplate = (code: string) => ({ OR: [{ templateCode: code }, { templateCode: null, code }] });
+
 export async function ensureEntityChart(db: PrismaClient, entityId: string): Promise<void> {
   const entity = await db.accEntity.findUniqueOrThrow({ where: { id: entityId } });
   const chart = chartFor(entity.kind as EntityKind, entity.country);
   // Also adds accounts that were added to the template after the entity was created.
-  const existing = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, gifi: true, name: true, type: true, subtype: true } });
-  const haveCodes = new Set(existing.map((a) => a.code));
+  const existing = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, templateCode: true, gifi: true, name: true, type: true, subtype: true } });
+  const haveCodes = new Set(existing.map((a) => keyOf(a)));
   // Canadian businesses: input tax credits used to be assets (1300 / 1310); they now sit under the tax payable
   // accounts (2301 / 2311) and 1300 / 1310 become the GST/HST and QST receivable accounts.
   if ((entity.kind === "SOLE_PROPRIETORSHIP" || entity.kind === "CORPORATION") && entity.country === "CA") {
     for (const [oldCode, newCode, payableCode] of [["1300", "2301", "2300"], ["1310", "2311", "2310"]]) {
-      const old = existing.find((a) => a.code === oldCode && a.type === "ASSET" && a.subtype === "TAX_RECOVERABLE");
+      const old = existing.find((a) => keyOf(a) === oldCode && a.type === "ASSET" && a.subtype === "TAX_RECOVERABLE");
       if (!old || haveCodes.has(newCode)) continue;
-      const payable = existing.find((a) => a.code === payableCode);
-      await db.accAccount.update({ where: { id: old.id }, data: { code: newCode, type: "LIABILITY", subtype: "TAX_RECOVERABLE", section: null, parentId: payable?.id ?? null } });
+      const payable = existing.find((a) => keyOf(a) === payableCode);
+      await db.accAccount.update({ where: { id: old.id }, data: { code: newCode, templateCode: newCode, type: "LIABILITY", subtype: "TAX_RECOVERABLE", section: null, parentId: payable?.id ?? null } });
       haveCodes.delete(oldCode);
       haveCodes.add(newCode);
     }
@@ -44,13 +49,13 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
   // Canadian corporations: fill in the suggested GIFI code on accounts that have none yet.
   if (usesGifi(entity.kind, entity.country)) {
     for (const a of existing) {
-      const g = a.gifi ? null : suggestGifi(entity.kind, a);
+      const g = a.gifi ? null : suggestGifi(entity.kind, { ...a, code: keyOf(a) });
       if (g) await db.accAccount.update({ where: { id: a.id }, data: { gifi: g } });
     }
   }
   if (entity.kind === "PERSONAL") {
     for (const a of existing) {
-      const fix = LEGACY_NAME_FIXES[a.code];
+      const fix = LEGACY_NAME_FIXES[keyOf(a)];
       if (fix && a.name === fix.oldName) await db.accAccount.update({ where: { id: a.id }, data: { name: fix.en, nameFr: fix.fr } });
     }
   }
@@ -65,13 +70,14 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
   // adopts those of its accounts that have no parent yet. Groups that already exist are left as the user has them.
   const groups = groupsFor(entity.kind as EntityKind, entity.country).filter((g) => !haveCodes.has(g.code) && g.members.some((m) => haveCodes.has(m) || chart.some((c) => c.code === m)));
   for (const g of groups) {
-    await db.accAccount.create({ data: { entityId, code: g.code, name: g.en, nameFr: g.fr, type: g.type, subtype: "GROUP", isSystem: true, order: 9000 } }).catch(() => null);
+    await db.accAccount.create({ data: { entityId, code: g.code, templateCode: g.code, name: g.en, nameFr: g.fr, type: g.type, subtype: "GROUP", isSystem: true, order: 9000 } }).catch(() => null);
   }
   if (missing.length === 0 && groups.length === 0) return;
   if (missing.length > 0) await db.accAccount.createMany({
     data: missing.map(({ c, order }) => ({
       entityId,
       code: c.code,
+      templateCode: c.code,
       name: c.en,
       nameFr: c.fr,
       type: c.type,
@@ -87,8 +93,8 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
   // Second-level accounts (the input tax credits sit under the tax payable accounts).
   const withParent = missing.filter(({ c }) => c.parent);
   if (withParent.length > 0) {
-    const rows = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true } });
-    const idOf = new Map(rows.map((r) => [r.code, r.id]));
+    const rows = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, templateCode: true } });
+    const idOf = new Map(rows.map((r) => [keyOf(r), r.id]));
     for (const { c } of withParent) {
       const child = idOf.get(c.code);
       const parent = idOf.get(c.parent as string);
@@ -97,8 +103,8 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
   }
   // Adopt members into the groups just created.
   if (groups.length > 0) {
-    const rows = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, parentId: true } });
-    const idOf = new Map(rows.map((r) => [r.code, r]));
+    const rows = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, templateCode: true, parentId: true } });
+    const idOf = new Map(rows.map((r) => [keyOf(r), r]));
     for (const g of groups) {
       const gid = idOf.get(g.code)?.id;
       if (!gid) continue;
@@ -170,7 +176,7 @@ export async function ensureRegisteredParent(db: PrismaClient, entityId: string,
   const marker = `REG:${registeredType}`;
   const templateCode = REGISTERED_PARENT_CODE[registeredType];
   if (templateCode) {
-    const template = await db.accAccount.findFirst({ where: { entityId, code: templateCode, subtype: "INVESTMENT" } });
+    const template = await db.accAccount.findFirst({ where: { entityId, subtype: "INVESTMENT", ...byTemplate(templateCode) } });
     if (template) return template.id;
   }
   const made = await db.accAccount.findFirst({ where: { entityId, subtype: "INVESTMENT", taxLine: marker } });
@@ -237,9 +243,9 @@ export async function ensureInterco(db: PrismaClient, entityId: string, otherId:
   const [entity, other] = await Promise.all([db.accEntity.findUniqueOrThrow({ where: { id: entityId } }), db.accEntity.findUniqueOrThrow({ where: { id: otherId } })]);
   const spec = intercoSpec({ kind: entity.kind as EntityKind }, { kind: other.kind as EntityKind, name: other.name });
   if (spec.unique) {
-    const found = await db.accAccount.findUnique({ where: { entityId_code: { entityId, code: spec.code } } });
+    const found = await db.accAccount.findFirst({ where: { entityId, ...byTemplate(spec.code) } });
     if (found) return found.id;
-    const created = await db.accAccount.create({ data: { entityId, code: spec.code, name: spec.en, nameFr: spec.fr, type: spec.type, subtype: spec.subtype, isSystem: true, counterEntityId: otherId } });
+    const created = await db.accAccount.create({ data: { entityId, code: spec.code, templateCode: spec.code, name: spec.en, nameFr: spec.fr, type: spec.type, subtype: spec.subtype, isSystem: true, counterEntityId: otherId } });
     return created.id;
   }
   const found = await db.accAccount.findFirst({ where: { entityId, counterEntityId: otherId, subtype: { in: ["INTERCO", "OWNER_INVESTMENT"] } } });
@@ -293,7 +299,7 @@ export async function postTransactions(db: PrismaClient, items: PostItem[]): Pro
     }
   }
   const byCode = new Map<string, string>();
-  for (const a of accounts) byCode.set(`${a.entityId}:${a.code}`, a.id);
+  for (const a of accounts) byCode.set(`${a.entityId}:${keyOf(a)}`, a.id);
 
   const entryRows: { id: string; entityId: string; date: Date; memo: string; source: string; transactionId: string }[] = [];
   const lineRows: { entryId: string; accountId: string; debit: number; credit: number; memo: string | null }[] = [];

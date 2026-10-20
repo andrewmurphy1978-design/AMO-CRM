@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setAccountGifi, setAccountNames, setAccountParent, setAccountSection } from "@/actions/accounting";
+import { setAccountCode, setAccountGifi, setAccountNames, setAccountParent, setAccountSection } from "@/actions/accounting";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
 
 export interface EditableAccount {
@@ -24,6 +24,7 @@ export default function AccountEditor({ account: a, lang, showGifi, depth = 0 }:
   const fr = lang === "fr";
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [code, setCode] = useState(a.code);
   const [gifi, setGifi] = useState(a.gifi ?? "");
   const [en, setEn] = useState(a.name);
   const [frName, setFrName] = useState(a.nameFr);
@@ -33,7 +34,28 @@ export default function AccountEditor({ account: a, lang, showGifi, depth = 0 }:
   const isGroup = a.isGroup;
   return (
     <div className={`${rowGrid(showGifi)} py-1.5`}>
-      <span className="text-xs text-soft" style={{ paddingLeft: depth * 14 }}>{a.code}</span>
+      <div style={{ paddingLeft: depth * 14 }}>
+        <input
+          value={code}
+          maxLength={6}
+          inputMode="numeric"
+          disabled={pending}
+          aria-label="Code"
+          title={fr ? "Code du compte (3 à 6 chiffres)" : "Account code (3 to 6 digits)"}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          onBlur={() => {
+            if (code === a.code) return;
+            start(async () => {
+              const r = await setAccountCode(a.id, code);
+              if (r.error) {
+                setError(r.error);
+                setCode(a.code);
+              } else setError(null);
+            });
+          }}
+          className={`${cls} w-full min-w-0 px-1.5 text-center text-xs`}
+        />
+      </div>
       <input value={en} onChange={(e) => setEn(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="English" aria-label="English description" className={`${cls} w-full min-w-0 text-sm ${depth === 0 ? "font-semibold" : ""}`} />
       <input value={frName} onChange={(e) => setFrName(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="Français" aria-label="Description française" className={`${cls} w-full min-w-0 text-sm ${depth === 0 ? "font-semibold" : ""}`} />
       {sections && !a.parentId ? (
@@ -81,8 +103,8 @@ export default function AccountEditor({ account: a, lang, showGifi, depth = 0 }:
 // One grid for the header and every row, so the columns line up and fill the card.
 export function rowGrid(showGifi: boolean): string {
   return showGifi
-    ? "grid grid-cols-1 items-center gap-2 lg:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)_12rem_12rem_4.5rem]"
-    : "grid grid-cols-1 items-center gap-2 lg:grid-cols-[3.5rem_minmax(0,1fr)_minmax(0,1fr)_12rem_12rem]";
+    ? "grid grid-cols-1 items-center gap-2 lg:grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_12rem_12rem_4.5rem]"
+    : "grid grid-cols-1 items-center gap-2 lg:grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)_12rem_12rem]";
 }
 
 export function AccountColumnsHeader({ lang, showGifi }: { lang: "en" | "fr"; showGifi: boolean }) {
