@@ -123,7 +123,7 @@ export async function ensureInstalmentInvoices(db: PrismaClient, projectId: stri
   const proposal = await db.proposal.findFirst({
     where: { projectId, status: "ACCEPTED", paymentSchedule: { some: {} } },
     orderBy: { respondedAt: "desc" },
-    include: { paymentSchedule: { orderBy: { order: "asc" } }, invoices: { select: { instalmentId: true } } },
+    include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { select: { sectionId: true, quantity: true, unitPrice: true } }, invoices: { select: { instalmentId: true } } },
   });
   if (!proposal) return;
   const rows = proposal.paymentSchedule;
@@ -134,7 +134,11 @@ export async function ensureInstalmentInvoices(db: PrismaClient, projectId: stri
   const round = (n: number) => Math.round(n * 100) / 100;
   for (const row of wanted) {
     if (proposal.invoices.some((inv) => inv.instalmentId === row.id)) continue;
-    const share = row.percentage != null ? row.percentage / 100 : grand > 0 && row.amount != null ? row.amount / grand : 0;
+    // On a sectioned proposal a percentage is a share of its own section, so it is turned
+    // into a share of the whole proposal here.
+    const sectionSubtotal = row.sectionId ? proposal.lineItems.filter((li) => li.sectionId === row.sectionId).reduce((a, li) => a + li.quantity * li.unitPrice, 0) : null;
+    const sectionShare = sectionSubtotal != null && proposal.subtotal > 0 ? sectionSubtotal / proposal.subtotal : 1;
+    const share = row.percentage != null ? (row.percentage / 100) * sectionShare : grand > 0 && row.amount != null ? row.amount / grand : 0;
     if (share <= 0) continue;
     const subtotal = round(proposal.subtotal * share);
     const tax = {

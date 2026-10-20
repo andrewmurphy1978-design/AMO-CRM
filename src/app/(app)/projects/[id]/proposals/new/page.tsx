@@ -4,6 +4,8 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { createFullProposal } from "@/actions/proposals";
 import { contactTaxLocation } from "@/lib/billing-totals";
 import ProposalForm from "../proposal-form";
+import { loadTypeInfo } from "@/lib/project-type-store";
+import { typesOfProject } from "@/lib/project-templates";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 
@@ -28,6 +30,7 @@ export default async function NewProposalPage({
   });
 
   if (!project) notFound();
+  const { labels: typeLabels } = await loadTypeInfo(lang);
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -40,6 +43,8 @@ export default async function NewProposalPage({
           action={createFullProposal}
           projectId={project.id}
           catalog={catalog}
+          projectTypes={typesOfProject(project)}
+          typeOptions={Object.entries(typeLabels).map(([value, label]) => ({ value, label }))}
           taxLocation={contactTaxLocation(project.contact)}
           chargeCanadianTax={billingSettings.chargeCanadianTax}
           submitLabel={t.proposals.createFullProposal}

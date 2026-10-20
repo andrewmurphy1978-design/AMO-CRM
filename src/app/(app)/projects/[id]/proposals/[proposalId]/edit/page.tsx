@@ -4,6 +4,8 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { updateFullProposal } from "@/actions/proposals";
 import { contactTaxLocation } from "@/lib/billing-totals";
 import ProposalForm from "../../proposal-form";
+import { loadTypeInfo } from "@/lib/project-type-store";
+import { typesOfProject } from "@/lib/project-templates";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 
@@ -20,7 +22,7 @@ export default async function EditProposalPage({
     const project = await db.project.findUnique({ where: { id }, include: { contact: true } });
     const proposal = await db.proposal.findUnique({
       where: { id: proposalId },
-      include: { lineItems: { orderBy: { order: "asc" } }, paymentSchedule: { orderBy: { order: "asc" } } },
+      include: { lineItems: { orderBy: { order: "asc" } }, paymentSchedule: { orderBy: { order: "asc" } }, sections: { orderBy: { order: "asc" } } },
     });
     const catalog = await db.servicePriceListItem.findMany({ where: { active: true }, orderBy: { name: "asc" } });
     const billingSettings = await db.billingSettings.upsert({
@@ -32,6 +34,16 @@ export default async function EditProposalPage({
   });
 
   if (!project || !proposal || proposal.projectId !== id) notFound();
+
+  const { labels: typeLabels } = await loadTypeInfo(lang);
+  const sections = proposal.sections.map((sec) => ({
+    title: sec.title,
+    kind: sec.kind,
+    lineItems: proposal.lineItems.filter((li) => li.sectionId === sec.id).map(({ description, details, quantity, unitPrice }) => ({ description, details, quantity, unitPrice })),
+    instalments: proposal.paymentSchedule
+      .filter((r) => r.sectionId === sec.id)
+      .map((r) => ({ label: r.label, percentage: r.percentage, amount: r.amount, dueDate: r.dueDate ? r.dueDate.toISOString().slice(0, 10) : null })),
+  }));
 
   const boundUpdate = updateFullProposal.bind(null, proposal.id);
 
@@ -45,8 +57,10 @@ export default async function EditProposalPage({
         <ProposalForm
           action={boundUpdate}
           projectId={project.id}
-          defaultValues={{ ...proposal, subscriptions: (Array.isArray(proposal.subscriptions) ? proposal.subscriptions : []) as { name: string; amount: number; period: string; note: string }[] }}
+          defaultValues={{ ...proposal, sections, subscriptions: (Array.isArray(proposal.subscriptions) ? proposal.subscriptions : []) as { name: string; amount: number; period: string; note: string }[] }}
           catalog={catalog}
+          projectTypes={typesOfProject(project)}
+          typeOptions={Object.entries(typeLabels).map(([value, label]) => ({ value, label }))}
           taxLocation={contactTaxLocation(project.contact)}
           chargeCanadianTax={billingSettings.chargeCanadianTax}
           submitLabel={t.proposals.saveChanges}

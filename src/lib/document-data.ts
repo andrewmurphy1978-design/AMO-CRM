@@ -11,6 +11,8 @@ import { getTypeLabels } from "@/lib/project-type-store";
 import { signPath } from "@/lib/signed-url";
 import { localizeText, localizeValue } from "@/lib/project-i18n";
 import { LOGO_FULL_EN_B64, LOGO_FULL_FR_B64 } from "@/lib/logo-assets";
+import { contactTaxLocation } from "@/lib/billing-totals";
+import { computeSectionedTotals } from "@/lib/proposal-sections";
 
 // Gathers what the Proposal / Invoice PDFs need from the database.
 
@@ -63,7 +65,7 @@ function clientBlock(c: {
 export async function loadProposalPdfData(db: PrismaClient, projectId: string, proposalId: string): Promise<{ data: ProposalPdfData; fileName: string } | null> {
   const proposal = await db.proposal.findUnique({
     where: { id: proposalId },
-    include: { lineItems: { orderBy: { order: "asc" } }, paymentSchedule: { orderBy: { order: "asc" } } },
+    include: { lineItems: { orderBy: { order: "asc" } }, paymentSchedule: { orderBy: { order: "asc" } }, sections: { orderBy: { order: "asc" } } },
   });
   if (!proposal || proposal.projectId !== projectId) return null;
   const project = await db.project.findUnique({
@@ -97,12 +99,38 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const plan = [...existing, ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: localizeText(p.name, lang), tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)).map((x) => localizeText(x, lang)) }))];
 
   const grand = proposal.subtotal + proposal.taxAmount;
-  const instalments = proposal.paymentSchedule.map((r) => ({
-    label: r.label,
-    percentage: r.percentage,
-    amount: r.amount ?? (r.percentage != null ? Math.round(((r.percentage / 100) * grand) * 100) / 100 : 0),
-    dueDate: r.dueDate,
+  // A sectioned proposal: each section is taxed on its own and its instalments are a share of its own total.
+  const sectioned = proposal.layout === "SECTIONED" && proposal.sections.length > 0;
+  const sectionRows = proposal.sections.map((sec) => ({
+    sec,
+    lineItems: proposal.lineItems.filter((li) => li.sectionId === sec.id),
+    rows: proposal.paymentSchedule.filter((r) => r.sectionId === sec.id),
   }));
+  const sectionTotals = sectioned
+    ? computeSectionedTotals(
+        sectionRows.map((r) => ({ lineItems: r.lineItems, instalments: r.rows })),
+        contactTaxLocation(project.contact),
+        settings.chargeCanadianTax
+      )
+    : null;
+  const sections = sectionTotals
+    ? sectionRows.map((r, i) => ({
+        title: r.sec.title,
+        lineItems: r.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
+        subtotal: sectionTotals.sections[i].subtotal,
+        taxes: sectionTotals.sections[i].total,
+        totalAmount: sectionTotals.sections[i].totalAmount,
+        instalments: r.rows.map((row, j) => ({ label: row.label, percentage: row.percentage, amount: sectionTotals.sections[i].instalmentAmounts[j], dueDate: row.dueDate })),
+      }))
+    : undefined;
+  const instalments = sections
+    ? sections.flatMap((sec) => sec.instalments.map((row) => ({ ...row, label: `${sec.title} — ${row.label}` })))
+    : proposal.paymentSchedule.map((r) => ({
+        label: r.label,
+        percentage: r.percentage,
+        amount: r.amount ?? (r.percentage != null ? Math.round(((r.percentage / 100) * grand) * 100) / 100 : 0),
+        dueDate: r.dueDate,
+      }));
 
   // Supplier invoices paid on the client's behalf before this proposal was issued.
   const costs = await proposalSupplierCosts(db, projectId, { sentAt: proposal.sentAt });
@@ -146,6 +174,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     attachments,
     totals: { subtotal: proposal.subtotal, gst: proposal.gstAmount, qst: proposal.qstAmount, hst: proposal.hstAmount, total: proposal.taxAmount },
     instalments,
+    sections,
     notes: proposal.notes,
   };
   return { data, fileName: `${number}-${project.name}`.replace(/[^\w.-]+/g, "-") };

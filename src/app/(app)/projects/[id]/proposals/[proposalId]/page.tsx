@@ -5,6 +5,8 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
+import { contactTaxLocation } from "@/lib/billing-totals";
+import { computeSectionedTotals } from "@/lib/proposal-sections";
 import ConvertToInvoiceButton from "./convert-to-invoice-button";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -32,6 +34,7 @@ export default async function ProposalDetailPage({
       include: {
         lineItems: { orderBy: { order: "asc" } },
         paymentSchedule: { orderBy: { order: "asc" } },
+        sections: { orderBy: { order: "asc" } },
         invoices: true,
       },
     });
@@ -39,6 +42,25 @@ export default async function ProposalDetailPage({
   });
 
   if (!project || !proposal || proposal.projectId !== id) notFound();
+
+  const sectioned = proposal.layout === "SECTIONED";
+  const money = (n: number) => `${n.toFixed(2)} ${proposal.currency}`;
+  const sectionRows = proposal.sections.map((sec) => ({
+    sec,
+    lineItems: proposal.lineItems.filter((li) => li.sectionId === sec.id),
+    instalments: proposal.paymentSchedule.filter((row) => row.sectionId === sec.id),
+  }));
+  const sectionTotals = sectioned
+    ? await withScopedPrismaClient(async (db) => {
+        const billing = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
+        return computeSectionedTotals(
+          sectionRows.map((r) => ({ lineItems: r.lineItems, instalments: r.instalments })),
+          contactTaxLocation(project.contact),
+          billing.chargeCanadianTax
+        );
+      })
+    : null;
+  let instalmentNo = 0;
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -78,6 +100,141 @@ export default async function ProposalDetailPage({
         </section>
       )}
 
+      {sectioned && sectionTotals && (
+        <>
+          {sectionRows.map(({ sec, lineItems, instalments }, si) => {
+            const st = sectionTotals.sections[si];
+            return (
+              <section key={sec.id} className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+                <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+                <h2 className="font-display text-lg font-semibold text-ink">{sec.title}</h2>
+                {lineItems.length > 0 ? (
+                  <table className="mt-3 w-full text-sm">
+                    <tbody className="divide-y divide-card-border">
+                      {lineItems.map((li) => (
+                        <tr key={li.id}>
+                          <td className="py-2 text-ink">{li.description}</td>
+                          <td className="py-2 text-right text-soft">{li.quantity}</td>
+                          <td className="py-2 text-right text-soft">{money(li.unitPrice)}</td>
+                          <td className="py-2 text-right font-medium text-ink">{money(li.quantity * li.unitPrice)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="mt-2 text-sm text-soft">{t.proposals.noLineItems}</p>
+                )}
+                <div className="mt-4 ml-auto max-w-xs space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-soft">{t.proposals.subtotal}</span>
+                    <span className="text-ink">{money(st.subtotal)}</span>
+                  </div>
+                  {st.gst > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-soft">{t.proposals.gst}</span>
+                      <span className="text-ink">{money(st.gst)}</span>
+                    </div>
+                  )}
+                  {st.qst > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-soft">{t.proposals.qst}</span>
+                      <span className="text-ink">{money(st.qst)}</span>
+                    </div>
+                  )}
+                  {st.hst > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-soft">{t.proposals.hst}</span>
+                      <span className="text-ink">{money(st.hst)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-card-border pt-1 font-semibold">
+                    <span className="text-ink">{t.proposals.sectionTotal}</span>
+                    <span className="text-ink">{money(st.totalAmount)}</span>
+                  </div>
+                </div>
+                {instalments.length > 0 && (
+                  <>
+                    <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-soft">{t.proposals.instalmentsTitle}</h3>
+                    <ul className="mt-1 divide-y divide-card-border text-sm">
+                      {instalments.map((row, i) => (
+                        <li key={row.id} className="flex items-center justify-between py-2">
+                          <span className="text-ink">{row.label}</span>
+                          <span className="text-soft">
+                            {row.percentage != null && `${row.percentage}% · `}
+                            {money(st.instalmentAmounts[i])}
+                            {row.dueDate && ` · ${format(row.dueDate, "MMMM d, yyyy", { locale: dateLocale })}`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </section>
+            );
+          })}
+
+          <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+            <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.summaryTitle}</h2>
+            <h3 className="mt-3 text-xs font-semibold uppercase tracking-wide text-soft">{t.proposals.summaryCostsBySection}</h3>
+            <ul className="mt-1 divide-y divide-card-border text-sm">
+              {sectionRows.map(({ sec }, si) => (
+                <li key={sec.id} className="flex justify-between py-2">
+                  <span className="text-ink">{sec.title}</span>
+                  <span className="text-ink">{money(sectionTotals.sections[si].totalAmount)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-2 ml-auto max-w-xs space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-soft">{t.proposals.subtotal}</span>
+                <span className="text-ink">{money(sectionTotals.grand.subtotal)}</span>
+              </div>
+              {sectionTotals.grand.gst > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-soft">{t.proposals.gst}</span>
+                  <span className="text-ink">{money(sectionTotals.grand.gst)}</span>
+                </div>
+              )}
+              {sectionTotals.grand.qst > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-soft">{t.proposals.qst}</span>
+                  <span className="text-ink">{money(sectionTotals.grand.qst)}</span>
+                </div>
+              )}
+              {sectionTotals.grand.hst > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-soft">{t.proposals.hst}</span>
+                  <span className="text-ink">{money(sectionTotals.grand.hst)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-card-border pt-1 font-semibold">
+                <span className="text-ink">{t.proposals.totalDue}</span>
+                <span className="text-ink">{money(sectionTotals.grand.totalAmount)}</span>
+              </div>
+            </div>
+            <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-soft">{t.proposals.summaryAllInstalments}</h3>
+            <ul className="mt-1 divide-y divide-card-border text-sm">
+              {sectionRows.flatMap(({ sec, instalments }, si) =>
+                instalments.map((row, i) => (
+                  <li key={row.id} className="flex items-center justify-between py-2">
+                    <span className="text-ink">
+                      {t.proposals.instalmentNumber} {++instalmentNo} — {sec.title}: {row.label}
+                    </span>
+                    <span className="text-soft">
+                      {money(sectionTotals.sections[si].instalmentAmounts[i])}
+                      {row.dueDate && ` · ${format(row.dueDate, "MMMM d, yyyy", { locale: dateLocale })}`}
+                    </span>
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
+        </>
+      )}
+
+      {!sectioned && (
+        <>
       <section className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-5 shadow-sm">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
         <h2 className="font-display text-lg font-semibold text-ink">{t.proposals.lineItemsTitle}</h2>
@@ -159,6 +316,9 @@ export default async function ProposalDetailPage({
             ))}
           </ul>
         </section>
+      )}
+
+        </>
       )}
 
       {proposal.notes && (

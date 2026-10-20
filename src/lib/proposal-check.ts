@@ -10,7 +10,7 @@ export async function proposalIssues(db: PrismaClient, proposalId: string, lang:
   const fr = lang === "fr";
   const proposal = await db.proposal.findUnique({
     where: { id: proposalId },
-    include: { lineItems: true, paymentSchedule: { orderBy: { order: "asc" } }, project: { include: { contact: true } } },
+    include: { lineItems: true, sections: { orderBy: { order: "asc" } }, paymentSchedule: { orderBy: { order: "asc" } }, project: { include: { contact: true } } },
   });
   if (!proposal) return [fr ? "Soumission introuvable." : "Proposal not found."];
   const issues: string[] = [];
@@ -35,7 +35,15 @@ export async function proposalIssues(db: PrismaClient, proposalId: string, lang:
 
   // Payment schedule adds up to 100%.
   if (proposal.paymentSchedule.length === 0) issues.push(fr ? "Le calendrier de paiement est vide." : "The payment schedule is empty.");
-  else {
+  else if (proposal.layout === "SECTIONED") {
+    // Each section's own instalments add up to 100% of that section.
+    for (const sec of proposal.sections) {
+      const rows = proposal.paymentSchedule.filter((r) => r.sectionId === sec.id);
+      const pct = rows.reduce((a, r) => a + (r.percentage ?? 0), 0);
+      if (rows.length === 0) issues.push(fr ? `Section « ${sec.title} » : aucun versement.` : `Section "${sec.title}": no instalments.`);
+      else if (!rows.some((r) => r.amount != null) && Math.abs(pct - 100) > 0.01) issues.push(fr ? `Section « ${sec.title} » : les versements totalisent ${pct}% au lieu de 100%.` : `Section "${sec.title}": the instalments add up to ${pct}% instead of 100%.`);
+    }
+  } else {
     const pct = proposal.paymentSchedule.reduce((a, r) => a + (r.percentage ?? 0), 0);
     const anyFixed = proposal.paymentSchedule.some((r) => r.amount != null);
     if (!anyFixed && Math.abs(pct - 100) > 0.01) issues.push(fr ? `Le calendrier de paiement totalise ${pct}% au lieu de 100%.` : `The payment schedule adds up to ${pct}% instead of 100%.`);

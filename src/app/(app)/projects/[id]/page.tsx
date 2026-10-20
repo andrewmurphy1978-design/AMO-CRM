@@ -138,7 +138,7 @@ export default async function ProjectDetailPage({
         emailLinks: { orderBy: { messageDate: "desc" } },
         supplierInvoices: { orderBy: { createdAt: "desc" }, omit: { fileData: true } },
         subscriptions: { orderBy: { order: "asc" } },
-        proposals: { orderBy: { createdAt: "desc" }, omit: { signedFileData: true }, include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { orderBy: { order: "asc" } } } },
+        proposals: { orderBy: { createdAt: "desc" }, omit: { signedFileData: true }, include: { paymentSchedule: { orderBy: { order: "asc" } }, lineItems: { orderBy: { order: "asc" } }, sections: { orderBy: { order: "asc" } } } },
         invoices: { orderBy: { createdAt: "desc" }, include: { lineItems: { orderBy: { order: "asc" } }, instalment: { include: { proposal: { select: { paymentSchedule: { select: { id: true }, orderBy: { order: "asc" } } } } } } } },
       },
     });
@@ -485,6 +485,13 @@ export default async function ProjectDetailPage({
     lineItems: p.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
     subscriptions: (Array.isArray(p.subscriptions) ? p.subscriptions : []) as { name: string; amount: number; period: string; note: string }[],
     paymentSchedule: p.paymentSchedule.map((r) => ({ label: r.label, percentage: r.percentage, amount: r.amount, dueDate: iso(r.dueDate) })),
+    layout: p.layout,
+    sections: p.sections.map((sec) => ({
+      title: sec.title,
+      kind: sec.kind,
+      lineItems: p.lineItems.filter((li) => li.sectionId === sec.id).map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
+      instalments: p.paymentSchedule.filter((r) => r.sectionId === sec.id).map((r) => ({ label: r.label, percentage: r.percentage, amount: r.amount, dueDate: iso(r.dueDate) })),
+    })),
   }));
   const invoiceRows: InvoiceRowData[] = project.invoices.map((inv) => {
     const ids = inv.instalment?.proposal.paymentSchedule.map((r) => r.id) ?? [];
@@ -1042,6 +1049,7 @@ export default async function ProjectDetailPage({
           <ProposalsCard
             projectId={project.id}
             projectType={typesOfProject(project).join(",")}
+            typeOptions={Object.entries(typeLabels).map(([value, label]) => ({ value, label }))}
             proposals={proposalRows}
             catalog={catalog}
             taxLocation={contactTaxLocation(project.contact)}

@@ -1083,6 +1083,15 @@ enum ProposalStatus {
 // a Contact), so a proposal shows up both under its project and — via the
 // project's contact — on that contact's page. No separate contactId: the
 // project is the single source of truth for who it's for.
+// COMBINED: one proposal (flat line items, one payment schedule). SECTIONED: split
+// into ProposalSections — one for Brand/Research/Mock-up (kind "PREP") and one per
+// project type (its build, presentation and launch) — each with its own line items
+// and instalments, plus a final summary of every cost and instalment.
+enum ProposalLayout {
+  COMBINED
+  SECTIONED
+}
+
 model Proposal {
   id        String         @id @default(cuid())
   projectId String
@@ -1093,6 +1102,7 @@ model Proposal {
   interactions       Interaction[]
   title     String
   status    ProposalStatus @default(DRAFT)
+  layout    ProposalLayout @default(COMBINED)
   // Legacy flat total from the original quick-add flow — still written
   // there for a proposal with no line items. Once line items exist,
   // subtotal/taxAmount/totalAmount below are authoritative and this is
@@ -1136,6 +1146,7 @@ model Proposal {
 
   lineItems       ProposalLineItem[]
   paymentSchedule ProposalPaymentScheduleItem[]
+  sections        ProposalSection[]
   invoices        Invoice[]
 
   @@index([projectId])
@@ -1155,8 +1166,12 @@ model ProposalLineItem {
   quantity    Float    @default(1)
   unitPrice   Float
   order       Int      @default(0)
+  // Set only on SECTIONED proposals.
+  sectionId   String?
+  section     ProposalSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@index([proposalId])
+  @@index([sectionId])
   @@map("proposal_line_items")
 }
 
@@ -1175,11 +1190,33 @@ model ProposalPaymentScheduleItem {
   paid       Boolean   @default(false)
   paidAt     DateTime?
   order      Int       @default(0)
+  // Set only on SECTIONED proposals; percentage is then a % of that section's
+  // total (tax included), not of the whole proposal.
+  sectionId  String?
+  section    ProposalSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   invoices Invoice[]
 
   @@index([proposalId])
+  @@index([sectionId])
   @@map("proposal_payment_schedule_items")
+}
+
+// One section of a SECTIONED proposal. kind is "PREP" (Brand, Research & Mock-up)
+// or a project type key (that type's build, presentation and launch).
+model ProposalSection {
+  id         String   @id @default(cuid())
+  proposalId String
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  title      String
+  kind       String   @default("OTHER")
+  order      Int      @default(0)
+
+  lineItems       ProposalLineItem[]
+  paymentSchedule ProposalPaymentScheduleItem[]
+
+  @@index([proposalId])
+  @@map("proposal_sections")
 }
 
 enum InvoiceStatus {

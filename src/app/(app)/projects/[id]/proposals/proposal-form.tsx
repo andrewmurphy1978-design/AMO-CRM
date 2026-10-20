@@ -7,6 +7,8 @@ import type { RecipientOption } from "@/lib/contact-address";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { clientFacingDescription } from "@/lib/catalog-text";
+import { PREP_KIND, defaultInstalmentsFor } from "@/lib/proposal-sections";
+import ProposalSectionsEditor, { type EditorSection, type TypeOption } from "./proposal-sections-editor";
 
 type LineItemRow = { tempKey: number; description: string; details: string; quantity: number; unitPrice: number };
 type SubRow = { tempKey: number; name: string; amount: number; period: string; note: string };
@@ -15,6 +17,8 @@ type ScheduleRow = { tempKey: number; label: string; percentage: number | null; 
 type ProposalFormValues = {
   title?: string;
   status?: string;
+  layout?: "COMBINED" | "SECTIONED";
+  sections?: Omit<EditorSection, "key">[];
   currency?: string;
   coverLetter?: string | null;
   notes?: string | null;
@@ -53,6 +57,8 @@ export default function ProposalForm({
   inline,
   onSuccess,
   projectType,
+  projectTypes,
+  typeOptions,
   formId,
   hideSubmit,
   onPendingChange,
@@ -76,6 +82,9 @@ export default function ProposalForm({
   onSuccess?: () => void;
   // Services of this project type are listed first in the price-list picker.
   projectType?: string;
+  // The project's own types (seed the Sectioned layout) and every type a section can be for.
+  projectTypes?: string[];
+  typeOptions?: TypeOption[];
   // Dialog mode: the save button lives in the dialog header (it submits this form by id).
   formId?: string;
   hideSubmit?: boolean;
@@ -109,6 +118,29 @@ export default function ProposalForm({
     }))
   );
   const nextScheduleKey = useRef(schedule.length);
+
+  const [layout, setLayout] = useState<"COMBINED" | "SECTIONED">(defaultValues?.layout ?? "COMBINED");
+  const nextSectionKey = useRef(defaultValues?.sections?.length ?? 0);
+  const [sections, setSections] = useState<EditorSection[]>(() => (defaultValues?.sections ?? []).map((sec, key) => ({ key, ...sec })));
+  const sectionTypeOptions = typeOptions ?? [];
+
+  // First time Sectioned is picked on a proposal with no sections yet: seed the Brand/Research/Mock-up
+  // section plus one for each of the project's own types.
+  function chooseLayout(next: "COMBINED" | "SECTIONED") {
+    setLayout(next);
+    if (next !== "SECTIONED" || sections.length > 0) return;
+    const labels = { deposit: t.proposals.instalmentDeposit, startBuild: t.proposals.instalmentStartBuild, beforeLaunch: t.proposals.instalmentBeforeLaunch };
+    const kinds = [PREP_KIND, ...(projectTypes?.length ? projectTypes : projectType ? [projectType] : [])];
+    setSections(
+      kinds.map((kind) => ({
+        key: nextSectionKey.current++,
+        kind,
+        title: kind === PREP_KIND ? t.proposals.prepSection : (sectionTypeOptions.find((o) => o.value === kind)?.label ?? kind),
+        lineItems: [],
+        instalments: defaultInstalmentsFor(kind, labels),
+      }))
+    );
+  }
 
   const [coverLetter, setCoverLetter] = useState(defaultValues?.coverLetter ?? "");
   const [currency, setCurrency] = useState(defaultValues?.currency ?? "CAD");
@@ -214,6 +246,12 @@ export default function ProposalForm({
       <input type="hidden" name="projectId" value={projectId} />
       {inline && <input type="hidden" name="inline" value="1" />}
       <input type="hidden" name="coverLetter" value={coverLetter} />
+      <input type="hidden" name="layout" value={layout} />
+      <input
+        type="hidden"
+        name="sectionsJson"
+        value={JSON.stringify(sections.map((sec) => ({ title: sec.title, kind: sec.kind, lineItems: sec.lineItems, instalments: sec.instalments })))}
+      />
 
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_8rem_11rem]">
         <div>
@@ -300,7 +338,20 @@ export default function ProposalForm({
         </div>
       )}
 
-      {/* AI drafting */}
+      <div>
+        <label className={LABEL_CLASS}>{t.proposals.layoutLabel}</label>
+        <div className="mt-1 flex flex-wrap gap-4 text-sm text-ink">
+          {(["COMBINED", "SECTIONED"] as const).map((value) => (
+            <label key={value} className="flex items-center gap-2">
+              <input type="radio" name="layoutChoice" checked={layout === value} onChange={() => chooseLayout(value)} className="accent-amo-lime" />
+              {value === "COMBINED" ? t.proposals.layoutCombined : t.proposals.layoutSectioned}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* AI drafting (Combined layout only) */}
+      {layout === "COMBINED" && (
       <div className="rounded-lg border border-card-border bg-field-bg p-4">
         <label className={LABEL_CLASS}>{t.proposals.briefLabel}</label>
         <textarea
@@ -326,6 +377,7 @@ export default function ProposalForm({
         {aiError && <p className="mt-2 text-xs text-red-600">{aiError}</p>}
         {aiDone && <p className="mt-2 text-xs text-emerald-700">{aiDone}</p>}
       </div>
+      )}
 
       <div>
         <label className={LABEL_CLASS}>{t.proposals.coverLetter}</label>
@@ -337,6 +389,21 @@ export default function ProposalForm({
         />
       </div>
 
+      {layout === "SECTIONED" && (
+        <ProposalSectionsEditor
+          sections={sections}
+          onChange={setSections}
+          catalog={catalog}
+          taxLocation={taxLocation}
+          chargeCanadianTax={chargeCanadianTax}
+          currency={currency}
+          nextKey={() => nextSectionKey.current++}
+          typeOptions={sectionTypeOptions}
+          lang={lang}
+        />
+      )}
+
+      {layout === "COMBINED" && (<>
       {/* Line items */}
       <div>
         <div className="flex items-center justify-between">
@@ -600,6 +667,8 @@ export default function ProposalForm({
           </button>
         </div>
       </div>
+
+      </>)}
 
       {/* Apps & subscriptions */}
       <div>

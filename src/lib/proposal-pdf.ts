@@ -31,6 +31,15 @@ export interface ProposalPdfData {
   attachments?: PdfAttachment[];
   totals: { subtotal: number; gst: number; qst: number; hst: number; total: number };
   instalments: { label: string; percentage: number | null; amount: number; dueDate?: Date | null }[];
+  // Sectioned proposal: one block per section (its own items, taxes and instalments), then a summary.
+  sections?: {
+    title: string;
+    lineItems: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
+    subtotal: number;
+    taxes: number;
+    totalAmount: number;
+    instalments: { label: string; percentage: number | null; amount: number; dueDate?: Date | null }[];
+  }[];
   notes?: string | null;
 }
 
@@ -75,6 +84,10 @@ const L = {
     subtotal: "Subtotal",
     total: "Total",
     taxesNote: "Taxes are included in the instalment amounts below.",
+    sectionTotal: "Section total (taxes included)",
+    summary: "Summary",
+    costBySection: "Cost by section",
+    allInstalments: "All instalments",
     schedule: "Payment schedule",
     instalment: "Instalment",
     percent: "%",
@@ -137,6 +150,10 @@ const L = {
     subtotal: "Sous-total",
     total: "Total",
     taxesNote: "Les taxes sont incluses dans les montants des versements ci-dessous.",
+    sectionTotal: "Total de la section (taxes incluses)",
+    summary: "Sommaire",
+    costBySection: "Coût par section",
+    allInstalments: "Tous les versements",
     schedule: "Calendrier de paiement",
     instalment: "Versement",
     percent: "%",
@@ -583,20 +600,16 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   }
 
   // ---- investment (heading, items, totals and tax note stay together when they fit on a page)
-  lo.keep(() => {
-  lo.heading(t.investment);
-  const rows: string[][] = data.lineItems.map((li) => [li.description, String(li.quantity), money(li.unitPrice, data.currency), money(li.quantity * li.unitPrice, data.currency)]);
-  lo.table(
-    [
-      { header: t.description, width: CONTENT_W - 8 - 40 - 100 - 100 },
-      { header: t.qty, width: 40, align: "right" },
-      { header: t.unit, width: 100, align: "right" },
-      { header: t.amount, width: 100, align: "right" },
-    ],
-    rows,
-    { details: data.lineItems.map((li) => li.details) }
-  );
-  // totals block (right aligned)
+  const instalmentCols = [
+    { header: "#", width: 24 },
+    { header: t.instalment, width: CONTENT_W - 8 - 24 - 50 - 110 - 120 },
+    { header: t.percent, width: 50, align: "right" as const },
+    { header: t.amount, width: 110, align: "right" as const },
+    { header: t.dueOn, width: 120 },
+  ];
+  const instalmentRows = (list: { label: string; percentage: number | null; amount: number; dueDate?: Date | null }[], from = 0) =>
+    list.map((r, i) => [String(from + i + 1), r.label, r.percentage != null ? `${r.percentage}%` : "", money(r.amount, data.currency), r.dueDate ? fmtDate(r.dueDate, data.lang) : ""]);
+  const drawTotals = () => {
   const totalsRows: [string, number, boolean][] = [[t.subtotal, data.totals.subtotal, false]];
   if (data.totals.gst) totalsRows.push([t.gst, data.totals.gst, false]);
   if (data.totals.qst) totalsRows.push([t.qst, data.totals.qst, false]);
@@ -621,7 +634,68 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     }
   }
   if (data.totals.total > 0) lo.paragraph(t.taxesNote, { size: 8.5, color: SOFT, font: italic });
-  });
+  };
+
+  if (data.sections && data.sections.length > 0) {
+    lo.heading(t.investment);
+    // keep() may run its block more than once while measuring, so the numbering is fixed up front.
+    const firstNumber = data.sections.map((_, i) => data.sections!.slice(0, i).reduce((n, x) => n + x.instalments.length, 0));
+    for (const [si, sec] of data.sections.entries()) {
+      lo.keep(() => {
+        lo.ensure(70);
+        lo.text(sec.title, MX, lo.y, { size: 12, font: bold, color: GREEN, maxWidth: CONTENT_W });
+        lo.gap(16);
+        if (sec.lineItems.length > 0) {
+          lo.table(
+            [
+              { header: t.description, width: CONTENT_W - 8 - 40 - 100 - 100 },
+              { header: t.qty, width: 40, align: "right" },
+              { header: t.unit, width: 100, align: "right" },
+              { header: t.amount, width: 100, align: "right" },
+            ],
+            sec.lineItems.map((li) => [li.description, String(li.quantity), money(li.unitPrice, data.currency), money(li.quantity * li.unitPrice, data.currency)]),
+            { details: sec.lineItems.map((li) => li.details) }
+          );
+        }
+        lo.ensure(24);
+        const label = `${t.sectionTotal}: ${money(sec.totalAmount, data.currency)}`;
+        lo.text(label, W - MX - 10 - bold.widthOfTextAtSize(safe(label), 10), lo.y, { size: 10, font: bold, color: GREEN });
+        lo.gap(18);
+        if (sec.instalments.length > 0) {
+          lo.table(instalmentCols, instalmentRows(sec.instalments, firstNumber[si]));
+        }
+        lo.gap(8);
+      });
+    }
+    // final summary: cost of each section, the proposal's totals, then every instalment
+    lo.keep(() => {
+      lo.heading(t.summary);
+      lo.table(
+        [
+          { header: t.costBySection, width: CONTENT_W - 8 - 130 },
+          { header: t.amount, width: 130, align: "right" },
+        ],
+        (data.sections ?? []).map((sec) => [sec.title, money(sec.totalAmount, data.currency)])
+      );
+      drawTotals();
+    });
+  } else {
+    lo.keep(() => {
+    lo.heading(t.investment);
+  const rows: string[][] = data.lineItems.map((li) => [li.description, String(li.quantity), money(li.unitPrice, data.currency), money(li.quantity * li.unitPrice, data.currency)]);
+  lo.table(
+    [
+      { header: t.description, width: CONTENT_W - 8 - 40 - 100 - 100 },
+      { header: t.qty, width: 40, align: "right" },
+      { header: t.unit, width: 100, align: "right" },
+      { header: t.amount, width: 100, align: "right" },
+    ],
+    rows,
+    { details: data.lineItems.map((li) => li.details) }
+  );
+    drawTotals();
+    });
+  }
 
   const subs = data.subscriptions ?? [];
   const costs = data.supplierCosts ?? [];
@@ -675,7 +749,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   // ---- schedule
   if (data.instalments.length > 0) {
     lo.keep(() => {
-    lo.heading(t.schedule);
+    lo.heading(data.sections ? t.allInstalments : t.schedule);
     lo.table(
       [
         { header: "#", width: 24 },

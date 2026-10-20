@@ -49,6 +49,8 @@ export interface ProposalRowData {
   lineItems: Line[];
   subscriptions: Sub[];
   paymentSchedule: { label: string; percentage: number | null; amount: number | null; dueDate: string | null }[];
+  layout?: "COMBINED" | "SECTIONED";
+  sections?: { title: string; kind: string; lineItems: Line[]; instalments: { label: string; percentage: number | null; amount: number | null; dueDate: string | null }[] }[];
 }
 
 export interface InvoiceRowData {
@@ -245,10 +247,12 @@ export function ProposalsCard({
   linkables,
   recipients,
   projectType,
+  typeOptions,
 }: {
   projectId: string;
   proposals: ProposalRowData[];
   projectType?: string;
+  typeOptions?: { value: string; label: string }[];
   catalog: CatalogItem[];
   taxLocation: { country: string | null; province: string | null };
   chargeCanadianTax: boolean;
@@ -446,6 +450,8 @@ export function ProposalsCard({
                 ? {
                     title: editing.title,
                     status: editing.status,
+                    layout: editing.layout,
+                    sections: editing.sections,
                     currency: editing.currency,
                     coverLetter: editing.coverLetter,
                     notes: editing.notes,
@@ -466,6 +472,8 @@ export function ProposalsCard({
             lang={lang}
             inline
             projectType={projectType}
+            projectTypes={projectType?.split(",").filter(Boolean)}
+            typeOptions={typeOptions}
             autoGenerate={autoAi && !editing}
             onSuccess={() => {
               setDialog(null);

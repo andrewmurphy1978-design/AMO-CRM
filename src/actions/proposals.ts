@@ -18,6 +18,7 @@ import { buildProposalPdf } from "@/lib/proposal-pdf";
 import { proposalIssues } from "@/lib/proposal-check";
 import { BRAND_ITEMS, DEFAULT_BRAND_ITEMS } from "@/lib/brand-items";
 import { draftProposalWithAI, type AIProposalDraft } from "@/lib/proposal-ai";
+import { computeSectionedTotals, type ProposalSectionInput } from "@/lib/proposal-sections";
 
 const ProposalSchema = z.object({
   projectId: z.string().min(1),
@@ -250,6 +251,7 @@ const FullProposalSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
   status: z.enum(["DRAFT", "SENT", "ACCEPTED", "DECLINED"]),
   currency: z.enum(CURRENCIES),
+  layout: z.enum(["COMBINED", "SECTIONED"]),
   coverLetter: z.string().trim().optional(),
   notes: z.string().trim().optional(),
   recipientContactId: z.string().optional(),
@@ -315,7 +317,43 @@ function readSubscriptions(formData: FormData): { name: string; amount: number; 
   return out;
 }
 
-async function computeProposalTotals(db: PrismaClient, projectId: string, lineItems: LineItemInput[]) {
+const SectionsSchema = z
+  .array(
+    z.object({
+      title: z.string().trim().min(1),
+      kind: z.string().trim().min(1),
+      lineItems: z.array(
+        z.object({
+          description: z.string().trim().min(1),
+          details: z.string().nullish(),
+          quantity: z.number().positive().catch(1),
+          unitPrice: z.number().finite(),
+        })
+      ),
+      instalments: z.array(
+        z.object({
+          label: z.string().trim().min(1),
+          percentage: z.number().finite().nullable(),
+          amount: z.number().finite().nullable(),
+          dueDate: z.string().nullable(),
+        })
+      ),
+    })
+  )
+  .min(1);
+
+// SECTIONED proposals post their whole section tree as one JSON field rather than
+// parallel arrays — there are lists nested inside lists.
+function readSections(formData: FormData): ProposalSectionInput[] | null {
+  try {
+    const parsed = SectionsSchema.safeParse(JSON.parse(String(formData.get("sectionsJson") ?? "[]")));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+async function computeProposalTotals(db: PrismaClient, projectId: string, lineItems: LineItemInput[], sections?: ProposalSectionInput[]) {
   const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, include: { contact: true } });
   const billingSettings = await db.billingSettings.upsert({
     where: { id: "singleton" },
@@ -323,7 +361,67 @@ async function computeProposalTotals(db: PrismaClient, projectId: string, lineIt
     create: { id: "singleton" },
   });
   const location = contactTaxLocation(project.contact);
-  return { project, totals: computeBillingTotals(lineItems, location, billingSettings.chargeCanadianTax) };
+  const totals = sections
+    ? computeSectionedTotals(sections, location, billingSettings.chargeCanadianTax).grand
+    : computeBillingTotals(lineItems, location, billingSettings.chargeCanadianTax);
+  return { project, totals };
+}
+
+// Replaces a proposal's line items / payment schedule / sections wholesale for whichever
+// layout it is saved in. Full replace, not a diff — same reasoning as the Contact form's
+// social-links resync (small, order-sensitive lists with nothing else referencing a row by id).
+async function writeProposalBody(
+  db: PrismaClient,
+  proposalId: string,
+  body:
+    | { sections?: undefined; lineItems: ReturnType<typeof readLineItems>; paymentSchedule: ReturnType<typeof readPaymentSchedule> }
+    | { sections: ProposalSectionInput[] }
+) {
+  await db.proposalLineItem.deleteMany({ where: { proposalId } });
+  await db.proposalPaymentScheduleItem.deleteMany({ where: { proposalId } });
+  await db.proposalSection.deleteMany({ where: { proposalId } });
+
+  if (!body.sections) {
+    if (body.lineItems.length > 0) {
+      await db.proposalLineItem.createMany({ data: body.lineItems.map((li, i) => ({ proposalId, ...li, order: i })) });
+    }
+    if (body.paymentSchedule.length > 0) {
+      await db.proposalPaymentScheduleItem.createMany({ data: body.paymentSchedule.map((row, i) => ({ proposalId, ...row, order: i })) });
+    }
+    return;
+  }
+
+  let lineOrder = 0;
+  let scheduleOrder = 0;
+  for (const [i, section] of body.sections.entries()) {
+    const created = await db.proposalSection.create({ data: { proposalId, title: section.title, kind: section.kind, order: i } });
+    if (section.lineItems.length > 0) {
+      await db.proposalLineItem.createMany({
+        data: section.lineItems.map((li) => ({
+          proposalId,
+          sectionId: created.id,
+          description: li.description,
+          details: li.details?.trim() || null,
+          quantity: li.quantity,
+          unitPrice: li.unitPrice,
+          order: lineOrder++,
+        })),
+      });
+    }
+    if (section.instalments.length > 0) {
+      await db.proposalPaymentScheduleItem.createMany({
+        data: section.instalments.map((row) => ({
+          proposalId,
+          sectionId: created.id,
+          label: row.label,
+          percentage: row.percentage,
+          amount: row.amount,
+          dueDate: row.dueDate ? new Date(row.dueDate) : null,
+          order: scheduleOrder++,
+        })),
+      });
+    }
+  }
 }
 
 export async function createFullProposal(
@@ -341,6 +439,7 @@ export async function createFullProposal(
       title: String(formData.get("title") ?? "").trim(),
       status: String(formData.get("status") ?? "DRAFT"),
       currency: String(formData.get("currency") ?? "CAD"),
+      layout: String(formData.get("layout") ?? "COMBINED"),
       coverLetter: String(formData.get("coverLetter") ?? "").trim() || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
       recipientContactId: String(formData.get("recipientContactId") ?? "") || undefined,
@@ -355,15 +454,18 @@ export async function createFullProposal(
   const lineItems = readLineItems(formData);
   const paymentSchedule = readPaymentSchedule(formData);
   const subscriptions = readSubscriptions(formData);
+  const sections = data.layout === "SECTIONED" ? readSections(formData) : null;
+  if (data.layout === "SECTIONED" && !sections) return { error: t.proposals.sectionsInvalid };
 
   const proposal = await withScopedPrismaClient(async (db) => {
-    const { project, totals } = await computeProposalTotals(db, data.projectId, lineItems);
+    const { project, totals } = await computeProposalTotals(db, data.projectId, lineItems, sections ?? undefined);
 
     const proposal = await db.proposal.create({
       data: {
         projectId: data.projectId,
         title: data.title,
         status: data.status,
+        layout: data.layout,
         currency: data.currency,
         coverLetter: data.coverLetter,
         notes: data.notes,
@@ -382,16 +484,7 @@ export async function createFullProposal(
       },
     });
 
-    if (lineItems.length > 0) {
-      await db.proposalLineItem.createMany({
-        data: lineItems.map((li, i) => ({ proposalId: proposal.id, ...li, order: i })),
-      });
-    }
-    if (paymentSchedule.length > 0) {
-      await db.proposalPaymentScheduleItem.createMany({
-        data: paymentSchedule.map((row, i) => ({ proposalId: proposal.id, ...row, order: i })),
-      });
-    }
+    await writeProposalBody(db, proposal.id, sections ? { sections } : { lineItems, paymentSchedule });
 
     revalidateBoth(data.projectId, project.contactId);
     return proposal;
@@ -418,6 +511,7 @@ export async function updateFullProposal(
       title: String(formData.get("title") ?? "").trim(),
       status: String(formData.get("status") ?? "DRAFT"),
       currency: String(formData.get("currency") ?? "CAD"),
+      layout: String(formData.get("layout") ?? "COMBINED"),
       coverLetter: String(formData.get("coverLetter") ?? "").trim() || undefined,
       notes: String(formData.get("notes") ?? "").trim() || undefined,
       recipientContactId: String(formData.get("recipientContactId") ?? "") || undefined,
@@ -432,6 +526,8 @@ export async function updateFullProposal(
   const lineItems = readLineItems(formData);
   const paymentSchedule = readPaymentSchedule(formData);
   const subscriptions = readSubscriptions(formData);
+  const sections = data.layout === "SECTIONED" ? readSections(formData) : null;
+  if (data.layout === "SECTIONED" && !sections) return { error: t.proposals.sectionsInvalid };
 
   let locked = false;
   let missing: string[] = [];
@@ -442,13 +538,14 @@ export async function updateFullProposal(
       locked = true;
       return;
     }
-    const { project, totals } = await computeProposalTotals(db, data.projectId, lineItems);
+    const { project, totals } = await computeProposalTotals(db, data.projectId, lineItems, sections ?? undefined);
 
     await db.proposal.update({
       where: { id: proposalId },
       data: {
         title: data.title,
         status: data.status,
+        layout: data.layout,
         currency: data.currency,
         coverLetter: data.coverLetter,
         notes: data.notes,
@@ -471,21 +568,7 @@ export async function updateFullProposal(
       },
     });
 
-    // Full replace, not a diff — same reasoning as the Contact form's
-    // social-links resync (small, order-sensitive lists with nothing else
-    // referencing a row by id).
-    await db.proposalLineItem.deleteMany({ where: { proposalId } });
-    if (lineItems.length > 0) {
-      await db.proposalLineItem.createMany({
-        data: lineItems.map((li, i) => ({ proposalId, ...li, order: i })),
-      });
-    }
-    await db.proposalPaymentScheduleItem.deleteMany({ where: { proposalId } });
-    if (paymentSchedule.length > 0) {
-      await db.proposalPaymentScheduleItem.createMany({
-        data: paymentSchedule.map((row, i) => ({ proposalId, ...row, order: i })),
-      });
-    }
+    await writeProposalBody(db, proposalId, sections ? { sections } : { lineItems, paymentSchedule });
 
     // A proposal can only be marked sent / accepted when nothing important is missing.
     if (data.status === "SENT" || data.status === "ACCEPTED") {
