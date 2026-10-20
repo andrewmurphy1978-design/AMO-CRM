@@ -596,7 +596,7 @@ export async function updateFullProposal(
 // Called directly from the client form (not a <form action>) — a plain
 // async function, not FormData-shaped, since it just returns a draft for
 // the form to pre-fill rather than persisting anything.
-export async function draftProposalAI(projectId: string, brief: string): Promise<AIProposalDraft | { error: string }> {
+export async function draftProposalAI(projectId: string, brief: string, sections?: { title: string; kind: string }[]): Promise<AIProposalDraft | { error: string }> {
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -654,6 +654,7 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
       servicesCatalog,
       brief: fullBrief,
       language,
+      sections,
     });
     if ("error" in draft || !project.createBrand) return draft;
     if (!draft.lineItems.some((li) => /brand|marque/i.test(`${li.description} ${li.details ?? ""}`))) {
@@ -663,6 +664,7 @@ export async function draftProposalAI(projectId: string, brief: string): Promise
         details: `${language === "fr" ? "Comprend : " : "Includes: "}${brandNames.join(", ")}.`,
         quantity: 1,
         unitPrice: priced?.unitPrice ?? 0,
+        ...(sections?.length ? { section: Math.max(0, sections.findIndex((s) => s.kind === "PREP")) } : {}),
       });
     }
     return draft;

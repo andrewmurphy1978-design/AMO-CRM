@@ -9,7 +9,8 @@ const CLAUDE_MODEL = "claude-sonnet-5-5";
 
 export interface AIProposalDraft {
   coverLetter: string;
-  lineItems: { description: string; details?: string; quantity: number; unitPrice: number }[];
+  // `section` (0-based) is set when the proposal is split into sections.
+  lineItems: { description: string; details?: string; quantity: number; unitPrice: number; section?: number }[];
   subscriptions?: { name: string; amount: number; period: string; note: string }[];
 }
 
@@ -29,6 +30,7 @@ function buildPrompt(input: {
   servicesCatalog: { name: string; description: string | null; unitPrice: number; currency: string; unit: string | null }[];
   brief: string;
   language: "en" | "fr";
+  sections?: { title: string; kind: string }[];
 }): string {
   const catalogText =
     input.servicesCatalog.length > 0
@@ -39,6 +41,13 @@ function buildPrompt(input: {
           )
           .join("\n")
       : "(no price list entries on file — invent reasonable line items and prices)";
+
+  const sectionsText =
+    input.sections && input.sections.length > 0
+      ? `\nThe proposal is split into sections, and every line item belongs to exactly one of them. Add "section": <number> to each line item:\n${input.sections
+          .map((s, i) => `${i}: ${s.title}${s.kind === "PREP" ? " (brand, research and mock-up work)" : " (the build, presentation and launch of this type of work)"}`)
+          .join("\n")}\n`
+      : "";
 
   return `You are helping a freelance consultant (AI courses/coaching, affiliate marketing, ClickFunnels funnel building, website building, and social media services) draft a client proposal.
 
@@ -57,8 +66,9 @@ Write:
 2. A list of line items covering the work described, each with a short description (the item name), "details" (1-3 sentences saying exactly what is included, written for the client), a quantity, and a unit price in ${input.currency}. Prefer matching existing price list items where they fit; add new reasonably-priced items for anything not covered.
 3. "subscriptions": the third-party apps / services the client will pay the providers directly for this project (for example the website/funnel app, hosting, domain, automation tools), each with name, amount (best estimate, 0 if unknown), period ("month", "year" or "once") and a short note. Leave the list empty if none apply.
 
+${sectionsText}
 Keep it tight: details at most 2 short sentences, at most 12 line items, no repetition of the brief. Respond with ONLY a JSON object, no markdown fences, no other text, in exactly this shape:
-{"coverLetter": "...", "lineItems": [{"description": "...", "details": "...", "quantity": 1, "unitPrice": 0}], "subscriptions": [{"name": "...", "amount": 0, "period": "month", "note": ""}]}`;
+{"coverLetter": "...", "lineItems": [{"description": "...", "details": "...", "quantity": 1, "unitPrice": 0${input.sections?.length ? ', "section": 0' : ""}}], "subscriptions": [{"name": "...", "amount": 0, "period": "month", "note": ""}]}`;
 }
 
 // The model sometimes wraps JSON in code fences or adds a sentence around it,
@@ -110,6 +120,7 @@ export async function draftProposalWithAI(
     servicesCatalog: { name: string; description: string | null; unitPrice: number; currency: string; unit: string | null }[];
     brief: string;
     language: "en" | "fr";
+    sections?: { title: string; kind: string }[];
   }
 ): Promise<AIProposalDraft | { error: string }> {
   const apiKey = await getStoredApiKey(db);
@@ -145,7 +156,7 @@ export async function draftProposalWithAI(
     }
     const parsed = parseLooseJson(rawText) as {
       coverLetter?: string;
-      lineItems?: { description?: string; details?: string; quantity?: number; unitPrice?: number }[];
+      lineItems?: { description?: string; details?: string; quantity?: number; unitPrice?: number; section?: number }[];
       subscriptions?: { name?: string; amount?: number; period?: string; note?: string }[];
     };
 
@@ -156,6 +167,9 @@ export async function draftProposalWithAI(
         details: li.details?.trim() || undefined,
         quantity: typeof li.quantity === "number" && li.quantity > 0 ? li.quantity : 1,
         unitPrice: li.unitPrice!,
+        ...(input.sections?.length
+          ? { section: Number.isInteger(li.section) && (li.section as number) >= 0 && (li.section as number) < input.sections.length ? (li.section as number) : Math.max(0, input.sections.findIndex((x) => x.kind !== "PREP")) }
+          : {}),
       }));
 
     if (lineItems.length === 0) {

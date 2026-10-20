@@ -126,20 +126,21 @@ export default function ProposalForm({
 
   // First time Sectioned is picked on a proposal with no sections yet: seed the Brand/Research/Mock-up
   // section plus one for each of the project's own types.
-  function chooseLayout(next: "COMBINED" | "SECTIONED") {
-    setLayout(next);
-    if (next !== "SECTIONED" || sections.length > 0) return;
+  function seedSections(): EditorSection[] {
     const labels = { deposit: t.proposals.instalmentDeposit, startBuild: t.proposals.instalmentStartBuild, beforeLaunch: t.proposals.instalmentBeforeLaunch };
     const kinds = [PREP_KIND, ...(projectTypes?.length ? projectTypes : projectType ? [projectType] : [])];
-    setSections(
-      kinds.map((kind) => ({
-        key: nextSectionKey.current++,
-        kind,
-        title: kind === PREP_KIND ? t.proposals.prepSection : (sectionTypeOptions.find((o) => o.value === kind)?.label ?? kind),
-        lineItems: [],
-        instalments: defaultInstalmentsFor(kind, labels),
-      }))
-    );
+    return kinds.map((kind) => ({
+      key: nextSectionKey.current++,
+      kind,
+      title: kind === PREP_KIND ? t.proposals.prepSection : (sectionTypeOptions.find((o) => o.value === kind)?.label ?? kind),
+      lineItems: [],
+      instalments: defaultInstalmentsFor(kind, labels),
+    }));
+  }
+
+  function chooseLayout(next: "COMBINED" | "SECTIONED") {
+    setLayout(next);
+    if (next === "SECTIONED" && sections.length === 0) setSections(seedSections());
   }
 
   const [coverLetter, setCoverLetter] = useState(defaultValues?.coverLetter ?? "");
@@ -190,10 +191,12 @@ export default function ProposalForm({
   function handleGenerateWithAI() {
     setAiError(null);
     setAiDone(null);
+    // Sectioned: the AI places each line item in one of the sections (seeded first if there are none yet).
+    const targetSections = layout === "SECTIONED" ? (sections.length > 0 ? sections : seedSections()) : null;
     startAiTransition(async () => {
       let result: Awaited<ReturnType<typeof draftProposalAI>>;
       try {
-        result = await draftProposalAI(projectId, brief);
+        result = await draftProposalAI(projectId, brief, targetSections?.map((s) => ({ title: s.title, kind: s.kind })));
       } catch (e) {
         const msg = e instanceof Error ? e.message : "";
         setAiError(
@@ -216,8 +219,17 @@ export default function ProposalForm({
           : `Draft applied: ${result.lineItems.length} line item(s) — review the letter and lines below.`
       );
       setCoverLetter(result.coverLetter);
-      setLineItems(result.lineItems.map((li, tempKey) => ({ tempKey, ...li, details: li.details ?? "" })));
-      nextLineKey.current = result.lineItems.length;
+      if (targetSections) {
+        setSections(
+          targetSections.map((sec, i) => ({
+            ...sec,
+            lineItems: result.lineItems.filter((li) => (li.section ?? 0) === i).map(({ description, details, quantity, unitPrice }) => ({ description, details: details ?? "", quantity, unitPrice })),
+          }))
+        );
+      } else {
+        setLineItems(result.lineItems.map((li, tempKey) => ({ tempKey, ...li, details: li.details ?? "" })));
+        nextLineKey.current = result.lineItems.length;
+      }
       if (result.subscriptions && result.subscriptions.length > 0 && subs.length === 0) {
         setSubs(result.subscriptions.map((x, tempKey) => ({ tempKey, ...x })));
         nextSubKey.current = result.subscriptions.length;
@@ -350,8 +362,8 @@ export default function ProposalForm({
         </div>
       </div>
 
-      {/* AI drafting (Combined layout only) */}
-      {layout === "COMBINED" && (
+      {/* AI drafting */}
+      {(
       <div className="rounded-lg border border-card-border bg-field-bg p-4">
         <label className={LABEL_CLASS}>{t.proposals.briefLabel}</label>
         <textarea
