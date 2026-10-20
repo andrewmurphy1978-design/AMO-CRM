@@ -4,7 +4,7 @@ import DateInput from "@/components/date-input";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { clientFacingDescription } from "@/lib/catalog-text";
+import { catalogLine } from "@/lib/catalog-text";
 import type { RecipientOption } from "@/lib/contact-address";
 
 type LineItemRow = { tempKey: number; description: string; details: string; quantity: number; unitPrice: number };
@@ -22,7 +22,7 @@ type InvoiceFormValues = {
   lineItems?: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
 };
 
-type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
+type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; nameFr?: string | null; clientDescriptionFr?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -43,6 +43,7 @@ export default function InvoiceLineItemsForm({
   taxLocation,
   chargeCanadianTax,
   lang,
+  docLang,
   onSuccess,
   formId,
   hideSubmit,
@@ -58,6 +59,8 @@ export default function InvoiceLineItemsForm({
   taxLocation: { country: string | null; province: string | null };
   chargeCanadianTax: boolean;
   lang: Lang;
+  // The language the invoice is written in (the client's).
+  docLang?: Lang;
   onSuccess?: () => void;
   formId?: string;
   hideSubmit?: boolean;
@@ -220,7 +223,7 @@ export default function InvoiceLineItemsForm({
               defaultValue=""
               onChange={(e) => {
                 const item = catalog.find((c) => c.id === e.target.value);
-                if (item) addLineItem({ description: item.name, unitPrice: item.unitPrice, details: item.clientDescription || clientFacingDescription(item.description) });
+                if (item) addLineItem({ ...catalogLine(item, docLang ?? lang), unitPrice: item.unitPrice });
                 e.target.value = "";
               }}
               className="rounded-md border border-card-border bg-field-bg px-2 py-1 text-xs text-ink"

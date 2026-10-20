@@ -49,6 +49,7 @@ export default async function NewProposalPage({
           chargeCanadianTax={billingSettings.chargeCanadianTax}
           submitLabel={t.proposals.createFullProposal}
           lang={lang}
+          docLang={(project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en"}
         />
       </div>
     </div>

@@ -2,13 +2,13 @@
 
 import { useMemo } from "react";
 import { computeSectionedTotals, defaultInstalmentsFor, PREP_KIND, type ProposalSectionInput } from "@/lib/proposal-sections";
-import { clientFacingDescription } from "@/lib/catalog-text";
+import { catalogLine } from "@/lib/catalog-text";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 export type EditorSection = ProposalSectionInput & { key: number };
 export type TypeOption = { value: string; label: string };
 
-type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; unitPrice: number; currency: string };
+type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; nameFr?: string | null; clientDescriptionFr?: string | null; unitPrice: number; currency: string };
 
 const FIELD_CLASS =
   "w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -24,6 +24,7 @@ export default function ProposalSectionsEditor({
   nextKey,
   typeOptions,
   lang,
+  docLang,
 }: {
   sections: EditorSection[];
   onChange: (sections: EditorSection[]) => void;
@@ -35,6 +36,8 @@ export default function ProposalSectionsEditor({
   // Project types a section can be for (the project's own types first).
   typeOptions: TypeOption[];
   lang: Lang;
+  // The language the proposal is written in (the client's).
+  docLang: Lang;
 }) {
   const t = getDict(lang).proposals;
   const totals = useMemo(
@@ -47,7 +50,8 @@ export default function ProposalSectionsEditor({
     onChange(sections.map((s) => (s.key === key ? { ...s, ...p } : s)));
   }
 
-  const kindLabel = (kind: string) => (kind === PREP_KIND ? t.prepSection : (typeOptions.find((o) => o.value === kind)?.label ?? kind));
+  const dt = getDict(docLang);
+  const kindLabel = (kind: string) => (kind === PREP_KIND ? dt.proposals.prepSection : ((dt.projectTypes as Record<string, string>)[kind] ?? typeOptions.find((o) => o.value === kind)?.label ?? kind));
 
   function addSection(kind: string) {
     onChange([
@@ -58,9 +62,9 @@ export default function ProposalSectionsEditor({
         title: kindLabel(kind),
         lineItems: [],
         instalments: defaultInstalmentsFor(kind, {
-          deposit: t.instalmentDeposit,
-          startBuild: t.instalmentStartBuild,
-          beforeLaunch: t.instalmentBeforeLaunch,
+          deposit: dt.proposals.instalmentDeposit,
+          startBuild: dt.proposals.instalmentStartBuild,
+          beforeLaunch: dt.proposals.instalmentBeforeLaunch,
         }),
       },
     ]);
@@ -103,7 +107,7 @@ export default function ProposalSectionsEditor({
                     const item = catalog.find((c) => c.id === e.target.value);
                     if (item)
                       patch(section.key, {
-                        lineItems: [...section.lineItems, { description: item.name, details: item.clientDescription || clientFacingDescription(item.description), quantity: 1, unitPrice: item.unitPrice }],
+                        lineItems: [...section.lineItems, { ...catalogLine(item, docLang), quantity: 1, unitPrice: item.unitPrice }],
                       });
                     e.target.value = "";
                   }}

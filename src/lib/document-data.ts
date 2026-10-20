@@ -9,7 +9,8 @@ import type { InvoicePdfData, PdfAttachment, ProposalPdfData } from "@/lib/propo
 import { proposalSupplierCosts } from "@/lib/supplier-costs";
 import { getTypeLabels } from "@/lib/project-type-store";
 import { signPath } from "@/lib/signed-url";
-import { localizeText, localizeValue } from "@/lib/project-i18n";
+import { localizeInstalmentLabel, localizeText, localizeValue } from "@/lib/project-i18n";
+import { clientFacingDescription } from "@/lib/catalog-text";
 import { LOGO_FULL_EN_B64, LOGO_FULL_FR_B64 } from "@/lib/logo-assets";
 import { contactTaxLocation } from "@/lib/billing-totals";
 import { computeSectionedTotals } from "@/lib/proposal-sections";
@@ -62,6 +63,23 @@ function clientBlock(c: {
   };
 }
 
+// A French client reads French: the price list's own French wording (when the line was picked from it)
+// replaces the English name / client description saved on the line; anything else goes through the
+// template dictionary and is otherwise left as written.
+type CatalogRow = { name: string; description: string | null; clientDescription: string | null; nameFr: string | null; clientDescriptionFr: string | null };
+const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
+function localizeLine<T extends { description: string; details?: string | null }>(li: T, catalog: CatalogRow[], lang: "en" | "fr"): T {
+  if (lang !== "fr") return li;
+  const item = catalog.find((c) => norm(c.name) === norm(li.description) || norm(c.nameFr) === norm(li.description));
+  const description = item?.nameFr && norm(item.name) === norm(li.description) ? item.nameFr : localizeText(li.description, "fr");
+  let details = li.details ?? null;
+  if (details) {
+    const sameAsEnglish = [item?.clientDescription, clientFacingDescription(item?.description)].some((d) => d && norm(d) === norm(details));
+    details = sameAsEnglish && item?.clientDescriptionFr ? item.clientDescriptionFr : localizeText(details, "fr");
+  }
+  return { ...li, description, details };
+}
+
 export async function loadProposalPdfData(db: PrismaClient, projectId: string, proposalId: string): Promise<{ data: ProposalPdfData; fileName: string } | null> {
   const proposal = await db.proposal.findUnique({
     where: { id: proposalId },
@@ -80,6 +98,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
   const lang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
   const dict = getDict(lang);
   const typeLabels = await getTypeLabels(db, dict.projectTypes as Record<string, string>, lang);
+  const catalog: CatalogRow[] = lang === "fr" ? await db.servicePriceListItem.findMany({ select: { name: true, description: true, clientDescription: true, nameFr: true, clientDescriptionFr: true } }) : [];
   // "Prepared for": the chosen recipient (a linked contact, a specific email / address) or the client.
   const recipient = proposal.recipientContactId && proposal.recipientContactId !== project.contactId ? await db.contact.findUnique({ where: { id: proposal.recipientContactId } }) : null;
   const client = {
@@ -134,9 +153,18 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
       if (types.length === 1 && !SHARED_PREP.test(ph.name.trim()) && !SKIPPED.test(ph.name.trim())) return [ph];
       return [];
     });
+  // Default section titles are saved in the language of the CRM screen they were created in: show them in the client's.
+  const sectionTitle = (sec: { title: string; kind: string }) => {
+    if (sec.kind === "PREP") {
+      const defaults = [getDict("en").proposals.prepSection, getDict("fr").proposals.prepSection];
+      return defaults.some((d) => norm(d) === norm(sec.title)) ? dict.proposals.prepSection : sec.title;
+    }
+    const names = [(getDict("en").projectTypes as Record<string, string>)[sec.kind], (getDict("fr").projectTypes as Record<string, string>)[sec.kind], typeLabels[sec.kind]];
+    return names.some((n) => n && norm(n) === norm(sec.title)) ? (typeLabels[sec.kind] ?? sec.title) : sec.title;
+  };
   const sections = sectionTotals
     ? sectionRows.map((r, i) => ({
-        title: r.sec.title,
+        title: sectionTitle(r.sec),
         kind: r.sec.kind,
         ...(r.sec.kind === "PREP"
           ? {
@@ -156,17 +184,17 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
               })(),
               plan: types.includes(r.sec.kind) ? phasesOfType(r.sec.kind).map(localized) : [],
             }),
-        lineItems: r.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
+        lineItems: r.lineItems.map((li) => localizeLine({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice }, catalog, lang)),
         subtotal: sectionTotals.sections[i].subtotal,
         taxes: sectionTotals.sections[i].total,
         totalAmount: sectionTotals.sections[i].totalAmount,
-        instalments: r.rows.map((row, j) => ({ label: row.label, percentage: row.percentage, amount: sectionTotals.sections[i].instalmentAmounts[j], dueDate: row.dueDate })),
+        instalments: r.rows.map((row, j) => ({ label: localizeInstalmentLabel(row.label, lang), percentage: row.percentage, amount: sectionTotals.sections[i].instalmentAmounts[j], dueDate: row.dueDate })),
       }))
     : undefined;
   const instalments = sections
     ? sections.flatMap((sec) => sec.instalments.map((row) => ({ ...row, label: `${sec.title} — ${row.label}` })))
     : proposal.paymentSchedule.map((r) => ({
-        label: r.label,
+        label: localizeInstalmentLabel(r.label, lang),
         percentage: r.percentage,
         amount: r.amount ?? (r.percentage != null ? Math.round(((r.percentage / 100) * grand) * 100) / 100 : 0),
         dueDate: r.dueDate,
@@ -208,7 +236,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     ),
     coverLetter: proposal.coverLetter,
     plan,
-    lineItems: proposal.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
+    lineItems: proposal.lineItems.map((li) => localizeLine({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice }, catalog, lang)),
     subscriptions: (Array.isArray(proposal.subscriptions) ? proposal.subscriptions : []) as { name: string; amount: number; period: string; note: string }[],
     supplierCosts: costs.map((c) => ({ supplier: c.supplier, reference: c.reference, description: c.description, total: c.totalAmount, currency: c.currency })),
     attachments,
@@ -232,12 +260,13 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
   if (!project) return null;
   const settings = await db.billingSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } });
   const lang: "en" | "fr" = (project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en";
+  const invoiceCatalog: CatalogRow[] = lang === "fr" ? await db.servicePriceListItem.findMany({ select: { name: true, description: true, clientDescription: true, nameFr: true, clientDescriptionFr: true } }) : [];
 
   let instalmentLabel: string | null = null;
   if (invoice.instalment) {
     const rows = invoice.instalment.proposal.paymentSchedule;
     const idx = rows.findIndex((r) => r.id === invoice.instalmentId);
-    instalmentLabel = `${lang === "fr" ? "Versement" : "Instalment"} ${idx + 1} ${lang === "fr" ? "de" : "of"} ${rows.length} — ${invoice.instalment.label}`;
+    instalmentLabel = `${lang === "fr" ? "Versement" : "Instalment"} ${idx + 1} ${lang === "fr" ? "de" : "of"} ${rows.length} — ${localizeInstalmentLabel(invoice.instalment.label, lang)}`;
   }
   // Where this instalment sits in the contract: the invoices already issued for the earlier
   // instalments, and what is left to invoice after this one.
@@ -294,7 +323,7 @@ export async function loadInvoicePdfData(db: PrismaClient, projectId: string, in
     instalment,
     jurisdiction,
     payUrl,
-    lineItems: invoice.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
+    lineItems: invoice.lineItems.map((li) => localizeLine({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice }, invoiceCatalog, lang)),
     attachments,
     totals: { subtotal: invoice.subtotal, gst: invoice.gstAmount, qst: invoice.qstAmount, hst: invoice.hstAmount, total: invoice.taxAmount },
     notes: invoice.notes,

@@ -27,7 +27,7 @@ import SendDocumentButton from "./send-document-button";
 import DocumentLinks, { type Linkables } from "./document-links";
 import type { RecipientOption } from "@/lib/contact-address";
 
-type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
+type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; nameFr?: string | null; clientDescriptionFr?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
 type Line = { description: string; details?: string | null; quantity: number; unitPrice: number };
 type Sub = { name: string; amount: number; period: string; note: string };
 
@@ -248,8 +248,10 @@ export function ProposalsCard({
   recipients,
   projectType,
   typeOptions,
+  docLang,
 }: {
   projectId: string;
+  docLang?: Lang;
   proposals: ProposalRowData[];
   projectType?: string;
   typeOptions?: { value: string; label: string }[];
@@ -473,6 +475,7 @@ export function ProposalsCard({
             inline
             projectType={projectType}
             projectTypes={projectType?.split(",").filter(Boolean)}
+            docLang={docLang}
             typeOptions={typeOptions}
             autoGenerate={autoAi && !editing}
             onSuccess={() => {
@@ -510,8 +513,10 @@ export function InvoicesCard({
   emailing,
   linkables,
   recipients,
+  docLang,
 }: {
   projectId: string;
+  docLang?: Lang;
   invoices: InvoiceRowData[];
   catalog: CatalogItem[];
   taxLocation: { country: string | null; province: string | null };
@@ -668,6 +673,7 @@ export function InvoicesCard({
             taxLocation={taxLocation}
             chargeCanadianTax={chargeCanadianTax}
             lang={lang}
+            docLang={docLang}
             onSuccess={() => {
               setEditId(null);
               router.refresh();

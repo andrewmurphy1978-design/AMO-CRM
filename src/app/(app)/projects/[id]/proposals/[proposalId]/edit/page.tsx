@@ -65,6 +65,7 @@ export default async function EditProposalPage({
           chargeCanadianTax={billingSettings.chargeCanadianTax}
           submitLabel={t.proposals.saveChanges}
           lang={lang}
+          docLang={(project.contact.locale ?? "").toLowerCase().startsWith("fr") ? "fr" : "en"}
         />
       </div>
     </div>

@@ -1944,6 +1944,9 @@ model ServicePriceListItem {
   // What the client reads under the line in a proposal / invoice ("description"
   // above stays an internal pricing note).
   clientDescription String?  @db.Text
+  // French wording, used on proposals and invoices written for a French-speaking client.
+  nameFr              String?
+  clientDescriptionFr String?  @db.Text
   // The project type this service belongs to (a ProjectType value), so a
   // proposal can offer the matching services first. Null = general.
   projectType       String?

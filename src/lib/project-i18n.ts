@@ -296,3 +296,29 @@ export function localizeText(text: string, lang: "en" | "fr"): string {
 export function localizeValue(text: string, lang: "en" | "fr"): string {
   return lang === "fr" ? frValue(text) : text;
 }
+
+// Instalment labels the CRM itself proposes (typed ones are left as written).
+const INSTALMENT_FR: Record<string, string> = {
+  "deposit — on acceptance": "Dépôt — à l'acceptation",
+  "full payment — on acceptance": "Paiement complet — à l'acceptation",
+  "on mock-up approval": "À l'approbation de la maquette",
+  "at launch": "Au lancement",
+  deposit: "Dépôt",
+  "start of build": "Début de la construction",
+  "before launch": "Avant le lancement",
+  "final payment": "Paiement final",
+  "1st instalment": "1er versement",
+  "2nd instalment": "2e versement",
+  "3rd instalment": "3e versement",
+};
+
+export function localizeInstalmentLabel(label: string, lang: "en" | "fr"): string {
+  if (lang !== "fr") return label;
+  const key = label.trim().toLowerCase();
+  if (INSTALMENT_FR[key]) return INSTALMENT_FR[key];
+  const milestone = /^milestone (\d+)$/i.exec(label.trim());
+  if (milestone) return `Étape ${milestone[1]}`;
+  const sep = label.indexOf(" — ");
+  if (sep > 0) return `${localizeInstalmentLabel(label.slice(0, sep), lang)} — ${localizeInstalmentLabel(label.slice(sep + 3), lang)}`;
+  return label;
+}

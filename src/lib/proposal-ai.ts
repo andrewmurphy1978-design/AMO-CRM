@@ -127,7 +127,7 @@ export interface AIApp {
   period: "month" | "year" | "once";
 }
 
-async function askClaude(db: PrismaClient, prompt: string, opts: { search?: boolean; language: "en" | "fr" }): Promise<{ text: string; notice?: string } | { error: string }> {
+export async function askClaude(db: PrismaClient, prompt: string, opts: { search?: boolean; language: "en" | "fr" }): Promise<{ text: string; notice?: string } | { error: string }> {
   const apiKey = await getStoredApiKey(db);
   if (!apiKey) return { error: "No Anthropic API key configured — add one in Settings first." };
 
@@ -269,4 +269,32 @@ Respond with ONLY a JSON object, no markdown fences, no other text, in exactly t
   } catch {
     return { subscription: { name: input.app.name, amount: 0, period: input.app.period, note: input.language === "fr" ? "Prix introuvable" : "Price not found" }, notice: reply.notice };
   }
+}
+
+// Translates price-list entries (name + the text the client reads under the line) into natural business French.
+export async function translateServicesToFrench(
+  db: PrismaClient,
+  items: { id: string; name: string; clientDescription: string | null }[]
+): Promise<{ translations: { id: string; name: string; clientDescription: string }[] } | { error: string }> {
+  const translations: { id: string; name: string; clientDescription: string }[] = [];
+  for (let i = 0; i < items.length; i += 12) {
+    const batch = items.slice(i, i + 12);
+    const prompt = `Translate these service price-list entries of a freelance web / funnel / AI consultancy into natural, professional French (Quebec business French; keep product and brand names such as Systeme.io, ClickFunnels, Zapier untranslated). The description is what a client reads under the line of a quote: keep its meaning and length. Leave an empty description empty.
+
+${JSON.stringify(batch.map((b) => ({ id: b.id, name: b.name, description: b.clientDescription ?? "" })))}
+
+Respond with ONLY a JSON object, no markdown fences, no other text, in exactly this shape:
+{"items": [{"id": "...", "name": "...", "description": "..."}]}`;
+    const reply = await askClaude(db, prompt, { language: "fr" });
+    if ("error" in reply) return reply;
+    try {
+      const parsed = parseLooseJson(reply.text) as { items?: { id?: string; name?: string; description?: string }[] };
+      for (const row of parsed.items ?? []) {
+        if (row.id && batch.some((b) => b.id === row.id)) translations.push({ id: row.id, name: row.name?.trim() ?? "", clientDescription: row.description?.trim() ?? "" });
+      }
+    } catch {
+      return { error: "The AI's reply couldn't be read — try again." };
+    }
+  }
+  return { translations };
 }

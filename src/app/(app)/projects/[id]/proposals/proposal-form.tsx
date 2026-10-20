@@ -6,7 +6,7 @@ import { aiProposalApps, aiProposalAppPrice, aiProposalItems, prepareProposalAI 
 import type { RecipientOption } from "@/lib/contact-address";
 import { computeBillingTotals } from "@/lib/billing-totals";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
-import { clientFacingDescription } from "@/lib/catalog-text";
+import { catalogLine } from "@/lib/catalog-text";
 import { PREP_KIND, defaultInstalmentsFor } from "@/lib/proposal-sections";
 import ProposalSectionsEditor, { type EditorSection, type TypeOption } from "./proposal-sections-editor";
 
@@ -30,7 +30,7 @@ type ProposalFormValues = {
   recipientAddress?: string | null;
 };
 
-type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
+type CatalogItem = { id: string; name: string; description: string | null; clientDescription?: string | null; nameFr?: string | null; clientDescriptionFr?: string | null; projectType?: string | null; unitPrice: number; currency: string; unit: string | null };
 
 const FIELD_CLASS =
   "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
@@ -54,6 +54,7 @@ export default function ProposalForm({
   chargeCanadianTax,
   submitLabel,
   lang,
+  docLang,
   inline,
   onSuccess,
   projectType,
@@ -77,6 +78,8 @@ export default function ProposalForm({
   chargeCanadianTax: boolean;
   submitLabel: string;
   lang: Lang;
+  // The language the proposal is written in (the client's), which can differ from the CRM screen's.
+  docLang?: Lang;
   // In a dialog: stay on the page and report back when saved.
   inline?: boolean;
   onSuccess?: () => void;
@@ -127,12 +130,13 @@ export default function ProposalForm({
   // First time Sectioned is picked on a proposal with no sections yet: seed the Brand/Research/Mock-up
   // section plus one for each of the project's own types.
   function seedSections(): EditorSection[] {
-    const labels = { deposit: t.proposals.instalmentDeposit, startBuild: t.proposals.instalmentStartBuild, beforeLaunch: t.proposals.instalmentBeforeLaunch };
+    const dt = getDict(docLang ?? lang);
+    const labels = { deposit: dt.proposals.instalmentDeposit, startBuild: dt.proposals.instalmentStartBuild, beforeLaunch: dt.proposals.instalmentBeforeLaunch };
     const kinds = [PREP_KIND, ...(projectTypes?.length ? projectTypes : projectType ? [projectType] : [])];
     return kinds.map((kind) => ({
       key: nextSectionKey.current++,
       kind,
-      title: kind === PREP_KIND ? t.proposals.prepSection : (sectionTypeOptions.find((o) => o.value === kind)?.label ?? kind),
+      title: kind === PREP_KIND ? dt.proposals.prepSection : ((dt.projectTypes as Record<string, string>)[kind] ?? sectionTypeOptions.find((o) => o.value === kind)?.label ?? kind),
       lineItems: [],
       instalments: defaultInstalmentsFor(kind, labels),
     }));
@@ -457,6 +461,7 @@ export default function ProposalForm({
           nextKey={() => nextSectionKey.current++}
           typeOptions={sectionTypeOptions}
           lang={lang}
+          docLang={docLang ?? lang}
         />
       )}
 
@@ -470,7 +475,7 @@ export default function ProposalForm({
               defaultValue=""
               onChange={(e) => {
                 const item = catalog.find((c) => c.id === e.target.value);
-                if (item) addLineItem({ description: item.name, unitPrice: item.unitPrice, details: item.clientDescription || clientFacingDescription(item.description) });
+                if (item) addLineItem({ ...catalogLine(item, docLang ?? lang), unitPrice: item.unitPrice });
                 e.target.value = "";
               }}
               className="rounded-md border border-card-border bg-field-bg px-2 py-1 text-xs text-ink"

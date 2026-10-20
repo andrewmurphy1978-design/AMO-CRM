@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createServicePriceListItem, updateServicePriceListItem, deleteServicePriceListItem } from "@/actions/service-price-list";
+import { createServicePriceListItem, updateServicePriceListItem, deleteServicePriceListItem, translatePriceListToFrench } from "@/actions/service-price-list";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 import { CARD_COLORS } from "@/components/section-card";
 import { PROJECT_TYPE_ORDER } from "@/lib/project-templates";
@@ -12,6 +12,8 @@ type ServiceItem = {
   name: string;
   description: string | null;
   clientDescription: string | null;
+  nameFr: string | null;
+  clientDescriptionFr: string | null;
   projectType: string | null;
   unitPrice: number;
   currency: string;
@@ -109,6 +111,14 @@ function ServiceDialog({ item, lang, onClose, customTypes }: { item: ServiceItem
           <textarea name="clientDescription" rows={3} defaultValue={item?.clientDescription ?? ""} className={FIELD_CLASS} />
         </div>
         <div className="sm:col-span-2">
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Nom en français (propositions et factures en français)" : "Name in French (for proposals and invoices in French)"}</label>
+          <input name="nameFr" defaultValue={item?.nameFr ?? ""} className={FIELD_CLASS} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={LABEL_CLASS}>{lang === "fr" ? "Description pour le client, en français" : "Client description, in French"}</label>
+          <textarea name="clientDescriptionFr" rows={3} defaultValue={item?.clientDescriptionFr ?? ""} className={FIELD_CLASS} />
+        </div>
+        <div className="sm:col-span-2">
           <label className={LABEL_CLASS}>{lang === "fr" ? "Note interne (fourchette de prix, etc.)" : "Internal note (price range, etc.)"}</label>
           <textarea name="description" rows={2} defaultValue={item?.description ?? ""} className={FIELD_CLASS} />
         </div>
@@ -121,7 +131,10 @@ export default function ServicePriceListForm({ items, lang, customTypes = [] }: 
   // `null` = closed; { item: null } = adding; { item } = editing.
   const [dialog, setDialog] = useState<{ item: ServiceItem | null; key: number } | null>(null);
   const [counter, setCounter] = useState(0);
+  const [translating, startTranslate] = useTransition();
+  const [translateMsg, setTranslateMsg] = useState<{ error?: string; success?: string } | null>(null);
   const t = getDict(lang);
+  const missingFrench = items.filter((i) => !i.nameFr || (i.clientDescription && !i.clientDescriptionFr)).length;
 
   function open(item: ServiceItem | null) {
     setCounter((c) => c + 1);
@@ -136,6 +149,30 @@ export default function ServicePriceListForm({ items, lang, customTypes = [] }: 
           {t.servicePriceList.add}
         </button>
       </div>
+
+      {missingFrench > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span className="min-w-0 flex-1">
+            {lang === "fr"
+              ? `${missingFrench} service(s) sans texte français : les propositions et factures en français afficheront l'anglais pour ces lignes.`
+              : `${missingFrench} service(s) have no French text: proposals and invoices in French will show English for those lines.`}
+          </span>
+          <button
+            type="button"
+            disabled={translating}
+            onClick={() =>
+              startTranslate(async () => {
+                setTranslateMsg(await translatePriceListToFrench());
+              })
+            }
+            className="rounded-md bg-[#0fa38a] px-3 py-1.5 text-xs font-medium text-[#f4faf6] hover:opacity-90 disabled:opacity-50"
+          >
+            {translating ? (lang === "fr" ? "Traduction…" : "Translating…") : lang === "fr" ? "Traduire avec l'IA" : "Translate with AI"}
+          </button>
+        </div>
+      )}
+      {translateMsg?.error && <p className="text-sm text-red-600">{translateMsg.error}</p>}
+      {translateMsg?.success && <p className="text-sm text-emerald-700">{translateMsg.success}</p>}
 
       <ul className="divide-y divide-card-border rounded-md border border-card-border">
         {items.map((item) => (

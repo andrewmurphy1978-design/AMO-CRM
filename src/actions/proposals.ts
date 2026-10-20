@@ -664,7 +664,9 @@ export async function aiProposalItems(prep: AIPrep): Promise<{ coverLetter: stri
   if (!session) throw new Error("Not authenticated");
   try {
     return await withScopedPrismaClient(async (db) => {
-      const servicesCatalog = await db.servicePriceListItem.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+      const rows = await db.servicePriceListItem.findMany({ where: { active: true }, orderBy: { name: "asc" } });
+      // For a French client the AI is shown (and so matches and writes) the French wording of each service.
+      const servicesCatalog = prep.ctx.language === "fr" ? rows.map((c) => ({ ...c, name: c.nameFr || c.name, description: [c.description, c.clientDescriptionFr].filter(Boolean).join(" — ") || null })) : rows;
       const draft = await draftLetterAndItems(db, { ...prep.ctx, servicesCatalog });
       if ("error" in draft || !prep.createBrand) return draft;
       if (!draft.lineItems.some((li) => /brand|marque/i.test(`${li.description} ${li.details ?? ""}`))) {

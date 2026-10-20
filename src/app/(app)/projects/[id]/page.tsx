@@ -1048,6 +1048,7 @@ export default async function ProjectDetailPage({
           <div style={{ order: proposalsPending ? 1 : 7 }}>
           <ProposalsCard
             projectId={project.id}
+            docLang={docLang}
             projectType={typesOfProject(project).join(",")}
             typeOptions={Object.entries(typeLabels).map(([value, label]) => ({ value, label }))}
             proposals={proposalRows}
@@ -1067,6 +1068,7 @@ export default async function ProjectDetailPage({
           <div style={{ order: invoicesPending ? 2 : 8 }}>
           <InvoicesCard
             projectId={project.id}
+            docLang={docLang}
             invoices={invoiceRows}
             catalog={catalog}
             taxLocation={contactTaxLocation(project.contact)}
