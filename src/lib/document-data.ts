@@ -113,9 +113,49 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
         settings.chargeCanadianTax
       )
     : null;
+  // Sectioned proposal: which phases and detail answers belong to which section. Phases of one type are
+  // named "<Type> — <Phase>" when the project combines several types; the shared planning phases (Brand,
+  // Research, Mock-up, presenting the reports) go to the Brand/Research/Mock-up section, and the shared
+  // Presenting / Deploying phases are repeated under every type (each type is presented and launched).
+  const rawPhases = [
+    ...project.phases.filter((p) => !/^(proposal|proposition)$/i.test(p.name)).map((p) => ({ name: p.name, tasks: p.tasks.map((tk) => tk.title).filter((x) => !INTERNAL_TASK.test(x)) })),
+    ...pending.filter((p) => !/^final payment$/i.test(p.name)).map((p) => ({ name: p.name, tasks: p.tasks.filter((x) => !INTERNAL_TASK.test(x)) })),
+  ];
+  const localized = (ph: { name: string; tasks: string[] }) => ({ name: localizeText(ph.name, lang), tasks: ph.tasks.map((x) => localizeText(x, lang)) });
+  const SHARED_PREP = /^(brand|research|mock-up|2nd instalment|present the reports( and mock-ups)?)$/i;
+  const SHARED_CLOSE = /^(presenting|deploying)$/i;
+  const SKIPPED = /^(final payment|training)$/i;
+  const labelsOf = (type: string) => [typeLabels[type], (getDict("en").projectTypes as Record<string, string>)[type], (getDict("fr").projectTypes as Record<string, string>)[type], type].filter(Boolean) as string[];
+  const phasesOfType = (type: string) =>
+    rawPhases.flatMap((ph) => {
+      const prefix = labelsOf(type).find((l) => ph.name.startsWith(`${l} — `));
+      if (prefix) return [{ ...ph, name: ph.name.slice(prefix.length + 3) }];
+      if (SHARED_CLOSE.test(ph.name.trim())) return [ph];
+      if (types.length === 1 && !SHARED_PREP.test(ph.name.trim()) && !SKIPPED.test(ph.name.trim())) return [ph];
+      return [];
+    });
   const sections = sectionTotals
     ? sectionRows.map((r, i) => ({
         title: r.sec.title,
+        kind: r.sec.kind,
+        ...(r.sec.kind === "PREP"
+          ? {
+              coveredTypes: types.map((ty) => typeLabels[ty] ?? ty),
+              plan: rawPhases.filter((ph) => SHARED_PREP.test(ph.name.trim())).map(localized),
+            }
+          : {
+              details: (() => {
+                const block = typeBlocks.find((b) => b.type === r.sec.kind);
+                return block
+                  ? block.template.fields
+                      .filter((f) => f.type !== "spacer")
+                      .filter((f) => isFieldVisible(f, block.answers, block.template.fields))
+                      .map((f) => ({ label: localizeText(f.label, lang), value: localizeValue(displayValue(block.answers[f.key]), lang) }))
+                      .filter((d) => d.value)
+                  : [];
+              })(),
+              plan: types.includes(r.sec.kind) ? phasesOfType(r.sec.kind).map(localized) : [],
+            }),
         lineItems: r.lineItems.map((li) => ({ description: li.description, details: li.details, quantity: li.quantity, unitPrice: li.unitPrice })),
         subtotal: sectionTotals.sections[i].subtotal,
         taxes: sectionTotals.sections[i].total,

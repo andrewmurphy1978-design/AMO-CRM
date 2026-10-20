@@ -34,6 +34,13 @@ export interface ProposalPdfData {
   // Sectioned proposal: one block per section (its own items, taxes and instalments), then a summary.
   sections?: {
     title: string;
+    // "PREP" (Brand, Research & Mock-up) or a project type key.
+    kind: string;
+    // PREP: the types of project the research and mock-up are needed for.
+    coveredTypes?: string[];
+    // A type section: that type's detail answers and the phases to deliver for it.
+    details?: { label: string; value: string }[];
+    plan?: { name: string; tasks: string[] }[];
     lineItems: { description: string; details?: string | null; quantity: number; unitPrice: number }[];
     subtotal: number;
     taxes: number;
@@ -85,6 +92,8 @@ const L = {
     total: "Total",
     taxesNote: "Taxes are included in the instalment amounts below.",
     sectionTotal: "Section total (taxes included)",
+    instalmentsTitle: "Instalments",
+    prepNeeded: "The research and mock-up are needed for these types of project:",
     summary: "Summary",
     costBySection: "Cost by section",
     allInstalments: "All instalments",
@@ -103,6 +112,10 @@ const L = {
     terms5: "Timelines depend on timely feedback and the supply of content and access by the client.",
     acceptance: "Acceptance",
     acceptBody: "By signing below, you accept this proposal and the payment schedule above.",
+    acceptSection: (title: string) => `Acceptance — ${title}`,
+    acceptSectionBody: (title: string, amount: string) => `By signing below, you accept only this section, "${title}", and its instalments (${amount}, taxes included). The other sections are not affected.`,
+    acceptAllTitle: "Acceptance of the whole project",
+    acceptAllBody: "By signing below, you accept the whole proposal: every section above, with all its instalments and the total shown in the summary.",
     clientSig: "Client signature",
     dateLine: "Date",
     printed: "Name",
@@ -151,6 +164,8 @@ const L = {
     total: "Total",
     taxesNote: "Les taxes sont incluses dans les montants des versements ci-dessous.",
     sectionTotal: "Total de la section (taxes incluses)",
+    instalmentsTitle: "Versements",
+    prepNeeded: "La recherche et la maquette sont nécessaires pour ces types de projet :",
     summary: "Sommaire",
     costBySection: "Coût par section",
     allInstalments: "Tous les versements",
@@ -169,6 +184,10 @@ const L = {
     terms5: "Les échéanciers dépendent de vos retours rapides et de la fourniture du contenu et des accès par le client.",
     acceptance: "Acceptation",
     acceptBody: "En signant ci-dessous, vous acceptez cette soumission et le calendrier de paiement ci-dessus.",
+    acceptSection: (title: string) => `Acceptation — ${title}`,
+    acceptSectionBody: (title: string, amount: string) => `En signant ci-dessous, vous acceptez uniquement cette section, « ${title} », et ses versements (${amount}, taxes incluses). Les autres sections ne sont pas touchées.`,
+    acceptAllTitle: "Acceptation de l'ensemble du projet",
+    acceptAllBody: "En signant ci-dessous, vous acceptez toute la soumission : chaque section ci-dessus, avec tous ses versements et le total indiqué dans le sommaire.",
     clientSig: "Signature du client",
     dateLine: "Date",
     printed: "Nom",
@@ -551,7 +570,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     lo.paragraph(data.project.description, { size: 10 });
   }
 
-  if (data.details.length > 0) {
+  if (!data.sections?.length && data.details.length > 0) {
     if (doc.getPageCount() === 1) lo.newPage(); // project details start on page 2
     // Each type's details stay together (the heading goes with the first group).
     const groups: { group?: string; rows: typeof data.details }[] = [];
@@ -580,7 +599,7 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   }
 
   // ---- plan
-  if (data.plan.length > 0) {
+  if (!data.sections?.length && data.plan.length > 0) {
     data.plan.forEach((ph, i) =>
       lo.keep(() => {
         if (i === 0) {
@@ -599,7 +618,16 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     );
   }
 
-  // ---- investment (heading, items, totals and tax note stay together when they fit on a page)
+  // ---- sectioned proposal: each section (Brand/Research/Mock-up, then one per project type) has its own
+  // details, plan, investment and instalments; the summary comes after.
+  const subHeading = (title: string) => {
+    lo.ensure(48);
+    lo.gap(6);
+    lo.text(title, MX, lo.y, { size: 12, font: bold, color: GREEN, maxWidth: CONTENT_W });
+    lo.gap(6);
+    lo.page.drawRectangle({ x: MX, y: lo.y, width: CONTENT_W, height: 0.7, color: RULE });
+    lo.gap(14);
+  };
   const instalmentCols = [
     { header: "#", width: 24 },
     { header: t.instalment, width: CONTENT_W - 8 - 24 - 50 - 110 - 120 },
@@ -609,6 +637,98 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   ];
   const instalmentRows = (list: { label: string; percentage: number | null; amount: number; dueDate?: Date | null }[], from = 0) =>
     list.map((r, i) => [String(from + i + 1), r.label, r.percentage != null ? `${r.percentage}%` : "", money(r.amount, data.currency), r.dueDate ? fmtDate(r.dueDate, data.lang) : ""]);
+
+  const signatureLines = () => {
+    lo.gap(34);
+    const sigY = lo.y;
+    lo.page.drawLine({ start: { x: MX, y: sigY }, end: { x: MX + 250, y: sigY }, thickness: 0.8, color: INK });
+    lo.page.drawLine({ start: { x: MX + 290, y: sigY }, end: { x: W - MX, y: sigY }, thickness: 0.8, color: INK });
+    lo.text(t.clientSig, MX, sigY - 12, { size: 8.5, color: SOFT });
+    lo.text(t.dateLine, MX + 290, sigY - 12, { size: 8.5, color: SOFT });
+    lo.gap(40);
+    lo.page.drawLine({ start: { x: MX, y: lo.y }, end: { x: MX + 250, y: lo.y }, thickness: 0.8, color: INK });
+    lo.text(t.printed, MX, lo.y - 12, { size: 8.5, color: SOFT });
+    lo.gap(20);
+  };
+
+  if (data.sections && data.sections.length > 0) {
+    // keep() may run its block more than once while measuring, so the numbering is fixed up front.
+    const firstNumber = data.sections.map((_, i) => data.sections!.slice(0, i).reduce((n, x) => n + x.instalments.length, 0));
+    for (const [si, sec] of data.sections.entries()) {
+      lo.newPage();
+      lo.heading(sec.title);
+
+      // Project details
+      if (sec.kind === "PREP" && (sec.coveredTypes?.length ?? 0) > 0) {
+        subHeading(t.details);
+        lo.paragraph(t.prepNeeded, { size: 10 });
+        lo.gap(2);
+        (sec.coveredTypes ?? []).forEach((ty) => lo.bullet(ty, 10));
+        lo.gap(6);
+      } else if ((sec.details?.length ?? 0) > 0) {
+        subHeading(t.details);
+        for (const d of sec.details ?? []) {
+          const lines = lo.wrap(d.value, CONTENT_W - 150, 9.5, regular);
+          lo.ensure(lines.length * 13 + 2);
+          lo.text(d.label, MX, lo.y, { size: 9.5, font: bold, color: SOFT, maxWidth: 140 });
+          lines.forEach((ln, i) => lo.text(ln, MX + 150, lo.y - i * 13, { size: 9.5 }));
+          lo.gap(lines.length * 13 + 2);
+        }
+        lo.gap(4);
+      }
+
+      // Project plan & deliverables
+      if ((sec.plan?.length ?? 0) > 0) {
+        subHeading(t.plan);
+        (sec.plan ?? []).forEach((ph, i) =>
+          lo.keep(() => {
+            lo.ensure(40);
+            lo.page.drawRectangle({ x: MX, y: lo.y - 5, width: 22, height: 18, color: LIME });
+            lo.text(String(i + 1), MX + (i + 1 > 9 ? 5 : 8), lo.y, { size: 10, font: bold, color: GREEN });
+            lo.text(ph.name, MX + 32, lo.y, { size: 11.5, font: bold, color: GREEN, maxWidth: CONTENT_W - 40 });
+            lo.gap(18);
+            ph.tasks.forEach((tk) => lo.bullet(tk, 32));
+            lo.gap(6);
+          })
+        );
+      }
+
+      // Investment
+      subHeading(t.investment);
+      if (sec.lineItems.length > 0) {
+        lo.table(
+          [
+            { header: t.description, width: CONTENT_W - 8 - 40 - 100 - 100 },
+            { header: t.qty, width: 40, align: "right" },
+            { header: t.unit, width: 100, align: "right" },
+            { header: t.amount, width: 100, align: "right" },
+          ],
+          sec.lineItems.map((li) => [li.description, String(li.quantity), money(li.unitPrice, data.currency), money(li.quantity * li.unitPrice, data.currency)]),
+          { details: sec.lineItems.map((li) => li.details) }
+        );
+      }
+      lo.ensure(24);
+      const totalLabel = `${t.sectionTotal}: ${money(sec.totalAmount, data.currency)}`;
+      lo.text(totalLabel, W - MX - 10 - bold.widthOfTextAtSize(safe(totalLabel), 10), lo.y, { size: 10, font: bold, color: GREEN });
+      lo.gap(18);
+
+      // Instalments
+      if (sec.instalments.length > 0) {
+        subHeading(t.instalmentsTitle);
+        lo.table(instalmentCols, instalmentRows(sec.instalments, firstNumber[si]));
+      }
+
+      // Acceptance of this section alone, so the client can accept only part of the project.
+      lo.keep(() => {
+        subHeading(t.acceptSection(sec.title));
+        lo.paragraph(t.acceptSectionBody(sec.title, money(sec.totalAmount, data.currency)), { size: 10 });
+        signatureLines();
+      });
+    }
+    lo.newPage();
+  }
+
+  // ---- investment (heading, items, totals and tax note stay together when they fit on a page)
   const drawTotals = () => {
   const totalsRows: [string, number, boolean][] = [[t.subtotal, data.totals.subtotal, false]];
   if (data.totals.gst) totalsRows.push([t.gst, data.totals.gst, false]);
@@ -637,36 +757,6 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
   };
 
   if (data.sections && data.sections.length > 0) {
-    lo.heading(t.investment);
-    // keep() may run its block more than once while measuring, so the numbering is fixed up front.
-    const firstNumber = data.sections.map((_, i) => data.sections!.slice(0, i).reduce((n, x) => n + x.instalments.length, 0));
-    for (const [si, sec] of data.sections.entries()) {
-      lo.keep(() => {
-        lo.ensure(70);
-        lo.text(sec.title, MX, lo.y, { size: 12, font: bold, color: GREEN, maxWidth: CONTENT_W });
-        lo.gap(16);
-        if (sec.lineItems.length > 0) {
-          lo.table(
-            [
-              { header: t.description, width: CONTENT_W - 8 - 40 - 100 - 100 },
-              { header: t.qty, width: 40, align: "right" },
-              { header: t.unit, width: 100, align: "right" },
-              { header: t.amount, width: 100, align: "right" },
-            ],
-            sec.lineItems.map((li) => [li.description, String(li.quantity), money(li.unitPrice, data.currency), money(li.quantity * li.unitPrice, data.currency)]),
-            { details: sec.lineItems.map((li) => li.details) }
-          );
-        }
-        lo.ensure(24);
-        const label = `${t.sectionTotal}: ${money(sec.totalAmount, data.currency)}`;
-        lo.text(label, W - MX - 10 - bold.widthOfTextAtSize(safe(label), 10), lo.y, { size: 10, font: bold, color: GREEN });
-        lo.gap(18);
-        if (sec.instalments.length > 0) {
-          lo.table(instalmentCols, instalmentRows(sec.instalments, firstNumber[si]));
-        }
-        lo.gap(8);
-      });
-    }
     // final summary: cost of each section, the proposal's totals, then every instalment
     lo.keep(() => {
       lo.heading(t.summary);
@@ -788,19 +878,11 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
     for (const term of [t.terms1, t.terms2, t.terms3, t.terms4, t.terms5]) lo.bullet(term, 4);
   });
 
-  // ---- acceptance
+  // ---- acceptance (of the whole proposal)
   lo.keep(() => {
-  lo.heading(t.acceptance);
-  lo.paragraph(t.acceptBody, { size: 10 });
-  lo.gap(34);
-  const sigY = lo.y;
-  lo.page.drawLine({ start: { x: MX, y: sigY }, end: { x: MX + 250, y: sigY }, thickness: 0.8, color: INK });
-  lo.page.drawLine({ start: { x: MX + 290, y: sigY }, end: { x: W - MX, y: sigY }, thickness: 0.8, color: INK });
-  lo.text(t.clientSig, MX, sigY - 12, { size: 8.5, color: SOFT });
-  lo.text(t.dateLine, MX + 290, sigY - 12, { size: 8.5, color: SOFT });
-  lo.gap(40);
-  lo.page.drawLine({ start: { x: MX, y: lo.y }, end: { x: MX + 250, y: lo.y }, thickness: 0.8, color: INK });
-  lo.text(t.printed, MX, lo.y - 12, { size: 8.5, color: SOFT });
+    lo.heading(data.sections?.length ? t.acceptAllTitle : t.acceptance);
+    lo.paragraph(data.sections?.length ? t.acceptAllBody : t.acceptBody, { size: 10 });
+    signatureLines();
   });
 
   // ---- footers

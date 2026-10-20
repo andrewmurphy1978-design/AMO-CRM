@@ -12,6 +12,8 @@ export interface AIProposalDraft {
   // `section` (0-based) is set when the proposal is split into sections.
   lineItems: { description: string; details?: string; quantity: number; unitPrice: number; section?: number }[];
   subscriptions?: { name: string; amount: number; period: string; note: string }[];
+  // Shown to the consultant after drafting (e.g. when live price lookup was unavailable).
+  notice?: string;
 }
 
 // Same key source as email-classifier.ts (Settings > Anthropic API key,
@@ -64,7 +66,7 @@ ${input.brief}
 Write:
 1. A warm, professional cover letter (3-5 short paragraphs) introducing the proposal to the client, written in ${input.language === "fr" ? "French" : "English"}, in the voice described in the client background if any. Start with a greeting using the client's first name and end with a short sign-off from Andrew Murphy, Andrew Murphy Online.
 2. A list of line items covering the work described, each with a short description (the item name), "details" (1-3 sentences saying exactly what is included, written for the client), a quantity, and a unit price in ${input.currency}. Prefer matching existing price list items where they fit; add new reasonably-priced items for anything not covered.
-3. "subscriptions": the third-party apps / services the client will pay the providers directly for this project (for example the website/funnel app, hosting, domain, automation tools), each with name, amount (best estimate, 0 if unknown), period ("month", "year" or "once") and a short note. Leave the list empty if none apply.
+3. "subscriptions": EVERY third-party app, platform, membership or service the client will have to pay the providers directly for this project (for example the website/funnel app such as Systeme.io or ClickFunnels, hosting, domain name, email / automation tools, plugins, memberships). Use web search to look up the CURRENT public price of each one on the provider's own pricing page, choose the plan that fits this project, and give: name (with the plan), amount in ${input.currency} (convert if the provider's price is in another currency), period ("month", "year" or "once"), and a short note with the plan and the source site (e.g. "Startup plan, systeme.io/pricing"). Only use amount 0 when no public price can be found, and say so in the note. Leave the list empty only if the project truly needs no third-party service.
 
 ${sectionsText}
 Keep it tight: details at most 2 short sentences, at most 12 line items, no repetition of the brief. Respond with ONLY a JSON object, no markdown fences, no other text, in exactly this shape:
@@ -127,29 +129,55 @@ export async function draftProposalWithAI(
   if (!apiKey) return { error: "No Anthropic API key configured — add one in Settings first." };
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 12000,
-        messages: [{ role: "user", content: buildPrompt(input) }],
-      }),
-      signal: AbortSignal.timeout(120_000),
-    });
+    const call = (messages: unknown[], withSearch: boolean) =>
+      fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: CLAUDE_MODEL,
+          max_tokens: 12000,
+          messages,
+          // Live price lookup for the apps / memberships the project needs.
+          ...(withSearch ? { tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }] } : {}),
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
 
-    if (!res.ok) {
-      const body = await res.text();
-      console.error("proposal-ai: Anthropic API returned", res.status, body);
-      return { error: `The AI request failed (HTTP ${res.status}: ${body.slice(0, 160)}) — check the Anthropic API key in Settings and try again.` };
+    type Block = { type: string; text?: string };
+    type Reply = { content?: Block[]; stop_reason?: string };
+    const messages: unknown[] = [{ role: "user", content: buildPrompt(input) }];
+    let withSearch = true;
+    let notice: string | undefined;
+    let data: Reply = {};
+    // A long search may pause the turn: send it back to continue (a few times at most).
+    for (let turn = 0; turn < 4; turn++) {
+      let res = await call(messages, withSearch);
+      if (!res.ok && withSearch && res.status === 400) {
+        // Web search isn't enabled for this API key / organization: draft with estimated prices instead.
+        const body = await res.text();
+        console.error("proposal-ai: web search unavailable, retrying without it:", body.slice(0, 300));
+        withSearch = false;
+        notice =
+          input.language === "fr"
+            ? "Les prix des applications sont des estimations : la recherche web n'est pas activée pour votre clé API Anthropic (console.anthropic.com > Paramètres > Recherche web)."
+            : "App and membership prices are estimates: web search isn't enabled for your Anthropic API key (console.anthropic.com > Settings > Web search).";
+        res = await call(messages, false);
+      }
+      if (!res.ok) {
+        const body = await res.text();
+        console.error("proposal-ai: Anthropic API returned", res.status, body);
+        return { error: `The AI request failed (HTTP ${res.status}: ${body.slice(0, 160)}) — check the Anthropic API key in Settings and try again.` };
+      }
+      data = (await res.json()) as Reply;
+      if (data.stop_reason !== "pause_turn") break;
+      messages.push({ role: "assistant", content: data.content });
     }
-
-    const data = (await res.json()) as { content?: { type: string; text?: string }[]; stop_reason?: string };
-    const rawText = data.content?.find((c) => c.type === "text")?.text ?? "";
+    // With searches in the reply, the JSON is in the last text block.
+    const rawText = [...(data.content ?? [])].reverse().find((c) => c.type === "text" && c.text?.includes("{"))?.text ?? "";
     if (data.stop_reason === "max_tokens") {
       console.error("proposal-ai: reply was cut off (max_tokens)");
       return { error: "The AI's reply was cut off — try again, or write a short brief to keep it concise." };
@@ -180,7 +208,7 @@ export async function draftProposalWithAI(
       .filter((x) => x.name)
       .map((x) => ({ name: x.name!, amount: typeof x.amount === "number" && x.amount >= 0 ? x.amount : 0, period: ["month", "year", "once"].includes(x.period ?? "") ? x.period! : "month", note: x.note ?? "" }));
 
-    return { coverLetter: parsed.coverLetter?.trim() ?? "", lineItems, subscriptions };
+    return { coverLetter: parsed.coverLetter?.trim() ?? "", lineItems, subscriptions, notice };
   } catch (error) {
     console.error("proposal-ai: failed to draft proposal", error);
     if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {

@@ -218,6 +218,7 @@ export default function ProposalForm({
           ? `Brouillon appliqué : ${result.lineItems.length} ligne(s) — vérifiez la lettre et les lignes ci-dessous.`
           : `Draft applied: ${result.lineItems.length} line item(s) — review the letter and lines below.`
       );
+      if (result.notice) setAiError(result.notice);
       setCoverLetter(result.coverLetter);
       if (targetSections) {
         setSections(
