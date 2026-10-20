@@ -2,7 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { deleteBankAccount, updateBankAccount } from "@/actions/accounting";
-import ActionForm, { CurrencyField, Field, inputCls } from "../action-form";
+import AccountingDialog from "../accounting-dialog";
+import { BankFields } from "./dialog-forms";
+import type { CardColor } from "@/components/section-card";
 
 export interface BankInfo {
   id: string;
@@ -19,7 +21,7 @@ export interface BankInfo {
   registeredLabel?: string;
 }
 
-export default function BankRow({ bank, lang }: { bank: BankInfo; lang: "en" | "fr" }) {
+export default function BankRow({ bank, lang, color }: { bank: BankInfo; lang: "en" | "fr"; color: CardColor }) {
   const fr = lang === "fr";
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +42,7 @@ export default function BankRow({ bank, lang }: { bank: BankInfo; lang: "en" | "
           </span>
         </span>
         <span className="flex items-center gap-3 text-xs">
-          <button className="text-soft underline" onClick={() => setEditing(!editing)}>{fr ? "Modifier" : "Edit"}</button>
+          <button className="text-soft underline" onClick={() => setEditing(true)}>{fr ? "Modifier" : "Edit"}</button>
           {bank.txCount === 0 && (
             <button disabled={pending} className="text-red-600 underline" onClick={remove}>{fr ? "Supprimer" : "Delete"}</button>
           )}
@@ -48,16 +50,9 @@ export default function BankRow({ bank, lang }: { bank: BankInfo; lang: "en" | "
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
       {editing && (
-        <div className="mt-2 rounded-lg border border-card-border p-3">
-          <ActionForm action={updateBankAccount.bind(null, bank.id)} submitLabel={fr ? "Enregistrer" : "Save"}>
-            <Field label={fr ? "Nom du compte" : "Account name"}><input name="name" defaultValue={bank.name} required className={inputCls} /></Field>
-            <Field label={fr ? "Nom en français" : "French name"}><input name="nameFr" defaultValue={bank.nameFr ?? ""} className={inputCls} /></Field>
-            <Field label={fr ? "Institution" : "Institution"}><input name="institution" defaultValue={bank.institution ?? ""} className={inputCls} /></Field>
-            <Field label={fr ? "4 derniers chiffres" : "Last 4 digits"}><input name="last4" maxLength={4} defaultValue={bank.last4 ?? ""} className={`${inputCls} w-24`} /></Field>
-            <CurrencyField label={fr ? "Devise" : "Currency"} defaultValue={bank.currency} />
-            <label className="flex items-center gap-2 pb-2 text-soft"><input type="checkbox" name="invertSign" defaultChecked={bank.inverted} /> {fr ? "Inverser les signes à l'import" : "Invert signs on import"}</label>
-          </ActionForm>
-        </div>
+        <AccountingDialog open onOpenChange={setEditing} title={fr && bank.nameFr ? bank.nameFr : bank.name} action={updateBankAccount.bind(null, bank.id)} lang={lang} color={color}>
+          <BankFields lang={lang} bank={bank} />
+        </AccountingDialog>
       )}
     </li>
   );

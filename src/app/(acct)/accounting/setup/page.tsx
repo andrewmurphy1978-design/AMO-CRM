@@ -52,7 +52,7 @@ export default async function SetupPage() {
               <Card
                 color={entityCardColor(e) as CardColor}
                 title={<>{e.name} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{mine.length}</span></>}
-                actions={<AddBankDialog lang={lang} entities={books.entities} entityId={e.id} />}
+                actions={<AddBankDialog lang={lang} entities={books.entities} entityId={e.id} color={entityCardColor(e) as CardColor} />}
               >
                 <ul className="divide-y divide-card-border text-sm">
                   {mine.length === 0 && <li className="py-2 text-soft">{fr ? "Aucun compte pour cette entité : utilisez le + pour en ajouter un." : "No accounts for this entity yet: use the + to add one."}</li>}
@@ -60,6 +60,7 @@ export default async function SetupPage() {
                     <BankRow
                       key={b.id}
                       lang={lang}
+                      color={entityCardColor(e) as CardColor}
                       bank={{ id: b.id, name: b.name, nameFr: b.nameFr, institution: b.institution, last4: b.last4, inverted: b.importSign === -1, card: b.subtype === "CREDIT_CARD", entityName: e.name, code: b.code, txCount: txCounts.get(b.id) ?? 0, currency: b.currency ?? e.currency, registeredLabel: b.registeredType ? REGISTERED_TYPES[b.registeredType]?.[lang].split(" (")[0] : undefined }}
                     />
                   ))}
@@ -141,7 +142,7 @@ export default async function SetupPage() {
                     key={t.key}
                     color={CARD_OF[t.key]}
                     title={<>{title} <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/25 px-1.5 text-xs font-semibold normal-case">{list.length}</span></>}
-                    actions={<AddAccountDialog lang={lang} entities={books.entities} options={books.options} entityId={e.id} type={t.key} />}
+                    actions={<AddAccountDialog lang={lang} entities={books.entities} options={books.options} entityId={e.id} type={t.key} color={CARD_OF[t.key]} />}
                   >
                     {list.length === 0 && <p className="text-sm text-soft">{fr ? "Aucun compte." : "No accounts."}</p>}
                     {sectionDefs

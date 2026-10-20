@@ -3,7 +3,8 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { entityCardColor, loadBooks, KIND_LABEL } from "@/lib/accounting/options";
 import Card, { type CardColor } from "@/components/section-card";
-import { EditEntityForm } from "../setup/setup-forms";
+import EditEntityDialog from "./edit-entity-dialog";
+import { TAX_NUMBER_TYPES } from "@/lib/accounting/tax-numbers";
 import AddEntityDialog from "./add-entity-dialog";
 import { requireAccountingUser } from "../session";
 
@@ -31,8 +32,20 @@ export default async function EntitiesPage() {
             key={e.id}
             color={entityCardColor(e) as CardColor}
             title={<>{e.name} <span className="rounded-full bg-white/25 px-2 py-0.5 text-xs font-semibold normal-case">{KIND_LABEL[e.kind]?.[lang] ?? e.kind} · {e.country}{e.province ? `-${e.province}` : ""}</span></>}
+            actions={<EditEntityDialog lang={lang} entity={e} color={entityCardColor(e) as CardColor} />}
           >
-            <EditEntityForm entity={e} lang={lang} />
+            <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+              <div><dt className="text-xs uppercase text-soft">{fr ? "Méthode comptable" : "Accounting basis"}</dt><dd className="text-ink">{e.basis === "CASH" ? (fr ? "Caisse" : "Cash") : fr ? "Exercice" : "Accrual"}</dd></div>
+              <div><dt className="text-xs uppercase text-soft">{fr ? "Fin d'exercice" : "Year-end"}</dt><dd className="text-ink">{new Date(Date.UTC(2000, e.fiscalYearEndMonth - 1, 1)).toLocaleString(fr ? "fr-CA" : "en-CA", { month: "long", timeZone: "UTC" })}</dd></div>
+              <div><dt className="text-xs uppercase text-soft">{fr ? "Devise" : "Currency"}</dt><dd className="text-ink">{e.currency}</dd></div>
+              <div><dt className="text-xs uppercase text-soft">{fr ? "Taxes de vente" : "Sales taxes"}</dt><dd className="text-ink">{e.salesTaxRegistered ? (fr ? "Inscrite" : "Registered") : fr ? "Non inscrite" : "Not registered"}</dd></div>
+              <div className="sm:col-span-2">
+                <dt className="text-xs uppercase text-soft">{fr ? "Numéros d'inscription" : "Registration numbers"}</dt>
+                <dd className="text-ink">
+                  {e.taxNumbers.length === 0 ? <span className="text-soft">—</span> : e.taxNumbers.map((t, i) => <span key={i} className="mr-3 inline-block">{TAX_NUMBER_TYPES[t.type]?.[lang].split(" (")[0]}{t.region ? ` ${t.region}` : ""}: <b>{t.number}</b></span>)}
+                </dd>
+              </div>
+            </dl>
           </Card>
         ))}
       </div>

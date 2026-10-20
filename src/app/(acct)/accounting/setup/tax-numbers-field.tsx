@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { TAX_NUMBER_TYPES, typesFor, type TaxNumber, type TaxNumberType } from "@/lib/accounting/tax-numbers";
-import { inputCls } from "../action-form";
+const inputCls = "rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 
 // Any number of registration numbers; submitted as repeated taxType / taxNumberValue / taxRegion fields.
 export default function TaxNumbersField({ lang, country, initial, note }: { lang: "en" | "fr"; country: string; initial: TaxNumber[]; note?: boolean }) {
