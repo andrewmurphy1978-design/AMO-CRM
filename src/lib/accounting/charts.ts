@@ -310,3 +310,58 @@ export const CORP_GIFI: Record<string, string> = {
   "6900": "9270",
   "7000": "9990",
 };
+
+const GIFI_BY_NAME: [RegExp, string, AccType?][] = [
+  [/accounts receivable/i, "1060"],
+  [/savings/i, "1003", "ASSET"],
+  [/accumulated/i, ""],
+  [/furniture|equipment/i, "1740", "ASSET"],
+  [/accounts payable/i, "2600"],
+  [/income taxes? payable/i, "2680"],
+  [/share capital/i, "3500"],
+  [/retained earnings/i, "3600"],
+  [/interest income|investment income/i, "8090", "INCOME"],
+  [/other (business )?(income|revenue)/i, "8230", "INCOME"],
+  [/revenue|sales|commissions|coaching|consulting|courses|services/i, "8000", "INCOME"],
+  [/management/i, "8871", "EXPENSE"],
+  [/subcontract/i, "8518", "EXPENSE"],
+  [/cost of goods|purchases/i, "8320", "EXPENSE"],
+  [/advertising|marketing|promotion/i, "8521", "EXPENSE"],
+  [/meals/i, "8523", "EXPENSE"],
+  [/bad debt/i, "8590", "EXPENSE"],
+  [/amortization|depreciation|\bCCA\b/i, "8670", "EXPENSE"],
+  [/insurance/i, "8690", "EXPENSE"],
+  [/interest|bank (fees|charges)/i, "8710", "EXPENSE"],
+  [/business taxes|licen[cs]es?|memberships/i, "8760", "EXPENSE"],
+  [/office supplies|stationery/i, "8811", "EXPENSE"],
+  [/office|software|subscriptions/i, "8810", "EXPENSE"],
+  [/professional|legal|accounting/i, "8860", "EXPENSE"],
+  [/rent/i, "8910", "EXPENSE"],
+  [/repairs|maintenance/i, "8960", "EXPENSE"],
+  [/salaries|wages/i, "9060", "EXPENSE"],
+  [/delivery|freight|shipping/i, "9275", "EXPENSE"],
+  [/travel/i, "9200", "EXPENSE"],
+  [/telephone|phone|internet|utilities/i, "9220", "EXPENSE"],
+  [/vehicle|motor/i, "9281", "EXPENSE"],
+  [/income tax/i, "9990", "EXPENSE"],
+  [/other (business )?expenses/i, "9270", "EXPENSE"],
+];
+
+/** A suggested GIFI code for an account of a Canadian business, from its chart code (corporations) or its name. */
+export function suggestGifi(entityKind: string, a: { code: string; name: string; type: string; subtype: string }): string | null {
+  if (a.type === "EQUITY" && !/share capital|retained/i.test(a.name)) return null;
+  if (entityKind === "CORPORATION" && CORP_GIFI[a.code]) return CORP_GIFI[a.code];
+  if (a.subtype === "BANK") return "1002";
+  if (a.subtype === "CREDIT_CARD" || a.subtype === "INTERCO" || a.subtype === "SHAREHOLDER_LOAN" || a.subtype === "OWNER_CAPITAL") return null;
+  for (const [re, code, type] of GIFI_BY_NAME) {
+    if (!re.test(a.name)) continue;
+    if (type && type !== a.type) continue;
+    return code || null;
+  }
+  return null;
+}
+
+/** GIFI applies to the Canadian business entities (not the personal books, not a US LLC). */
+export function usesGifi(kind: string, country: string): boolean {
+  return country === "CA" && (kind === "CORPORATION" || kind === "SOLE_PROPRIETORSHIP");
+}

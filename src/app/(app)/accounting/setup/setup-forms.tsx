@@ -2,7 +2,7 @@
 
 import { addAccount, addBankAccount, addEntity, updateEntity } from "@/actions/accounting";
 import { useState } from "react";
-import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
+import { ASSET_SECTIONS, LIABILITY_SECTIONS, usesGifi } from "@/lib/accounting/charts";
 import ActionForm, { CurrencyField, Field, inputCls } from "../action-form";
 import TaxNumbersField from "./tax-numbers-field";
 import type { AccountOption, EntityInfo } from "@/lib/accounting/options";
@@ -113,7 +113,7 @@ export function AddAccountForm({ lang, entities, options }: { lang: Lang; entiti
         </Field>
       )}
       <Field label={fr ? "Ligne d'impôt" : "Tax line"}><input name="taxLine" className={`${inputCls} w-28`} /></Field>
-      {entity?.kind === "CORPORATION" && entity.country === "CA" && <Field label="GIFI"><input name="gifi" maxLength={4} className={`${inputCls} w-20`} /></Field>}
+      {entity && usesGifi(entity.kind, entity.country) && <Field label="GIFI"><input name="gifi" maxLength={4} className={`${inputCls} w-20`} /></Field>}
     </ActionForm>
   );
 }

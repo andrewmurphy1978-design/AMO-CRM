@@ -19,6 +19,7 @@ import {
 import type { EntityKind } from "@/lib/accounting/charts";
 import { r2 } from "@/lib/accounting/posting";
 import { suggestForSuppliers, keywordAccountCode, readPdfStatement, type AiAccountOption } from "@/lib/accounting/ai";
+import { suggestGifi, usesGifi } from "@/lib/accounting/charts";
 import { parseTaxNumbers } from "@/lib/accounting/tax-numbers";
 import { assertUnlocked, monthRange, reconcileSummary } from "@/lib/accounting/reconcile";
 import { supplierKey } from "@/lib/accounting/supplier";
@@ -144,6 +145,12 @@ export async function deleteBankAccount(id: string): Promise<Result> {
   return result;
 }
 
+// A new account in a Canadian business entity gets the suggested GIFI code unless one was typed.
+async function autoGifi(db: import("@/lib/prisma").PrismaClient, entityId: string, code: string, name: string, type: string, subtype: string): Promise<string | null> {
+  const e = await db.accEntity.findUnique({ where: { id: entityId } });
+  return e && usesGifi(e.kind, e.country) ? suggestGifi(e.kind, { code, name, type, subtype }) : null;
+}
+
 async function validParent(db: import("@/lib/prisma").PrismaClient, entityId: string, type: string, parentId: string): Promise<string | null> {
   if (!parentId) return null;
   const p = await db.accAccount.findUnique({ where: { id: parentId } });
@@ -204,7 +211,7 @@ export async function addAccount(_prev: Result | undefined, formData: FormData):
   try {
     await withScopedPrismaClient(async (db) =>
       db.accAccount.create({
-        data: { entityId, code, name, type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : sectionSubtype(String(formData.get("section") ?? ""), type), taxLine: String(formData.get("taxLine") ?? "").trim() || null, gifi: /^\d{4}$/.test(String(formData.get("gifi") ?? "").trim()) ? String(formData.get("gifi")).trim() : null, parentId: await validParent(db, entityId, type, String(formData.get("parentId") ?? "")) },
+        data: { entityId, code, name, type: type as "ASSET", subtype: type === "EXPENSE" ? "OPERATING" : type === "INCOME" ? "REVENUE" : sectionSubtype(String(formData.get("section") ?? ""), type), taxLine: String(formData.get("taxLine") ?? "").trim() || null, gifi: /^\d{4}$/.test(String(formData.get("gifi") ?? "").trim()) ? String(formData.get("gifi")).trim() : await autoGifi(db, entityId, code, name, type, sectionSubtype(String(formData.get("section") ?? ""), type)), parentId: await validParent(db, entityId, type, String(formData.get("parentId") ?? "")) },
       })
     );
   } catch {

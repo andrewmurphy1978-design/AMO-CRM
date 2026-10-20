@@ -5,6 +5,7 @@ import { loadBooks, KIND_LABEL } from "@/lib/accounting/options";
 import { AddAccountForm, AddBankForm, AddEntityForm, EditEntityForm } from "./setup-forms";
 import BankRow from "./bank-row";
 import DeleteRuleButton from "./delete-rule-button";
+import { usesGifi } from "@/lib/accounting/charts";
 import SetupLayout, { type SetupSection } from "./setup-layout";
 import AccountEditor from "./account-editor";
 
@@ -86,7 +87,7 @@ export default async function SetupPage() {
         <AddAccountForm lang={lang} entities={books.entities} options={books.options} />
       </section>
       {books.entities.map((e) => {
-        const gifi = e.kind === "CORPORATION" && e.country === "CA";
+        const gifi = usesGifi(e.kind, e.country);
         const own = books.options.filter((o) => o.entityId === e.id && !o.bank);
         return (
           <section key={e.id} className={card}>

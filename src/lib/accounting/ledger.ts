@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { lockedThrough } from "./reconcile";
-import { CORP_GIFI, chartFor, entityDefaults, intercoSpec, type EntityKind } from "./charts";
+import { chartFor, suggestGifi, usesGifi, entityDefaults, intercoSpec, type EntityKind } from "./charts";
 import { buildPosting, r2, type AllocationInput, type PostAccount, type PostEntity, type PostingEntry } from "./posting";
 import { parseCsv } from "./csv";
 import { supplierKey, supplierName } from "./supplier";
@@ -27,11 +27,14 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
   const entity = await db.accEntity.findUniqueOrThrow({ where: { id: entityId } });
   const chart = chartFor(entity.kind as EntityKind, entity.country);
   // Also adds accounts that were added to the template after the entity was created.
-  const existing = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, gifi: true } });
+  const existing = await db.accAccount.findMany({ where: { entityId }, select: { id: true, code: true, gifi: true, name: true, type: true, subtype: true } });
   const haveCodes = new Set(existing.map((a) => a.code));
   // Canadian corporations: fill in the suggested GIFI code on accounts that have none yet.
-  if (entity.kind === "CORPORATION" && entity.country === "CA") {
-    for (const a of existing) if (!a.gifi && CORP_GIFI[a.code]) await db.accAccount.update({ where: { id: a.id }, data: { gifi: CORP_GIFI[a.code] } });
+  if (usesGifi(entity.kind, entity.country)) {
+    for (const a of existing) {
+      const g = a.gifi ? null : suggestGifi(entity.kind, a);
+      if (g) await db.accAccount.update({ where: { id: a.id }, data: { gifi: g } });
+    }
   }
   const missing = chart.map((c, order) => ({ c, order })).filter(({ c }) => !haveCodes.has(c.code));
   if (missing.length === 0) return;
@@ -44,7 +47,7 @@ export async function ensureEntityChart(db: PrismaClient, entityId: string): Pro
       type: c.type,
       subtype: c.subtype,
       taxLine: c.taxLine ?? null,
-      gifi: entity.kind === "CORPORATION" && entity.country === "CA" ? CORP_GIFI[c.code] ?? null : null,
+      gifi: usesGifi(entity.kind, entity.country) ? suggestGifi(entity.kind, { code: c.code, name: c.en, type: c.type, subtype: c.subtype }) : null,
       deductiblePct: c.deductiblePct ?? 100,
       isSystem: Boolean(c.system),
       order,
