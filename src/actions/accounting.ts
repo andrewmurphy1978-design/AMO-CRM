@@ -434,13 +434,14 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
   const me = await access();
   try {
     return await withScopedPrismaClient(async (db) => {
-      const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] }, account: { entity: { ownerId: me.id } } }, select: { id: true, supplier: true, description: true, amount: true } });
+      const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] }, account: { entity: { ownerId: me.id } } }, select: { id: true, accountId: true, supplier: true, description: true, amount: true } });
       if (open.length === 0) return { success: "Nothing to categorize.", suggested: 0 };
-      const groups = new Map<string, { name: string; sample: string; amount: number; count: number; ids: string[] }>();
+      const groups = new Map<string, { name: string; sample: string; amount: number; count: number; ids: string[]; from: Set<string> }>();
       for (const t of open) {
-        const g = groups.get(t.supplier) ?? { name: t.supplier, sample: t.description, amount: t.amount, count: 0, ids: [] };
+        const g = groups.get(t.supplier) ?? { name: t.supplier, sample: t.description, amount: t.amount, count: 0, ids: [], from: new Set<string>() };
         g.count++;
         g.ids.push(t.id);
+        g.from.add(t.accountId);
         groups.set(t.supplier, g);
       }
       const accounts = await db.accAccount.findMany({ where: { archived: false, subtype: { not: "GROUP" }, entity: { ownerId: me.id } }, include: { entity: true }, orderBy: [{ entityId: "asc" }, { code: "asc" }] });
@@ -459,12 +460,19 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
       const found = new Map(forced);
       if (rest.length > 0) for (const [k, v] of await suggestForSuppliers(db, rest.map(({ name, sample, amount, count }) => ({ name, sample, amount, count })), options)) found.set(k, v);
       let suggested = 0;
+      const assigned = new Set<string>();
       for (const [supplier, pick] of found) {
         const g = groups.get(supplier);
         if (!g) continue;
+        // The account the money moved in is never the answer: a transfer goes to the other account.
+        if (g.from.has(pick.accountId)) continue;
+        assigned.add(supplier);
         await db.accTransaction.updateMany({ where: { id: { in: g.ids } }, data: { status: "SUGGESTED", suggestion: { source: "AI", allocations: [{ entityId: pick.entityId, accountId: pick.accountId, pct: 100 }] } } });
         suggested += g.ids.length;
       }
+      // Old suggestions that no longer hold (e.g. pointing at the transaction's own account) are cleared.
+      const stale = [...groups.values()].filter((g) => !assigned.has(g.name)).flatMap((g) => g.ids);
+      if (stale.length > 0) await db.accTransaction.updateMany({ where: { id: { in: stale }, status: "SUGGESTED" }, data: { status: "NEW", suggestion: undefined } });
       refresh();
       return { success: `${suggested} transaction(s) have a suggestion to confirm.`, suggested };
     });
@@ -484,12 +492,17 @@ export async function confirmSuggestions(txIds: string[]): Promise<Result & { po
       return [{ txId: t.id, by: "AI" as const, allocations: allocationsFromRule(s.allocations, t.amount) }];
     });
     const res = await postTransactions(db, items);
+    const failed = new Set(res.errors.map((e) => e.txId));
+    // Only what actually posted is remembered for that supplier.
     for (const t of txs) {
       const s = t.suggestion as { allocations?: RuleAllocation[] } | null;
-      if (s?.allocations?.length) await saveRule(db, me.id, t.supplier, s.allocations);
+      if (s?.allocations?.length && !failed.has(t.id)) await saveRule(db, me.id, t.supplier, s.allocations);
     }
     const auto = await applyRules(db, me.id);
+    // A suggestion that cannot be posted is dropped, so the transaction goes back to "to categorize" with no wrong suggestion.
+    if (failed.size > 0) await db.accTransaction.updateMany({ where: { id: { in: [...failed] } }, data: { status: "NEW", suggestion: undefined } });
     refresh();
+    if (failed.size > 0) return { error: `${failed.size} suggestion(s) could not be posted (${res.errors[0].message}). Categorize them by hand.`, posted: res.posted + auto.posted };
     return { success: "Confirmed.", posted: res.posted + auto.posted };
   });
 }

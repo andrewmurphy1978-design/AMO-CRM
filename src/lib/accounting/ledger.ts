@@ -338,13 +338,15 @@ export async function applyRules(db: PrismaClient, ownerId: string | null, txIds
   const rules = await db.accRule.findMany({ where: { ownerId } });
   if (rules.length === 0) return { posted: 0, errors: [] };
   const byPattern = new Map(rules.map((r) => [r.pattern, r]));
-  const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] }, account: { entity: { ownerId } }, ...(txIds ? { id: { in: txIds } } : {}) }, select: { id: true, supplier: true, description: true, amount: true } });
+  const open = await db.accTransaction.findMany({ where: { status: { in: ["NEW", "SUGGESTED"] }, account: { entity: { ownerId } }, ...(txIds ? { id: { in: txIds } } : {}) }, select: { id: true, accountId: true, supplier: true, description: true, amount: true } });
   const items: PostItem[] = [];
   const used = new Set<string>();
   for (const t of open) {
     const key = supplierKey(t.supplier || supplierName(t.description));
     const rule = byPattern.get(key);
     if (!rule) continue;
+    // A transaction can never be categorized to its own bank account (a transfer goes to the other account).
+    if ((rule.allocations as unknown as RuleAllocation[]).some((a) => a.accountId === t.accountId)) continue;
     used.add(rule.id);
     items.push({ txId: t.id, by: "RULE", allocations: allocationsFromRule(rule.allocations as unknown as RuleAllocation[], t.amount) });
   }

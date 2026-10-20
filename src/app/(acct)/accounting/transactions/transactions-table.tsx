@@ -27,14 +27,14 @@ export interface TxRow {
 type Line = { pick: string; pct: number; tax: boolean };
 const enc = (entityId: string, accountId: string) => `${entityId}|${accountId}`;
 
-function CategoryPicker({ value, onChange, entities, options, lang }: { value: string; onChange: (v: string) => void; entities: EntityInfo[]; options: AccountOption[]; lang: "en" | "fr" }) {
+function CategoryPicker({ value, onChange, entities, options, lang, exclude }: { value: string; onChange: (v: string) => void; entities: EntityInfo[]; options: AccountOption[]; lang: "en" | "fr"; exclude?: string[] }) {
   const fr = lang === "fr";
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full min-w-48 rounded-lg border border-card-border bg-white px-2 py-1.5 text-sm text-ink">
       <option value="">{fr ? "— Choisir une catégorie —" : "— Choose a category —"}</option>
       {entities.map((e) =>
         (["EXPENSE", "INCOME", "TRANSFER", "LIABILITY", "ASSET", "EQUITY"] as const).map((g) => {
-          const list = options.filter((o) => o.entityId === e.id && o.group === g && !o.isGroup);
+          const list = options.filter((o) => o.entityId === e.id && o.group === g && !o.isGroup && !exclude?.includes(o.id));
           if (list.length === 0) return null;
           return (
             <optgroup key={`${e.id}${g}`} label={`${e.name} — ${GROUP_LABEL[g][lang]}`}>
@@ -97,8 +97,12 @@ export default function TransactionsTable({
   const run = (fn: () => Promise<string | void>) =>
     startTransition(async () => {
       setMessage(null);
-      const m = await fn();
-      if (m) setMessage(m);
+      try {
+        const m = await fn();
+        if (m) setMessage(m);
+      } catch (error) {
+        setMessage(error instanceof Error && error.message && !/server components render/i.test(error.message) ? error.message : fr ? "L'opération a échoué. Réessayez." : "That did not work. Please try again.");
+      }
     });
 
   const save = (t: TxRow) => {
@@ -202,7 +206,7 @@ export default function TransactionsTable({
                   {fr ? "Appliquer" : "Apply"}
                 </button>
                 {suggestedSelected.length > 0 && (
-                  <button disabled={busy} onClick={() => run(async () => { await confirmSuggestions(suggestedSelected); setSelected(new Set()); })} className="rounded-lg border border-card-border px-3 py-1.5 hover:bg-black/5">
+                  <button disabled={busy} onClick={() => run(async () => { const r = await confirmSuggestions(suggestedSelected); setSelected(new Set()); return r.error; })} className="rounded-lg border border-card-border px-3 py-1.5 hover:bg-black/5">
                     {fr ? "Confirmer les suggestions" : "Confirm suggestions"}
                   </button>
                 )}
@@ -243,7 +247,7 @@ export default function TransactionsTable({
                         const ent = entityById.get(l.pick.split("|")[0]);
                         return (
                           <div key={i} className="flex flex-wrap items-center gap-2">
-                            <CategoryPicker value={l.pick} onChange={(v) => setLinesFor(t.id, ls.map((x, j) => (j === i ? { ...x, pick: v } : x)))} entities={entities} options={options} lang={lang} />
+                            <CategoryPicker value={l.pick} onChange={(v) => setLinesFor(t.id, ls.map((x, j) => (j === i ? { ...x, pick: v } : x)))} entities={entities} options={options} lang={lang} exclude={[t.accountId]} />
                             {split && (
                               <span className="flex items-center gap-1 text-sm">
                                 <input type="number" min={1} max={100} value={l.pct} onChange={(e) => setLinesFor(t.id, ls.map((x, j) => (j === i ? { ...x, pct: Number(e.target.value) } : x)))} className="w-16 rounded-lg border border-card-border px-2 py-1" />%
