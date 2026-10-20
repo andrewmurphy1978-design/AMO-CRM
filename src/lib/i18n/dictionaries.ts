@@ -711,7 +711,9 @@ export const dictionaries = {
     },
     settings: {
       title: "Settings",
-      subtitle: "Manage integrations and your team.",
+      menuLabel: "Settings menu",
+      menuSearch: "Search settings…",
+      menuNoMatch: "No matching setting.",
       tabMySettings: "My Settings",
       tabAdminSettings: "Admin Settings",
       groupAccount: "Account",
@@ -2316,7 +2318,9 @@ export const dictionaries = {
     },
     settings: {
       title: "Paramètres",
-      subtitle: "Gérez les intégrations et votre équipe.",
+      menuLabel: "Menu des paramètres",
+      menuSearch: "Rechercher un paramètre…",
+      menuNoMatch: "Aucun paramètre correspondant.",
       tabMySettings: "Mes paramètres",
       tabAdminSettings: "Paramètres admin",
       groupAccount: "Compte",

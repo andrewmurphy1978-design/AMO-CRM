@@ -214,6 +214,7 @@ export async function loadProposalPdfData(db: PrismaClient, projectId: string, p
     attachments,
     totals: { subtotal: proposal.subtotal, gst: proposal.gstAmount, qst: proposal.qstAmount, hst: proposal.hstAmount, total: proposal.taxAmount },
     instalments,
+    payment: { interac: Boolean(settings.interacEmail), card: Boolean(settings.cardPaymentUrl) || Boolean(await getStripeConfig(db)) },
     sections,
     notes: proposal.notes,
   };

@@ -31,6 +31,8 @@ export interface ProposalPdfData {
   attachments?: PdfAttachment[];
   totals: { subtotal: number; gst: number; qst: number; hst: number; total: number };
   instalments: { label: string; percentage: number | null; amount: number; dueDate?: Date | null }[];
+  // How the client can pay the invoices (from Settings): Interac e-Transfer and/or credit card.
+  payment?: { interac: boolean; card: boolean };
   // Sectioned proposal: one block per section (its own items, taxes and instalments), then a summary.
   sections?: {
     title: string;
@@ -102,6 +104,18 @@ const L = {
     percent: "%",
     dueOn: "Due",
     payment: "Payment method",
+    afterTitle: "After you accept",
+    afterMethods: (m: { interac: boolean; card: boolean }) =>
+      m.interac && m.card ? "Interac e-Transfer or credit card" : m.interac ? "Interac e-Transfer" : m.card ? "credit card" : "the payment options available to you (Interac e-Transfer or credit card)",
+    afterSteps: (sectioned: boolean, methods: string, days: number) => [
+      sectioned
+        ? "Accept the whole project by signing the final acceptance at the end of this proposal, or only the parts you want by signing the acceptance block of each section. You can accept part of the project and decide on the rest later."
+        : "Accept this proposal by signing the acceptance at the end of it and sending it back to us.",
+      `As soon as we receive the signed proposal, you will receive an invoice for the 1st instalment${sectioned ? " of what you accepted" : ""}. It offers the ways to pay: ${methods}.`,
+      `Work begins once the 1st instalment is received${sectioned ? ", on the sections you accepted" : ""}.`,
+      "When the 2nd instalment and each following instalment falls due, a new invoice is issued for it, with the same payment options.",
+      ...(sectioned ? [`Sections you have not accepted are not invoiced. You can accept them later, at the prices shown, while this proposal is valid (${days} days).`] : []),
+    ],
     paymentBody:
       "A new invoice is issued for each instalment when it falls due, with payment instructions. Accepted methods (for example Interac e-Transfer and credit card) will be confirmed with your first invoice.",
     terms: "Terms & conditions",
@@ -174,6 +188,18 @@ const L = {
     percent: "%",
     dueOn: "Échéance",
     payment: "Mode de paiement",
+    afterTitle: "Une fois la soumission acceptée",
+    afterMethods: (m: { interac: boolean; card: boolean }) =>
+      m.interac && m.card ? "virement Interac ou carte de crédit" : m.interac ? "virement Interac" : m.card ? "carte de crédit" : "les modes de paiement offerts (virement Interac ou carte de crédit)",
+    afterSteps: (sectioned: boolean, methods: string, days: number) => [
+      sectioned
+        ? "Acceptez l'ensemble du projet en signant l'acceptation finale à la fin de cette soumission, ou seulement les parties de votre choix en signant le bloc d'acceptation de chaque section. Vous pouvez accepter une partie du projet et vous décider pour le reste plus tard."
+        : "Acceptez cette soumission en signant l'acceptation à la fin du document et en nous la retournant.",
+      `Dès que nous recevons la soumission signée, vous recevez une facture pour le 1er versement${sectioned ? " de ce que vous avez accepté" : ""}. Elle propose les modes de paiement : ${methods}.`,
+      `Les travaux commencent à la réception du 1er versement${sectioned ? ", pour les sections acceptées" : ""}.`,
+      "Lorsque le 2e versement, puis chacun des versements suivants, arrive à échéance, une nouvelle facture est émise, avec les mêmes modes de paiement.",
+      ...(sectioned ? [`Les sections que vous n'avez pas acceptées ne sont pas facturées. Vous pourrez les accepter plus tard, aux prix indiqués, tant que cette soumission est valide (${days} jours).`] : []),
+    ],
     paymentBody:
       "Une nouvelle facture est émise pour chaque versement à son échéance, avec les instructions de paiement. Les modes acceptés (par exemple virement Interac et carte de crédit) seront confirmés avec votre première facture.",
     terms: "Conditions",
@@ -861,8 +887,16 @@ export async function buildProposalPdf(data: ProposalPdfData): Promise<Uint8Arra
 
   // ---- payment method
   lo.keep(() => {
-    lo.heading(t.payment);
-    lo.paragraph(t.paymentBody, { size: 10 });
+    lo.heading(t.afterTitle);
+    const steps = t.afterSteps(Boolean(data.sections?.length), t.afterMethods(data.payment ?? { interac: false, card: false }), data.validDays);
+    steps.forEach((step, i) => {
+      lo.ensure(34);
+      lo.page.drawRectangle({ x: MX, y: lo.y - 5, width: 20, height: 17, color: LIME });
+      lo.text(String(i + 1), MX + (i + 1 > 9 ? 4 : 7), lo.y, { size: 10, font: bold, color: GREEN });
+      const lines = lo.wrap(step, CONTENT_W - 34, 10, regular);
+      lines.forEach((ln, j) => lo.text(ln, MX + 30, lo.y - j * 13, { size: 10 }));
+      lo.gap(Math.max(lines.length * 13, 17) + 6);
+    });
   });
 
   if (data.notes) {

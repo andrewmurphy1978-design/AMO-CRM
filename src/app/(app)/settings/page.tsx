@@ -32,9 +32,9 @@ import BillingSettingsForm from "./billing-settings-form";
 import EmailComposePreferencesForm from "./email-compose-preferences-form";
 import EmailSignaturesForm from "./email-signatures-form";
 import BuildVersion from "./build-version";
-import SettingsCard, { SettingsGroupLabel } from "./settings-card";
 import LocalFilesForm from "./local-files-form";
-import SettingsTabs from "./settings-tabs";
+import SettingsLayout, { type SettingsSectionDef } from "./settings-layout";
+import SettingsIcon from "../settings-icon";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getWatchedPeople, isPersonalSectionUser } from "@/lib/personal-watch";
@@ -261,17 +261,21 @@ export default async function SettingsPage({
     x: t.dashboard.socialX,
   };
 
-  // Everything any signed-in user can see and change for themselves —
-  // account/password, dashboard personalization, and their own mail
-  // connections. The Admin tab (below) never renders any of this, and this
-  // tab never renders anything admin-only, so the two stay fully separate
-  // regardless of screen size.
-  const myTabContent = (
-    <div className="space-y-3 sm:space-y-6">
-      <SettingsCard title={t.settings.crmLinkTitle} description={t.settings.crmLinkDesc}>
+  // The left-hand menu of the Settings screen: every section is one entry (grouped), shown one at a time.
+  // "user" sections are what any signed-in user can see and change for themselves (account, dashboard
+  // personalization, their own mail connections); "admin" sections (shared integrations, billing, team
+  // management, org-wide credentials) are only added when isAdmin — a non-admin user gets no trace of them.
+  const sections: SettingsSectionDef[] = [];
+  const addSection = (s: SettingsSectionDef) => sections.push(s);
+  const fr = lang === "fr";
+
+  addSection({
+    id: "crm-link", scope: "user", group: t.settings.groupAccount, icon: "link", label: t.settings.crmLinkTitle, description: t.settings.crmLinkDesc,
+    content: (
+      <>
         <a
           href="https://crm.andrewmurphy.online"
-          className="mt-3 inline-block rounded-lg border border-card-border bg-field-bg px-4 py-2 font-mono text-sm text-emerald-700 hover:bg-black/5"
+          className="inline-block rounded-lg border border-card-border bg-field-bg px-4 py-2 font-mono text-sm text-emerald-700 hover:bg-black/5"
         >
           crm.andrewmurphy.online
         </a>
@@ -283,81 +287,88 @@ export default async function SettingsPage({
           localBuildLabel={t.settings.localBuildLabel}
           deployedAtPrefix={t.settings.deployedAtPrefix}
         />
-      </SettingsCard>
-
-      <SettingsGroupLabel>{t.settings.groupAccount}</SettingsGroupLabel>
-      <SettingsCard title={t.settings.accountTitle} description={t.settings.accountDesc}>
-        <ChangePasswordForm lang={lang} />
-      </SettingsCard>
-      {currentUser && (
-        <SettingsCard title={t.settings.timeFormatLabel} description={t.settings.timeFormatDesc}>
-          <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />
-        </SettingsCard>
-      )}
-
-      {currentUser && (
-        <>
-          <SettingsGroupLabel>{t.settings.groupDashboardWidgets}</SettingsGroupLabel>
-          <SettingsCard title={t.settings.worldClockZonesLabel} description={t.settings.worldClockZonesDesc}>
-            <WorldClockForm
-              lang={lang}
-              initialZones={worldClockZones}
-              initialHeaderZones={headerClockZones}
-              initialHeaderZoneMobile={headerZoneMobile}
-            />
-          </SettingsCard>
-          <SettingsCard title={t.settings.marketsPicksLabel} description={t.settings.marketsPicksDesc}>
-            <MarketsPicksForm
-              lang={lang}
-              initialCurrency={marketsCurrency}
-              initialItems={marketsItems}
-              initialItemMobile={marketsItemMobile}
-            />
-          </SettingsCard>
-          <SettingsCard title={t.settings.sportsPicksLabel} description={t.settings.sportsPicksDesc}>
-            <SportsPicksForm
-              lang={lang}
-              initialLeague={sportsLeague}
-              initialTeamNhl={sportsTeamNhl}
-              initialTeamMlb={sportsTeamMlb}
-              initialTeamNfl={sportsTeamNfl}
-              initialTeamCfl={sportsTeamCfl}
-              initialTeamMls={sportsTeamMls}
-              initialTeamNba={sportsTeamNba}
-              initialLeagueMobile={sportsLeagueMobile}
-            />
-          </SettingsCard>
-          <SettingsCard title={t.settings.headerWidgetsLabel} description={t.settings.headerWidgetsDesc}>
-            <HeaderWidgetsForm lang={lang} initialHidden={hiddenHeaderWidgets} />
-          </SettingsCard>
-        </>
-      )}
-
-      <SettingsGroupLabel>{t.settings.groupEmail}</SettingsGroupLabel>
-      {currentUser && (
-        <SettingsCard title={t.emailComposeSettings.title} description={t.emailComposeSettings.description}>
-          <EmailComposePreferencesForm
-            lang={lang}
-            accounts={mailAccounts}
-            defaultComposeSource={currentUser.defaultComposeSource}
-            defaultFontFamily={currentUser.defaultFontFamily}
-            defaultFontSize={currentUser.defaultFontSize}
-          />
-        </SettingsCard>
-      )}
-
-      <SettingsCard title={t.emailScreeningSettings.title} description={t.emailScreeningSettings.description}>
-        <EmailScreeningForm initialInstructions={currentUser?.emailScreeningInstructions ?? ""} lang={lang} />
-      </SettingsCard>
-
-      <SettingsCard title={t.settings.googleTitle} description={t.settings.googleDesc}>
+      </>
+    ),
+  });
+  addSection({
+    id: "account", scope: "user", group: t.settings.groupAccount, icon: "user", label: t.settings.accountTitle, description: t.settings.accountDesc,
+    content: <ChangePasswordForm lang={lang} />,
+  });
+  if (currentUser) {
+    addSection({
+      id: "time-format", scope: "user", group: t.settings.groupAccount, icon: "clock", label: t.settings.timeFormatLabel, description: t.settings.timeFormatDesc,
+      content: <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />,
+    });
+    addSection({
+      id: "world-clock", scope: "user", group: t.settings.groupDashboardWidgets, icon: "globe", label: t.settings.worldClockZonesLabel, description: t.settings.worldClockZonesDesc,
+      content: (
+        <WorldClockForm
+          lang={lang}
+          initialZones={worldClockZones}
+          initialHeaderZones={headerClockZones}
+          initialHeaderZoneMobile={headerZoneMobile}
+        />
+      ),
+    });
+    addSection({
+      id: "markets", scope: "user", group: t.settings.groupDashboardWidgets, icon: "chart", label: t.settings.marketsPicksLabel, description: t.settings.marketsPicksDesc,
+      content: (
+        <MarketsPicksForm
+          lang={lang}
+          initialCurrency={marketsCurrency}
+          initialItems={marketsItems}
+          initialItemMobile={marketsItemMobile}
+        />
+      ),
+    });
+    addSection({
+      id: "sports", scope: "user", group: t.settings.groupDashboardWidgets, icon: "sparkles", label: t.settings.sportsPicksLabel, description: t.settings.sportsPicksDesc,
+      content: (
+        <SportsPicksForm
+          lang={lang}
+          initialLeague={sportsLeague}
+          initialTeamNhl={sportsTeamNhl}
+          initialTeamMlb={sportsTeamMlb}
+          initialTeamNfl={sportsTeamNfl}
+          initialTeamCfl={sportsTeamCfl}
+          initialTeamMls={sportsTeamMls}
+          initialTeamNba={sportsTeamNba}
+          initialLeagueMobile={sportsLeagueMobile}
+        />
+      ),
+    });
+    addSection({
+      id: "header-widgets", scope: "user", group: t.settings.groupDashboardWidgets, icon: "squares", label: t.settings.headerWidgetsLabel, description: t.settings.headerWidgetsDesc,
+      content: <HeaderWidgetsForm lang={lang} initialHidden={hiddenHeaderWidgets} />,
+    });
+    addSection({
+      id: "email-compose", scope: "user", group: t.settings.groupEmail, icon: "envelope", label: t.emailComposeSettings.title, description: t.emailComposeSettings.description,
+      content: (
+        <EmailComposePreferencesForm
+          lang={lang}
+          accounts={mailAccounts}
+          defaultComposeSource={currentUser.defaultComposeSource}
+          defaultFontFamily={currentUser.defaultFontFamily}
+          defaultFontSize={currentUser.defaultFontSize}
+        />
+      ),
+    });
+  }
+  addSection({
+    id: "email-screening", scope: "user", group: t.settings.groupEmail, icon: "shield", label: t.emailScreeningSettings.title, description: t.emailScreeningSettings.description,
+    content: <EmailScreeningForm initialInstructions={currentUser?.emailScreeningInstructions ?? ""} lang={lang} />,
+  });
+  addSection({
+    id: "google", scope: "user", group: t.settings.groupEmail, icon: "globe", label: t.settings.googleTitle, description: t.settings.googleDesc,
+    content: (
+      <>
         {googleStatus === "error" && (
-          <p className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+          <p className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
             {googleErrorReason || "Connection failed."}
           </p>
         )}
         {googleStatus === "connected" && !googleConnection && (
-          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             Google said the connection succeeded, but nothing was saved — please try again.
           </p>
         )}
@@ -392,49 +403,42 @@ export default async function SettingsPage({
           </a>
         )}
         <GoogleContactsImportForm connected={Boolean(googleConnection)} lang={lang} />
-      </SettingsCard>
+      </>
+    ),
+  });
+  addSection({
+    id: "ionos", scope: "user", group: t.settings.groupEmail, icon: "envelope", label: t.ionosMailbox.title,
+    content: (
+      <IonosMailboxForm
+        connected={Boolean(ionosMailbox)}
+        address={ionosMailbox?.address ?? ""}
+        displayName={ionosMailbox?.displayName ?? ""}
+        lastCheckedAt={ionosMailbox?.lastCheckedAt ?? null}
+        lastError={ionosMailbox?.lastError ?? null}
+        lang={lang}
+      />
+    ),
+  });
+  addSection({
+    id: "email-colors", scope: "user", group: t.settings.groupEmail, icon: "palette", label: t.settings.emailAddressColorTitle, description: t.settings.emailAddressColorDesc,
+    content: <EmailAddressColorForm rows={emailAddressColors} lang={lang} />,
+  });
+  if (showPersonalCard) {
+    addSection({
+      id: "personal", scope: "user", group: t.personal.settingsTitle, icon: "eye", label: t.personal.settingsTitle, description: t.personal.settingsDescription,
+      content: <PersonalWatchForm people={watchedPeople} lang={lang} />,
+    });
+  }
 
-      <SettingsCard title={t.ionosMailbox.title}>
-        <IonosMailboxForm
-          connected={Boolean(ionosMailbox)}
-          address={ionosMailbox?.address ?? ""}
-          displayName={ionosMailbox?.displayName ?? ""}
-          lastCheckedAt={ionosMailbox?.lastCheckedAt ?? null}
-          lastError={ionosMailbox?.lastError ?? null}
-          lang={lang}
-        />
-      </SettingsCard>
-
-      <SettingsCard title={t.settings.emailAddressColorTitle} description={t.settings.emailAddressColorDesc}>
-        <EmailAddressColorForm rows={emailAddressColors} lang={lang} />
-      </SettingsCard>
-
-      {showPersonalCard && (
-        <>
-          <SettingsGroupLabel>{t.personal.settingsTitle}</SettingsGroupLabel>
-          <SettingsCard description={t.personal.settingsDescription}>
-            <PersonalWatchForm people={watchedPeople} lang={lang} />
-          </SettingsCard>
-        </>
-      )}
-    </div>
-  );
-
-  // Everything only an admin can see — shared integrations, billing, team
-  // management, and org-wide credentials. Rendered only when isAdmin, and
-  // only ever reachable through the Admin Settings tab, which itself only
-  // exists for admins (see the `tabs` array below) — a non-admin user gets
-  // no trace of this content, not even a disabled placeholder.
-  const adminTabContent = isAdmin && session ? (
-    <div className="space-y-3 sm:space-y-6">
-      <SettingsGroupLabel>{t.settings.groupTeamAccess}</SettingsGroupLabel>
-      <SettingsCard>
-        <UserManagement users={users} currentUserId={session.user.id} lang={lang} />
-      </SettingsCard>
-
-      <SettingsGroupLabel>{t.settings.groupBilling}</SettingsGroupLabel>
-      {billingSettings && (
-        <SettingsCard title={t.billingSettings.title} description={t.billingSettings.description}>
+  if (isAdmin && session) {
+    addSection({
+      id: "team", scope: "admin", group: t.settings.groupTeamAccess, icon: "users", label: t.settings.groupTeamAccess,
+      content: <UserManagement users={users} currentUserId={session.user.id} lang={lang} />,
+    });
+    if (billingSettings) {
+      addSection({
+        id: "billing", scope: "admin", group: t.settings.groupBilling, icon: "card", label: t.billingSettings.title, description: t.billingSettings.description,
+        content: (
           <BillingSettingsForm
             chargeCanadianTax={billingSettings.chargeCanadianTax}
             gstNumber={billingSettings.gstNumber}
@@ -444,17 +448,22 @@ export default async function SettingsPage({
             bookingUrl={billingSettings.bookingUrl}
             lang={lang}
           />
-        </SettingsCard>
-      )}
-      <SettingsCard title={lang === "fr" ? "Fichiers locaux" : "Local files"} description={lang === "fr" ? "Où sont rangés les dossiers de vos clients et projets sur votre ordinateur." : "Where your client and project folders are kept on your computer."}>
-        <LocalFilesForm root={billingSettings?.localFilesRoot ?? null} lang={lang} />
-      </SettingsCard>
-      <SettingsCard>
-        <ServicePriceListForm items={serviceItems} lang={lang} customTypes={(await loadTypeInfo(lang)).custom.map((c) => ({ key: c.key, label: lang === "fr" && c.labelFr ? c.labelFr : c.label }))} />
-      </SettingsCard>
+        ),
+      });
+    }
+    addSection({
+      id: "local-files", scope: "admin", group: t.settings.groupBilling, icon: "folder", label: fr ? "Fichiers locaux" : "Local files",
+      description: fr ? "Où sont rangés les dossiers de vos clients et projets sur votre ordinateur." : "Where your client and project folders are kept on your computer.",
+      content: <LocalFilesForm root={billingSettings?.localFilesRoot ?? null} lang={lang} />,
+    });
+    addSection({
+      id: "price-list", scope: "admin", group: t.settings.groupBilling, icon: "tag", label: t.servicePriceList.title,
+      content: <ServicePriceListForm items={serviceItems} lang={lang} customTypes={(await loadTypeInfo(lang)).custom.map((c) => ({ key: c.key, label: lang === "fr" && c.labelFr ? c.labelFr : c.label }))} />,
+    });
 
-      <SettingsGroupLabel>{t.settings.groupIntegrations}</SettingsGroupLabel>
-      <SettingsCard title={t.settings.systemeioTitle} description={t.settings.systemeioDesc}>
+    addSection({
+      id: "systeme-io", scope: "admin", group: t.settings.groupIntegrations, icon: "bolt", label: t.settings.systemeioTitle, description: t.settings.systemeioDesc,
+      content: (
         <SystemeIoForm
           connected={Boolean(integration?.apiKeyEncrypted)}
           expiry={expiryOf(integration)}
@@ -465,8 +474,11 @@ export default async function SettingsPage({
           autoSyncTime={integration?.autoSyncTime ?? "03:00"}
           lang={lang}
         />
-      </SettingsCard>
-      <SettingsCard title={t.settings.makeTitle} description={t.settings.makeDesc}>
+      ),
+    });
+    addSection({
+      id: "make", scope: "admin", group: t.settings.groupIntegrations, icon: "bolt", label: t.settings.makeTitle, description: t.settings.makeDesc,
+      content: (
         <MakeForm
           connected={Boolean(makeIntegration?.apiKeyEncrypted)}
           expiry={expiryOf(makeIntegration)}
@@ -477,8 +489,11 @@ export default async function SettingsPage({
           lastSyncError={makeIntegration?.lastSyncError ?? null}
           lang={lang}
         />
-      </SettingsCard>
-      <SettingsCard title={t.shortio.title}>
+      ),
+    });
+    addSection({
+      id: "shortio", scope: "admin", group: t.settings.groupIntegrations, icon: "link", label: t.shortio.title,
+      content: (
         <ShortIoForm
           connected={Boolean(shortioIntegration?.apiKeyEncrypted)}
           expiry={expiryOf(shortioIntegration)}
@@ -486,100 +501,116 @@ export default async function SettingsPage({
           domainFr={shortioMetadata.domainFr ?? ""}
           lang={lang}
         />
-      </SettingsCard>
-      <SettingsCard title={t.settings.zapierTitle} description={t.settings.zapierDesc}>
-        <p className="mt-3 text-sm text-ink">{t.automations.zapierSetupNote}</p>
-        <div className="mt-2">
+      ),
+    });
+    addSection({
+      id: "zapier", scope: "admin", group: t.settings.groupIntegrations, icon: "bolt", label: t.settings.zapierTitle, description: t.settings.zapierDesc,
+      content: (
+        <>
+          <p className="text-sm text-ink">{t.automations.zapierSetupNote}</p>
+          <div className="mt-2">
+            <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
+              {t.automations.webhookUrlLabel}
+            </label>
+            <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
+              https://crm.andrewmurphy.online/api/webhooks/zapier
+            </code>
+          </div>
+        </>
+      ),
+    });
+    addSection({
+      id: "buffer", scope: "admin", group: t.settings.groupIntegrations, icon: "chart", label: t.settings.bufferTitle, description: t.settings.bufferDesc,
+      content: <BufferForm accounts={bufferAccounts} lang={lang} />,
+    });
+    addSection({
+      id: "social-analytics", scope: "admin", group: t.settings.groupIntegrations, icon: "chart", label: t.settings.socialAnalyticsTitle, description: t.settings.socialAnalyticsDesc,
+      content: (
+        <>
           <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
             {t.automations.webhookUrlLabel}
           </label>
           <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
-            https://crm.andrewmurphy.online/api/webhooks/zapier
+            https://crm.andrewmurphy.online/api/webhooks/social-analytics
           </code>
-        </div>
-      </SettingsCard>
-      <SettingsCard title={t.settings.bufferTitle} description={t.settings.bufferDesc}>
-        <BufferForm accounts={bufferAccounts} lang={lang} />
-      </SettingsCard>
-      <SettingsCard title={t.settings.socialAnalyticsTitle} description={t.settings.socialAnalyticsDesc}>
-        <label className="block text-xs font-semibold uppercase tracking-wide text-soft">
-          {t.automations.webhookUrlLabel}
-        </label>
-        <code className="mt-1 block rounded-md border border-card-border bg-field-bg px-3 py-2 text-xs text-ink">
-          https://crm.andrewmurphy.online/api/webhooks/social-analytics
-        </code>
-      </SettingsCard>
-      <SettingsCard title={t.settings.socialLinksTitle} description={t.settings.socialLinksDesc}>
-        <SocialLinksForm initialLinks={socialLinks} platformNames={socialPlatformNames} lang={lang} />
-      </SettingsCard>
-
-      {mailAccounts.length > 0 && (
-        <>
-          <SettingsGroupLabel>{t.settings.groupSharedEmail}</SettingsGroupLabel>
-          <SettingsCard title={t.emailSignatures.title} description={t.emailSignatures.description}>
-            <EmailSignaturesForm signatures={emailSignatures} accounts={mailAccounts} lang={lang} />
-          </SettingsCard>
         </>
-      )}
+      ),
+    });
+    addSection({
+      id: "social-links", scope: "admin", group: t.settings.groupIntegrations, icon: "link", label: t.settings.socialLinksTitle, description: t.settings.socialLinksDesc,
+      content: <SocialLinksForm initialLinks={socialLinks} platformNames={socialPlatformNames} lang={lang} />,
+    });
+    if (mailAccounts.length > 0) {
+      addSection({
+        id: "signatures", scope: "admin", group: t.settings.groupSharedEmail, icon: "envelope", label: t.emailSignatures.title, description: t.emailSignatures.description,
+        content: <EmailSignaturesForm signatures={emailSignatures} accounts={mailAccounts} lang={lang} />,
+      });
+    }
 
-      <SettingsGroupLabel>{t.settings.groupAiSecurity}</SettingsGroupLabel>
-      <SettingsCard title={t.anthropicKey.title} description={t.anthropicKey.description}>
-        <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} expiry={expiryOf(anthropicIntegration)} lang={lang} />
-      </SettingsCard>
-      {isAdmin && (
-        <SettingsCard
-          title={lang === "fr" ? "Paiements par carte (Stripe)" : "Card payments (Stripe)"}
-          description={lang === "fr" ? "Page de paiement pour les versements : le client paie par carte et la facture est marquée payée automatiquement." : "A payment page for the instalments: the client pays by card and the invoice is marked paid automatically."}
-        >
-          <StripeForm
-            connected={Boolean(stripeIntegration?.apiKeyEncrypted)}
-            expiry={expiryOf(stripeIntegration)}
-            webhookSet={Boolean((stripeIntegration?.metadata as { webhookSecretEnc?: string } | null)?.webhookSecretEnc)}
-            webhookUrl={`${publicBaseUrl() ?? "https://your-crm-address"}/api/stripe/webhook`}
-            lang={lang}
-          />
-        </SettingsCard>
-      )}
-      {isAdmin && (
-        <SettingsCard title={t.twilioSettings.title} description={t.twilioSettings.description}>
-          <TwilioForm
-            connected={Boolean(twilioConfig)}
-            expiry={expiryOf(twilioIntegration)}
-            accountSid={twilioConfig?.accountSid ?? ""}
-            fromNumber={twilioConfig?.fromNumber ?? ""}
-            baseUrl={publicBaseUrl() ?? ""}
-            lang={lang}
-          />
-        </SettingsCard>
-      )}
-      <SettingsCard title={t.apiVault.title} description={t.apiVault.description}>
-        <ApiKeyVaultForm entries={vaultEntries.map((e) => ({ id: e.id, label: e.label, notes: e.notes, source: e.source, expiresAt: e.expiresAt?.toISOString() ?? null, noExpiry: e.noExpiry }))} lang={lang} />
-      </SettingsCard>
+    addSection({
+      id: "anthropic", scope: "admin", group: t.settings.groupAiSecurity, icon: "sparkles", label: t.anthropicKey.title, description: t.anthropicKey.description,
+      content: <AnthropicKeyForm connected={Boolean(anthropicIntegration?.apiKeyEncrypted)} expiry={expiryOf(anthropicIntegration)} lang={lang} />,
+    });
+    addSection({
+      id: "stripe", scope: "admin", group: t.settings.groupAiSecurity, icon: "card", label: fr ? "Paiements par carte (Stripe)" : "Card payments (Stripe)",
+      description: fr ? "Page de paiement pour les versements : le client paie par carte et la facture est marquée payée automatiquement." : "A payment page for the instalments: the client pays by card and the invoice is marked paid automatically.",
+      content: (
+        <StripeForm
+          connected={Boolean(stripeIntegration?.apiKeyEncrypted)}
+          expiry={expiryOf(stripeIntegration)}
+          webhookSet={Boolean((stripeIntegration?.metadata as { webhookSecretEnc?: string } | null)?.webhookSecretEnc)}
+          webhookUrl={`${publicBaseUrl() ?? "https://your-crm-address"}/api/stripe/webhook`}
+          lang={lang}
+        />
+      ),
+    });
+    addSection({
+      id: "twilio", scope: "admin", group: t.settings.groupAiSecurity, icon: "phone", label: t.twilioSettings.title, description: t.twilioSettings.description,
+      content: (
+        <TwilioForm
+          connected={Boolean(twilioConfig)}
+          expiry={expiryOf(twilioIntegration)}
+          accountSid={twilioConfig?.accountSid ?? ""}
+          fromNumber={twilioConfig?.fromNumber ?? ""}
+          baseUrl={publicBaseUrl() ?? ""}
+          lang={lang}
+        />
+      ),
+    });
+    addSection({
+      id: "api-vault", scope: "admin", group: t.settings.groupAiSecurity, icon: "key", label: t.apiVault.title, description: t.apiVault.description,
+      content: <ApiKeyVaultForm entries={vaultEntries.map((e) => ({ id: e.id, label: e.label, notes: e.notes, source: e.source, expiresAt: e.expiresAt?.toISOString() ?? null, noExpiry: e.noExpiry }))} lang={lang} />,
+    });
 
-      <SettingsGroupLabel>{t.settings.groupDataTools}</SettingsGroupLabel>
-      <SettingsCard title={t.settings.tagsTitle} description={t.settings.tagsDesc}>
-        <TagsForm tags={allTags} lang={lang} />
-      </SettingsCard>
-      <SettingsCard title={t.contactDataFixes.title}>
-        <ContactDataFixesForm lang={lang} />
-      </SettingsCard>
-    </div>
-  ) : null;
-
-  const tabs = [
-    { id: "user", label: t.settings.tabMySettings, content: myTabContent },
-    ...(adminTabContent ? [{ id: "admin", label: t.settings.tabAdminSettings, content: adminTabContent }] : []),
-  ];
+    addSection({
+      id: "tags", scope: "admin", group: t.settings.groupDataTools, icon: "tag", label: t.settings.tagsTitle, description: t.settings.tagsDesc,
+      content: <TagsForm tags={allTags} lang={lang} />,
+    });
+    addSection({
+      id: "data-fixes", scope: "admin", group: t.settings.groupDataTools, icon: "wrench", label: t.contactDataFixes.title,
+      content: <ContactDataFixesForm lang={lang} />,
+    });
+  }
 
   return (
     // Mobile: same -mx-4/px-2 inset-cancelling trick as the Dashboard/
-    // Marketing/Contact Info pages, plus a tighter vertical rhythm — this
-    // page stacks many more cards than most, so the usual sm:space-y-8 felt
-    // even longer here.
+    // Marketing/Contact Info pages, plus a tighter vertical rhythm.
     <div className="space-y-2 sm:space-y-6">
-      <PageHeader title={t.settings.title} hour12={hour12} lang={lang} location={t.dashboard.myLocation} />
-      <p className="text-sm text-soft">{t.settings.subtitle}</p>
-      <SettingsTabs tabs={tabs} />
+      <PageHeader
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <SettingsIcon />
+            <span className="truncate">{t.settings.title}</span>
+          </span>
+        }
+        hour12={hour12}
+        lang={lang}
+        location={t.dashboard.myLocation}
+      />
+      <SettingsLayout
+        sections={sections}
+        labels={{ mine: t.settings.tabMySettings, admin: t.settings.tabAdminSettings, search: t.settings.menuSearch, noMatch: t.settings.menuNoMatch, menu: t.settings.menuLabel }}
+      />
     </div>
   );
 }
