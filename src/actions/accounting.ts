@@ -685,3 +685,90 @@ export async function recordInvestmentAdjustment(input: { accountId: string; mon
   refresh();
   return { success: "Adjustment recorded." };
 }
+
+/**
+ * Moves an already-categorized transaction to another category (from the General Ledger). The old posting is
+ * replaced; a transfer's other half is reopened first and linked again if the new category is a transfer too.
+ */
+export async function recategorizeTransaction(input: { txId: string; entityId: string; accountId: string; tax: boolean; remember: boolean }): Promise<Result> {
+  const me = await access();
+  try {
+    return await withScopedPrismaClient(async (db) => {
+      const ids = await ownTxIds(db, me, [input.txId]);
+      if (ids.length === 0) throw deny();
+      await assertUnlocked(db, ids);
+      const tx = await db.accTransaction.findUniqueOrThrow({ where: { id: input.txId } });
+      const target = await db.accAccount.findFirst({ where: { id: input.accountId, entityId: input.entityId, subtype: { not: "GROUP" }, entity: { ownerId: me.id } }, include: { entity: true } });
+      if (!target) throw deny();
+      if (target.id === tx.accountId) return { error: "A transaction cannot be categorized to its own bank account." };
+      const linked = await db.accTransaction.findMany({ where: { matchedTransactionId: tx.id }, select: { id: true } });
+      if (linked.length > 0) await db.accTransaction.updateMany({ where: { id: { in: linked.map((l) => l.id) } }, data: { status: "NEW", categorizedBy: null, matchedTransactionId: null } });
+      const taxProvince = input.tax && target.entity.salesTaxRegistered ? target.entity.province ?? "QC" : null;
+      const res = await postTransactions(db, [{ txId: tx.id, by: "USER", allocations: allocationsFromRule([{ entityId: target.entityId, accountId: target.id, pct: 100, tax: taxProvince }], tx.amount) }]);
+      if (res.errors.length > 0) {
+        // Nothing was replaced: put the other half back.
+        if (linked.length > 0) await db.accTransaction.updateMany({ where: { id: { in: linked.map((l) => l.id) } }, data: { status: "POSTED", categorizedBy: "USER", matchedTransactionId: tx.id } });
+        return { error: res.errors[0].message };
+      }
+      if (input.remember) {
+        await saveRule(db, me.id, tx.supplier, [{ entityId: target.entityId, accountId: target.id, pct: 100, tax: taxProvince }]);
+        await applyRules(db, me.id);
+      }
+      refresh();
+      return { success: "Recategorized." };
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Not found") throw error;
+    return { error: error instanceof Error ? error.message : "Could not recategorize." };
+  }
+}
+
+/**
+ * Sets the opening balances of an entity's asset and liability accounts on a date. Each non-zero balance is one
+ * opening entry against the entity's opening-balance equity account; a blank or zero balance removes the account's
+ * opening entry. Positive = the account's normal balance (money in an asset, money owed on a liability).
+ */
+export async function saveOpeningBalances(input: { entityId: string; date: string; balances: { accountId: string; amount: number }[] }): Promise<Result> {
+  const me = await access();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { error: "Enter the date of the opening balances." };
+  try {
+    const saved = await withScopedPrismaClient(async (db) => {
+      await ownEntity(db, me, input.entityId);
+      const entity = await db.accEntity.findUniqueOrThrow({ where: { id: input.entityId } });
+      const ids = input.balances.map((b) => b.accountId);
+      const accs = await db.accAccount.findMany({ where: { id: { in: ids }, entityId: input.entityId, type: { in: ["ASSET", "LIABILITY"] }, subtype: { not: "GROUP" } } });
+      const byId = new Map(accs.map((a) => [a.id, a]));
+      // Corporations open against retained earnings, everyone else against the opening-balance equity account.
+      const equity = (entity.kind === "CORPORATION" ? await db.accAccount.findUnique({ where: { entityId_code: { entityId: entity.id, code: "3200" } } }) : null) ?? (await db.accAccount.findUnique({ where: { entityId_code: { entityId: entity.id, code: "3000" } } }));
+      if (!equity) throw new Error("The entity has no opening-balance account.");
+      const date = new Date(`${input.date}T00:00:00.000Z`);
+      let count = 0;
+      for (const b of input.balances) {
+        const acc = byId.get(b.accountId);
+        if (!acc) continue;
+        await db.accJournalEntry.deleteMany({ where: { entityId: entity.id, source: "OPENING", lines: { some: { accountId: acc.id } } } });
+        const amount = Number.isFinite(b.amount) ? r2(b.amount) : 0;
+        if (amount === 0) continue;
+        // Asset: debit when positive. Liability: credit when positive.
+        const accountDebit = acc.type === "ASSET" ? amount > 0 : amount < 0;
+        const abs = Math.abs(amount);
+        await db.accJournalEntry.create({
+          data: {
+            entityId: entity.id,
+            date,
+            memo: `Opening balance — ${acc.name}`,
+            source: "OPENING",
+            lines: { create: [{ accountId: acc.id, debit: accountDebit ? abs : 0, credit: accountDebit ? 0 : abs }, { accountId: equity.id, debit: accountDebit ? 0 : abs, credit: accountDebit ? abs : 0 }] },
+          },
+        });
+        count++;
+      }
+      return count;
+    });
+    refresh();
+    return { success: `${saved} opening balance(s) saved.` };
+  } catch (error) {
+    if (error instanceof Error && error.message === "Not found") throw error;
+    return { error: error instanceof Error ? error.message : "Could not save." };
+  }
+}

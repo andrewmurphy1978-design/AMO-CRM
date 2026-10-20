@@ -8,6 +8,7 @@ import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks } from "@/lib/accounting/options";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
 import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
+import RecategorizeButton, { type RecatTx } from "./recategorize-button";
 import { isoDate, money } from "@/lib/accounting/format";
 
 type Sp = { entity?: string; year?: string; r?: string; account?: string };
@@ -34,12 +35,19 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     else if (report === "st") data.st = await salesTaxReport(db, entity.id, range.from, range.to);
     else if (report === "gl") {
       const accountId = options.find((o) => o.id === sp.account && o.entityId === entity.id && !o.isGroup)?.id ?? options.find((o) => o.entityId === entity.id && !o.bank && !o.isGroup)?.id;
-      if (accountId) data.gl = await generalLedger(db, accountId, range.from, range.to);
+      if (accountId) {
+        const gl = await generalLedger(db, accountId, range.from, range.to);
+        data.gl = gl;
+        const txIds = [...new Set(gl.lines.map((l) => l.transactionId).filter((x): x is string => !!x))];
+        const txs = txIds.length ? await db.accTransaction.findMany({ where: { id: { in: txIds }, account: { entity: { ownerId: me.id } } }, select: { id: true, supplier: true, date: true, amount: true, accountId: true } }) : [];
+        data.glTx = txs.map((t) => ({ id: t.id, supplier: t.supplier, date: isoDate(t.date), amount: t.amount, accountId: t.accountId }));
+      }
     }
     return { entities, options, entity, range, cur, data };
   });
   const { entities, options, entity, range, cur, data } = out;
   const m = (n: number) => money(n, cur, lang);
+  const glTx = new Map(((data.glTx as RecatTx[] | undefined) ?? []).map((t) => [t.id, t]));
   const name = (r: { name: string; nameFr: string | null }) => (fr && r.nameFr ? r.nameFr : r.name);
 
   const tabs: [string, string][] = [
@@ -225,10 +233,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               const g = data.gl as Awaited<ReturnType<typeof generalLedger>>;
               return (
                 <table className="w-full text-sm">
-                  <thead><tr className="text-left text-xs uppercase text-soft"><th>Date</th><th>{fr ? "Description" : "Description"}</th><th className="text-right">{fr ? "Débit" : "Debit"}</th><th className="text-right">{fr ? "Crédit" : "Credit"}</th><th className="text-right">{fr ? "Solde" : "Balance"}</th></tr></thead>
+                  <thead><tr className="text-left text-xs uppercase text-soft"><th>Date</th><th>{fr ? "Description" : "Description"}</th><th className="text-right">{fr ? "Débit" : "Debit"}</th><th className="text-right">{fr ? "Crédit" : "Credit"}</th><th className="text-right">{fr ? "Solde" : "Balance"}</th><th /></tr></thead>
                   <tbody className="divide-y divide-card-border">
-                    <tr className="text-soft"><td /><td className="py-1">{fr ? "Solde d'ouverture" : "Opening balance"}</td><td /><td /><td className="text-right">{m(g.openingBalance)}</td></tr>
-                    {g.lines.map((l) => (<tr key={l.id}><td className="py-1 whitespace-nowrap text-soft">{isoDate(l.date)}</td><td className="text-ink">{l.memo}</td><td className="text-right">{l.debit ? m(l.debit) : ""}</td><td className="text-right">{l.credit ? m(l.credit) : ""}</td><td className="text-right">{m(l.balance)}</td></tr>))}
+                    <tr className="text-soft"><td /><td className="py-1">{fr ? "Solde d'ouverture" : "Opening balance"}</td><td /><td /><td className="text-right">{m(g.openingBalance)}</td><td /></tr>
+                    {g.lines.map((l) => (<tr key={l.id}><td className="py-1 whitespace-nowrap text-soft">{isoDate(l.date)}</td><td className="text-ink">{l.memo}</td><td className="text-right">{l.debit ? m(l.debit) : ""}</td><td className="text-right">{l.credit ? m(l.credit) : ""}</td><td className="text-right">{m(l.balance)}</td><td className="pl-3 text-right">{l.transactionId && glTx.get(l.transactionId) ? <RecategorizeButton lang={lang} tx={glTx.get(l.transactionId)!} entities={entities} options={options} currency={cur} /> : null}</td></tr>))}
                   </tbody>
                 </table>
               );
