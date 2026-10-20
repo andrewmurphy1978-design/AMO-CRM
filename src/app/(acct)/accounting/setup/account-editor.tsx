@@ -20,7 +20,7 @@ export interface EditableAccount {
 }
 
 // One line of the chart of accounts: balance-sheet section (assets / liabilities), sub-category parent, and GIFI code.
-export default function AccountEditor({ account: a, lang, showGifi }: { account: EditableAccount; lang: "en" | "fr"; showGifi: boolean }) {
+export default function AccountEditor({ account: a, lang, showGifi, depth = 0 }: { account: EditableAccount; lang: "en" | "fr"; showGifi: boolean; depth?: number }) {
   const fr = lang === "fr";
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -33,9 +33,9 @@ export default function AccountEditor({ account: a, lang, showGifi }: { account:
   const isGroup = a.isGroup;
   return (
     <div className={`${rowGrid(showGifi)} py-1.5`}>
-      <span className={`text-xs text-soft ${a.parentId ? "pl-4" : ""}`}>{a.code}</span>
-      <input value={en} onChange={(e) => setEn(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="English" aria-label="English description" className={`${cls} w-full min-w-0 text-sm ${isGroup ? "font-semibold" : ""}`} />
-      <input value={frName} onChange={(e) => setFrName(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="Français" aria-label="Description française" className={`${cls} w-full min-w-0 text-sm ${isGroup ? "font-semibold" : ""}`} />
+      <span className="text-xs text-soft" style={{ paddingLeft: depth * 14 }}>{a.code}</span>
+      <input value={en} onChange={(e) => setEn(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="English" aria-label="English description" className={`${cls} w-full min-w-0 text-sm ${depth === 0 ? "font-semibold" : ""}`} />
+      <input value={frName} onChange={(e) => setFrName(e.target.value)} onBlur={saveNames} disabled={pending} placeholder="Français" aria-label="Description française" className={`${cls} w-full min-w-0 text-sm ${depth === 0 ? "font-semibold" : ""}`} />
       {sections && !a.parentId ? (
         <select disabled={pending} value={a.section ?? ""} onChange={(e) => start(() => setAccountSection(a.id, e.target.value || null))} className={`${cls} w-full min-w-0`} title={fr ? "Section du bilan" : "Balance-sheet section"}>
           <option value="">{fr ? "Section automatique" : "Automatic section"}</option>
@@ -44,7 +44,7 @@ export default function AccountEditor({ account: a, lang, showGifi }: { account:
       ) : (
         <span className="hidden lg:block" />
       )}
-      {!a.bank && !a.hasChildren ? (
+      {!a.bank && a.parentChoices.length + (a.parentId ? 1 : 0) > 0 ? (
         <select
           disabled={pending}
           value={a.parentId ?? ""}

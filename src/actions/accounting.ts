@@ -173,10 +173,30 @@ async function autoGifi(db: import("@/lib/prisma").PrismaClient, entityId: strin
   return e && usesGifi(e.kind, e.country) ? suggestGifi(e.kind, { code, name, type, subtype }) : null;
 }
 
+// Income and expenses nest three deep under their card (group > account > sub-account); assets and liabilities
+// one deep (their section is the level above).
+const maxDepth = (type: string) => (type === "INCOME" || type === "EXPENSE" ? 2 : 1);
+async function ancestorCount(db: Db, id: string): Promise<number> {
+  let n = 0;
+  let cur = await db.accAccount.findUnique({ where: { id }, select: { parentId: true } });
+  while (cur?.parentId && n < 5) {
+    n++;
+    cur = await db.accAccount.findUnique({ where: { id: cur.parentId }, select: { parentId: true } });
+  }
+  return n;
+}
+async function subtreeHeight(db: Db, id: string): Promise<number> {
+  const kids = await db.accAccount.findMany({ where: { parentId: id }, select: { id: true } });
+  let h = 0;
+  for (const k of kids) h = Math.max(h, 1 + (await subtreeHeight(db, k.id)));
+  return h;
+}
+
 async function validParent(db: import("@/lib/prisma").PrismaClient, entityId: string, type: string, parentId: string): Promise<string | null> {
   if (!parentId) return null;
   const p = await db.accAccount.findUnique({ where: { id: parentId } });
-  return p && p.entityId === entityId && p.type === type && !p.parentId ? p.id : null;
+  if (!p || p.entityId !== entityId || p.type !== type) return null;
+  return (await ancestorCount(db, p.id)) + 1 <= maxDepth(type) ? p.id : null;
 }
 
 // The balance-sheet section chosen for a new account sets the subtype that places it there.
@@ -199,14 +219,20 @@ export async function setAccountParent(id: string, parentId: string | null): Pro
   const result = await withScopedPrismaClient(async (db) => {
     await ownAccount(db, me, id);
     if (parentId) await ownAccount(db, me, parentId);
-    const acc = await db.accAccount.findUniqueOrThrow({ where: { id }, include: { children: { select: { id: true } } } });
+    const acc = await db.accAccount.findUniqueOrThrow({ where: { id } });
     if (parentId) {
       const parent = await db.accAccount.findUniqueOrThrow({ where: { id: parentId } });
       if (parent.id === acc.id) return { error: "An account cannot be its own parent." };
       if (parent.entityId !== acc.entityId || parent.type !== acc.type) return { error: "A sub-category must be in the same entity and of the same type as its parent." };
       if ((parent.type === "ASSET" || parent.type === "LIABILITY") && (parent.section ?? defaultSection(parent.type, parent.subtype)) !== (acc.section ?? defaultSection(acc.type, acc.subtype))) return { error: "A second-level account must be in the same section as the account above it." };
-      if (parent.parentId) return { error: "Only one level of sub-categories is supported: choose a top-level parent." };
-      if (acc.children.length > 0) return { error: "This account already has sub-categories, so it cannot become one itself." };
+      // The parent must not be one of this account's own descendants, and the whole branch must stay within the depth.
+      let up: string | null = parent.parentId;
+      while (up) {
+        if (up === acc.id) return { error: "An account cannot be placed under one of its own sub-accounts." };
+        up = (await db.accAccount.findUnique({ where: { id: up }, select: { parentId: true } }))?.parentId ?? null;
+      }
+      const depthOfParent = (await ancestorCount(db, parent.id)) + 1;
+      if (depthOfParent + (await subtreeHeight(db, acc.id)) + 0 > maxDepth(acc.type)) return { error: acc.type === "INCOME" || acc.type === "EXPENSE" ? "Income and expenses go three levels deep (group, account, sub-account)." : "Only one level of sub-categories is supported for this type." };
       if (acc.subtype === "BANK" || acc.subtype === "CREDIT_CARD") return { error: "Bank and card accounts cannot be sub-categories." };
     }
     await db.accAccount.update({ where: { id }, data: { parentId } });

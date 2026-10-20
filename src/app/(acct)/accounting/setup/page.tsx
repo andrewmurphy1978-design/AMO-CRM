@@ -11,6 +11,7 @@ import AddBankDialog from "./add-bank-dialog";
 import AddAccountDialog from "./add-account-dialog";
 import EntityTabs from "./entity-tabs";
 import SetupLayout, { type SetupSection } from "./setup-layout";
+import { flatten, parentChoices as parentChoicesOf } from "@/lib/accounting/tree";
 import AccountEditor, { AccountColumnsHeader } from "./account-editor";
 
 export default async function SetupPage() {
@@ -123,14 +124,19 @@ export default async function SetupPage() {
               )}
               {TYPES.map((t) => {
                 const list = own.filter((o) => o.type === t.key).sort((x, y) => x.code.localeCompare(y.code));
-                const parents = list.filter((o) => !o.parentId && !o.bank);
                 const hasChildren = new Set(list.map((o) => o.parentId).filter(Boolean));
-                const renderRow = (o: (typeof list)[number]) => (
+                const pathLabel = (o: (typeof list)[number]): string => {
+                  const parent = o.parentId ? list.find((x) => x.id === o.parentId) : null;
+                  const mine = fr ? (o.nameFr ?? o.name) : o.name;
+                  return parent ? `${pathLabel(parent)} › ${mine}` : mine;
+                };
+                const renderRow = ({ o, depth }: { o: (typeof list)[number]; depth: number }) => (
                   <AccountEditor
                     key={o.id}
                     lang={lang}
                     showGifi={gifi}
-                    account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), isGroup: o.isGroup, bank: o.bank, parentChoices: parents.filter((p) => p.id !== o.id && (o.type !== "ASSET" && o.type !== "LIABILITY" ? true : optionOf(p.id)?.section === optionOf(o.id)?.section)).map((p) => ({ id: p.id, label: fr ? (p.nameFr ?? p.name) : p.name })) }}
+                    depth={depth}
+                    account={{ id: o.id, code: o.code, name: o.name, nameFr: o.nameFr ?? "", type: o.type, section: optionOf(o.id)?.section ?? null, parentId: o.parentId, gifi: o.gifi, hasChildren: hasChildren.has(o.id), isGroup: o.isGroup, bank: o.bank, parentChoices: parentChoicesOf(o, list).map((p) => ({ id: p.id, label: pathLabel(p) })) }}
                   />
                 );
                 // Assets and liabilities: grouped under their second-level section; an account whose section is changed moves there.
@@ -148,8 +154,7 @@ export default async function SetupPage() {
                     {list.length > 0 && <AccountColumnsHeader lang={lang} showGifi={gifi} />}
                     {sectionDefs
                       ? sectionDefs.map((d) => {
-                          const inSection = list.filter((o) => !o.parentId && o.section === d.key);
-                          const rows = inSection.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]);
+                          const rows = flatten(list, list.filter((o) => !o.parentId && o.section === d.key));
                           if (rows.length === 0) return null;
                           return (
                             <div key={d.key}>
@@ -160,7 +165,7 @@ export default async function SetupPage() {
                         })
                       : (
                         <div className="divide-y divide-card-border">
-                          {parents.flatMap((p) => [p, ...list.filter((c) => c.parentId === p.id)]).map(renderRow)}
+                          {flatten(list, list.filter((o) => !o.parentId)).map(renderRow)}
                         </div>
                       )}
                   </Card>

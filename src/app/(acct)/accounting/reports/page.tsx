@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { requireAccountingUser } from "../session";
 import Card from "@/components/section-card";
 import Link from "next/link";
@@ -56,58 +56,63 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   };
 
   const optById = new Map(options.map((o) => [o.id, o]));
-  // Sub-categories are shown under their parent with a subtotal, even when the parent itself has no balance.
+  // Sub-categories are shown under their parent with a subtotal, to any depth, even when a parent has no balance itself.
   const Rows = ({ rows }: { rows: AccountRow[] }) => {
-    const ids = new Set(rows.map((r) => r.id));
-    const kids = new Map<string, AccountRow[]>();
-    const top: (AccountRow | { heading: string; id: string })[] = [];
+    const rowById = new Map(rows.map((r) => [r.id, r]));
+    // Every account to show: the rows plus all their ancestors (headers such as groups carry no balance of their own).
+    const needed = new Set<string>();
     for (const r of rows) {
-      if (r.parentId && optById.has(r.parentId)) kids.set(r.parentId, [...(kids.get(r.parentId) ?? []), r]);
-      else top.push(r);
+      let id: string | null = r.id;
+      while (id && !needed.has(id)) {
+        needed.add(id);
+        id = optById.get(id)?.parentId ?? null;
+      }
     }
-    for (const pid of kids.keys()) if (!ids.has(pid)) top.push({ heading: fr ? optById.get(pid)!.labelFr.split(" › ")[0] : optById.get(pid)!.name, id: pid });
-    top.sort((a, b) => ("code" in a ? a.code : optById.get(a.id)!.code).localeCompare("code" in b ? b.code : optById.get(b.id)!.code));
-    return (
-      <>
-        {top.map((t) => {
-          const children = kids.get(t.id) ?? [];
-          const own = "code" in t ? t : null;
-          const subtotal = (own?.balance ?? 0) + children.reduce((s, c) => s + c.balance, 0);
-          return (
-            <Fragment key={t.id}>
-              {own && (
-                <tr>
-                  <td className="py-1 pr-3 text-soft">{own.code}</td>
-                  <td className="pr-3 text-ink">{name(own)}</td>
-                  <td className="text-right text-ink">{m(own.balance)}</td>
-                </tr>
-              )}
-              {!own && (
-                <tr>
-                  <td />
-                  <td className="py-1 pr-3 font-medium text-ink">{(t as { heading: string }).heading}</td>
-                  <td />
-                </tr>
-              )}
-              {children.map((c) => (
-                <tr key={c.id}>
-                  <td className="py-1 pr-3 text-soft">{c.code}</td>
-                  <td className="pr-3 pl-5 text-ink">{name(c)}</td>
-                  <td className="text-right text-ink">{m(c.balance)}</td>
-                </tr>
-              ))}
-              {children.length > 0 && (
-                <tr className="text-xs text-soft">
-                  <td />
-                  <td className="pr-3 pb-1 pl-5">{fr ? "Sous-total" : "Subtotal"}</td>
-                  <td className="pb-1 text-right">{m(subtotal)}</td>
-                </tr>
-              )}
-            </Fragment>
-          );
-        })}
-      </>
-    );
+    const kids = new Map<string, string[]>();
+    const roots: string[] = [];
+    for (const id of needed) {
+      const parent = optById.get(id)?.parentId;
+      if (parent && needed.has(parent)) kids.set(parent, [...(kids.get(parent) ?? []), id]);
+      else roots.push(id);
+    }
+    const codeOf = (id: string) => optById.get(id)?.code ?? "";
+    const total = (id: string): number => (rowById.get(id)?.balance ?? 0) + (kids.get(id) ?? []).reduce((sum, c) => sum + total(c), 0);
+    const nameOf = (id: string) => {
+      const o = optById.get(id);
+      return o ? (fr && o.nameFr ? o.nameFr : o.name) : "";
+    };
+    const render = (id: string, depth: number): ReactNode => {
+      const children = (kids.get(id) ?? []).sort((x, y) => codeOf(x).localeCompare(codeOf(y)));
+      const own = rowById.get(id);
+      const pad = { paddingLeft: depth * 16 };
+      if (children.length === 0) {
+        return (
+          <tr key={id}>
+            <td className="py-1 pr-3 text-soft">{codeOf(id)}</td>
+            <td className="pr-3 text-ink" style={pad}>{nameOf(id)}</td>
+            <td className="text-right text-ink">{m(own?.balance ?? 0)}</td>
+          </tr>
+        );
+      }
+      return (
+        <Fragment key={id}>
+          <tr>
+            <td className="py-1 pr-3 text-soft">{codeOf(id)}</td>
+            <td className={`pr-3 text-ink ${depth === 0 ? "font-semibold" : "font-medium"}`} style={pad}>{nameOf(id)}</td>
+            <td className="text-right font-medium text-ink">{m(total(id))}</td>
+          </tr>
+          {own && own.balance !== 0 && (
+            <tr className="text-soft">
+              <td />
+              <td className="pr-3 text-xs" style={{ paddingLeft: (depth + 1) * 16 }}>{nameOf(id)}</td>
+              <td className="text-right text-xs">{m(own.balance)}</td>
+            </tr>
+          )}
+          {children.map((c) => render(c, depth + 1))}
+        </Fragment>
+      );
+    };
+    return <>{roots.sort((x, y) => codeOf(x).localeCompare(codeOf(y))).map((id) => render(id, 0))}</>;
   };
   // Balance-sheet sections with their own subtotals.
   const Sections = ({ rows, defs }: { rows: AccountRow[]; defs: { key: string; en: string; fr: string }[] }) => (

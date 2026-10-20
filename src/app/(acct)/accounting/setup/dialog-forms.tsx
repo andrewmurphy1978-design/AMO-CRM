@@ -5,6 +5,7 @@ import Combobox from "@/components/combobox";
 import { FIELD_CLASS, LABEL_CLASS } from "@/app/(app)/contacts/[id]/section-dialog";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS, REGISTERED_TYPES, usesGifi } from "@/lib/accounting/charts";
 import type { AccountOption, EntityInfo } from "@/lib/accounting/options";
+import { parentChoices } from "@/lib/accounting/tree";
 import TaxNumbersField from "./tax-numbers-field";
 
 type Lang = "en" | "fr";
@@ -110,7 +111,12 @@ export function AccountFields({ lang, entities, options, defaultEntityId, defaul
   const effectiveSection = sectionDefs ? (sectionDefs.some((d) => d.key === section) ? section : sectionDefs[0].key) : "";
   // A second-level account sits under a top-level account of the same entity and type (and, for assets and
   // liabilities, of the same section: a fixed asset's accumulated amortization goes under that fixed asset).
-  const parents = options.filter((o) => o.entityId === entityId && o.type === type && !o.parentId && !o.bank && (!sectionDefs || o.section === effectiveSection));
+  const mine = options.filter((o) => o.entityId === entityId);
+  const parents = parentChoices({ id: "__new__", parentId: null, type, section: effectiveSection || null, bank: false, code: "", label: "" } as unknown as AccountOption, mine);
+  const pathOf = (o: AccountOption): string => {
+    const up = o.parentId ? mine.find((x) => x.id === o.parentId) : null;
+    return up ? `${pathOf(up)} › ${fr ? o.labelFr.split(" › ").pop() : o.label.split(" › ").pop()}` : fr ? (o.nameFr ?? o.name) : o.name;
+  };
   return (
     <Grid>
       <F label={fr ? "Entité" : "Entity"}>
@@ -138,13 +144,13 @@ export function AccountFields({ lang, entities, options, defaultEntityId, defaul
       <F label={fr ? "Niveau" : "Level"}>
         <select value={level} onChange={(e) => setLevel(e.target.value as "top" | "second")} className={FIELD_CLASS}>
           <option value="top">{fr ? "Premier niveau" : "Top level"}</option>
-          <option value="second" disabled={parents.length === 0}>{fr ? "Deuxième niveau (sous un compte)" : "Second level (under an account)"}</option>
+          <option value="second" disabled={parents.length === 0}>{fr ? "Sous un compte (sous-niveau)" : "Under an account (sub-level)"}</option>
         </select>
       </F>
       {level === "second" && parents.length > 0 && (
         <F label={fr ? "Sous le compte" : "Under"}>
           <select name="parentId" required className={FIELD_CLASS}>
-            {parents.map((p) => <option key={p.id} value={p.id}>{p.code} {fr ? p.labelFr : p.label}</option>)}
+            {parents.map((p) => <option key={p.id} value={p.id}>{p.code} {pathOf(p)}</option>)}
           </select>
         </F>
       )}
