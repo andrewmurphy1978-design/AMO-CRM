@@ -51,6 +51,13 @@ function CategoryPicker({ value, onChange, entities, options, lang, exclude }: {
   );
 }
 
+function pageHref(f: { account: string; q: string; year: string; month: string; show: string }, page: number) {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries({ account: f.account, q: f.q, year: f.year, month: f.month, show: f.show })) if (v) p.set(k, v);
+  p.set("page", String(page));
+  return `/accounting/transactions?${p}`;
+}
+
 export default function TransactionsTable({
   lang,
   entities,
@@ -68,7 +75,7 @@ export default function TransactionsTable({
   pending: TxRow[];
   done: TxRow[];
   doneCount: number;
-  filters: { account: string; q: string; year: string; show: string };
+  filters: { account: string; q: string; year: string; month: string; show: string; page: number; pageSize: number };
 }) {
   const fr = lang === "fr";
   const [busy, startTransition] = useTransition();
@@ -150,6 +157,15 @@ export default function TransactionsTable({
         <label className="flex flex-col gap-1">
           <span className="text-xs text-soft">{fr ? "Année" : "Year"}</span>
           <input name="year" defaultValue={filters.year} placeholder="2026" className="w-24 rounded-lg border border-card-border bg-white px-2 py-1.5" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-soft">{fr ? "Mois" : "Month"}</span>
+          <select name="month" defaultValue={filters.month} className="rounded-lg border border-card-border bg-white px-2 py-1.5">
+            <option value="">{fr ? "Tous" : "All"}</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>{new Date(Date.UTC(2000, i, 1)).toLocaleString(fr ? "fr-CA" : "en-CA", { month: "long", timeZone: "UTC" })}</option>
+            ))}
+          </select>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs text-soft">{fr ? "Fournisseur / description" : "Supplier / description"}</span>
@@ -327,7 +343,13 @@ export default function TransactionsTable({
                 ))}
               </tbody>
             </table>
-            {doneCount > done.length && <p className="mt-2 text-xs text-soft">{fr ? `Les ${done.length} plus récentes sur ${doneCount} — utilisez les filtres pour voir les autres.` : `Showing the most recent ${done.length} of ${doneCount} — use the filters to see others.`}</p>}
+            {doneCount > filters.pageSize && (
+              <div className="mt-3 flex items-center gap-3 text-sm">
+                {filters.page > 1 && <a className="underline" href={pageHref(filters, filters.page - 1)}>← {fr ? "Plus récentes" : "Newer"}</a>}
+                <span className="text-soft">{(filters.page - 1) * filters.pageSize + 1}–{(filters.page - 1) * filters.pageSize + done.length} / {doneCount}</span>
+                {filters.page * filters.pageSize < doneCount && <a className="underline" href={pageHref(filters, filters.page + 1)}>{fr ? "Plus anciennes" : "Older"} →</a>}
+              </div>
+            )}
           </div>
         )}
       </Card>

@@ -7,11 +7,13 @@ import TransactionsTable, { type TxRow } from "./transactions-table";
 
 const PAGE = 300;
 
-export default async function TransactionsPage({ searchParams }: { searchParams: Promise<{ account?: string; q?: string; year?: string; show?: string }> }) {
+export default async function TransactionsPage({ searchParams }: { searchParams: Promise<{ account?: string; q?: string; year?: string; month?: string; show?: string; page?: string }> }) {
   const me = await requireAccountingUser();
   const sp = await searchParams;
   const lang = await getLang();
-  const year = sp.year ? Number(sp.year) : undefined;
+  const month = sp.month ? Number(sp.month) : undefined;
+  const year = sp.year ? Number(sp.year) : month ? new Date().getUTCFullYear() : undefined;
+  const pageNo = Math.max(1, Number(sp.page) || 1);
   const q = sp.q?.trim();
 
   const data = await withScopedPrismaClient(async (db) => {
@@ -21,7 +23,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       account: { entity: { ownerId: me.id } },
       ...(sp.account ? { accountId: sp.account } : {}),
       ...(q ? { OR: [{ supplier: { contains: q, mode: "insensitive" as const } }, { description: { contains: q, mode: "insensitive" as const } }] } : {}),
-      ...(year ? { date: { gte: new Date(Date.UTC(year, 0, 1)), lte: new Date(Date.UTC(year, 11, 31)) } } : {}),
+      ...(year ? { date: month && month >= 1 && month <= 12 ? { gte: new Date(Date.UTC(year, month - 1, 1)), lte: new Date(Date.UTC(year, month, 0)) } : { gte: new Date(Date.UTC(year, 0, 1)), lte: new Date(Date.UTC(year, 11, 31)) } } : {}),
     };
     const [pending, done, doneCount] = await Promise.all([
       db.accTransaction.findMany({ where: { ...base, status: { in: ["NEW", "SUGGESTED"] } }, orderBy: [{ date: "desc" }, { id: "asc" }], take: 1000 }),
@@ -29,6 +31,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         where: { ...base, status: sp.show === "ignored" ? "IGNORED" : "POSTED" },
         orderBy: [{ date: "desc" }, { id: "asc" }],
         take: PAGE,
+        skip: (pageNo - 1) * PAGE,
       }),
       db.accTransaction.count({ where: { ...base, status: sp.show === "ignored" ? "IGNORED" : "POSTED" } }),
     ]);
@@ -71,7 +74,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       pending={data.pending}
       done={data.done}
       doneCount={data.doneCount}
-      filters={{ account: sp.account ?? "", q: q ?? "", year: sp.year ?? "", show: sp.show ?? "" }}
+      filters={{ account: sp.account ?? "", q: q ?? "", year: sp.year ?? "", month: sp.month ?? "", show: sp.show ?? "", page: pageNo, pageSize: PAGE }}
     />
   );
 }

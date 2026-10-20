@@ -25,7 +25,7 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
   const [pdfRows, setPdfRows] = useState<ImportRow[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number; dateMismatches?: number } | null>(null);
+  const [result, setResult] = useState<{ rows: number; added: number; duplicates: number; autoPosted: number; transfersLinked: number; dateMismatches?: number; skipped?: { date: string; description: string; amount: number; reason: "duplicate" | "swapped" }[] } | null>(null);
   const [usedSaved, setUsedSaved] = useState(false);
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [busy, startTransition] = useTransition();
@@ -265,6 +265,23 @@ export default function ImportForm({ lang, accounts }: { lang: "en" | "fr"; acco
             <li>{result.autoPosted} {fr ? "catégorisées automatiquement (fournisseurs connus)" : "categorized automatically (known suppliers)"}</li>
             {result.transfersLinked > 0 && <li>{result.transfersLinked} {fr ? "virements entre vos comptes reliés" : "transfers between your accounts linked"}</li>}
           </ul>
+          {result.skipped && result.skipped.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer">{fr ? `Lignes ignorées (${result.skipped.length}${result.duplicates > result.skipped.length ? "+" : ""}) — voir lesquelles` : `Skipped lines (${result.skipped.length}${result.duplicates > result.skipped.length ? "+" : ""}) — see which`}</summary>
+              <table className="mt-1 w-full text-xs">
+                <tbody>
+                  {result.skipped.map((k, i) => (
+                    <tr key={i}>
+                      <td className="pr-2 whitespace-nowrap">{k.date}</td>
+                      <td className="pr-2">{k.description}</td>
+                      <td className="pr-2 text-right whitespace-nowrap">{money(k.amount, account?.currency ?? "CAD", lang)}</td>
+                      <td>{k.reason === "swapped" ? (fr ? "déjà importée (jour/mois inversés)" : "already imported (day/month swapped)") : fr ? "déjà importée" : "already imported"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          )}
           {aiNote && <p className="mt-2">{aiNote}</p>}
           <Link href="/accounting/transactions" className="mt-2 inline-block underline">{fr ? "Catégoriser maintenant →" : "Categorize now →"}</Link>
         </div>

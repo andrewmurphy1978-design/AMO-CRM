@@ -359,7 +359,7 @@ export async function applyRules(db: PrismaClient, ownerId: string | null, txIds
 
 export type ImportRow = { date: string; description: string; amount: number; supplier?: string };
 
-export async function importTransactions(db: PrismaClient, accountId: string, rows: ImportRow[], fileName: string, fxRate = 1): Promise<{ rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number }> {
+export async function importTransactions(db: PrismaClient, accountId: string, rows: ImportRow[], fileName: string, fxRate = 1): Promise<{ rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number; skipped: { date: string; description: string; amount: number; reason: "duplicate" | "swapped" }[] }> {
   const account = await db.accAccount.findUniqueOrThrow({ where: { id: accountId } });
   if (account.subtype !== "BANK" && account.subtype !== "CREDIT_CARD") throw new Error("Choose a bank or credit-card account to import into.");
   const sign = account.importSign === -1 ? -1 : 1;
@@ -395,18 +395,24 @@ export async function importTransactions(db: PrismaClient, accountId: string, ro
       candidates.push(...(await db.accTransaction.findMany({ where: { accountId, amount: { in: c }, id: { notIn: [...matchedIds] } }, select: { id: true, date: true, amount: true, description: true } })));
     }
     const used = new Set<string>();
+    const hits = new Set<string>();
+    let eligible = 0;
     for (const p of stillNew) {
       const m = p.date.getUTCMonth() + 1;
       const d = p.date.getUTCDate();
       if (m === d || d > 12) continue;
+      eligible++;
       const swapped = Date.UTC(p.date.getUTCFullYear(), d - 1, m);
       const key = supplierKey(p.description);
       const hit = candidates.find((c) => !used.has(c.id) && r2(c.amount) === p.amount && c.date.getTime() === swapped && supplierKey(c.description) === key);
       if (hit) {
         used.add(hit.id);
-        sameWithSwappedDate.add(p.dedupeKey);
+        hits.add(p.dedupeKey);
       }
     }
+    // Only a file whose dates were really read the other way round matches this way for most of its rows; a
+    // couple of look-alikes (a payment on the 2nd one month and the 1st the next) are genuine new transactions.
+    if (hits.size >= 3 && hits.size / Math.max(1, eligible) >= 0.6) for (const k of hits) sameWithSwappedDate.add(k);
   }
   const fresh = prepared.filter((p) => !existing.has(p.dedupeKey) && !sameWithSwappedDate.has(p.dedupeKey));
   // A reconciled month is closed: new transactions cannot appear in it.
@@ -446,7 +452,7 @@ export async function importTransactions(db: PrismaClient, accountId: string, ro
 
   const owner = await db.accEntity.findUnique({ where: { id: account.entityId }, select: { ownerId: true } });
   const auto = await applyRules(db, owner?.ownerId ?? null, created);
-  return { rows: rows.length, added: fresh.length, duplicates: rows.length - fresh.length, dateMismatches: sameWithSwappedDate.size, autoPosted: auto.posted, transfersLinked };
+  return { rows: rows.length, added: fresh.length, duplicates: rows.length - fresh.length, dateMismatches: sameWithSwappedDate.size, skipped: prepared.filter((p) => existing.has(p.dedupeKey) || sameWithSwappedDate.has(p.dedupeKey)).slice(0, 100).map((p) => ({ date: p.date.toISOString().slice(0, 10), description: p.description, amount: p.amount, reason: existing.has(p.dedupeKey) ? "duplicate" as const : "swapped" as const })), autoPosted: auto.posted, transfersLinked };
 }
 
 export { parseCsv };

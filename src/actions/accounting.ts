@@ -304,7 +304,7 @@ export async function deleteRule(id: string): Promise<void> {
 
 // ---------------------------------------------------------------- import
 
-export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1, format?: { signature: string; map: unknown } | null): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number } }> {
+export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1, format?: { signature: string; map: unknown } | null): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number; skipped: { date: string; description: string; amount: number; reason: "duplicate" | "swapped" }[] } }> {
   const me = await access();
   if (rows.length === 0) return { error: "There is nothing to import." };
   if (rows.length > 20000) return { error: "That file is too large — import it in parts." };
