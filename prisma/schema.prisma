@@ -2130,6 +2130,10 @@ model AccAccount {
   templateCode    String?
   // An opposite account: shown as an asset while its balance is a debit and as a liability (same section) while it is a credit, and back.
   twoWay          Boolean        @default(false)
+  // What an opposite account is called (and numbered) while it sits on the other side of the balance sheet.
+  altCode         String?
+  altName         String?
+  altNameFr       String?
   parentId        String?
   parent          AccAccount?    @relation("AccParent", fields: [parentId], references: [id], onDelete: SetNull)
   children        AccAccount[]   @relation("AccParent")

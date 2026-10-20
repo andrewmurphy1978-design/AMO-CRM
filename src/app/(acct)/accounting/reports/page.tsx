@@ -91,19 +91,21 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       let id: string | null = r.id;
       while (id && !needed.has(id)) {
         needed.add(id);
-        id = optById.get(id)?.parentId ?? null;
+        id = (rowById.has(id) ? rowById.get(id)!.parentId : optById.get(id)?.parentId) ?? null;
       }
     }
     const kids = new Map<string, string[]>();
     const roots: string[] = [];
     for (const id of needed) {
-      const parent = optById.get(id)?.parentId;
+      const parent = rowById.has(id) ? rowById.get(id)!.parentId : optById.get(id)?.parentId;
       if (parent && needed.has(parent)) kids.set(parent, [...(kids.get(parent) ?? []), id]);
       else roots.push(id);
     }
-    const codeOf = (id: string) => optById.get(id)?.code ?? "";
+    const codeOf = (id: string) => rowById.get(id)?.code ?? optById.get(id)?.code ?? "";
     const total = (id: string): number => (rowById.get(id)?.balance ?? 0) + (kids.get(id) ?? []).reduce((sum, c) => sum + total(c), 0);
     const nameOf = (id: string) => {
+      const r = rowById.get(id);
+      if (r) return fr && r.nameFr ? r.nameFr : r.name;
       const o = optById.get(id);
       return o ? (fr && o.nameFr ? o.nameFr : o.name) : "";
     };

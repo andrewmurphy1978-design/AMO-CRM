@@ -265,16 +265,27 @@ export async function setAccountCode(id: string, code: string): Promise<Result> 
   }
 }
 
-export async function setAccountTwoWay(id: string, twoWay: boolean): Promise<Result> {
+/** Makes an account an opposite account (or not) and sets the number and names it takes on the other side of the balance sheet. */
+export async function saveOppositeAccount(id: string, input: { twoWay: boolean; altCode: string; altName: string; altNameFr: string }): Promise<Result> {
   const me = await access();
-  await withScopedPrismaClient(async (db) => {
+  const altCode = input.altCode.trim();
+  if (altCode && !/^\d{3,6}$/.test(altCode)) return { error: "A code is 3 to 6 digits." };
+  const out = await withScopedPrismaClient(async (db) => {
     await ownAccount(db, me, id);
     const acc = await db.accAccount.findUniqueOrThrow({ where: { id } });
     if (acc.type !== "ASSET" && acc.type !== "LIABILITY") throw deny();
-    await db.accAccount.update({ where: { id }, data: { twoWay } });
+    if (altCode) {
+      const clash = await db.accAccount.findFirst({ where: { entityId: acc.entityId, id: { not: id }, OR: [{ code: altCode }, { altCode }] }, select: { code: true } });
+      if (clash) return { error: "That number is already used by another account of this entity." };
+    }
+    await db.accAccount.update({
+      where: { id },
+      data: { twoWay: input.twoWay, altCode: input.twoWay ? altCode || null : null, altName: input.twoWay ? input.altName.trim() || null : null, altNameFr: input.twoWay ? input.altNameFr.trim() || null : null },
+    });
+    return { success: "Saved." };
   });
   refresh();
-  return {};
+  return out;
 }
 
 // Accounts the books themselves rely on (sales taxes, opening-balance equity...): they cannot be removed.
