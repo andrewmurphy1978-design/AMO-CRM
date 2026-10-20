@@ -47,6 +47,8 @@ model User {
   role                       UserRole   @default(MEMBER)
   // Team members only (admins always have it): may use the Accounting section, with their own separate books.
   accountingAccess           Boolean    @default(false)
+  // Team members only: the CRM shows them the Accounting section and nothing else.
+  accountingOnly             Boolean    @default(false)
   phone                      String?
   whatsapp                   String?
   country                    String     @default("CA")

@@ -27,6 +27,12 @@ async function requireAdmin() {
   return session;
 }
 
+// "Accounting only" implies accounting access; admins always have the whole CRM.
+function accountingFlags(formData: FormData, role: string) {
+  const only = role !== "ADMIN" && formData.get("accountingOnly") === "on";
+  return { accountingAccess: only || formData.get("accountingAccess") === "on", accountingOnly: only };
+}
+
 const ProfileFieldsSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   email: z.string().email("A valid email is required"),
@@ -97,7 +103,7 @@ export async function createUser(
         whatsapp: data.whatsapp,
         country: data.country,
         language: data.language,
-        accountingAccess: formData.get("accountingAccess") === "on",
+        ...accountingFlags(formData, data.role),
       },
     });
     return {};
@@ -146,7 +152,7 @@ export async function updateUser(
         country: data.country,
         language: data.language,
         role,
-        accountingAccess: formData.get("accountingAccess") === "on",
+        ...accountingFlags(formData, role),
       },
     });
     return {};

@@ -16,6 +16,7 @@ type TeamUser = {
   country: string;
   language: "EN" | "FR";
   accountingAccess?: boolean;
+  accountingOnly?: boolean;
 };
 
 const FIELD_CLASS =
@@ -202,6 +203,17 @@ export default function UserManagement({
                   {lang === "fr"
                     ? "Donne accès à la section Comptabilité, avec ses propres livres personnels (séparés des vôtres). Les administrateurs y ont toujours accès."
                     : "Gives access to the Accounting section with their own personal books, separate from yours. Admins always have access."}
+                </span>
+              </span>
+            </label>
+            <label className="mt-3 flex items-start gap-2 text-sm text-ink">
+              <input type="checkbox" name="accountingOnly" defaultChecked={selected?.accountingOnly ?? false} className="mt-0.5 accent-amo-lime" />
+              <span>
+                <span className="font-semibold">{lang === "fr" ? "Comptabilité seulement" : "Accounting only"}</span>
+                <span className="block text-xs text-soft">
+                  {lang === "fr"
+                    ? "Le CRM ne lui montre que la Comptabilité (aucun contact, projet, courriel ni facture). Active aussi la comptabilité personnelle."
+                    : "The CRM shows only Accounting (no contacts, projects, emails or invoices). Also turns on personal accounting."}
                 </span>
               </span>
             </label>

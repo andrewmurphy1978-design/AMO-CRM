@@ -6,8 +6,8 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getHour12 } from "@/lib/time-format";
-import PageHeader from "../page-header";
-import AccountingIcon from "../accounting-icon";
+import PageHeader from "@/app/(app)/page-header";
+import AccountingIcon from "@/app/(app)/accounting-icon";
 import AccountingNav from "./accounting-nav";
 
 // Accounting holds personal bank data: admins and the team members given access, each with their own books.
