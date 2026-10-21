@@ -7,14 +7,14 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks } from "@/lib/accounting/options";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
-import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, periodGroupTotals, periodTotals, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
+import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, periodAccountTotals, periodGroupTotals, periodTotals, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
 import MoveAccountButton from "./move-account-button";
 import BarChart from "./bar-chart";
 import { seriesRanges, yearBefore, type By } from "@/lib/accounting/periods";
 import RecategorizeButton, { type RecatTx } from "./recategorize-button";
 import { isoDate, money } from "@/lib/accounting/format";
 
-type Sp = { entity?: string; year?: string; r?: string; account?: string; month?: string; from?: string; to?: string; metric?: string; by?: string; count?: string; yoy?: string; group?: string };
+type Sp = { entity?: string; year?: string; r?: string; account?: string; month?: string; from?: string; to?: string; metric?: string; by?: string; count?: string; yoy?: string; group?: string; acc?: string | string[]; is?: string };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -62,7 +62,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       const totals = await periodTotals(db, entity.id, yoy ? [...ranges, ...ranges.map(yearBefore)] : ranges);
       const grouped = sp.group === "1" && (sp.metric === "income" || sp.metric === "expenses");
       const breakdown = grouped ? await periodGroupTotals(db, entity.id, sp.metric === "income" ? "INCOME" : "EXPENSE", ranges) : null;
-      data.cmp = { by, count, yoy, labels: ranges.map((r) => r.label), current: totals.slice(0, ranges.length), previous: yoy ? totals.slice(ranges.length) : null, breakdown };
+      const selected = (Array.isArray(sp.acc) ? sp.acc : sp.acc ? [sp.acc] : []).filter((id) => options.some((o) => o.id === id && o.entityId === entity.id && (o.type === "INCOME" || o.type === "EXPENSE")));
+      const needAccounts = sp.metric === "accounts" || sp.is === "1";
+      const accountTotals = needAccounts ? [...(await periodAccountTotals(db, entity.id, ranges)).entries()] : [];
+      data.cmp = { by, count, yoy, labels: ranges.map((r) => r.label), current: totals.slice(0, ranges.length), previous: yoy ? totals.slice(ranges.length) : null, breakdown, selected, accountTotals };
     }
     else if (report === "gl") {
       const accountId = options.find((o) => o.id === sp.account && o.entityId === entity.id && !o.isGroup)?.id ?? options.find((o) => o.entityId === entity.id && !o.bank && !o.isGroup)?.id;
@@ -90,7 +93,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     ["st", fr ? "Taxes de vente" : "Sales taxes"],
     ["cmp", fr ? "Comparer (graphique)" : "Compare (chart)"],
   ];
-  const href = (over: Partial<Sp>) => {
+  const href = (over: Partial<Record<keyof Sp, string>>) => {
     const base: Record<string, string | undefined> = { entity: entity.id, year: String(year), r: report, account: sp.account, month: sp.month, from: sp.from, to: sp.to, ...over };
     const p = new URLSearchParams(Object.entries(base).filter(([, v]) => v) as [string, string][]);
     return `/accounting/reports?${p}`;
@@ -247,23 +250,34 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         {report !== "cmp" && <p className="text-xs text-soft">{isoDate(range.from)} → {isoDate(range.to)} · {cur}</p>}
 
         {report === "cmp" && data.cmp ? (() => {
-          const c = data.cmp as { by: By; count: number; yoy: boolean; labels: string[]; current: { income: number; expenses: number; net: number }[]; previous: { income: number; expenses: number; net: number }[] | null; breakdown: { groups: { id: string; code: string; name: string; nameFr: string | null }[]; values: number[][] } | null };
-          const metric = sp.metric === "income" || sp.metric === "expenses" || sp.metric === "net" ? sp.metric : "both";
+          const c = data.cmp as { by: By; count: number; yoy: boolean; labels: string[]; current: { income: number; expenses: number; net: number }[]; previous: { income: number; expenses: number; net: number }[] | null; breakdown: { groups: { id: string; code: string; name: string; nameFr: string | null }[]; values: number[][] } | null; selected: string[]; accountTotals: [string, number[]][] };
+          const metric = sp.metric === "income" || sp.metric === "expenses" || sp.metric === "net" || sp.metric === "accounts" ? sp.metric : "both";
+          const accTotals = new Map(c.accountTotals);
           const label = { income: fr ? "Revenus" : "Income", expenses: fr ? "Dépenses" : "Expenses", net: fr ? "Résultat net" : "Net" };
           const GREEN = "#059669";
           const ROSE = "#e11d48";
           const BLUE = "#0284c7";
+          const PALETTE = ["#2563eb", "#d97706", "#059669", "#7c3aed", "#e11d48", "#0891b2", "#65a30d", "#c026d3", "#64748b"];
+          const zeros = c.labels.map(() => 0);
+          const optOf = (id: string) => options.find((o) => o.id === id);
+          const accName = (id: string) => {
+            const o = optOf(id);
+            return o ? `${o.code} ${fr ? o.labelFr : o.label}` : id;
+          };
           const series: { name: string; color: string; values: number[] }[] = [];
-          if (metric === "both") {
+          if (metric === "accounts") {
+            c.selected.slice(0, 10).forEach((id, i) => series.push({ name: accName(id), color: PALETTE[i % PALETTE.length], values: accTotals.get(id) ?? zeros }));
+          } else if (metric === "both") {
             series.push({ name: label.income, color: GREEN, values: c.current.map((t) => t.income) }, { name: label.expenses, color: ROSE, values: c.current.map((t) => t.expenses) });
           } else {
             const color = metric === "income" ? GREEN : metric === "expenses" ? ROSE : BLUE;
             series.push({ name: label[metric], color, values: c.current.map((t) => t[metric]) });
             if (c.previous && !c.breakdown) series.push({ name: `${label[metric]} — ${fr ? "année précédente" : "previous year"}`, color: color + "66", values: c.previous.map((t) => t[metric]) });
           }
-          const PALETTE = ["#2563eb", "#d97706", "#059669", "#7c3aed", "#e11d48", "#0891b2", "#65a30d", "#c026d3", "#64748b"];
           const stackSeries = c.breakdown ? c.breakdown.groups.map((g, i) => ({ name: g.id === "__other__" ? (fr ? "Autres" : "Other") : fr && g.nameFr ? g.nameFr : g.name, color: PALETTE[i % PALETTE.length], values: c.breakdown!.values[i] })) : null;
-          const rowMetric = metric === "both" ? "net" : metric;
+          // Specific accounts: one column per account in the table (no stacking).
+          const columnSeries = stackSeries ?? (metric === "accounts" ? series : null);
+          const rowMetric = metric === "both" || metric === "accounts" ? "net" : metric;
           const pct = (cur: number, prev: number) => (prev === 0 ? "—" : `${(((cur - prev) / Math.abs(prev)) * 100).toFixed(0)} %`);
           return (
             <div className="space-y-3">
@@ -277,6 +291,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                     <option value="income">{label.income}</option>
                     <option value="expenses">{label.expenses}</option>
                     <option value="net">{label.net}</option>
+                    <option value="accounts">{fr ? "Comptes précis…" : "Specific accounts…"}</option>
                   </select>
                 </label>
                 <label className="flex flex-col gap-1">
@@ -298,17 +313,32 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                 <label className="flex items-center gap-2 pb-2 text-soft" title={fr ? "Seulement pour « Revenus » ou « Dépenses »" : "Only for “Income” or “Expenses”"}>
                   <input type="checkbox" name="group" value="1" defaultChecked={!!c.breakdown} /> {fr ? "Détailler par groupe" : "Break down by group"}
                 </label>
+                <label className="flex items-center gap-2 pb-2 text-soft">
+                  <input type="checkbox" name="is" value="1" defaultChecked={sp.is === "1"} /> {fr ? "Afficher l'état des résultats par période" : "Show the income statement by period"}
+                </label>
+                <details open={metric === "accounts"} className="w-full rounded-lg border border-card-border bg-white p-2">
+                  <summary className="cursor-pointer text-sm text-ink">{fr ? `Comptes à comparer (${c.selected.length} choisis) — utilisés avec la mesure « Comptes précis »` : `Accounts to compare (${c.selected.length} chosen) — used with the “Specific accounts” measure`}</summary>
+                  <div className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {options.filter((o) => o.entityId === entity.id && (o.type === "INCOME" || o.type === "EXPENSE") && !o.isGroup).map((o) => (
+                      <label key={o.id} className="flex items-center gap-2 text-xs text-ink">
+                        <input type="checkbox" name="acc" value={o.id} defaultChecked={c.selected.includes(o.id)} />
+                        <span className="text-soft">{o.type === "INCOME" ? (fr ? "Rev." : "Inc.") : fr ? "Dép." : "Exp."}</span> {o.code} {fr ? o.labelFr : o.label}
+                      </label>
+                    ))}
+                  </div>
+                </details>
                 <button className="btn-primary rounded-lg px-4 py-1.5 font-semibold">{fr ? "Afficher" : "Show"}</button>
               </form>
+              {metric === "accounts" && c.selected.length === 0 && <p className="text-xs text-amber-700">{fr ? "Cochez un ou plusieurs comptes dans la liste." : "Tick one or more accounts in the list."}</p>}
               {sp.group === "1" && !c.breakdown && <p className="text-xs text-amber-700">{fr ? "Choisissez « Revenus » ou « Dépenses » comme mesure pour détailler par groupe." : "Choose “Income” or “Expenses” as the measure to break down by group."}</p>}
-              <BarChart labels={c.labels} series={stackSeries ?? series} stacked={!!stackSeries} currency={cur} lang={lang} title={`${entity.name} — ${metric === "both" ? `${label.income} / ${label.expenses}` : label[metric]}`} />
-              {stackSeries && (
+              <BarChart labels={c.labels} series={stackSeries ?? series} stacked={!!stackSeries} currency={cur} lang={lang} title={`${entity.name} — ${metric === "both" ? `${label.income} / ${label.expenses}` : metric === "accounts" ? (fr ? "Comptes choisis" : "Selected accounts") : label[metric]}`} />
+              {columnSeries && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-xs uppercase text-soft">
                         <th className="py-1">{fr ? "Période" : "Period"}</th>
-                        {stackSeries.map((g) => <th key={g.name} className="text-right"><span className="mr-1 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: g.color }} />{g.name}</th>)}
+                        {columnSeries.map((g) => <th key={g.name} className="text-right"><span className="mr-1 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: g.color }} />{g.name}</th>)}
                         <th className="text-right">Total</th>
                       </tr>
                     </thead>
@@ -316,15 +346,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                       {c.labels.map((l, i) => (
                         <tr key={l}>
                           <td className="py-1 text-ink">{l}</td>
-                          {stackSeries.map((g) => <td key={g.name} className="text-right text-ink">{m(g.values[i] ?? 0)}</td>)}
-                          <td className="text-right font-semibold text-ink">{m(stackSeries.reduce((sum, g) => sum + (g.values[i] ?? 0), 0))}</td>
+                          {columnSeries.map((g) => <td key={g.name} className="text-right text-ink">{m(g.values[i] ?? 0)}</td>)}
+                          <td className="text-right font-semibold text-ink">{m(columnSeries.reduce((sum, g) => sum + (g.values[i] ?? 0), 0))}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
-              {!stackSeries && <table className="w-full max-w-5xl text-sm">
+              {!columnSeries && <table className="w-full max-w-5xl text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase text-soft">
                     <th className="py-1">{fr ? "Période" : "Period"}</th>
@@ -348,6 +378,67 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   ))}
                 </tbody>
               </table>}
+              {sp.is === "1" && (() => {
+                const inEntity = options.filter((o) => o.entityId === entity.id && (o.type === "INCOME" || o.type === "EXPENSE"));
+                const needed = new Set<string>();
+                for (const [id, row] of accTotals) {
+                  if (!row.some((v) => v !== 0)) continue;
+                  let cur: string | null = id;
+                  while (cur && !needed.has(cur)) {
+                    needed.add(cur);
+                    cur = optOf(cur)?.parentId ?? null;
+                  }
+                }
+                const kids = new Map<string, string[]>();
+                const roots: Record<"INCOME" | "EXPENSE", string[]> = { INCOME: [], EXPENSE: [] };
+                for (const o of inEntity) {
+                  if (!needed.has(o.id)) continue;
+                  if (o.parentId && needed.has(o.parentId)) kids.set(o.parentId, [...(kids.get(o.parentId) ?? []), o.id]);
+                  else roots[o.type as "INCOME" | "EXPENSE"].push(o.id);
+                }
+                const sumRow = (id: string): number[] => (kids.get(id) ?? []).reduce((acc, k) => acc.map((v, i) => v + sumRow(k)[i]), [...(accTotals.get(id) ?? zeros)]);
+                const code = (id: string) => optOf(id)?.code ?? "";
+                const cells = (row: number[], cls: string) => [...row, row.reduce((x, y) => x + y, 0)].map((v, i) => <td key={i} className={`text-right ${cls} ${i === row.length ? "font-semibold" : ""}`}>{m(v)}</td>);
+                const renderNode = (id: string, depth: number): ReactNode => {
+                  const children = (kids.get(id) ?? []).sort((x, y) => code(x).localeCompare(code(y)));
+                  const o = optOf(id)!;
+                  return (
+                    <Fragment key={id}>
+                      <tr className={children.length > 0 ? "bg-black/[0.03]" : ""}>
+                        <td className={`py-1 pr-3 text-ink ${depth === 0 || children.length > 0 ? "font-semibold" : ""}`} style={{ paddingLeft: depth * 16 }}>{o.code} {fr ? o.labelFr.split(" › ").pop() : o.name}</td>
+                        {cells(sumRow(id), "text-ink")}
+                      </tr>
+                      {children.sort((x, y) => code(x).localeCompare(code(y))).map((k) => renderNode(k, depth + 1))}
+                    </Fragment>
+                  );
+                };
+                const totalRow = (type: "INCOME" | "EXPENSE") => roots[type].reduce((acc, id) => acc.map((v, i) => v + sumRow(id)[i]), [...zeros]);
+                const incomeRow = totalRow("INCOME");
+                const expenseRow = totalRow("EXPENSE");
+                return (
+                  <div className="overflow-x-auto">
+                    <p className="mt-2 text-sm font-semibold text-ink">{fr ? "État des résultats par période" : "Income statement by period"}</p>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs uppercase text-soft">
+                          <th className="py-1">{fr ? "Compte" : "Account"}</th>
+                          {c.labels.map((l) => <th key={l} className="text-right">{l}</th>)}
+                          <th className="text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-card-border">
+                        <tr><td colSpan={c.labels.length + 2} className="pt-2 text-xs font-semibold uppercase tracking-wide text-soft">{label.income}</td></tr>
+                        {roots.INCOME.sort((x, y) => code(x).localeCompare(code(y))).map((id) => renderNode(id, 0))}
+                        <tr className="border-t-2 border-card-border font-semibold"><td className="py-1 text-ink">{fr ? "Total des revenus" : "Total income"}</td>{cells(incomeRow, "text-emerald-700")}</tr>
+                        <tr><td colSpan={c.labels.length + 2} className="pt-2 text-xs font-semibold uppercase tracking-wide text-soft">{label.expenses}</td></tr>
+                        {roots.EXPENSE.sort((x, y) => code(x).localeCompare(code(y))).map((id) => renderNode(id, 0))}
+                        <tr className="border-t-2 border-card-border font-semibold"><td className="py-1 text-ink">{fr ? "Total des dépenses" : "Total expenses"}</td>{cells(expenseRow, "text-ink")}</tr>
+                        <tr className="border-t-2 border-ink font-bold"><td className="py-1.5 text-ink">{label.net}</td>{cells(incomeRow.map((v, i) => v - expenseRow[i]), "text-ink")}</tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
               <p className="text-xs text-soft">{fr ? "La dernière période va jusqu'à aujourd'hui." : "The last period runs to today."}</p>
             </div>
           );

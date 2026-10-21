@@ -279,3 +279,27 @@ export async function periodGroupTotals(
   }
   return { groups, values };
 }
+
+/** Income and expense per account for each date range (natural sign: income credit − debit, expense debit − credit). */
+export async function periodAccountTotals(db: PrismaClient, entityId: string, ranges: { from: Date; to: Date }[]): Promise<Map<string, number[]>> {
+  const out = new Map<string, number[]>();
+  if (ranges.length === 0) return out;
+  const min = new Date(Math.min(...ranges.map((r) => r.from.getTime())));
+  const max = new Date(Math.max(...ranges.map((r) => r.to.getTime())));
+  const lines = await db.accJournalLine.findMany({
+    where: { account: { type: { in: ["INCOME", "EXPENSE"] }, entityId }, entry: { entityId, date: { gte: min, lte: max } } },
+    select: { debit: true, credit: true, accountId: true, account: { select: { type: true } }, entry: { select: { date: true } } },
+  });
+  for (const l of lines) {
+    const t = l.entry.date.getTime();
+    const amount = l.account.type === "INCOME" ? l.credit - l.debit : l.debit - l.credit;
+    ranges.forEach((r, i) => {
+      if (t < r.from.getTime() || t > r.to.getTime()) return;
+      const row = out.get(l.accountId) ?? ranges.map(() => 0);
+      row[i] += amount;
+      out.set(l.accountId, row);
+    });
+  }
+  for (const [k, row] of out) out.set(k, row.map(r2));
+  return out;
+}
