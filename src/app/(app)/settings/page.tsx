@@ -19,7 +19,7 @@ import SocialLinksForm from "./social-links-form";
 import type { SocialPlatform } from "@/lib/social";
 import UserManagement from "./user-management";
 import SharedMailboxesForm, { type SharedMailboxRow } from "./shared-mailboxes-form";
-import { loadCredentials } from "@/lib/mail/shared-mailbox";
+import { loadCredentials, loadMailbox } from "@/lib/mail/shared-mailbox";
 import { resolvePermissions } from "@/lib/permissions";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
@@ -171,11 +171,12 @@ export default async function SettingsPage({
       const sharedMailboxRows: SharedMailboxRow[] = [];
       for (const b of sharedBoxes) {
         const c = await loadCredentials(db, b.id);
+        const googleBox = b.provider === "google-oauth" ? await loadMailbox(db, b.id) : null;
         sharedMailboxRows.push({
           id: b.id, name: b.name, address: b.address, displayName: b.displayName, provider: b.provider,
           imapHost: c?.creds.imapHost ?? "", imapPort: c?.creds.imapPort ?? 993, imapSecurity: c?.creds.imapSecurity ?? "tls",
           smtpHost: c?.creds.smtpHost ?? "", smtpPort: c?.creds.smtpPort ?? 465, smtpSecurity: c?.creds.smtpSecurity ?? "tls",
-          username: c?.creds.username ?? "", lastError: b.lastError,
+          username: c?.creds.username ?? "", googleConnected: googleBox?.kind === "google" && Boolean(googleBox.tokens), lastError: b.lastError,
         });
       }
       const accessRows = isAdmin ? await db.sharedMailboxAccess.findMany() : [];

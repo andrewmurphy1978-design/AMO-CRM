@@ -2315,10 +2315,10 @@ model SharedMailboxCompletion {
   id          String        @id @default(cuid())
   mailboxId   String
   mailbox     SharedMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
-  uid         Int
+  messageKey  String // IMAP uid or Gmail message id
   completedBy String?
   completedAt DateTime      @default(now())
 
-  @@unique([mailboxId, uid])
+  @@unique([mailboxId, messageKey])
   @@map("shared_mailbox_completions")
 }

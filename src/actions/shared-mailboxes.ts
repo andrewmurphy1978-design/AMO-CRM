@@ -4,15 +4,16 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { requireAccess } from "@/lib/permissions";
-import { verifyImap, listRecentImapMessages, fetchImapMessageRaw, type ImapMessageSummary } from "@/lib/mail/imap";
+import { verifyImap, listRecentImapMessages, fetchImapMessageRaw } from "@/lib/mail/imap";
+import { getRecentEmails, fetchGmailMessageRaw, sendGmailMessage } from "@/lib/google";
 import { verifySmtp, sendViaSmtp } from "@/lib/mail/smtp";
 import { parseMessage, extractAttachmentBytes, encodeBase64, type AttachmentMeta } from "@/lib/mail/mime-parse";
 import { buildMimeMessage } from "@/lib/mail/mime-build";
 import type { MailSecurity } from "@/lib/mail/socket";
-import { loadCredentials, imapOf, smtpOf, encryptCredentials, mailboxLevel, type SharedCredentials } from "@/lib/mail/shared-mailbox";
+import { loadMailbox, getMailboxAccessToken, loadCredentials, imapOf, smtpOf, encryptCredentials, mailboxLevel, type SharedCredentials } from "@/lib/mail/shared-mailbox";
 import { mailboxAtLeast, type MailboxLevel } from "@/lib/mail/shared-levels";
 
-type FormState = { error?: string; success?: string } | undefined;
+type FormState = { error?: string; success?: string; id?: string } | undefined;
 
 async function requireAdmin() {
   const session = await auth();
@@ -57,6 +58,16 @@ export async function saveSharedMailboxAction(_prev: FormState, formData: FormDa
   const f = readForm(formData);
   if (!f.name || !f.address) return { error: "Name and email address are required." };
   const result = await withScopedPrismaClient(async (db) => {
+    if (f.provider === "google-oauth") {
+      // "Connect with Google": only the label details are saved here; the sign-in itself happens at /api/google/shared/connect.
+      const existing = f.id ? await db.sharedMailbox.findUnique({ where: { id: f.id } }) : null;
+      if (existing) {
+        await db.sharedMailbox.update({ where: { id: f.id }, data: { name: f.name, address: f.address, displayName: f.displayName, provider: "google-oauth" } });
+        return { success: "Saved.", id: f.id };
+      }
+      const created = await db.sharedMailbox.create({ data: { name: f.name, address: f.address, displayName: f.displayName, provider: "google-oauth", credentialsEncrypted: await encryptCredentials({} as SharedCredentials) } });
+      return { success: "Saved. Now click “Connect with Google”.", id: created.id };
+    }
     const creds = await credentialsFromForm(db, f);
     if ("error" in creds) return creds;
     const credentialsEncrypted = await encryptCredentials(creds);
@@ -126,20 +137,36 @@ async function guard(mailboxId: string, need: MailboxLevel) {
   return session;
 }
 
-export type SharedMessage = Pick<ImapMessageSummary, "uid" | "seen" | "from" | "to" | "subject" | "date" | "internalDate" | "hasAttachments"> & { completed: boolean };
+export interface SharedMessage {
+  key: string; // IMAP uid, or Gmail message id
+  seen: boolean;
+  from: { name: string; email: string };
+  subject: string;
+  date: string | null;
+  hasAttachments: boolean;
+  completed: boolean;
+}
 
 export async function listSharedMessagesAction(mailboxId: string): Promise<{ messages: SharedMessage[] } | { error: string }> {
   await guard(mailboxId, "READ");
   return withScopedPrismaClient(async (db) => {
-    const box = await loadCredentials(db, mailboxId);
+    const box = await loadMailbox(db, mailboxId);
     if (!box) return { error: "Mailbox not found." };
     try {
-      const list = await listRecentImapMessages(imapOf(box.creds), 60);
-      const done = new Set((await db.sharedMailboxCompletion.findMany({ where: { mailboxId, uid: { in: list.map((m) => m.uid) } }, select: { uid: true } })).map((c) => c.uid));
+      let rows: Omit<SharedMessage, "completed">[];
+      if (box.kind === "google") {
+        const token = await getMailboxAccessToken(db, mailboxId);
+        if (!token) throw new Error("Google is not connected for this mailbox (or access was revoked). An admin must reconnect it in Settings.");
+        const list = await getRecentEmails(token, { maxResults: 60, unreadOnly: false });
+        if (!list) throw new Error("Gmail could not be read for this mailbox.");
+        rows = list.map((m) => ({ key: m.id, seen: true, from: { name: m.from, email: m.fromEmail }, subject: m.subject, date: m.date, hasAttachments: m.hasAttachments }));
+      } else {
+        const list = await listRecentImapMessages(imapOf(box.creds), 60);
+        rows = list.map((m) => ({ key: String(m.uid), seen: m.seen, from: m.from, subject: m.subject, date: m.date ?? m.internalDate, hasAttachments: m.hasAttachments }));
+      }
+      const done = new Set((await db.sharedMailboxCompletion.findMany({ where: { mailboxId, messageKey: { in: rows.map((m) => m.key) } }, select: { messageKey: true } })).map((c) => c.messageKey));
       await db.sharedMailbox.update({ where: { id: mailboxId }, data: { lastCheckedAt: new Date(), lastError: null } });
-      return {
-        messages: list.map((m) => ({ uid: m.uid, seen: m.seen, from: m.from, to: m.to, subject: m.subject, date: m.date, internalDate: m.internalDate, hasAttachments: m.hasAttachments, completed: done.has(m.uid) })),
-      };
+      return { messages: rows.map((m) => ({ ...m, completed: done.has(m.key) })) };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       await db.sharedMailbox.update({ where: { id: mailboxId }, data: { lastCheckedAt: new Date(), lastError: message } });
@@ -149,7 +176,8 @@ export async function listSharedMessagesAction(mailboxId: string): Promise<{ mes
 }
 
 export interface SharedDetail {
-  uid: number;
+  key: string;
+  threadId: string | null;
   subject: string;
   from: { name: string; email: string };
   to: string[];
@@ -162,30 +190,42 @@ export interface SharedDetail {
   references: string[];
 }
 
-export async function fetchSharedMessageAction(mailboxId: string, uid: number): Promise<SharedDetail | { error: string }> {
+// The full raw message, from Gmail's API or the IMAP server, whichever the mailbox uses.
+async function fetchRaw(db: Parameters<typeof loadMailbox>[0], mailboxId: string, key: string): Promise<{ raw: string; threadId: string | null } | { error: string }> {
+  const box = await loadMailbox(db, mailboxId);
+  if (!box) return { error: "Mailbox not found." };
+  if (box.kind === "google") {
+    const token = await getMailboxAccessToken(db, mailboxId);
+    if (!token) return { error: "Google is not connected for this mailbox." };
+    const r = await fetchGmailMessageRaw(token, key);
+    return r ? { raw: r.raw, threadId: r.threadId } : { error: "Message not found." };
+  }
+  const uid = Number(key);
+  if (!Number.isFinite(uid)) return { error: "Message not found." };
+  const raw = await fetchImapMessageRaw(imapOf(box.creds), uid);
+  return raw ? { raw, threadId: null } : { error: "Message not found." };
+}
+
+export async function fetchSharedMessageAction(mailboxId: string, key: string): Promise<SharedDetail | { error: string }> {
   await guard(mailboxId, "READ");
   return withScopedPrismaClient(async (db) => {
-    const box = await loadCredentials(db, mailboxId);
-    if (!box) return { error: "Mailbox not found." };
     try {
-      const raw = await fetchImapMessageRaw(imapOf(box.creds), uid);
-      if (!raw) return { error: "Message not found." };
-      const p = parseMessage(raw);
-      return { uid, subject: p.subject, from: p.from, to: p.to.map((a) => a.email), cc: p.cc.map((a) => a.email), date: p.date, html: p.html, text: p.text, attachments: p.attachments, messageIdHeader: p.messageId, references: p.references };
+      const r = await fetchRaw(db, mailboxId, key);
+      if ("error" in r) return r;
+      const p = parseMessage(r.raw);
+      return { key, threadId: r.threadId, subject: p.subject, from: p.from, to: p.to.map((a) => a.email), cc: p.cc.map((a) => a.email), date: p.date, html: p.html, text: p.text, attachments: p.attachments, messageIdHeader: p.messageId, references: p.references };
     } catch (e) {
       return { error: e instanceof Error ? e.message : String(e) };
     }
   });
 }
 
-export async function downloadSharedAttachmentAction(mailboxId: string, uid: number, index: number): Promise<{ filename: string; mimeType: string; base64: string } | { error: string }> {
+export async function downloadSharedAttachmentAction(mailboxId: string, key: string, index: number): Promise<{ filename: string; mimeType: string; base64: string } | { error: string }> {
   await guard(mailboxId, "READ");
   return withScopedPrismaClient(async (db) => {
-    const box = await loadCredentials(db, mailboxId);
-    if (!box) return { error: "Mailbox not found." };
-    const raw = await fetchImapMessageRaw(imapOf(box.creds), uid);
-    if (!raw) return { error: "Message not found." };
-    const a = extractAttachmentBytes(raw, index);
+    const r = await fetchRaw(db, mailboxId, key);
+    if ("error" in r) return r;
+    const a = extractAttachmentBytes(r.raw, index);
     return a ? { filename: a.filename, mimeType: a.mimeType, base64: encodeBase64(a.bytes) } : { error: "Attachment not found." };
   });
 }
@@ -197,13 +237,14 @@ export interface SharedSendInput {
   html: string;
   inReplyTo: string | null;
   references: string[];
+  threadId: string | null;
 }
 
 export async function sendSharedMessageAction(mailboxId: string, input: SharedSendInput): Promise<{ error: string } | { success: true }> {
   await guard(mailboxId, "SEND");
   if (input.to.length === 0) return { error: "Add at least one recipient." };
   return withScopedPrismaClient(async (db) => {
-    const box = await loadCredentials(db, mailboxId);
+    const box = await loadMailbox(db, mailboxId);
     if (!box) return { error: "Mailbox not found." };
     const { raw } = buildMimeMessage({
       fromName: box.displayName,
@@ -215,10 +256,17 @@ export async function sendSharedMessageAction(mailboxId: string, input: SharedSe
       html: input.html,
       inReplyTo: input.inReplyTo,
       references: input.references,
-      includeBccHeader: false,
+      includeBccHeader: box.kind === "google",
     });
     try {
-      await sendViaSmtp(smtpOf(box.creds), { from: box.address, to: input.to, cc: input.cc, bcc: [], raw });
+      if (box.kind === "google") {
+        const token = await getMailboxAccessToken(db, mailboxId);
+        if (!token) return { error: "Google is not connected for this mailbox." };
+        const r = await sendGmailMessage(token, raw, input.threadId ?? undefined);
+        if ("error" in r) return { error: r.error };
+      } else {
+        await sendViaSmtp(smtpOf(box.creds), { from: box.address, to: input.to, cc: input.cc, bcc: [], raw });
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       await db.sharedMailbox.update({ where: { id: mailboxId }, data: { lastError: message } });
@@ -228,17 +276,17 @@ export async function sendSharedMessageAction(mailboxId: string, input: SharedSe
   });
 }
 
-export async function setSharedCompleteAction(mailboxId: string, uid: number, done: boolean): Promise<void> {
+export async function setSharedCompleteAction(mailboxId: string, key: string, done: boolean): Promise<void> {
   const session = await guard(mailboxId, "COMPLETE");
   await withScopedPrismaClient(async (db) => {
     if (done) {
       await db.sharedMailboxCompletion.upsert({
-        where: { mailboxId_uid: { mailboxId, uid } },
+        where: { mailboxId_messageKey: { mailboxId, messageKey: key } },
         update: {},
-        create: { mailboxId, uid, completedBy: session.user.id },
+        create: { mailboxId, messageKey: key, completedBy: session.user.id },
       });
     } else {
-      await db.sharedMailboxCompletion.deleteMany({ where: { mailboxId, uid } });
+      await db.sharedMailboxCompletion.deleteMany({ where: { mailboxId, messageKey: key } });
     }
   });
 }

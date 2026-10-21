@@ -22,7 +22,7 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
   const [error, setError] = useState("");
   const [loading, startLoad] = useTransition();
   const [open, setOpen] = useState<SharedDetail | null>(null);
-  const [compose, setCompose] = useState<{ to: string; cc: string; subject: string; body: string; inReplyTo: string | null; references: string[] } | null>(null);
+  const [compose, setCompose] = useState<{ to: string; cc: string; subject: string; body: string; inReplyTo: string | null; references: string[]; threadId: string | null } | null>(null);
   const [notice, setNotice] = useState("");
   const [sending, startSend] = useTransition();
 
@@ -50,30 +50,30 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
   const canSend = box ? mailboxAtLeast(box.level, "SEND") : false;
   const canComplete = box ? mailboxAtLeast(box.level, "COMPLETE") : false;
 
-  async function openMessage(uid: number) {
-    const r = await fetchSharedMessageAction(boxId, uid);
+  async function openMessage(key: string) {
+    const r = await fetchSharedMessageAction(boxId, key);
     if ("error" in r) setError(r.error); else { setOpen(r); setCompose(null); setNotice(""); }
   }
   function reply(d: SharedDetail) {
     setCompose({
       to: d.from.email, cc: "", subject: /^re:/i.test(d.subject) ? d.subject : `Re: ${d.subject}`, body: "",
-      inReplyTo: d.messageIdHeader, references: [...d.references, ...(d.messageIdHeader ? [d.messageIdHeader] : [])],
+      inReplyTo: d.messageIdHeader, references: [...d.references, ...(d.messageIdHeader ? [d.messageIdHeader] : [])], threadId: d.threadId,
     });
   }
   function send() {
     if (!compose) return;
     startSend(async () => {
       const html = `<div>${esc(compose.body).replace(/\n/g, "<br>")}</div>`;
-      const r = await sendSharedMessageAction(boxId, { to: addrs(compose.to), cc: addrs(compose.cc), subject: compose.subject, html, inReplyTo: compose.inReplyTo, references: compose.references });
+      const r = await sendSharedMessageAction(boxId, { to: addrs(compose.to), cc: addrs(compose.cc), subject: compose.subject, html, inReplyTo: compose.inReplyTo, references: compose.references, threadId: compose.threadId });
       if ("error" in r) setNotice(r.error); else { setNotice(fr ? "Envoyé." : "Sent."); setCompose(null); }
     });
   }
-  async function toggleComplete(m: { uid: number }, done: boolean) {
-    await setSharedCompleteAction(boxId, m.uid, done);
-    setMessages((list) => list.map((x) => (x.uid === m.uid ? { ...x, completed: done } : x)));
+  async function toggleComplete(m: { key: string }, done: boolean) {
+    await setSharedCompleteAction(boxId, m.key, done);
+    setMessages((list) => list.map((x) => (x.key === m.key ? { ...x, completed: done } : x)));
   }
-  async function download(uid: number, i: number) {
-    const r = await downloadSharedAttachmentAction(boxId, uid, i);
+  async function download(key: string, i: number) {
+    const r = await downloadSharedAttachmentAction(boxId, key, i);
     if ("error" in r) return setNotice(r.error);
     const a = document.createElement("a");
     a.href = `data:${r.mimeType};base64,${r.base64}`;
@@ -89,7 +89,7 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
         </select>
         <button type="button" onClick={() => refresh()} disabled={loading} className={BTN}>{loading ? "…" : fr ? "Actualiser" : "Refresh"}</button>
         {canSend && (
-          <button type="button" onClick={() => { setOpen(null); setCompose({ to: "", cc: "", subject: "", body: "", inReplyTo: null, references: [] }); }} className={BTN}>{fr ? "Nouveau courriel" : "New email"}</button>
+          <button type="button" onClick={() => { setOpen(null); setCompose({ to: "", cc: "", subject: "", body: "", inReplyTo: null, references: [], threadId: null }); }} className={BTN}>{fr ? "Nouveau courriel" : "New email"}</button>
         )}
         <span className="text-xs text-soft">
           {box?.level === "READ" ? (fr ? "Lecture seule" : "Read only") : box?.level === "SEND" ? (fr ? "Lecture et envoi" : "Read & send") : fr ? "Lecture, envoi et complétion" : "Read, send & complete"}
@@ -128,7 +128,7 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
           {open.attachments.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {open.attachments.map((a, i) => (
-                <button key={i} type="button" onClick={() => download(open.uid, i)} data-readonly-ok className={BTN}>📎 {a.filename}</button>
+                <button key={i} type="button" onClick={() => download(open.key, i)} data-readonly-ok className={BTN}>📎 {a.filename}</button>
               ))}
             </div>
           )}
@@ -142,8 +142,8 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
 
       <ul className="divide-y divide-card-border rounded-md border border-card-border">
         {messages.map((m) => (
-          <li key={m.uid} className={`flex items-center gap-2 px-3 py-2 ${m.completed ? "opacity-60" : ""}`}>
-            <button type="button" onClick={() => openMessage(m.uid)} data-readonly-ok className="min-w-0 flex-1 text-left">
+          <li key={m.key} className={`flex items-center gap-2 px-3 py-2 ${m.completed ? "opacity-60" : ""}`}>
+            <button type="button" onClick={() => openMessage(m.key)} data-readonly-ok className="min-w-0 flex-1 text-left">
               <p className={`truncate text-sm ${m.seen ? "text-soft" : "font-semibold text-ink"}`}>{m.subject || (fr ? "(sans objet)" : "(no subject)")}</p>
               <p className="truncate text-xs text-soft">{m.from.name || m.from.email} · {m.date ? new Date(m.date).toLocaleString(fr ? "fr-CA" : "en-CA") : ""}{m.hasAttachments ? " · 📎" : ""}</p>
             </button>

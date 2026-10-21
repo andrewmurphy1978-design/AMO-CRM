@@ -19,6 +19,7 @@ export type SharedMailboxRow = {
   smtpPort: number;
   smtpSecurity: string;
   username: string;
+  googleConnected: boolean;
   lastError: string | null;
 };
 
@@ -28,7 +29,8 @@ const LABEL = "block text-xs font-semibold uppercase tracking-wide text-soft";
 function Editor({ box, fr, onDone }: { box?: SharedMailboxRow; fr: boolean; onDone?: () => void }) {
   const [saveState, saveAction, savePending] = useActionState(saveSharedMailboxAction, undefined);
   const [testState, testAction, testPending] = useActionState(testSharedMailboxAction, undefined);
-  const [preset, setPreset] = useState(box?.provider ?? "google");
+  const [preset, setPreset] = useState(box?.provider ?? "google-oauth");
+  const isGoogle = preset === "google-oauth";
   const p = MAILBOX_PRESETS.find((x) => x.provider === preset) ?? MAILBOX_PRESETS[3];
   const [hosts, setHosts] = useState({
     imapHost: box?.imapHost ?? p.imapHost, imapPort: box?.imapPort ?? p.imapPort,
@@ -60,6 +62,7 @@ function Editor({ box, fr, onDone }: { box?: SharedMailboxRow; fr: boolean; onDo
       <div>
         <label className={LABEL}>{fr ? "Fournisseur" : "Provider"}</label>
         <select value={preset} onChange={(e) => choose(e.target.value)} className={FIELD}>
+          <option value="google-oauth">{fr ? "Google Workspace / Gmail : se connecter avec Google (recommandé)" : "Google Workspace / Gmail: sign in with Google (recommended)"}</option>
           {MAILBOX_PRESETS.map((x) => <option key={x.provider} value={x.provider}>{x.label}</option>)}
         </select>
         {(preset === "google" || preset === "microsoft") && (
@@ -70,6 +73,21 @@ function Editor({ box, fr, onDone }: { box?: SharedMailboxRow; fr: boolean; onDo
           </p>
         )}
       </div>
+      {isGoogle ? (
+        <div className="space-y-2 rounded-md border border-card-border bg-field-bg/40 p-3 text-sm text-ink">
+          <p className="text-xs text-soft">
+            {fr
+              ? "Enregistrez d'abord, puis cliquez sur « Connecter avec Google » et choisissez le compte Google de cette boîte (ex. support@votreentreprise.com). Aucun mot de passe n'est conservé."
+              : "Save first, then click “Connect with Google” and pick this mailbox's own Google account (e.g. support@yourcompany.com). No password is stored."}
+          </p>
+          {(box?.googleConnected && !saveState?.id) && <p className="text-xs font-medium text-emerald-700">{fr ? "Connecté à Google." : "Connected to Google."}</p>}
+          {(box?.id || saveState?.id) && (
+            <a href={`/api/google/shared/connect?mailboxId=${box?.id ?? saveState?.id}`} className="inline-block rounded-md bg-[#0fa38a] px-3 py-1.5 text-xs font-medium text-[#f4faf6] hover:opacity-90">
+              {box?.googleConnected ? (fr ? "Reconnecter avec Google" : "Reconnect with Google") : fr ? "Connecter avec Google" : "Connect with Google"}
+            </a>
+          )}
+        </div>
+      ) : (<>
       <div className="grid gap-3 sm:grid-cols-4">
         <div><label className={LABEL}>IMAP</label><input name="imapHost" value={hosts.imapHost} onChange={(e) => setHosts({ ...hosts, imapHost: e.target.value })} className={FIELD} /></div>
         <div><label className={LABEL}>{fr ? "Port IMAP" : "IMAP port"}</label><input name="imapPort" type="number" value={hosts.imapPort} onChange={(e) => setHosts({ ...hosts, imapPort: Number(e.target.value) })} className={FIELD} /></div>
@@ -85,10 +103,11 @@ function Editor({ box, fr, onDone }: { box?: SharedMailboxRow; fr: boolean; onDo
         <div><label className={LABEL}>{fr ? "Nom d'utilisateur (par défaut : l'adresse)" : "Username (defaults to the address)"}</label><input name="username" defaultValue={box?.username ?? ""} className={FIELD} /></div>
         <div><label className={LABEL}>{fr ? "Mot de passe / mot de passe d'application" : "Password / app password"}</label><input name="password" type="password" placeholder={box ? (fr ? "Laisser vide pour le conserver" : "Leave blank to keep") : ""} className={FIELD} /></div>
       </div>
+      </>)}
       {box?.lastError && <p className="text-xs text-red-600">{box.lastError}</p>}
       <div className="flex flex-wrap items-center gap-2">
         <button type="submit" disabled={savePending} className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60">{savePending ? "…" : fr ? "Enregistrer" : "Save"}</button>
-        <button type="submit" formAction={testAction} disabled={testPending} className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60">{testPending ? "…" : fr ? "Tester la connexion" : "Test connection"}</button>
+        {!isGoogle && <button type="submit" formAction={testAction} disabled={testPending} className="rounded-md border border-card-border px-4 py-2 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60">{testPending ? "…" : fr ? "Tester la connexion" : "Test connection"}</button>}
         {box && (
           <button type="button" onClick={() => { if (confirm(fr ? "Retirer cette boîte partagée ?" : "Remove this shared mailbox?")) void deleteSharedMailboxAction(box.id).then(onDone); }} className="rounded-md border border-card-border px-4 py-2 text-sm text-red-600 hover:bg-black/5">{fr ? "Retirer" : "Remove"}</button>
         )}
