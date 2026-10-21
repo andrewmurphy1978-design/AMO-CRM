@@ -17,6 +17,7 @@ import {
   MLS_TEAM_OPTIONS,
   NBA_TEAM_OPTIONS,
 } from "@/lib/dashboard-sports-picks";
+import { SECTIONS, LEVELS } from "@/lib/permissions";
 import { HEADER_WIDGET_KEYS } from "@/lib/dashboard-header-widgets";
 
 async function requireAdmin() {
@@ -27,10 +28,21 @@ async function requireAdmin() {
   return session;
 }
 
-// "Accounting only" implies accounting access; admins always have the whole CRM.
+// The per-section access chosen in the Team screen (a JSON map of section -> level). Admins always have everything.
 function accountingFlags(formData: FormData, role: string) {
-  const only = role !== "ADMIN" && formData.get("accountingOnly") === "on";
-  return { accountingAccess: only || formData.get("accountingAccess") === "on", accountingOnly: only };
+  if (role === "ADMIN") return { accountingAccess: false, accountingOnly: false };
+  const clean: Record<string, string> = {};
+  try {
+    const raw = JSON.parse(String(formData.get("permissions") ?? "{}")) as Record<string, string>;
+    for (const sec of SECTIONS) {
+      const v = raw[sec.key];
+      clean[sec.key] = (LEVELS as string[]).includes(v) ? v : "NONE";
+    }
+  } catch {
+    for (const sec of SECTIONS) clean[sec.key] = "NONE";
+  }
+  clean.settings = clean.settings === "NONE" ? "WRITE" : clean.settings; // everyone keeps their own Settings
+  return { permissions: clean, accountingAccess: clean.accounting !== "NONE", accountingOnly: false };
 }
 
 const ProfileFieldsSchema = z.object({

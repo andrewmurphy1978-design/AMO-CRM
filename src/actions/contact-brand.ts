@@ -5,12 +5,14 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { BRAND_CATEGORIES, MAX_BRAND_FILE_BYTES, isKept, keptId, type BrandItemInput } from "@/lib/brand";
+import { requireAccess } from "@/lib/permissions";
 
 export async function saveContactBrand(
   contactId: string,
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -71,6 +73,7 @@ export async function saveContactAiDetails(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");

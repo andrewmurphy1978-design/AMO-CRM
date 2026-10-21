@@ -7,6 +7,7 @@ import { readExpiry, recordInVault } from "@/lib/api-key-expiry";
 import { encryptSecret } from "@/lib/crypto";
 import { runBufferSync } from "@/lib/buffer";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireAdmin() {
   const session = await auth();
@@ -20,6 +21,7 @@ export async function saveBufferApiKey(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const provider = String(formData.get("provider") ?? "");
@@ -50,6 +52,7 @@ export async function saveBufferApiKey(
 }
 
 export async function triggerBufferSync(): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const result = await runBufferSync();

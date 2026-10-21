@@ -49,6 +49,8 @@ model User {
   accountingAccess           Boolean    @default(false)
   // Team members only: the CRM shows them the Accounting section and nothing else.
   accountingOnly             Boolean    @default(false)
+  // Access to each section of the CRM: { section: "NONE" | "READ" | "WRITE" | "DELETE" } (see src/lib/permissions.ts). Null = the default for a team member.
+  permissions                Json?
   phone                      String?
   whatsapp                   String?
   country                    String     @default("CA")

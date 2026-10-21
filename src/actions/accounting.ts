@@ -26,6 +26,7 @@ import { parseTaxNumbers } from "@/lib/accounting/tax-numbers";
 import { accountingUserFor, type AccountingUser } from "@/lib/accounting/access";
 import { assertUnlocked, monthRange, reconcileSummary } from "@/lib/accounting/reconcile";
 import { supplierName, supplierKey } from "@/lib/accounting/supplier";
+import { requireAccess } from "@/lib/permissions";
 
 // Accounting holds personal bank data: admins, and team members who were given access. Each user has their own
 // books, so every id received from the browser is checked to belong to the signed-in user before it is used.
@@ -67,12 +68,14 @@ type Result = { error?: string; success?: string };
 // ---------------------------------------------------------------- setup
 
 export async function setupAccounting(): Promise<void> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   await withScopedPrismaClient((db) => ensureAccountingSetup(db, me));
   refresh();
 }
 
 export async function addEntity(_prev: Result | undefined, formData: FormData): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const name = String(formData.get("name") ?? "").trim();
   const kind = String(formData.get("kind") ?? "") as EntityKind;
@@ -95,6 +98,7 @@ export async function addEntity(_prev: Result | undefined, formData: FormData): 
 }
 
 export async function updateEntity(id: string, _prev: Result | undefined, formData: FormData): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   await withScopedPrismaClient(async (db) => {
     await ownEntity(db, me, id);
@@ -116,6 +120,7 @@ export async function updateEntity(id: string, _prev: Result | undefined, formDa
 }
 
 export async function addBankAccount(_prev: Result | undefined, formData: FormData): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const entityId = String(formData.get("entityId") ?? "");
   const name = String(formData.get("name") ?? "").trim();
@@ -139,6 +144,7 @@ export async function addBankAccount(_prev: Result | undefined, formData: FormDa
 }
 
 export async function updateBankAccount(id: string, _prev: Result | undefined, formData: FormData): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { error: "Enter a name." };
@@ -161,6 +167,7 @@ export async function updateBankAccount(id: string, _prev: Result | undefined, f
 }
 
 export async function deleteBankAccount(id: string): Promise<Result> {
+  await requireAccess("accounting", "DELETE");
   const me = await access();
   const result = await withScopedPrismaClient(async (db) => {
     await ownAccount(db, me, id);
@@ -214,6 +221,7 @@ function sectionSubtype(section: string, type: string): string {
 }
 
 export async function setAccountSection(id: string, section: string | null): Promise<void> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const valid = ["TREASURY", "CURRENT", "LONG_TERM", "FIXED", "INTANGIBLE", "SHORT_TERM"];
   await withScopedPrismaClient(async (db) => { await ownAccount(db, me, id); const next = section && valid.includes(section) ? section : null; await db.accAccount.updateMany({ where: { parentId: id }, data: { section: next } }); return db.accAccount.update({ where: { id }, data: { section: next } }); });
@@ -222,6 +230,7 @@ export async function setAccountSection(id: string, section: string | null): Pro
 
 /** Makes an account a sub-category of another (same entity and type, one level), or a top-level account again. */
 export async function setAccountParent(id: string, parentId: string | null): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const result = await withScopedPrismaClient(async (db) => {
     await ownAccount(db, me, id);
@@ -251,6 +260,7 @@ export async function setAccountParent(id: string, parentId: string | null): Pro
 
 /** Renumbers an account. The system keeps finding it by its template code, so sales taxes, opening balances etc. keep working. */
 export async function setAccountCode(id: string, code: string): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const next = code.trim();
   if (!/^\d{3,6}$/.test(next)) return { error: "A code is 3 to 6 digits." };
@@ -272,6 +282,7 @@ export async function setAccountCode(id: string, code: string): Promise<Result> 
 
 /** Makes an account an opposite account (or not) and sets the number and names it takes on the other side of the balance sheet. */
 export async function saveOppositeAccount(id: string, input: { twoWay: boolean; altCode: string; altName: string; altNameFr: string }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const altCode = input.altCode.trim();
   if (altCode && !/^\d{3,6}$/.test(altCode)) return { error: "A code is 3 to 6 digits." };
@@ -301,6 +312,7 @@ const REQUIRED_KEYS = new Set(["2300", "2301", "2310", "2311", "3000", "3200"]);
  * of the way) rather than deleted so they are not created again; the user's own accounts are deleted.
  */
 export async function deleteAccount(id: string): Promise<Result> {
+  await requireAccess("accounting", "DELETE");
   const me = await access();
   const out = await withScopedPrismaClient(async (db) => {
     await ownAccount(db, me, id);
@@ -332,6 +344,7 @@ export async function deleteAccount(id: string): Promise<Result> {
 }
 
 export async function setAccountNames(id: string, name: string, nameFr: string): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   if (!name.trim()) return { error: "The English name cannot be empty." };
   await withScopedPrismaClient(async (db) => { await ownAccount(db, me, id); return db.accAccount.update({ where: { id }, data: { name: name.trim(), nameFr: nameFr.trim() || null } }); });
@@ -340,6 +353,7 @@ export async function setAccountNames(id: string, name: string, nameFr: string):
 }
 
 export async function setAccountGifi(id: string, gifi: string): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const code = gifi.trim();
   if (code && !/^\d{4}$/.test(code)) return { error: "A GIFI code has 4 digits." };
@@ -349,6 +363,7 @@ export async function setAccountGifi(id: string, gifi: string): Promise<Result> 
 }
 
 export async function addAccount(_prev: Result | undefined, formData: FormData): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const entityId = String(formData.get("entityId") ?? "");
   const code = String(formData.get("code") ?? "").trim();
@@ -378,6 +393,7 @@ export async function addAccount(_prev: Result | undefined, formData: FormData):
 
 /** Sets the exchange rate of not-yet-categorized transactions in a foreign-currency account. */
 export async function setFxRate(txIds: string[], rate: number): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   if (!(rate > 0)) return { error: "Enter a rate above 0." };
   await withScopedPrismaClient(async (db) => { const ids = await ownTxIds(db, me, txIds); return db.accTransaction.updateMany({ where: { id: { in: ids }, status: { in: ["NEW", "SUGGESTED"] } }, data: { fxRate: rate } }); });
@@ -386,6 +402,7 @@ export async function setFxRate(txIds: string[], rate: number): Promise<Result> 
 }
 
 export async function deleteRule(id: string): Promise<void> {
+  await requireAccess("accounting", "DELETE");
   const me = await access();
   await withScopedPrismaClient((db) => db.accRule.deleteMany({ where: { id, ownerId: me.id } }));
   refresh();
@@ -394,6 +411,7 @@ export async function deleteRule(id: string): Promise<void> {
 // ---------------------------------------------------------------- import
 
 export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1, format?: { signature: string; map: unknown } | null): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number; skipped: { date: string; description: string; amount: number; reason: "duplicate" | "swapped" }[] } }> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   if (rows.length === 0) return { error: "There is nothing to import." };
   if (rows.length > 20000) return { error: "That file is too large — import it in parts." };
@@ -414,6 +432,7 @@ export async function importStatement(accountId: string, rows: ImportRow[], file
 
 // A PDF statement: the AI reads it and returns the rows for the user to check before importing.
 export async function readStatementPdf(accountId: string, base64: string): Promise<{ rows?: ImportRow[]; warning?: string; error?: string }> {
+  await requireAccess("accounting", "READ");
   const me = await access();
   if (base64.length > 9_000_000) return { error: "That PDF is too large (max about 6 MB)." };
   return withScopedPrismaClient(async (db) => {
@@ -436,6 +455,7 @@ export type AllocationPayload = { entityId: string; accountId: string; pct?: num
  * the same way.
  */
 export async function categorizeTransactions(input: { txIds: string[]; allocations: AllocationPayload[]; remember: boolean }): Promise<Result & { posted?: number; autoPosted?: number }> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   if (input.txIds.length === 0 || input.allocations.length === 0) return { error: "Choose an account." };
   const byPct = input.allocations.every((a) => typeof a.pct === "number");
@@ -483,6 +503,7 @@ export async function categorizeTransactions(input: { txIds: string[]; allocatio
 
 /** Removes an import and its transactions (posted ones are first taken out of the books). */
 export async function deleteImportBatch(batchId: string): Promise<void> {
+  await requireAccess("accounting", "DELETE");
   const me = await access();
   await withScopedPrismaClient(async (db) => {
     if ((await db.accImportBatch.count({ where: { id: batchId, account: { entity: { ownerId: me.id } } } })) === 0) throw deny();
@@ -496,12 +517,14 @@ export async function deleteImportBatch(batchId: string): Promise<void> {
 }
 
 export async function uncategorizeTransactions(txIds: string[]): Promise<void> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   await withScopedPrismaClient(async (db) => unpostTransactions(db, await ownTxIds(db, me, txIds)));
   refresh();
 }
 
 export async function ignoreTransactions(allIds: string[], ignore: boolean): Promise<void> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   await withScopedPrismaClient(async (db) => {
     const txIds = await ownTxIds(db, me, allIds);
@@ -517,6 +540,7 @@ export async function ignoreTransactions(allIds: string[], ignore: boolean): Pro
 }
 
 export async function updateSupplier(txId: string, name: string): Promise<void> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const clean = name.trim();
   if (!clean) return;
@@ -532,6 +556,7 @@ export async function updateSupplier(txId: string, name: string): Promise<void> 
 }
 
 export async function deleteTransactions(allIds: string[]): Promise<void> {
+  await requireAccess("accounting", "DELETE");
   const me = await access();
   await withScopedPrismaClient(async (db) => {
     const txIds = await ownTxIds(db, me, allIds);
@@ -546,6 +571,7 @@ export async function deleteTransactions(allIds: string[]): Promise<void> {
 
 /** Suggests a categorization for every supplier that has none yet (one AI call per 30 suppliers). */
 export async function suggestWithAI(): Promise<Result & { suggested?: number }> {
+  await requireAccess("accounting", "READ");
   const me = await access();
   try {
     return await withScopedPrismaClient(async (db) => {
@@ -598,6 +624,7 @@ export async function suggestWithAI(): Promise<Result & { suggested?: number }> 
 
 /** Posts the AI / rule suggestions of the given transactions (and remembers each supplier). */
 export async function confirmSuggestions(txIds: string[]): Promise<Result & { posted?: number }> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   return withScopedPrismaClient(async (db) => {
     const txs = await db.accTransaction.findMany({ where: { id: { in: await ownTxIds(db, me, txIds) }, status: "SUGGESTED" } });
@@ -625,6 +652,7 @@ export async function confirmSuggestions(txIds: string[]): Promise<Result & { po
 // ---------------------------------------------------------------- manual entries
 
 export async function addManualEntry(input: { entityId: string; date: string; memo: string; opening?: boolean; lines: { accountId: string; debit: number; credit: number }[] }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const lines = input.lines.map((l) => ({ ...l, debit: r2(Math.max(0, l.debit || 0)), credit: r2(Math.max(0, l.credit || 0)) })).filter((l) => l.debit > 0 || l.credit > 0);
   const d = r2(lines.reduce((s, l) => s + l.debit, 0));
@@ -650,6 +678,7 @@ export async function addManualEntry(input: { entityId: string; date: string; me
 }
 
 export async function deleteManualEntry(id: string): Promise<void> {
+  await requireAccess("accounting", "DELETE");
   const me = await access();
   await withScopedPrismaClient((db) => db.accJournalEntry.deleteMany({ where: { id, transactionId: null, entity: { ownerId: me.id } } }));
   refresh();
@@ -659,6 +688,7 @@ export async function deleteManualEntry(id: string): Promise<void> {
 
 /** Locks the month once the statement balance equals what the CRM computed. */
 export async function reconcileMonth(input: { accountId: string; month: string; statementBalance: number; notes?: string }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   if (!/^\d{4}-\d{2}$/.test(input.month) || !Number.isFinite(input.statementBalance)) return { error: "Enter the statement's closing balance." };
   try {
@@ -684,6 +714,7 @@ export async function reconcileMonth(input: { accountId: string; month: string; 
 
 /** Reopens the latest reconciled month. */
 export async function unlockReconciliation(id: string): Promise<Result> {
+  await requireAccess("accounting", "DELETE");
   const me = await access();
   const result = await withScopedPrismaClient(async (db) => {
     const rec = await db.accReconciliation.findFirstOrThrow({ where: { id, account: { entity: { ownerId: me.id } } } });
@@ -698,6 +729,7 @@ export async function unlockReconciliation(id: string): Promise<Result> {
 
 /** Records the account's balance on a date as an opening-balance entry (against the entity's opening-balance equity). */
 export async function setOpeningBalance(input: { accountId: string; date: string; amount: number }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !Number.isFinite(input.amount)) return { error: "Enter a date and a balance." };
   const amount = r2(input.amount);
@@ -736,6 +768,7 @@ export async function setOpeningBalance(input: { accountId: string; date: string
  * losses" income account, created the first time it is needed).
  */
 export async function recordInvestmentAdjustment(input: { accountId: string; month: string; amount: number }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   if (!/^\d{4}-\d{2}$/.test(input.month) || !Number.isFinite(input.amount)) return { error: "Enter an amount." };
   const amount = r2(input.amount);
@@ -800,6 +833,7 @@ async function findSimilar(db: Db, me: AccountingUser, tx: { id: string; supplie
 }
 
 export async function countSimilarTransactions(txId: string): Promise<{ count: number; locked: number }> {
+  await requireAccess("accounting", "READ");
   const me = await access();
   return withScopedPrismaClient(async (db) => {
     if ((await ownTxIds(db, me, [txId])).length === 0) throw deny();
@@ -814,6 +848,7 @@ export async function countSimilarTransactions(txId: string): Promise<{ count: n
  * replaced; a transfer's other half is reopened first and linked again if the new category is a transfer too.
  */
 export async function recategorizeTransaction(input: { txId: string; entityId: string; accountId: string; tax: boolean; remember: boolean; applyToSimilar?: boolean }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   try {
     return await withScopedPrismaClient(async (db) => {
@@ -872,6 +907,7 @@ export async function recategorizeTransaction(input: { txId: string; entityId: s
  * opening entry. Positive = the account's normal balance (money in an asset, money owed on a liability).
  */
 export async function saveOpeningBalances(input: { entityId: string; date: string; balances: { accountId: string; amount: number }[] }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { error: "Enter the date of the opening balances." };
   try {
@@ -940,6 +976,7 @@ export async function saveOpeningBalances(input: { entityId: string; date: strin
 
 /** Adds a transaction that is missing from the imports (e.g. found while reconciling). It goes to "to categorize", or is categorized by a remembered supplier. */
 export async function addManualTransaction(input: { accountId: string; date: string; description: string; amount: number; direction: "in" | "out" }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   const description = input.description.trim();
   if (!description) return { error: "Enter a description." };
@@ -972,6 +1009,7 @@ export async function addManualTransaction(input: { accountId: string; date: str
  * pointed at the old one follow, and a relationship account hands its link with the other entity over.
  */
 export async function moveAccountTransactions(input: { fromId: string; toId: string; updateRules: boolean }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   try {
     const out = await withScopedPrismaClient(async (db) => {
@@ -1017,6 +1055,7 @@ export async function moveAccountTransactions(input: { fromId: string; toId: str
 
 /** Chooses the account of an entity's books that holds the money going to / from another entity (a loan to or from it). */
 export async function setRelationshipAccount(entityId: string, otherId: string, accountId: string | null): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
   const me = await access();
   try {
     await withScopedPrismaClient(async (db) => {

@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccess } from "@/lib/permissions";
 
 export async function deleteAttachedFile(id: string): Promise<void> {
+  await requireAccess("projects", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const row = await withScopedPrismaClient(async (db) => {
@@ -17,6 +19,7 @@ export async function deleteAttachedFile(id: string): Promise<void> {
 }
 
 export async function renameAttachedFile(id: string, name: string, note: string): Promise<void> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const clean = name.trim().slice(0, 200);

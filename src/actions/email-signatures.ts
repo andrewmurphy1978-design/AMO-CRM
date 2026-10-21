@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireAdmin() {
   const session = await auth();
@@ -26,6 +27,7 @@ export interface EmailSignatureRow {
 // Settings page's own list — admin-only, same as every other integration
 // config on that page.
 export async function listEmailSignaturesAction(): Promise<EmailSignatureRow[]> {
+  await requireAccess("email", "READ");
   await requireAdmin();
   return withScopedPrismaClient((db) => db.emailSignature.findMany({ orderBy: { createdAt: "asc" } }));
 }
@@ -41,6 +43,7 @@ export interface EmailSignatureInput {
 }
 
 export async function saveEmailSignatureAction(id: string | null, data: EmailSignatureInput): Promise<{ error?: string; id?: string }> {
+  await requireAccess("email", "WRITE");
   await requireAdmin();
   const name = data.name.trim();
   if (!name) return { error: "name_required" };
@@ -62,6 +65,7 @@ export async function saveEmailSignatureAction(id: string | null, data: EmailSig
 }
 
 export async function deleteEmailSignatureAction(id: string): Promise<void> {
+  await requireAccess("email", "DELETE");
   await requireAdmin();
   await withScopedPrismaClient((db) => db.emailSignature.delete({ where: { id } }));
   revalidatePath("/settings");
@@ -80,6 +84,7 @@ export type ComposeSignatureMode = "new" | "reply" | "forward";
 // (a signature's FR/EN wording is written independently, not machine-
 // translated, so this picks the stored body rather than translating).
 export async function resolveComposeSignatureAction(accountAddress: string, mode: ComposeSignatureMode): Promise<string | null> {
+  await requireAccess("email", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 

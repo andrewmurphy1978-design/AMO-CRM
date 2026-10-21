@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { SOCIAL_PLATFORMS, SOCIAL_LANGUAGES, socialLinkKey } from "@/lib/social";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireAdmin() {
   const session = await auth();
@@ -18,6 +19,7 @@ export async function saveSocialLinks(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("socialAnalytics", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 

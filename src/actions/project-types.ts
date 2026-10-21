@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { TEMPLATE_TYPES, sanitizeConfig, type TemplateConfig } from "@/lib/project-templates";
+import { requireAccess } from "@/lib/permissions";
 
 async function checkType(db: PrismaClient, type: string) {
   if ((TEMPLATE_TYPES as readonly string[]).includes(type)) return;
@@ -11,6 +12,7 @@ async function checkType(db: PrismaClient, type: string) {
 }
 
 export async function saveProjectTemplate(type: string, config: TemplateConfig): Promise<{ error?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const clean = sanitizeConfig(config);
@@ -29,6 +31,7 @@ export async function saveProjectTemplate(type: string, config: TemplateConfig):
 
 // Back to the built-in default for this type.
 export async function resetProjectTemplate(type: string): Promise<void> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   await withScopedPrismaClient(async (db) => {
@@ -41,6 +44,7 @@ export async function resetProjectTemplate(type: string): Promise<void> {
 
 // Adds a new project type (empty template; fill it in on the customization page).
 export async function createProjectType(name: string, nameFr: string): Promise<{ error?: string; key?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const label = name.trim();
@@ -68,6 +72,7 @@ export async function createProjectType(name: string, nameFr: string): Promise<{
 
 // Removes a type you added — only while no project uses it.
 export async function deleteProjectType(key: string): Promise<{ error?: string }> {
+  await requireAccess("projects", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const result = await withScopedPrismaClient(async (db) => {
@@ -85,6 +90,7 @@ export async function deleteProjectType(key: string): Promise<{ error?: string }
 
 // Saves the order of the project type list (drag and drop on the customization page).
 export async function saveProjectTypeOrder(keys: string[]): Promise<void> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   await withScopedPrismaClient(async (db) => {

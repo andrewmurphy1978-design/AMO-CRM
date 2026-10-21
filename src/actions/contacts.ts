@@ -27,6 +27,7 @@ import {
   readContactRelations,
   readAppSyncSettings,
 } from "@/lib/contact-form-fields";
+import { requireAccess } from "@/lib/permissions";
 
 // Core tag-add logic, taking a shared scoped client — callers that already
 // have one open (createContact's tag loop, syncContactTags) pass it in
@@ -218,6 +219,7 @@ export async function applyContactExternalSyncs(
   appSyncRows: { app: string; enabled: boolean; direction: ContactSyncDirection }[],
   t: ReturnType<typeof getDict>
 ): Promise<string> {
+  await requireAccess("contacts", "WRITE");
   const systemeSync = appSyncRows.find((row) => row.app === "systeme_io");
   const googleSync = appSyncRows.find((row) => row.app === "google_contacts");
   let syncStatus = "";
@@ -281,6 +283,7 @@ export async function createContact(
   _prevState: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -426,6 +429,7 @@ export async function updateContact(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -547,6 +551,7 @@ export async function updateContact(
 }
 
 export async function deleteContact(contactId: string): Promise<never> {
+  await requireAccess("contacts", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -604,18 +609,21 @@ export async function deleteContact(contactId: string): Promise<never> {
 }
 
 export async function addTagToContact(contactId: string, tagName: string) {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   await withScopedPrismaClient((db) => addTagToContactWith(db, contactId, tagName, session.user.id));
 }
 
 export async function removeTagFromContact(contactId: string, tagId: string) {
+  await requireAccess("contacts", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   await withScopedPrismaClient((db) => removeTagFromContactWith(db, contactId, tagId, session.user.id));
 }
 
 export async function addContactNote(contactId: string, formData: FormData) {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");

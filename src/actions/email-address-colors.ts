@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { requireAccess } from "@/lib/permissions";
 
 const DEFAULT_COLOR = "#64748b";
 
@@ -17,6 +18,7 @@ export async function addEmailAddressColor(
   _prevState: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string }> {
+  await requireAccess("email", "WRITE");
   const session = await requireUser();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const address = String(formData.get("address") ?? "").trim();
@@ -35,6 +37,7 @@ export async function addEmailAddressColor(
 }
 
 export async function updateEmailAddressColor(id: string, color: string): Promise<{ error?: string }> {
+  await requireAccess("email", "WRITE");
   await requireUser();
   if (!id || !color) return { error: "Invalid input" };
 
@@ -46,6 +49,7 @@ export async function updateEmailAddressColor(id: string, color: string): Promis
 }
 
 export async function deleteEmailAddressColor(id: string): Promise<void> {
+  await requireAccess("email", "DELETE");
   await requireUser();
   await withScopedPrismaClient((db) => db.emailAddressColor.delete({ where: { id } }));
   revalidatePath("/settings");

@@ -19,6 +19,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { getDateLocale } from "@/lib/i18n/date-locale";
 import PageHeader from "./page-header";
+import { requireSection } from "@/lib/permissions";
 import CardSkeleton from "./card-skeleton";
 import WeatherHeaderServer from "./weather-header-server";
 import { WeatherWidgetSkeleton } from "./header-weather-widget";
@@ -166,6 +167,7 @@ function contactLabel(c: {
 }
 
 export default async function DashboardPage() {
+  await requireSection("dashboard");
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);

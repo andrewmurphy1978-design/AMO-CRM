@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { attachSmsNumberToContact } from "@/lib/sms-link";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireSession() {
   const session = await auth();
@@ -21,6 +22,7 @@ function refresh(contactId?: string | null) {
 // Marks incoming texts as looked at (drops them off the SMS page's "new"
 // list and the sidebar badge).
 export async function markSmsSeen(ids: string[]): Promise<void> {
+  await requireAccess("sms", "WRITE");
   await requireSession();
   if (ids.length === 0) return;
   await withScopedPrismaClient((db) =>
@@ -33,6 +35,7 @@ export async function markSmsSeen(ids: string[]): Promise<void> {
 // saves the number on that contact if it isn't there yet so the next text
 // from it is matched automatically.
 export async function linkSmsToContact(number: string, contactId: string): Promise<void> {
+  await requireAccess("sms", "WRITE");
   await requireSession();
   await withScopedPrismaClient((db) => attachSmsNumberToContact(db, number, contactId));
   refresh(contactId);
@@ -40,6 +43,7 @@ export async function linkSmsToContact(number: string, contactId: string): Promi
 
 // Creates a new contact for an unknown number and links its texts to it.
 export async function createContactFromSms(number: string, firstName: string, lastName: string): Promise<string> {
+  await requireAccess("sms", "WRITE");
   await requireSession();
   const first = firstName.trim();
   const last = lastName.trim();

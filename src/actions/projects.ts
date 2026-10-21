@@ -16,6 +16,7 @@ import { TRAINING_PHASE_TASKS, buildMultiPlan, cleanValues, readFieldValues, typ
 import { getTypeLabels } from "@/lib/project-type-store";
 import { appSubscriptionsFrom } from "@/lib/project-subscriptions";
 import { PROJECT_STATUSES, BUILD_STAGE_STATUSES, phaseStatusFor, type ProjectStatusValue } from "@/lib/project-status";
+import { requireAccess } from "@/lib/permissions";
 
 const ProjectSchema = z.object({
   name: z.string().trim().min(1, "Project name is required"),
@@ -111,6 +112,7 @@ export async function createPhase(
   order: number,
   values: PhaseValues
 ): Promise<{ id?: string; error?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -133,6 +135,7 @@ export async function updatePhase(
   projectId: string,
   values: PhaseValues
 ): Promise<{ error?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -157,6 +160,7 @@ export async function updatePhase(
 }
 
 export async function deletePhase(phaseId: string, projectId: string) {
+  await requireAccess("projects", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -388,6 +392,7 @@ export async function createProject(
   _prevState: { error?: string; createdId?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; createdId?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -445,6 +450,7 @@ export async function updateProject(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -497,6 +503,7 @@ export async function updateProject(
 }
 
 export async function deleteProject(projectId: string) {
+  await requireAccess("projects", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -513,6 +520,7 @@ export async function updateProjectGeneral(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -575,6 +583,7 @@ export async function updateProjectNotes(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -593,6 +602,7 @@ export async function updatePhaseNotes(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -612,6 +622,7 @@ export async function updateProjectCustomFields(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");

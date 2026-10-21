@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
-import { accountingUserFor } from "@/lib/accounting/access";
-import { withScopedPrismaClient } from "@/lib/prisma";
+import { currentPermissions, atLeast, type Section } from "@/lib/permissions";
 import { isPersonalSectionUser } from "@/lib/personal-watch";
 import AppShell from "./app-shell";
 import { LangProvider } from "@/components/lang-context";
@@ -14,7 +13,7 @@ async function handleSignOut() {
   await signOut({ redirectTo: "/login" });
 }
 
-export default async function AppChrome({ children, onlyAccounting }: { children: React.ReactNode; onlyAccounting?: boolean }) {
+export default async function AppChrome({ children }: { children: React.ReactNode }) {
   const session = await auth();
 
   // Route protection used to live in middleware (src/proxy.ts), but
@@ -28,32 +27,34 @@ export default async function AppChrome({ children, onlyAccounting }: { children
 
   const lang = await getLang();
   const t = getDict(lang);
-  const accountingUser = await withScopedPrismaClient((db) => accountingUserFor(db, session));
+  const me = await currentPermissions();
+  const can = (section: Section) => !!me && atLeast(me.perms[section], "READ");
   const NAV_ITEMS = [
-    { href: "/", label: t.nav.dashboard },
-    { href: "/email", label: t.nav.email },
-    { href: "/sms", label: t.nav.sms },
+    ...(can("dashboard") ? [{ href: "/", label: t.nav.dashboard }] : []),
+    ...(can("email") ? [{ href: "/email", label: t.nav.email }] : []),
+    ...(can("sms") ? [{ href: "/sms", label: t.nav.sms }] : []),
     // Points at the CRM's own native calendar (linkable to clients/
     // projects/tasks/bookings) — the previous embedded Google Calendar
     // view is kept, unlinked, at /calendar as a fallback to revert to.
-    { href: "/calendar-app", label: t.nav.calendar },
-    { href: "/tasks", label: t.nav.tasks },
-    { href: "/contacts", label: t.nav.contacts },
-    { href: "/projects", label: t.nav.projects },
-    { href: "/invoices", label: t.nav.invoices },
-    ...(accountingUser ? [{ href: "/accounting", label: t.nav.accounting }] : []),
-    { href: "/marketing", label: t.nav.marketing },
-    { href: "/social-analytics", label: t.nav.socialAnalytics },
-    { href: "/bookings", label: t.nav.bookings },
+    ...(can("calendar") ? [{ href: "/calendar-app", label: t.nav.calendar }] : []),
+    ...(can("tasks") ? [{ href: "/tasks", label: t.nav.tasks }] : []),
+    ...(can("contacts") ? [{ href: "/contacts", label: t.nav.contacts }] : []),
+    ...(can("projects") ? [{ href: "/projects", label: t.nav.projects }] : []),
+    ...(can("invoices") ? [{ href: "/invoices", label: t.nav.invoices }] : []),
+    ...(can("accounting") ? [{ href: "/accounting", label: t.nav.accounting }] : []),
+    ...(can("marketing") ? [{ href: "/marketing", label: t.nav.marketing }] : []),
+    ...(can("socialAnalytics") ? [{ href: "/social-analytics", label: t.nav.socialAnalytics }] : []),
+    ...(can("bookings") ? [{ href: "/bookings", label: t.nav.bookings }] : []),
     // Visible only on Andrew's own account — family emails/events have no
     // business reason to show up for any other team member.
     ...(isPersonalSectionUser(session.user.email) ? [{ href: "/personal", label: t.nav.personal }] : []),
-    { href: "/settings", label: t.nav.settings },
+    ...(can("settings") ? [{ href: "/settings", label: t.nav.settings }] : []),
   ];
+
 
   return (
     <AppShell
-      navItems={onlyAccounting ? NAV_ITEMS.filter((n) => n.href === "/accounting") : NAV_ITEMS}
+      navItems={NAV_ITEMS}
       userName={session?.user?.name}
       userEmail={session?.user?.email}
       signOutLabel={t.nav.signOut}

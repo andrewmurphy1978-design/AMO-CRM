@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { billPendingSupplierCosts } from "@/lib/supplier-costs";
 import { MAX_SUPPLIER_FILE_BYTES } from "@/lib/supplier-limits";
+import { requireAccess } from "@/lib/permissions";
 
 const STATUSES = ["PENDING", "BILLED", "REIMBURSED", "ABSORBED"];
 
@@ -23,6 +24,7 @@ export async function saveSupplierInvoice(
   _prev: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const fr = session.user.language === "FR";
@@ -81,6 +83,7 @@ export async function saveSupplierInvoice(
 }
 
 export async function deleteSupplierInvoice(supplierInvoiceId: string, projectId: string) {
+  await requireAccess("projects", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   await withScopedPrismaClient((db) => db.projectSupplierInvoice.delete({ where: { id: supplierInvoiceId } }));

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { assignMissingFolders, getLocalRoot, moveRoot } from "@/lib/local-folders";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireAdmin() {
   const session = await auth();
@@ -13,6 +14,7 @@ async function requireAdmin() {
 
 // Settings > Local files: where the client folders live on the computer (e.g. C:\Users\Andrew\Clients).
 export async function saveLocalFilesRoot(_prev: { error?: string; success?: string } | undefined, formData: FormData): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   await requireAdmin();
   const root = String(formData.get("root") ?? "").trim().replace(/[\\/]+$/, "");
   if (root && !/^([a-zA-Z]:[\\/]|\\\\|\/|~)/.test(root)) return { error: "Give a full path, such as C:\\Users\\Andrew\\Clients or /Users/andrew/Clients." };
@@ -30,6 +32,7 @@ export async function saveLocalFilesRoot(_prev: { error?: string; success?: stri
 
 // Editing a contact's or project's folder path by hand.
 export async function setFolderPath(kind: "contact" | "project", id: string, path: string): Promise<{ error?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const clean = path.trim();

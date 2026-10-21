@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { translateServicesToFrench } from "@/lib/proposal-ai";
+import { requireAccess } from "@/lib/permissions";
 
 const ServiceItemSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -46,6 +47,7 @@ export async function createServicePriceListItem(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -68,6 +70,7 @@ export async function updateServicePriceListItem(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -90,6 +93,7 @@ export async function updateServicePriceListItem(
 }
 
 export async function deleteServicePriceListItem(itemId: string) {
+  await requireAccess("settings", "DELETE");
   await requireAdmin();
   await withScopedPrismaClient((db) => db.servicePriceListItem.delete({ where: { id: itemId } }));
   revalidatePath("/settings");
@@ -98,6 +102,7 @@ export async function deleteServicePriceListItem(itemId: string) {
 // Fills in the French name / client description of every service that has none yet, with the AI, so
 // proposals and invoices for French-speaking clients read in French. Existing French text is never touched.
 export async function translatePriceListToFrench(): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const fr = session.user.language === "FR";
   const result = await withScopedPrismaClient(async (db) => {

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { disableGoogleTasks, enableGoogleTasks, syncUserTasks } from "@/lib/google-tasks";
+import { requireAccess } from "@/lib/permissions";
 
 // The Settings > Google integration "Google Tasks" buttons. One action with
 // an `intent` field so a single useActionState shows every outcome.
@@ -11,6 +12,7 @@ export async function googleTasksAction(
   _prev: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("tasks", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const userId = session.user.id;

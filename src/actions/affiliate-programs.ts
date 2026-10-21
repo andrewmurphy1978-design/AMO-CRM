@@ -16,6 +16,7 @@ import {
   listShortIoLinks,
   getShortIoLinkStatistics,
 } from "@/lib/shortio";
+import { requireAccess } from "@/lib/permissions";
 
 const AffiliateProgramSchema = z.object({
   tab: z.enum(["AI_TOOLS", "TRAINING_PROGRAMS", "BUSINESS_OPPORTUNITIES"]),
@@ -93,6 +94,7 @@ export async function createAffiliateProgram(
   _prevState: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string }> {
+  await requireAccess("marketing", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -120,6 +122,7 @@ export async function updateAffiliateProgram(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("marketing", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -183,6 +186,7 @@ export async function updateAffiliateProgram(
 // on the next full "Save changes" — and so leaving the field blank on a
 // later full-form save can never accidentally clear it.
 export async function saveAffiliateProgramApiKey(programId: string, apiKey: string): Promise<{ error?: string; success?: string }> {
+  await requireAccess("marketing", "WRITE");
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can manage this" };
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -197,6 +201,7 @@ export async function saveAffiliateProgramApiKey(programId: string, apiKey: stri
 
 // Admin-gated, same reason as the API key vault's own reveal action.
 export async function revealAffiliateProgramApiKey(programId: string): Promise<{ value?: string; error?: string }> {
+  await requireAccess("marketing", "WRITE");
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can view this" };
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -207,6 +212,7 @@ export async function revealAffiliateProgramApiKey(programId: string): Promise<{
 }
 
 export async function deleteAffiliateProgram(programId: string) {
+  await requireAccess("marketing", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -218,6 +224,7 @@ export async function deleteAffiliateProgram(programId: string) {
 // Admin-gated like the other integration-triggering actions (triggerSystemeIoSync,
 // triggerMakeSync) since it spends calls against a shared, paid Short.io account.
 export async function createAffiliateShortLink(programId: string, variant: "default" | "fr"): Promise<{ error?: string; shortURL?: string }> {
+  await requireAccess("marketing", "WRITE");
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can create Short.io links" };
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -284,6 +291,7 @@ export async function syncShortIoLinks(): Promise<{
   statsError?: string;
   remainingForStats?: number;
 }> {
+  await requireAccess("marketing", "WRITE");
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can sync Short.io" };
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -420,6 +428,7 @@ export async function syncShortIoLinks(): Promise<{
 // "Refresh stats" button on that one program's detail page rather than
 // re-running the full account sync.
 export async function refreshAffiliateProgramStats(programId: string): Promise<{ error?: string }> {
+  await requireAccess("marketing", "WRITE");
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can refresh Short.io stats" };
   const t = getDict(session.user.language === "FR" ? "fr" : "en");

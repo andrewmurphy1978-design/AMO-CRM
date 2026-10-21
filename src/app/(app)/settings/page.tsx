@@ -18,6 +18,7 @@ import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buf
 import SocialLinksForm from "./social-links-form";
 import type { SocialPlatform } from "@/lib/social";
 import UserManagement from "./user-management";
+import { resolvePermissions } from "@/lib/permissions";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
 import WorldClockForm from "./world-clock-form";
@@ -433,7 +434,7 @@ export default async function SettingsPage({
   if (isAdmin && session) {
     addSection({
       id: "team", scope: "admin", group: t.settings.groupTeamAccess, icon: "users", label: t.settings.groupTeamAccess,
-      content: <UserManagement users={users} currentUserId={session.user.id} lang={lang} />,
+      content: <UserManagement users={users.map((u) => ({ ...u, perms: resolvePermissions(u) }))} currentUserId={session.user.id} lang={lang} />,
     });
     if (billingSettings) {
       addSection({

@@ -10,6 +10,7 @@ import { buildMimeMessage } from "@/lib/mail/mime-build";
 import { sendViaSmtp } from "@/lib/mail/smtp";
 import { loadIdentities } from "./email-messages";
 import type { MailSource } from "@/lib/mail/identity";
+import { requireAccess } from "@/lib/permissions";
 
 export type DraftSource = "gmail" | "ionos";
 
@@ -43,6 +44,7 @@ function parseIonosDraftUid(id: string): number | null {
 // Prisma reads sharing one Hyperdrive connection is what trips Cloudflare's
 // Error 1102.
 export async function fetchDraftsAction(): Promise<DraftRow[]> {
+  await requireAccess("email", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -108,6 +110,7 @@ export interface DraftDetail {
 // raw MIME (whichever source the id names) and parses it with the same
 // mime-parse.ts parser every other message-fetch path in this app uses.
 export async function fetchDraftDetailAction(id: string): Promise<DraftDetail | { error: string }> {
+  await requireAccess("email", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -176,6 +179,7 @@ export interface SendDraftInput {
 // directly over that account's own transport rather than going through
 // sendEmailAction's header-based identity guess.
 export async function sendDraftAction(id: string, source: DraftSource, input: SendDraftInput): Promise<{ error: string } | { success: true }> {
+  await requireAccess("email", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   if (input.to.length === 0) return { error: "recipient_required" };
@@ -249,6 +253,7 @@ export async function sendDraftAction(id: string, source: DraftSource, input: Se
 // Deletes a draft without sending it — the Discard action. Returns an error
 // message instead of failing silently when the provider refuses the delete.
 export async function discardDraftAction(id: string, source: DraftSource): Promise<{ error?: string }> {
+  await requireAccess("email", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -306,6 +311,7 @@ export interface CreateDraftInput {
 // an *existing* Drafts-folder row) — builds the same MIME every send path
 // does and files it as a draft on whichever identity was chosen.
 export async function createDraftAction(input: CreateDraftInput): Promise<{ error: string } | { success: true }> {
+  await requireAccess("email", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   // Unlike sendEmailAction, a draft is allowed to have no recipient yet —

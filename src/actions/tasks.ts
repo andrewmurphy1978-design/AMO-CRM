@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { requireAccess } from "@/lib/permissions";
 
 const TaskSchema = z.object({
   title: z.string().trim().min(1, "Task title is required"),
@@ -67,6 +68,7 @@ export async function createTaskViaDialog(
   projectId: string,
   values: TaskDialogValues
 ): Promise<{ id?: string; error?: string }> {
+  await requireAccess("tasks", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -113,6 +115,7 @@ export async function updateTaskViaDialog(
   projectId: string,
   values: TaskDialogValues
 ): Promise<{ error?: string }> {
+  await requireAccess("tasks", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -162,6 +165,7 @@ export async function createTask(
   _prevState: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string }> {
+  await requireAccess("tasks", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -211,6 +215,7 @@ export async function createTaskAndRedirect(
   _prevState: { error?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string }> {
+  await requireAccess("tasks", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -258,6 +263,7 @@ export async function updateTask(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("tasks", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -318,6 +324,7 @@ export async function updateTask(
 }
 
 export async function toggleTaskStatus(taskId: string, projectId: string, done: boolean) {
+  await requireAccess("tasks", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -345,6 +352,7 @@ export async function toggleTaskStatus(taskId: string, projectId: string, done: 
 }
 
 export async function deleteTask(taskId: string, projectId: string) {
+  await requireAccess("tasks", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 

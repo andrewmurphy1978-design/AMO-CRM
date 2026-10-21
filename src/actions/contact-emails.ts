@@ -3,11 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccess } from "@/lib/permissions";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Every email address recorded on a contact (main, second, billing, extras), without duplicates.
 export async function listContactEmails(contactId: string): Promise<string[]> {
+  await requireAccess("contacts", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient(async (db) => {
@@ -19,6 +21,7 @@ export async function listContactEmails(contactId: string): Promise<string[]> {
 
 // Adds an address to the contact's extra emails (kept as is if it is already there).
 export async function addContactEmail(contactId: string, email: string): Promise<{ error?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const clean = email.trim();

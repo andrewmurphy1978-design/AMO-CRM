@@ -19,6 +19,7 @@ import { proposalIssues } from "@/lib/proposal-check";
 import { BRAND_ITEMS, DEFAULT_BRAND_ITEMS } from "@/lib/brand-items";
 import { draftLetterAndItems, listRequiredApps, priceApp, type AIApp, type AIContext, type AIProposalDraft } from "@/lib/proposal-ai";
 import { computeSectionedTotals, type ProposalSectionInput } from "@/lib/proposal-sections";
+import { requireAccess } from "@/lib/permissions";
 
 const ProposalSchema = z.object({
   projectId: z.string().min(1),
@@ -64,6 +65,7 @@ export async function createProposal(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -112,6 +114,7 @@ export async function createProposal(
 }
 
 export async function updateProposalStatus(proposalId: string, projectId: string, status: string) {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -138,6 +141,7 @@ export async function updateProposalStatus(proposalId: string, projectId: string
 // "Accepted": the proposal is accepted and the "Await the answer" task is done. If the signed copy
 // comes with it (base64 from the browser, 4 MB max) it is attached too, which shows "Accepted and Signed".
 export async function acceptProposal(proposalId: string, projectId: string, signed?: { base64: string; fileName: string; mime: string }): Promise<{ error?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   let bytes: Uint8Array | null = null;
@@ -168,6 +172,7 @@ export async function acceptProposal(proposalId: string, projectId: string, sign
 // Paying the 1st / last instalment is what moves the project through its
 // lifecycle (see lib/project-progress.ts).
 export async function setInstalmentPaid(rowId: string, projectId: string, paid: boolean): Promise<{ invoiceEmail?: "sent" | "failed" | "no_recipient"; error?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -230,6 +235,7 @@ export async function setInstalmentPaid(rowId: string, projectId: string, paid: 
 
 // `clientRefreshes`: the caller refreshes the project page itself, so it isn't also re-rendered here.
 export async function deleteProposal(proposalId: string, projectId: string, clientRefreshes = false) {
+  await requireAccess("projects", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -428,6 +434,7 @@ export async function createFullProposal(
   _prevState: { error?: string; success?: string; proposalId?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string; proposalId?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -500,6 +507,7 @@ export async function updateFullProposal(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -604,6 +612,7 @@ export interface AIPrep {
 // Step 1: gather what the CRM knows. With no brief typed, it works from the project (type, description, custom
 // answers) and what's been written for AI about the client (voice, preferences, background).
 export async function prepareProposalAI(projectId: string, brief: string, sections?: { title: string; kind: string }[]): Promise<AIPrep | { error: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   try {
@@ -660,6 +669,7 @@ export async function prepareProposalAI(projectId: string, brief: string, sectio
 
 // Step 2: the cover letter and the priced line items.
 export async function aiProposalItems(prep: AIPrep): Promise<{ coverLetter: string; lineItems: NonNullable<AIProposalDraft["lineItems"]> } | { error: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   try {
@@ -690,6 +700,7 @@ export async function aiProposalItems(prep: AIPrep): Promise<{ coverLetter: stri
 
 // Step 3: the apps / memberships the project needs.
 export async function aiProposalApps(ctx: AIContext, lineItems: { description: string }[]): Promise<{ apps: AIApp[] } | { error: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   try {
@@ -702,6 +713,7 @@ export async function aiProposalApps(ctx: AIContext, lineItems: { description: s
 
 // Steps 4...: the current price of one app.
 export async function aiProposalAppPrice(app: AIApp, currency: string, language: "en" | "fr") {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   try {
@@ -715,6 +727,7 @@ export async function aiProposalAppPrice(app: AIApp, currency: string, language:
 // Sign-off before anything goes to the client.
 // Refuses (with the list of what is missing) while important information is still blank.
 export async function approveProposal(proposalId: string, projectId: string): Promise<{ error?: string; issues?: string[] }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const fr = session.user.language === "FR";
@@ -731,6 +744,7 @@ export async function approveProposal(proposalId: string, projectId: string): Pr
 }
 
 export async function unapproveProposal(proposalId: string, projectId: string) {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
@@ -756,6 +770,7 @@ export interface ProposalSendInfo {
 // invitation to book a call, how to pay the 1st instalment) with the proposal PDF
 // attached, and the recipient. Refuses an unapproved proposal.
 export async function proposalSendInfo(proposalId: string, projectId: string): Promise<ProposalSendInfo> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient(async (db) => {
@@ -815,6 +830,7 @@ export async function proposalSendInfo(proposalId: string, projectId: string): P
 
 // The copy signed and returned by the client (base64 from the browser, 4 MB max).
 export async function attachSignedProposal(proposalId: string, projectId: string, base64: string, fileName: string, mime: string): Promise<{ error?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
@@ -832,6 +848,7 @@ export async function attachSignedProposal(proposalId: string, projectId: string
 }
 
 export async function removeSignedProposal(proposalId: string, projectId: string) {
+  await requireAccess("projects", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
@@ -843,6 +860,7 @@ export async function removeSignedProposal(proposalId: string, projectId: string
 
 // After the email went out: the proposal is now with the client.
 export async function markProposalSent(proposalId: string, projectId: string) {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {

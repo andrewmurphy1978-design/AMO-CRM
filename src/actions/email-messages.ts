@@ -10,6 +10,7 @@ import { getIonosMailbox, recordIonosResult, type IonosMailbox } from "@/lib/mai
 import { sendViaSmtp } from "@/lib/mail/smtp";
 import { fetchImapMessageRaw } from "@/lib/mail/imap";
 import { recordIonosSend, parseIonosSentRecordId } from "@/lib/mail/sent-records";
+import { requireAccess } from "@/lib/permissions";
 
 // "ionos:<uid>" ids (see EmailSummary's source/messageIdHeader comment in
 // google.ts) never collide with a bare Gmail id, which is exactly what
@@ -91,6 +92,7 @@ export interface EmailDetail {
 // own headers, not this order — this order only matters as the last-
 // resort fallback when nothing else matches.
 export async function loadIdentities(userId: string, db: PrismaClient): Promise<MailIdentity[]> {
+  await requireAccess("email", "READ");
   // Sequential, not Promise.all — two Prisma reads landing at once against
   // the same Hyperdrive connection is exactly what trips Cloudflare's
   // Error 1102 (same lesson documented throughout this codebase, e.g.
@@ -108,6 +110,7 @@ export async function loadIdentities(userId: string, db: PrismaClient): Promise<
 // user could send as, used both there and (for reply/forward/replyAll) as
 // EmailDetail.availableIdentities below.
 export async function listMailIdentitiesAction(): Promise<MailIdentity[]> {
+  await requireAccess("email", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient((db) => loadIdentities(session.user.id, db));
@@ -139,6 +142,7 @@ function applyFromOverride(
 // the shared MIME parser, whichever source the id names (see
 // fetchOriginal above).
 export async function fetchEmailDetail(id: string): Promise<EmailDetail | { error: string }> {
+  await requireAccess("email", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -243,6 +247,7 @@ export interface SendEmailInput {
 // fetchEmailDetail used to show it in the first place, so a stale or
 // tampered client value can't send from the wrong address.
 export async function sendEmailAction(input: SendEmailInput): Promise<{ error: string } | { success: true; threadId?: string }> {
+  await requireAccess("email", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -333,6 +338,7 @@ export async function downloadEmailAttachment(
   id: string,
   attachmentIndex: number
 ): Promise<{ filename: string; mimeType: string; base64: string } | { error: string }> {
+  await requireAccess("email", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccess } from "@/lib/permissions";
 
 // Both Gmail threads and Google Calendar events live outside our database —
 // these actions just point a stable external id (thread id / event id) at
@@ -18,6 +19,7 @@ export async function saveEmailLink(
   // lets those pages show something readable without a live Gmail call.
   meta?: { subject?: string; fromLabel?: string; date?: string; link?: string; myAddress?: string | null }
 ): Promise<void> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -77,6 +79,7 @@ export async function saveCalendarEventLink(
   googleEventId: string,
   target: { contactId?: string; projectId?: string; taskId?: string; bookingId?: string }
 ): Promise<void> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 

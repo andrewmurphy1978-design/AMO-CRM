@@ -6,6 +6,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { CREDENTIAL_LOGIN_METHODS } from "@/lib/contact-form-fields";
+import { requireAccess } from "@/lib/permissions";
 
 // Same admin-only, decrypt-on-demand pattern as the global API key vault
 // (see api-key-vault.ts) — these are login credentials for a client's own
@@ -24,6 +25,7 @@ export async function addContactCredential(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const label = String(formData.get("label") ?? "").trim();
@@ -63,6 +65,7 @@ export async function addContactCredential(
 }
 
 export async function deleteContactCredential(contactId: string, id: string): Promise<void> {
+  await requireAccess("contacts", "DELETE");
   await requireAdmin();
   await withScopedPrismaClient((db) => db.contactCredential.delete({ where: { id } }));
   revalidatePath(`/contacts/${contactId}`);
@@ -72,6 +75,7 @@ export async function deleteContactCredential(contactId: string, id: string): Pr
 // client on page load — the password only ever leaves the server when the
 // admin explicitly clicks "Reveal" for that one entry.
 export async function revealContactCredential(id: string, field: "password" | "apiKey" = "password"): Promise<{ value?: string; error?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const entry = await withScopedPrismaClient((db) => db.contactCredential.findUnique({ where: { id } }));
@@ -84,6 +88,7 @@ export async function revealContactCredential(id: string, field: "password" | "a
 // The per-entry "Share with AI" switch: whether this API key may be included
 // in an Export for AI (the exporter still has to opt in each time).
 export async function setApiKeyShareWithAi(contactId: string, id: string, share: boolean): Promise<void> {
+  await requireAccess("contacts", "WRITE");
   await requireAdmin();
   await withScopedPrismaClient((db) => db.contactCredential.update({ where: { id }, data: { shareApiKeyWithAi: share } }));
   revalidatePath(`/contacts/${contactId}`);

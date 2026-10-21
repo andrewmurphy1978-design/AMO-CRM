@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccess } from "@/lib/permissions";
 
 export interface SubscriptionInput {
   name: string;
@@ -13,6 +14,7 @@ export interface SubscriptionInput {
 
 // Replaces the project's Apps & subscriptions with the rows in the card.
 export async function saveProjectSubscriptions(projectId: string, rows: SubscriptionInput[]): Promise<{ error?: string }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const clean = rows

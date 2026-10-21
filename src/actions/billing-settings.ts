@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { requireAccess } from "@/lib/permissions";
 
 export async function getBillingSettings() {
+  await requireAccess("settings", "READ");
   return withScopedPrismaClient((db) =>
     db.billingSettings.upsert({
       where: { id: "singleton" },
@@ -19,6 +21,7 @@ export async function updateBillingSettings(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") throw new Error("Not authorized");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");

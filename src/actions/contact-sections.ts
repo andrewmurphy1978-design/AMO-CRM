@@ -30,6 +30,7 @@ import {
   buildCustomFieldEditOps,
 } from "@/lib/contact-form-fields";
 import { applyContactExternalSyncs } from "./contacts";
+import { requireAccess } from "@/lib/permissions";
 
 type ActionResult = { error?: string; success?: string };
 
@@ -65,6 +66,7 @@ export async function updateContactGeneralInfo(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -130,6 +132,7 @@ export async function updateContactInfo(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -183,6 +186,7 @@ export async function updateContactSocial(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -207,6 +211,7 @@ export async function updateContactVoip(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -231,6 +236,7 @@ export async function updateContactAddresses(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -298,6 +304,7 @@ export async function updateContactInvoice(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -343,6 +350,7 @@ export async function updateContactTechStack(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -406,6 +414,7 @@ export async function updateContactDomains(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -430,6 +439,7 @@ export async function updateContactRelations(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -487,6 +497,7 @@ export async function updateContactNotes(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 
@@ -528,6 +539,7 @@ export async function updateContactOtherInfo(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth2();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
 

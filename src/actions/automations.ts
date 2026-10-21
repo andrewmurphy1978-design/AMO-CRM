@@ -7,6 +7,7 @@ import { readExpiry, recordInVault } from "@/lib/api-key-expiry";
 import { encryptSecret } from "@/lib/crypto";
 import { runMakeSync } from "@/lib/automations";
 import { getDict } from "@/lib/i18n/dictionaries";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireAdmin() {
   const session = await auth();
@@ -20,6 +21,7 @@ export async function saveMakeApiKey(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("marketing", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const apiKey = String(formData.get("apiKey") ?? "").trim();
@@ -47,6 +49,7 @@ export async function saveMakeApiKey(
 }
 
 export async function triggerMakeSync(): Promise<{ error?: string; success?: string }> {
+  await requireAccess("marketing", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   try {

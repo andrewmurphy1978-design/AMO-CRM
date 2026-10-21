@@ -6,6 +6,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { readExpiry } from "@/lib/api-key-expiry";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireAdmin() {
   const session = await auth();
@@ -19,6 +20,7 @@ export async function addVaultEntry(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const label = String(formData.get("label") ?? "").trim();
@@ -43,6 +45,7 @@ export async function addVaultEntry(
 
 // Renewing or correcting a key's expiry date without pasting the key again.
 export async function updateVaultExpiry(id: string, formData: FormData): Promise<{ error?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const expiry = readExpiry(formData, session.user.language === "FR");
   if ("error" in expiry) return { error: expiry.error };
@@ -58,6 +61,7 @@ export async function updateVaultExpiry(id: string, formData: FormData): Promise
 }
 
 export async function deleteVaultEntry(id: string): Promise<void> {
+  await requireAccess("settings", "DELETE");
   await requireAdmin();
   await withScopedPrismaClient((db) => db.apiKeyVaultEntry.delete({ where: { id } }));
   revalidatePath("/settings");
@@ -67,6 +71,7 @@ export async function deleteVaultEntry(id: string): Promise<void> {
 // client on page load — the value only ever leaves the server when the
 // admin explicitly clicks "Reveal" for that one entry.
 export async function revealVaultEntry(id: string): Promise<{ value?: string; error?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const entry = await withScopedPrismaClient((db) => db.apiKeyVaultEntry.findUnique({ where: { id } }));

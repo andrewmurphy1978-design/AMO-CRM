@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { splitPhoneExtension } from "@/lib/phone-display";
 import { getTimezoneFromAreaCode } from "@/lib/timezone";
+import { requireAccess } from "@/lib/permissions";
 
 export interface BackfillContactDataResult {
   error?: string;
@@ -39,6 +40,7 @@ function withCountryCode(value: string): string {
 // number that already has a country code, or a timeZone that's already
 // set; safe to run more than once.
 export async function backfillContactDataAction(): Promise<BackfillContactDataResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session || session.user.role !== "ADMIN") return { error: "Only admins can run this." };
 

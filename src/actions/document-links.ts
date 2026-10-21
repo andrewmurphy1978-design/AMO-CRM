@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { requireAccess } from "@/lib/permissions";
 
 export type DocumentKind = "proposal" | "invoice";
 export type LinkableKind = "email" | "event" | "call";
@@ -18,6 +19,7 @@ export async function toggleDocumentLink(
   itemId: string,
   linked: boolean
 ): Promise<{ error?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const data = kind === "proposal" ? { proposalId: linked ? docId : null } : { invoiceId: linked ? docId : null };
@@ -50,6 +52,7 @@ export interface ProjectDocuments {
 // The project's proposals and invoices, and the ones this email thread / calendar event is
 // linked to now.
 export async function listProjectDocuments(projectId: string, item: LinkedItem): Promise<ProjectDocuments> {
+  await requireAccess("contacts", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient(async (db) => {
@@ -73,6 +76,7 @@ export async function listProjectDocuments(projectId: string, item: LinkedItem):
 
 // Links the email thread / calendar event to a proposal or invoice of the project ("" unlinks).
 export async function setItemDocumentLink(item: LinkedItem, projectId: string, kind: DocumentKind, docId: string): Promise<{ error?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const data = kind === "proposal" ? { proposalId: docId || null } : { invoiceId: docId || null };

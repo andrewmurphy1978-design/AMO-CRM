@@ -10,10 +10,12 @@ import { buildPhasePrompt, phaseKind, type PromptContext } from "@/lib/phase-pro
 import { getProjectTemplate } from "@/lib/project-template-store";
 import { displayValue, isFieldVisible, typesOfProject, valuesOfType } from "@/lib/project-templates";
 import { getTypeLabels } from "@/lib/project-type-store";
+import { requireAccess } from "@/lib/permissions";
 
 // The AI prompt for a phase (shown on the phase's first task): everything the CRM knows about
 // the client, the project's details, the brand and the phase's tasks, ready to paste into an AI.
 export async function generatePhasePrompt(projectId: string, phaseId: string): Promise<{ prompt?: string; error?: string; assetsZip?: { url: string; count: number } }> {
+  await requireAccess("projects", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient(async (db) => {

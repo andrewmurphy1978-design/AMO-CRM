@@ -14,6 +14,7 @@ import {
   type CalendarEventInput,
   type CalendarEventDetail,
 } from "@/lib/google";
+import { requireAccess } from "@/lib/permissions";
 
 export interface EventLinkTargets {
   contactId: string;
@@ -57,6 +58,7 @@ async function saveLinks(db: PrismaClient, googleEventId: string, links: EventLi
 }
 
 export async function fetchCalendarEventDetail(eventId: string): Promise<CalendarEventDetail | { error: string }> {
+  await requireAccess("calendar", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -74,6 +76,7 @@ export async function fetchCalendarEventDetail(eventId: string): Promise<Calenda
 // of just that label — independent of any one event, so it's fetched on
 // its own rather than folded into fetchCalendarEventDetail.
 export async function fetchDefaultReminders(): Promise<{ minutes: number[] } | { error: string }> {
+  await requireAccess("calendar", "READ");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -88,6 +91,7 @@ export async function createCalendarEventAction(
   values: CalendarEventInput,
   links: EventLinkTargets
 ): Promise<{ id?: string; error?: string }> {
+  await requireAccess("calendar", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -112,6 +116,7 @@ export async function updateCalendarEventAction(
   values: CalendarEventInput,
   links: EventLinkTargets
 ): Promise<{ error?: string }> {
+  await requireAccess("calendar", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -132,6 +137,7 @@ export async function updateCalendarEventAction(
 }
 
 export async function deleteCalendarEventAction(eventId: string): Promise<{ error?: string }> {
+  await requireAccess("calendar", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 

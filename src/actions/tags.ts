@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import type { TagCategory } from "@prisma/client";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireAdmin() {
   const session = await auth();
@@ -22,6 +23,7 @@ export async function createTag(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const name = String(formData.get("name") ?? "").trim();
@@ -54,6 +56,7 @@ export async function updateTag(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const name = String(formData.get("name") ?? "").trim();
@@ -76,6 +79,7 @@ export async function updateTag(
 }
 
 export async function deleteTag(id: string): Promise<void> {
+  await requireAccess("contacts", "DELETE");
   await requireAdmin();
   await withScopedPrismaClient((db) => db.tag.delete({ where: { id } }));
   revalidatePath("/settings");
@@ -86,6 +90,7 @@ export async function deleteTag(id: string): Promise<void> {
 // same up/down-arrow mechanic as the World Clock zone reorder list. No-op
 // past either end of the list.
 export async function moveTag(id: string, direction: "up" | "down"): Promise<void> {
+  await requireAccess("contacts", "WRITE");
   await requireAdmin();
   await withScopedPrismaClient(async (db: PrismaClient) => {
     const tag = await db.tag.findUnique({ where: { id } });

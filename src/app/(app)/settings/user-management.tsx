@@ -4,6 +4,7 @@ import { useActionState, useState, useTransition } from "react";
 import { createUser, updateUser, deleteUser, resetUserPassword } from "@/actions/users";
 import PhoneField from "@/components/phone-field";
 import { COUNTRIES } from "@/lib/countries";
+import { SECTIONS, type Level, type Permissions } from "@/lib/permissions";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
 
 type TeamUser = {
@@ -15,8 +16,7 @@ type TeamUser = {
   whatsapp: string | null;
   country: string;
   language: "EN" | "FR";
-  accountingAccess?: boolean;
-  accountingOnly?: boolean;
+  perms?: Permissions;
 };
 
 const FIELD_CLASS =
@@ -52,6 +52,7 @@ export default function UserManagement({
 
   function openCreate() {
     setSelected(null);
+    setRoleDraft("MEMBER");
     setMode("create");
     setCountry("CA");
     setTempPassword("");
@@ -59,6 +60,7 @@ export default function UserManagement({
 
   function openEdit(user: TeamUser) {
     setSelected(user);
+    setRoleDraft(user.role);
     setMode("edit");
     setCountry(user.country);
     setTempPassword("");
@@ -92,6 +94,8 @@ export default function UserManagement({
   const activeState = mode === "create" ? createState : updateState;
   const activePending = mode === "create" ? createPending : updatePending;
   const isSelf = selected?.id === currentUserId;
+  const [roleDraft, setRoleDraft] = useState<"ADMIN" | "MEMBER">("MEMBER");
+  const isAdminRole = (mode === "edit" ? roleDraft : roleDraft) === "ADMIN";
 
   return (
     <div className="space-y-4">
@@ -186,7 +190,8 @@ export default function UserManagement({
             <label className={LABEL_CLASS}>{t.team.role}</label>
             <select
               name="role"
-              defaultValue={selected?.role ?? "MEMBER"}
+              value={roleDraft}
+              onChange={(e) => setRoleDraft(e.target.value as "ADMIN" | "MEMBER")}
               disabled={isSelf}
               className={`${FIELD_CLASS} disabled:opacity-60`}
             >
@@ -194,30 +199,7 @@ export default function UserManagement({
               <option value="ADMIN">{t.team.admin}</option>
             </select>
           </div>
-          <div className="sm:col-span-2 rounded-md border border-card-border bg-field-bg/40 p-3">
-            <label className="flex items-start gap-2 text-sm text-ink">
-              <input type="checkbox" name="accountingAccess" defaultChecked={selected?.accountingAccess ?? false} className="mt-0.5 accent-amo-lime" />
-              <span>
-                <span className="font-semibold">{lang === "fr" ? "Comptabilité personnelle" : "Personal accounting"}</span>
-                <span className="block text-xs text-soft">
-                  {lang === "fr"
-                    ? "Donne accès à la section Comptabilité, avec ses propres livres personnels (séparés des vôtres). Les administrateurs y ont toujours accès."
-                    : "Gives access to the Accounting section with their own personal books, separate from yours. Admins always have access."}
-                </span>
-              </span>
-            </label>
-            <label className="mt-3 flex items-start gap-2 text-sm text-ink">
-              <input type="checkbox" name="accountingOnly" defaultChecked={selected?.accountingOnly ?? false} className="mt-0.5 accent-amo-lime" />
-              <span>
-                <span className="font-semibold">{lang === "fr" ? "Comptabilité seulement" : "Accounting only"}</span>
-                <span className="block text-xs text-soft">
-                  {lang === "fr"
-                    ? "Le CRM ne lui montre que la Comptabilité (aucun contact, projet, courriel ni facture). Active aussi la comptabilité personnelle."
-                    : "The CRM shows only Accounting (no contacts, projects, emails or invoices). Also turns on personal accounting."}
-                </span>
-              </span>
-            </label>
-          </div>
+          <AccessMatrix key={selected?.id ?? "new"} initial={selected?.perms} lang={lang} disabled={isAdminRole} />
           <div>
             <label className={LABEL_CLASS}>{t.team.language}</label>
             <div className="mt-2 flex items-center gap-4 text-sm text-ink">
@@ -289,6 +271,75 @@ export default function UserManagement({
             </button>
           </div>
         </form>
+      )}
+    </div>
+  );
+}
+
+const LABELS: Record<string, [string, string]> = {
+  dashboard: ["Dashboard", "Tableau de bord"], email: ["Email", "Courriel"], sms: ["SMS", "SMS"], calendar: ["Calendar", "Calendrier"],
+  tasks: ["Tasks", "Tâches"], contacts: ["Contacts", "Contacts"], projects: ["Projects", "Projets"], invoices: ["Invoices", "Factures"],
+  accounting: ["Accounting", "Comptabilité"], marketing: ["Marketing", "Marketing"], socialAnalytics: ["Social analytics", "Analytique sociale"],
+  bookings: ["Bookings", "Réservations"], settings: ["Settings", "Paramètres"],
+};
+const LEVEL_OPTS: { v: Level; en: string; fr: string }[] = [
+  { v: "NONE", en: "No access", fr: "Aucun accès" },
+  { v: "READ", en: "Read only", fr: "Lecture seule" },
+  { v: "WRITE", en: "Read & write", fr: "Lecture et écriture" },
+  { v: "DELETE", en: "Read, write & delete", fr: "Lecture, écriture et suppression" },
+];
+
+// Access per section, with one-click presets. Saved as a JSON map in a hidden field.
+function AccessMatrix({ initial, lang, disabled }: { initial?: Permissions; lang: Lang; disabled: boolean }) {
+  const fr = lang === "fr";
+  const full = (l: Level) => Object.fromEntries(SECTIONS.map((s) => [s.key, l])) as Permissions;
+  const [perms, setPerms] = useState<Permissions>(initial ?? full("DELETE"));
+  const presets: { label: string; value: Permissions }[] = [
+    { label: fr ? "Accès complet" : "Full access", value: { ...full("DELETE") } },
+    { label: fr ? "Lecture seule" : "Read only", value: { ...full("READ"), settings: "WRITE" } },
+    { label: fr ? "Comptabilité seulement" : "Accounting only", value: { ...full("NONE"), accounting: "DELETE", settings: "WRITE" } },
+  ];
+  return (
+    <div className="sm:col-span-2 rounded-md border border-card-border bg-field-bg/40 p-3">
+      <input type="hidden" name="permissions" value={JSON.stringify(perms)} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className={LABEL_CLASS}>{fr ? "Accès par section" : "Access by section"}</span>
+        {!disabled && (
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((p) => (
+              <button key={p.label} type="button" onClick={() => setPerms(p.value)} className="rounded-md border border-card-border px-2 py-1 text-xs text-ink hover:bg-black/5">
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {disabled ? (
+        <p className="mt-2 text-xs text-soft">{fr ? "Les administrateurs ont toujours un accès complet." : "Admins always have full access."}</p>
+      ) : (
+        <>
+          <div className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+            {SECTIONS.map((s) => (
+              <label key={s.key} className="flex items-center justify-between gap-2 text-sm text-ink">
+                <span>{LABELS[s.key][fr ? 1 : 0]}</span>
+                <select
+                  value={perms[s.key]}
+                  onChange={(e) => setPerms({ ...perms, [s.key]: e.target.value as Level })}
+                  className="rounded-md border border-card-border bg-field-bg px-2 py-1 text-xs text-ink"
+                >
+                  {LEVEL_OPTS.map((o) => (
+                    <option key={o.v} value={o.v}>{fr ? o.fr : o.en}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-soft">
+            {fr
+              ? "Comptabilité donne à la personne ses propres livres, séparés des vôtres. Chacun garde l'accès à ses Paramètres personnels."
+              : "Accounting gives the person their own books, separate from yours. Everyone keeps access to their own Settings."}
+          </p>
+        </>
       )}
     </div>
   );

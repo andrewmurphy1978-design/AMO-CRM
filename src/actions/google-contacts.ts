@@ -6,6 +6,7 @@ import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getValidAccessToken } from "@/lib/google";
 import { listGoogleContacts, type GoogleContactSummary } from "@/lib/google-contacts";
 import { getTimezoneFromAreaCode } from "@/lib/timezone";
+import { requireAccess } from "@/lib/permissions";
 
 export interface ImportGoogleContactsResult {
   error?: string;
@@ -238,6 +239,7 @@ async function enrichContact(db: PrismaClient, contactId: string, existing: Exis
 // and (since it has no systemeIoId) means it's never pushed back to
 // systeme.io by the contact-save action.
 export async function importGoogleContactsAction(): Promise<ImportGoogleContactsResult> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 

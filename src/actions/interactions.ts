@@ -9,6 +9,7 @@ import { getTwilioConfig, publicBaseUrl, sendTwilioSms } from "@/lib/twilio";
 import { explainTwilioError } from "@/lib/twilio-errors";
 import { attachSmsNumberToContact } from "@/lib/sms-link";
 import { summarizeInteractionWithAI } from "@/lib/interaction-ai";
+import { requireAccess } from "@/lib/permissions";
 
 const InteractionSchema = z.object({
   type: z.enum(["CALL", "EMAIL", "MEETING", "NOTE"]),
@@ -22,6 +23,7 @@ export async function logInteraction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -88,6 +90,7 @@ export async function saveContactInteraction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -219,6 +222,7 @@ export async function deleteInteraction(
   contactId: string,
   projectId?: string | null
 ): Promise<void> {
+  await requireAccess("contacts", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -232,6 +236,7 @@ export async function deleteInteraction(
 
 // "Generate a summary with AI": from the notes / pasted transcript currently in the dialog.
 export async function generateInteractionSummary(notes: string, type: string, subject?: string): Promise<{ summary?: string; error?: string }> {
+  await requireAccess("contacts", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   if (!notes.trim()) return { error: "Paste or type the notes first." };

@@ -9,6 +9,7 @@ import { withScopedPrismaClient, type PrismaClient } from "@/lib/prisma";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { buildInvoiceEmail, type InvoiceEmail } from "@/lib/invoice-email";
 import { computeBillingTotals, contactTaxLocation, type LineItemInput } from "@/lib/billing-totals";
+import { requireAccess } from "@/lib/permissions";
 
 const InvoiceSchema = z.object({
   projectId: z.string().min(1),
@@ -33,6 +34,7 @@ function revalidateBoth(projectId: string, contactId: string) {
 // "+" on the Invoices card: starts an empty draft (the contact's currency and payment
 // terms, an automatic number) and returns its id so the full editor can open on it.
 export async function createDraftInvoice(projectId: string): Promise<{ id: string }> {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const result = await withScopedPrismaClient(async (db) => {
@@ -58,6 +60,7 @@ export async function createInvoice(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -106,6 +109,7 @@ export async function createInvoice(
 }
 
 export async function updateInvoiceStatus(invoiceId: string, projectId: string, status: string) {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -133,6 +137,7 @@ export async function updateInvoiceStatus(invoiceId: string, projectId: string, 
 // `clientRefreshes`: the caller refreshes the project page itself (router.refresh()), so the heavy
 // project page isn't also re-rendered inside this request.
 export async function deleteInvoice(invoiceId: string, projectId: string, clientRefreshes = false) {
+  await requireAccess("invoices", "DELETE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -151,6 +156,7 @@ export async function deleteInvoice(invoiceId: string, projectId: string, client
 // to 30 days out since a Proposal's payment schedule dates don't map
 // cleanly onto a single invoice due date.
 export async function convertProposalToInvoice(proposalId: string, projectId: string) {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -204,6 +210,7 @@ export async function convertProposalToInvoice(proposalId: string, projectId: st
 // just records that a reminder went out, so the reminders list stops
 // flagging this invoice for another REMINDER_INTERVAL_DAYS.
 export async function markInvoiceReminderSent(invoiceId: string) {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
 
@@ -252,6 +259,7 @@ export async function updateInvoiceLineItems(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -336,6 +344,7 @@ export async function updateInvoiceLineItems(
 // ---- internal approval, then send
 
 export async function approveInvoice(invoiceId: string, projectId: string) {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
@@ -346,6 +355,7 @@ export async function approveInvoice(invoiceId: string, projectId: string) {
 }
 
 export async function unapproveInvoice(invoiceId: string, projectId: string) {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {
@@ -358,6 +368,7 @@ export async function unapproveInvoice(invoiceId: string, projectId: string) {
 }
 
 export async function invoiceSendInfo(invoiceId: string, projectId: string): Promise<InvoiceEmail> {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   return withScopedPrismaClient(async (db) => {
@@ -370,6 +381,7 @@ export async function invoiceSendInfo(invoiceId: string, projectId: string): Pro
 }
 
 export async function markInvoiceSent(invoiceId: string, projectId: string) {
+  await requireAccess("invoices", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not authenticated");
   const contactId = await withScopedPrismaClient(async (db) => {

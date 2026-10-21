@@ -14,6 +14,7 @@ import { saveIonosMailbox, getIonosMailbox, disconnectIonosMailbox, recordIonosR
 import { verifySmtp } from "@/lib/mail/smtp";
 import { verifyImap } from "@/lib/mail/imap";
 import type { MailSecurity } from "@/lib/mail/socket";
+import { requireAccess } from "@/lib/permissions";
 
 async function requireAdmin() {
   const session = await auth();
@@ -32,6 +33,7 @@ export async function saveAnthropicApiKey(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const apiKey = String(formData.get("apiKey") ?? "").trim();
@@ -60,6 +62,7 @@ export async function saveSystemeIoApiKey(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const apiKey = String(formData.get("apiKey") ?? "").trim();
@@ -96,6 +99,7 @@ export async function triggerSystemeIoSync(): Promise<{
   automationsSynced?: number;
   bookingsSynced?: number;
 }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   try {
@@ -118,6 +122,7 @@ export async function triggerSystemeIoSync(): Promise<{
 }
 
 export async function toggleAutoSync(enabled: boolean) {
+  await requireAccess("settings", "WRITE");
   await requireAdmin();
   await withScopedPrismaClient((db) =>
     db.integrationSetting.upsert({
@@ -133,6 +138,7 @@ export async function saveAutoSyncTime(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const time = String(formData.get("autoSyncTime") ?? "");
@@ -156,6 +162,7 @@ export async function saveShortIoApiKey(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const apiKey = String(formData.get("apiKey") ?? "").trim();
@@ -187,6 +194,7 @@ export async function saveShortIoApiKey(
 // integrations above), so any signed-in user can disconnect their own —
 // no admin check.
 export async function disconnectGoogleAccount(): Promise<void> {
+  await requireAccess("settings", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not signed in");
   await disconnectGoogle(session.user.id);
@@ -201,6 +209,7 @@ export async function saveIonosMailboxAction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not signed in");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -247,6 +256,7 @@ export async function testIonosMailboxAction(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not signed in");
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
@@ -285,6 +295,7 @@ export async function testIonosMailboxAction(
 }
 
 export async function disconnectIonosMailboxAction(): Promise<void> {
+  await requireAccess("settings", "WRITE");
   const session = await auth();
   if (!session) throw new Error("Not signed in");
   await withScopedPrismaClient((db) => disconnectIonosMailbox(session.user.id, db));
@@ -297,6 +308,7 @@ export async function saveTwilioSettings(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const accountSid = String(formData.get("accountSid") ?? "").trim();
   const authTokenInput = String(formData.get("authToken") ?? "").trim();
@@ -335,6 +347,7 @@ export async function saveTwilioSettings(
 }
 
 export async function disconnectTwilio(): Promise<void> {
+  await requireAccess("settings", "WRITE");
   await requireAdmin();
   await withScopedPrismaClient((db) => db.integrationSetting.deleteMany({ where: { provider: "twilio" } }));
   revalidatePath("/settings");
@@ -346,6 +359,7 @@ export async function saveStripeSettings(
   _prevState: { error?: string; success?: string } | undefined,
   formData: FormData
 ): Promise<{ error?: string; success?: string }> {
+  await requireAccess("settings", "WRITE");
   const session = await requireAdmin();
   const fr = session.user.language === "FR";
   const secretKey = String(formData.get("secretKey") ?? "").trim();
