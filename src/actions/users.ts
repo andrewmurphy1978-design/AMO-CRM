@@ -29,6 +29,17 @@ async function requireAdmin() {
 }
 
 // The per-section access chosen in the Team screen (a JSON map of section -> level). Admins always have everything.
+// Replaces a member's shared-mailbox access with the levels chosen in the Team screen (a JSON map mailboxId -> level).
+async function saveMailboxAccess(db: import("@/lib/prisma").PrismaClient, userId: string, formData: FormData, role: string) {
+  await db.sharedMailboxAccess.deleteMany({ where: { userId } });
+  if (role === "ADMIN") return;
+  let raw: Record<string, string> = {};
+  try { raw = JSON.parse(String(formData.get("mailboxAccess") ?? "{}")); } catch { return; }
+  const valid = new Set((await db.sharedMailbox.findMany({ select: { id: true } })).map((m) => m.id));
+  const rows = Object.entries(raw).filter(([id, level]) => valid.has(id) && ["READ", "SEND", "COMPLETE"].includes(level));
+  if (rows.length) await db.sharedMailboxAccess.createMany({ data: rows.map(([mailboxId, level]) => ({ mailboxId, userId, level })) });
+}
+
 function accountingFlags(formData: FormData, role: string) {
   if (role === "ADMIN") return { accountingAccess: false, accountingOnly: false };
   const clean: Record<string, string> = {};
@@ -105,7 +116,7 @@ export async function createUser(
   const result = await withScopedPrismaClient(async (db) => {
     const existing = await db.user.findUnique({ where: { email: data.email } });
     if (existing) return { error: t.actions.userEmailExists };
-    await db.user.create({
+    const created = await db.user.create({
       data: {
         name: data.name,
         email: data.email,
@@ -118,6 +129,7 @@ export async function createUser(
         ...accountingFlags(formData, data.role),
       },
     });
+    await saveMailboxAccess(db, created.id, formData, data.role);
     return {};
   });
   if (result.error) return { error: result.error };
@@ -167,6 +179,7 @@ export async function updateUser(
         ...accountingFlags(formData, role),
       },
     });
+    if (formData.has("mailboxAccess") || role === "ADMIN") await saveMailboxAccess(db, userId, formData, role);
     return {};
   });
   if (result.error) return { error: result.error };

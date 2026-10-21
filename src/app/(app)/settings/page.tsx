@@ -18,6 +18,8 @@ import BufferForm, { type BufferAccountStatus, type BufferProvider } from "./buf
 import SocialLinksForm from "./social-links-form";
 import type { SocialPlatform } from "@/lib/social";
 import UserManagement from "./user-management";
+import SharedMailboxesForm, { type SharedMailboxRow } from "./shared-mailboxes-form";
+import { loadCredentials } from "@/lib/mail/shared-mailbox";
 import { resolvePermissions } from "@/lib/permissions";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
@@ -99,6 +101,9 @@ export default async function SettingsPage({
     googleProblem,
     googleTasksOn,
     ionosMailbox,
+    sharedMailboxRows,
+    mailboxAccessByUser,
+    mailboxAccessByMailbox,
     users,
     watchedPeople,
     emailAddressColors,
@@ -162,6 +167,24 @@ export default async function SettingsPage({
         ? Boolean((await db.googleAccount.findUnique({ where: { userId: session.user.id }, select: { tasksListId: true } }))?.tasksListId)
         : false;
       const ionosMailbox = session ? await getIonosMailbox(session.user.id, db) : null;
+      const sharedBoxes = isAdmin ? await db.sharedMailbox.findMany({ orderBy: { name: "asc" } }) : [];
+      const sharedMailboxRows: SharedMailboxRow[] = [];
+      for (const b of sharedBoxes) {
+        const c = await loadCredentials(db, b.id);
+        sharedMailboxRows.push({
+          id: b.id, name: b.name, address: b.address, displayName: b.displayName, provider: b.provider,
+          imapHost: c?.creds.imapHost ?? "", imapPort: c?.creds.imapPort ?? 993, imapSecurity: c?.creds.imapSecurity ?? "tls",
+          smtpHost: c?.creds.smtpHost ?? "", smtpPort: c?.creds.smtpPort ?? 465, smtpSecurity: c?.creds.smtpSecurity ?? "tls",
+          username: c?.creds.username ?? "", lastError: b.lastError,
+        });
+      }
+      const accessRows = isAdmin ? await db.sharedMailboxAccess.findMany() : [];
+      const mailboxAccessByUser: Record<string, Record<string, string>> = {};
+      const mailboxAccessByMailbox: Record<string, Record<string, string>> = {};
+      for (const r of accessRows) {
+        (mailboxAccessByUser[r.userId] ??= {})[r.mailboxId] = r.level;
+        (mailboxAccessByMailbox[r.mailboxId] ??= {})[r.userId] = r.level;
+      }
       const users = isAdmin ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
       const watchedPeople = showPersonalCard ? await getWatchedPeople(db) : [];
       const emailAddressColors = await db.emailAddressColor.findMany({ orderBy: { order: "asc" } });
@@ -191,6 +214,9 @@ export default async function SettingsPage({
         googleProblem,
         googleTasksOn,
         ionosMailbox,
+        sharedMailboxRows,
+        mailboxAccessByUser,
+        mailboxAccessByMailbox,
         users,
         watchedPeople,
         emailAddressColors,
@@ -420,6 +446,12 @@ export default async function SettingsPage({
       />
     ),
   });
+  if (isAdmin) {
+    addSection({
+      id: "shared-mailboxes", scope: "admin", group: t.settings.groupEmail, icon: "envelope", label: lang === "fr" ? "Boîtes courriel partagées" : "Shared mailboxes",
+      content: <SharedMailboxesForm mailboxes={sharedMailboxRows} lang={lang} members={users.filter((u) => u.role === "MEMBER").map((u) => ({ id: u.id, name: u.name }))} access={mailboxAccessByMailbox} />,
+    });
+  }
   addSection({
     id: "email-colors", scope: "user", group: t.settings.groupEmail, icon: "palette", label: t.settings.emailAddressColorTitle, description: t.settings.emailAddressColorDesc,
     content: <EmailAddressColorForm rows={emailAddressColors} lang={lang} />,
@@ -434,7 +466,7 @@ export default async function SettingsPage({
   if (isAdmin && session) {
     addSection({
       id: "team", scope: "admin", group: t.settings.groupTeamAccess, icon: "users", label: t.settings.groupTeamAccess,
-      content: <UserManagement users={users.map((u) => ({ ...u, perms: resolvePermissions(u) }))} currentUserId={session.user.id} lang={lang} />,
+      content: <UserManagement users={users.map((u) => ({ ...u, perms: resolvePermissions(u), mailboxAccess: mailboxAccessByUser[u.id] ?? {} }))} sharedMailboxes={sharedMailboxRows.map((m) => ({ id: m.id, name: m.name, address: m.address }))} currentUserId={session.user.id} lang={lang} />,
     });
     if (billingSettings) {
       addSection({

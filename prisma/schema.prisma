@@ -135,6 +135,7 @@ model User {
   googleAccount             GoogleAccount?
   ionosMailbox              IonosMailboxAccount?
   sentEmailRecords          SentEmailRecord[]
+  sharedMailboxAccess       SharedMailboxAccess[]
 
   @@map("users")
 }
@@ -2273,4 +2274,51 @@ model AccReconciliation {
 
   @@unique([accountId, periodEnd])
   @@map("acc_reconciliations")
+}
+
+// A shared / departmental mailbox (support@, finance@, sales@…) read over IMAP and sent from over SMTP — any
+// provider, including Google Workspace (IMAP + an app password). Credentials live in one encrypted JSON blob like
+// IonosMailboxAccount. Which team members may open it, and how far, is SharedMailboxAccess.
+model SharedMailbox {
+  id                   String   @id @default(cuid())
+  name                 String // "Support", "Finance"…
+  address              String
+  displayName          String?
+  provider             String   @default("imap") // label only: "google" | "microsoft" | "ionos" | "imap"
+  credentialsEncrypted String   @db.Text
+  sentMailbox          String?
+  lastCheckedAt        DateTime?
+  lastError            String?  @db.Text
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  access      SharedMailboxAccess[]
+  completions SharedMailboxCompletion[]
+
+  @@map("shared_mailboxes")
+}
+
+// level: "READ" (read only) | "SEND" (read and send) | "COMPLETE" (read, send and mark messages done). Never delete.
+model SharedMailboxAccess {
+  id        String        @id @default(cuid())
+  mailboxId String
+  mailbox   SharedMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level     String
+
+  @@unique([mailboxId, userId])
+  @@map("shared_mailbox_access")
+}
+
+model SharedMailboxCompletion {
+  id          String        @id @default(cuid())
+  mailboxId   String
+  mailbox     SharedMailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  uid         Int
+  completedBy String?
+  completedAt DateTime      @default(now())
+
+  @@unique([mailboxId, uid])
+  @@map("shared_mailbox_completions")
 }

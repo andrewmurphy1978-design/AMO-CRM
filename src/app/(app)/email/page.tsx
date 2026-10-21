@@ -99,6 +99,7 @@ export default async function EmailPage() {
       defaultFontSize={composePrefs?.defaultFontSize ?? null}
       headerActions={
         <>
+          <a href="/email/shared" className="btn-primary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold shadow-sm sm:text-sm">{lang === "fr" ? "Boîtes partagées" : "Shared mailboxes"}</a>
           {/* Mobile only: Gmail + IONOS collapse into one dropdown trigger —
               two full buttons here alongside New email and Refresh left no
               room for the page title (see MailAppLinksMenu's own comment). */}

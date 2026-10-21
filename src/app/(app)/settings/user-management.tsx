@@ -17,6 +17,7 @@ type TeamUser = {
   country: string;
   language: "EN" | "FR";
   perms?: Permissions;
+  mailboxAccess?: Record<string, string>;
 };
 
 const FIELD_CLASS =
@@ -34,7 +35,9 @@ export default function UserManagement({
   users,
   currentUserId,
   lang,
+  sharedMailboxes = [],
 }: {
+  sharedMailboxes?: { id: string; name: string; address: string }[];
   users: TeamUser[];
   currentUserId: string;
   lang: Lang;
@@ -200,6 +203,7 @@ export default function UserManagement({
             </select>
           </div>
           <AccessMatrix key={selected?.id ?? "new"} initial={selected?.perms} lang={lang} disabled={isAdminRole} />
+          {!isAdminRole && sharedMailboxes.length > 0 && <MailboxAccess key={`mb-${selected?.id ?? "new"}`} boxes={sharedMailboxes} initial={selected?.mailboxAccess} lang={lang} />}
           <div>
             <label className={LABEL_CLASS}>{t.team.language}</label>
             <div className="mt-2 flex items-center gap-4 text-sm text-ink">
@@ -341,6 +345,36 @@ function AccessMatrix({ initial, lang, disabled }: { initial?: Permissions; lang
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+const MB_OPTS = [
+  { v: "NONE", en: "No access", fr: "Aucun accès" },
+  { v: "READ", en: "Read only", fr: "Lecture seule" },
+  { v: "SEND", en: "Read & send", fr: "Lecture et envoi" },
+  { v: "COMPLETE", en: "Read, send & complete", fr: "Lecture, envoi et complétion" },
+];
+
+// Access to each shared mailbox (support@, finance@…). There is no delete level.
+function MailboxAccess({ boxes, initial, lang }: { boxes: { id: string; name: string; address: string }[]; initial?: Record<string, string>; lang: Lang }) {
+  const fr = lang === "fr";
+  const [value, setValue] = useState<Record<string, string>>(initial ?? {});
+  return (
+    <div className="sm:col-span-2 rounded-md border border-card-border bg-field-bg/40 p-3">
+      <input type="hidden" name="mailboxAccess" value={JSON.stringify(value)} />
+      <span className={LABEL_CLASS}>{fr ? "Boîtes courriel partagées" : "Shared mailboxes"}</span>
+      <div className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+        {boxes.map((b) => (
+          <label key={b.id} className="flex items-center justify-between gap-2 text-sm text-ink">
+            <span>{b.name} <span className="text-xs text-soft">{b.address}</span></span>
+            <select value={value[b.id] ?? "NONE"} onChange={(e) => setValue({ ...value, [b.id]: e.target.value })} className="rounded-md border border-card-border bg-field-bg px-2 py-1 text-xs text-ink">
+              {MB_OPTS.map((o) => <option key={o.v} value={o.v}>{fr ? o.fr : o.en}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-soft">{fr ? "Aucune suppression de courriel n'est permise." : "Deleting messages is never allowed."}</p>
     </div>
   );
 }
