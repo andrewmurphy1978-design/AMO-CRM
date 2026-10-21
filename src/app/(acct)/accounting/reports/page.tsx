@@ -7,12 +7,14 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks } from "@/lib/accounting/options";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
-import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
+import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, periodTotals, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
 import MoveAccountButton from "./move-account-button";
+import BarChart from "./bar-chart";
+import { seriesRanges, yearBefore, type By } from "@/lib/accounting/periods";
 import RecategorizeButton, { type RecatTx } from "./recategorize-button";
 import { isoDate, money } from "@/lib/accounting/format";
 
-type Sp = { entity?: string; year?: string; r?: string; account?: string; month?: string; from?: string; to?: string };
+type Sp = { entity?: string; year?: string; r?: string; account?: string; month?: string; from?: string; to?: string; metric?: string; by?: string; count?: string; yoy?: string };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -51,6 +53,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     else if (report === "bs") data.bs = await balanceSheet(db, entity.id, range.to, fyStart);
     else if (report === "tax") data.tax = await taxSummary(db, entity.id, range.from, range.to);
     else if (report === "st") data.st = await salesTaxReport(db, entity.id, range.from, range.to);
+    else if (report === "cmp") {
+      const by = (["week", "month", "quarter", "year"].includes(sp.by ?? "") ? sp.by : "month") as By;
+      const defaults: Record<By, number> = { week: 12, month: 12, quarter: 8, year: 5 };
+      const count = Math.min(36, Math.max(2, Number(sp.count) || defaults[by]));
+      const ranges = seriesRanges(by, count, entity.fiscalYearEndMonth);
+      const yoy = sp.yoy === "1" && by !== "year";
+      const totals = await periodTotals(db, entity.id, yoy ? [...ranges, ...ranges.map(yearBefore)] : ranges);
+      data.cmp = { by, count, yoy, labels: ranges.map((r) => r.label), current: totals.slice(0, ranges.length), previous: yoy ? totals.slice(ranges.length) : null };
+    }
     else if (report === "gl") {
       const accountId = options.find((o) => o.id === sp.account && o.entityId === entity.id && !o.isGroup)?.id ?? options.find((o) => o.entityId === entity.id && !o.bank && !o.isGroup)?.id;
       if (accountId) {
@@ -75,6 +86,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     ["gl", fr ? "Grand livre" : "General ledger"],
     ["tax", fr ? "Lignes d'impôt" : "Tax lines"],
     ["st", fr ? "Taxes de vente" : "Sales taxes"],
+    ["cmp", fr ? "Comparer (graphique)" : "Compare (chart)"],
   ];
   const href = (over: Partial<Sp>) => {
     const base: Record<string, string | undefined> = { entity: entity.id, year: String(year), r: report, account: sp.account, month: sp.month, from: sp.from, to: sp.to, ...over };
@@ -200,7 +212,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </Link>
         ))}
       </div>
-      <form method="get" action="/accounting/reports" className="flex flex-wrap items-end gap-3 text-sm">
+      {report !== "cmp" && <form method="get" action="/accounting/reports" className="flex flex-wrap items-end gap-3 text-sm">
         <input type="hidden" name="entity" value={entity.id} />
         <input type="hidden" name="r" value={report} />
         <input type="hidden" name="year" value={year} />
@@ -220,7 +232,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         </label>
         <button className="btn-primary rounded-lg px-4 py-1.5 font-semibold">{fr ? "Afficher la période" : "Show period"}</button>
         {periodMode !== "year" && <Link href={href({ month: "", from: "", to: "" })} className="pb-2 text-soft underline">{fr ? "Retour à l'exercice" : "Back to the fiscal year"}</Link>}
-      </form>
+      </form>}
       <div className="flex flex-wrap gap-2 text-sm">
         {tabs.map(([k, label]) => (
           <Link key={k} href={href({ r: k })} className={k === report ? "rounded-lg bg-ink px-3 py-1 font-medium text-white" : "rounded-lg border border-card-border px-3 py-1 text-ink hover:bg-black/5"}>
@@ -230,7 +242,86 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       </div>
 
       <Card color="statistics" title={<>{entity.name} · {tabs.find(([k]) => k === report)?.[1]}</>}>
-        <p className="text-xs text-soft">{isoDate(range.from)} → {isoDate(range.to)} · {cur}</p>
+        {report !== "cmp" && <p className="text-xs text-soft">{isoDate(range.from)} → {isoDate(range.to)} · {cur}</p>}
+
+        {report === "cmp" && data.cmp ? (() => {
+          const c = data.cmp as { by: By; count: number; yoy: boolean; labels: string[]; current: { income: number; expenses: number; net: number }[]; previous: { income: number; expenses: number; net: number }[] | null };
+          const metric = sp.metric === "income" || sp.metric === "expenses" || sp.metric === "net" ? sp.metric : "both";
+          const label = { income: fr ? "Revenus" : "Income", expenses: fr ? "Dépenses" : "Expenses", net: fr ? "Résultat net" : "Net" };
+          const GREEN = "#059669";
+          const ROSE = "#e11d48";
+          const BLUE = "#0284c7";
+          const series: { name: string; color: string; values: number[] }[] = [];
+          if (metric === "both") {
+            series.push({ name: label.income, color: GREEN, values: c.current.map((t) => t.income) }, { name: label.expenses, color: ROSE, values: c.current.map((t) => t.expenses) });
+          } else {
+            const color = metric === "income" ? GREEN : metric === "expenses" ? ROSE : BLUE;
+            series.push({ name: label[metric], color, values: c.current.map((t) => t[metric]) });
+            if (c.previous) series.push({ name: `${label[metric]} — ${fr ? "année précédente" : "previous year"}`, color: color + "66", values: c.previous.map((t) => t[metric]) });
+          }
+          const rowMetric = metric === "both" ? "net" : metric;
+          const pct = (cur: number, prev: number) => (prev === 0 ? "—" : `${(((cur - prev) / Math.abs(prev)) * 100).toFixed(0)} %`);
+          return (
+            <div className="space-y-3">
+              <form method="get" action="/accounting/reports" className="flex flex-wrap items-end gap-3 text-sm">
+                <input type="hidden" name="entity" value={entity.id} />
+                <input type="hidden" name="r" value="cmp" />
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-soft">{fr ? "Mesure" : "Measure"}</span>
+                  <select name="metric" defaultValue={metric} className="rounded-lg border border-card-border bg-white px-2 py-1.5">
+                    <option value="both">{fr ? "Revenus et dépenses" : "Income and expenses"}</option>
+                    <option value="income">{label.income}</option>
+                    <option value="expenses">{label.expenses}</option>
+                    <option value="net">{label.net}</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-soft">{fr ? "Par" : "By"}</span>
+                  <select name="by" defaultValue={c.by} className="rounded-lg border border-card-border bg-white px-2 py-1.5">
+                    <option value="week">{fr ? "Semaine" : "Week"}</option>
+                    <option value="month">{fr ? "Mois" : "Month"}</option>
+                    <option value="quarter">{fr ? "Trimestre" : "Quarter"}</option>
+                    <option value="year">{fr ? "Exercice" : "Fiscal year"}</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-soft">{fr ? "Nombre de périodes" : "Number of periods"}</span>
+                  <input type="number" name="count" min={2} max={36} defaultValue={c.count} className="w-24 rounded-lg border border-card-border bg-white px-2 py-1.5" />
+                </label>
+                <label className="flex items-center gap-2 pb-2 text-soft">
+                  <input type="checkbox" name="yoy" value="1" defaultChecked={c.yoy} disabled={false} /> {fr ? "Comparer à l'année précédente" : "Compare with the previous year"}
+                </label>
+                <button className="btn-primary rounded-lg px-4 py-1.5 font-semibold">{fr ? "Afficher" : "Show"}</button>
+              </form>
+              <BarChart labels={c.labels} series={series} currency={cur} lang={lang} title={`${entity.name} — ${metric === "both" ? `${label.income} / ${label.expenses}` : label[metric]}`} />
+              <table className="w-full max-w-5xl text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase text-soft">
+                    <th className="py-1">{fr ? "Période" : "Period"}</th>
+                    <th className="text-right">{label.income}</th>
+                    <th className="text-right">{label.expenses}</th>
+                    <th className="text-right">{label.net}</th>
+                    {c.previous && <th className="text-right">{fr ? `${label[rowMetric]}, année précédente` : `${label[rowMetric]}, previous year`}</th>}
+                    {c.previous && <th className="text-right">{fr ? "Variation" : "Change"}</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-card-border">
+                  {c.labels.map((l, i) => (
+                    <tr key={l}>
+                      <td className="py-1 text-ink">{l}</td>
+                      <td className="text-right text-emerald-700">{m(c.current[i].income)}</td>
+                      <td className="text-right text-ink">{m(c.current[i].expenses)}</td>
+                      <td className={`text-right font-medium ${c.current[i].net < 0 ? "text-red-600" : "text-ink"}`}>{m(c.current[i].net)}</td>
+                      {c.previous && <td className="text-right text-soft">{m(c.previous[i][rowMetric])}</td>}
+                      {c.previous && <td className="text-right text-soft">{pct(c.current[i][rowMetric], c.previous[i][rowMetric])}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-soft">{fr ? "La dernière période va jusqu'à aujourd'hui." : "The last period runs to today."}</p>
+            </div>
+          );
+        })() : null}
 
         {report === "is" && data.is ? (() => {
           const s = data.is as Awaited<ReturnType<typeof incomeStatement>>;

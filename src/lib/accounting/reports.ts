@@ -203,3 +203,27 @@ export async function smallSupplierStatus(db: PrismaClient, entityId: string, as
   const total = r2(quarters.reduce((s, q) => s + q.revenue, 0));
   return { quarters: quarters.reverse(), total, threshold: 30000, pct: Math.min(100, Math.round((total / 30000) * 100)), exceeded: total > 30000 };
 }
+
+/** Income, expenses (cost of sales included) and net for each date range, from one read of the journal. */
+export async function periodTotals(db: PrismaClient, entityId: string, ranges: { from: Date; to: Date }[]): Promise<{ income: number; expenses: number; net: number }[]> {
+  if (ranges.length === 0) return [];
+  const min = new Date(Math.min(...ranges.map((r) => r.from.getTime())));
+  const max = new Date(Math.max(...ranges.map((r) => r.to.getTime())));
+  const lines = await db.accJournalLine.findMany({
+    where: { account: { type: { in: ["INCOME", "EXPENSE"] } }, entry: { entityId, date: { gte: min, lte: max } } },
+    select: { debit: true, credit: true, account: { select: { type: true } }, entry: { select: { date: true } } },
+  });
+  return ranges.map((r) => {
+    let income = 0;
+    let expenses = 0;
+    const a = r.from.getTime();
+    const b = r.to.getTime();
+    for (const l of lines) {
+      const t = l.entry.date.getTime();
+      if (t < a || t > b) continue;
+      if (l.account.type === "INCOME") income += l.credit - l.debit;
+      else expenses += l.debit - l.credit;
+    }
+    return { income: r2(income), expenses: r2(expenses), net: r2(income - expenses) };
+  });
+}

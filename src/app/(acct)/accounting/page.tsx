@@ -5,16 +5,15 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { entityCardColor, loadBooks, KIND_LABEL } from "@/lib/accounting/options";
-import { fiscalYearRange, incomeStatement, salesTaxReport, smallSupplierStatus } from "@/lib/accounting/reports";
+import { periodTotals, salesTaxReport, smallSupplierStatus } from "@/lib/accounting/reports";
+import { overviewRanges } from "@/lib/accounting/periods";
 import { money } from "@/lib/accounting/format";
 
-export default async function AccountingOverview({ searchParams }: { searchParams: Promise<{ year?: string }> }) {
+export default async function AccountingOverview() {
   const me = await requireAccountingUser();
-  const { year: yearParam } = await searchParams;
   const lang = await getLang();
   const fr = lang === "fr";
   const now = new Date();
-  const year = Number(yearParam) || now.getUTCFullYear();
 
   const data = await withScopedPrismaClient(async (db) => {
     await ensureAccountingSetup(db, me);
@@ -25,28 +24,25 @@ export default async function AccountingOverview({ searchParams }: { searchParam
     ]);
     const cards = [];
     for (const e of entities) {
-      const range = fiscalYearRange(e.fiscalYearEndMonth, year);
-      const stmt = await incomeStatement(db, e.id, range.from, range.to);
-      const tax = e.country === "CA" && e.kind !== "PERSONAL" ? await salesTaxReport(db, e.id, range.from, range.to) : null;
+      const r = overviewRanges(e.fiscalYearEndMonth);
+      const [ytd, prev, mtd] = await periodTotals(db, e.id, [r.ytd, r.prev, r.mtd]);
+      const periods = [
+        { key: "ytd", label: fr ? "Cumul annuel" : "Year to date", sub: `${r.ytd.from.toISOString().slice(0, 10)} →`, t: ytd },
+        { key: "prev", label: fr ? "Mois précédent" : "Previous month", sub: r.prev.label, t: prev },
+        { key: "mtd", label: fr ? "Mois en cours" : "Month to date", sub: r.mtd.label, t: mtd },
+      ];
+      const tax = e.country === "CA" && e.kind !== "PERSONAL" ? await salesTaxReport(db, e.id, r.ytd.from, r.ytd.to) : null;
       const small = e.country === "CA" && e.kind !== "PERSONAL" && !e.salesTaxRegistered ? await smallSupplierStatus(db, e.id, now) : null;
       const accounts = await db.accAccount.findMany({ where: { entityId: e.id, subtype: { in: ["BANK", "CREDIT_CARD"] }, archived: false }, select: { id: true, name: true, last4: true } });
-      cards.push({ e, stmt, tax, small, accounts });
+      cards.push({ e, periods, tax, small, accounts });
     }
     return { cards, toCategorize, suggested };
   });
 
-  const years = [year + 1, year, year - 1, year - 2];
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-soft">{fr ? "Année :" : "Year:"}</span>
-          {years.map((y) => (
-            <Link key={y} href={`/accounting?year=${y}`} className={y === year ? "btn-primary rounded-lg px-3 py-1 font-semibold" : "rounded-lg border border-card-border px-3 py-1 text-ink hover:bg-black/5"}>
-              {y}
-            </Link>
-          ))}
-        </div>
+        <span />
         <Link href="/accounting/import" className="btn-primary rounded-lg px-4 py-2 text-sm font-semibold">
           {fr ? "Importer des transactions" : "Import transactions"}
         </Link>
@@ -60,7 +56,7 @@ export default async function AccountingOverview({ searchParams }: { searchParam
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {data.cards.map(({ e, stmt, tax, small, accounts }) => {
+        {data.cards.map(({ e, periods, tax, small, accounts }) => {
           const cur = e.currency;
           const kind = KIND_LABEL[e.kind]?.[fr ? "fr" : "en"] ?? e.kind;
           return (
@@ -73,20 +69,33 @@ export default async function AccountingOverview({ searchParams }: { searchParam
                   </p>
                 </div>
               </div>
-              <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                <div>
-                  <dt className="text-xs uppercase text-soft">{fr ? "Revenus" : "Income"}</dt>
-                  <dd className="font-semibold text-emerald-700">{money(stmt.totalIncome, cur, lang)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase text-soft">{fr ? "Dépenses" : "Expenses"}</dt>
-                  <dd className="font-semibold text-ink">{money(stmt.totalCogs + stmt.totalExpenses, cur, lang)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase text-soft">{fr ? "Résultat net" : "Net"}</dt>
-                  <dd className={`font-semibold ${stmt.netIncome < 0 ? "text-red-600" : "text-ink"}`}>{money(stmt.netIncome, cur, lang)}</dd>
-                </div>
-              </dl>
+              <table className="mt-4 w-full text-sm">
+                <thead>
+                  <tr className="text-xs uppercase text-soft">
+                    <th />
+                    {periods.map((p) => (
+                      <th key={p.key} className="pb-1 text-right font-semibold">
+                        {p.label}
+                        <span className="block text-[10px] font-normal normal-case">{p.sub}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-card-border">
+                  <tr>
+                    <th className="py-1.5 text-left font-medium text-soft">{fr ? "Revenus" : "Income"}</th>
+                    {periods.map((p) => <td key={p.key} className="text-right font-semibold text-emerald-700">{money(p.t.income, cur, lang)}</td>)}
+                  </tr>
+                  <tr>
+                    <th className="py-1.5 text-left font-medium text-soft">{fr ? "Dépenses" : "Expenses"}</th>
+                    {periods.map((p) => <td key={p.key} className="text-right font-semibold text-ink">{money(p.t.expenses, cur, lang)}</td>)}
+                  </tr>
+                  <tr>
+                    <th className="py-1.5 text-left font-medium text-soft">{fr ? "Résultat net" : "Net"}</th>
+                    {periods.map((p) => <td key={p.key} className={`text-right font-bold ${p.t.net < 0 ? "text-red-600" : "text-ink"}`}>{money(p.t.net, cur, lang)}</td>)}
+                  </tr>
+                </tbody>
+              </table>
 
               {tax && e.salesTaxRegistered && (
                 <div className="mt-4 rounded-lg bg-black/[0.03] p-3 text-sm">
