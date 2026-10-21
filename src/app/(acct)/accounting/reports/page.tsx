@@ -237,6 +237,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </Link>
         ))}
         <span className="ml-auto flex items-center gap-2">
+          <a href={`${exportHref}&format=pdf`} className="rounded-lg border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5">{fr ? "Télécharger en PDF" : "Download PDF"}</a>
           <a href={exportHref} className="rounded-lg border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5">{fr ? "Exporter en CSV" : "Export to CSV"}</a>
           <PrintButton label={fr ? "Imprimer / PDF" : "Print / PDF"} />
         </span>
