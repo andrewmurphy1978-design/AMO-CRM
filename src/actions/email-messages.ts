@@ -11,6 +11,7 @@ import { sendViaSmtp } from "@/lib/mail/smtp";
 import { fetchImapMessageRaw } from "@/lib/mail/imap";
 import { recordIonosSend, parseIonosSentRecordId } from "@/lib/mail/sent-records";
 import { requireAccess } from "@/lib/permissions";
+import { findArchivedRaw } from "@/lib/email-archive";
 
 // "ionos:<uid>" ids (see EmailSummary's source/messageIdHeader comment in
 // google.ts) never collide with a bare Gmail id, which is exactly what
@@ -181,8 +182,13 @@ export async function fetchEmailDetail(id: string): Promise<EmailDetail | { erro
 
     const mailbox = await getIonosMailbox(session.user.id, db);
     const identities = await loadIdentities(session.user.id, db);
-    const original = await fetchOriginal(id, accessToken, mailbox);
-    if (!original) return { error: "not_found" };
+    let original = await fetchOriginal(id, accessToken, mailbox).catch(() => null);
+    if (!original) {
+      // Deleted at the provider (or purged): fall back to the copy saved when it was linked.
+      const saved = await findArchivedRaw(db, id);
+      if (!saved) return { error: "not_found" };
+      original = { raw: saved.raw, parsed: parseMessage(saved.raw), threadId: saved.threadKey ?? id, source: id.startsWith("ionos:") ? "ionos" : "gmail" };
+    }
 
     const { parsed, threadId, source } = original;
     // Links saved before snapshots were kept have no subject/sender/date:
@@ -351,10 +357,11 @@ export async function downloadEmailAttachment(
     if (!accessToken) return { error: "not_connected" };
 
     const mailbox = await getIonosMailbox(session.user.id, db);
-    const original = await fetchOriginal(id, accessToken, mailbox);
-    if (!original) return { error: "not_found" };
+    const original = await fetchOriginal(id, accessToken, mailbox).catch(() => null);
+    const raw = original?.raw ?? (await findArchivedRaw(db, id))?.raw;
+    if (!raw) return { error: "not_found" };
 
-    const attachment = extractAttachmentBytes(original.raw, attachmentIndex);
+    const attachment = extractAttachmentBytes(raw, attachmentIndex);
     if (!attachment) return { error: "not_found" };
 
     return { filename: attachment.filename, mimeType: attachment.mimeType, base64: encodeBase64(attachment.bytes) };

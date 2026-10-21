@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import {
-  listSharedMessagesAction, fetchSharedMessageAction, sendSharedMessageAction, setSharedCompleteAction, downloadSharedAttachmentAction,
-  type MyMailbox, type SharedMessage, type SharedDetail,
+  listSharedMessagesAction, listArchivedMessagesAction, fetchSharedMessageAction, sendSharedMessageAction, setSharedCompleteAction, downloadSharedAttachmentAction,
+  type MyMailbox, type SharedMessage, type SharedDetail, type ArchivedMessage,
 } from "@/actions/shared-mailboxes";
 import { mailboxAtLeast } from "@/lib/mail/shared-levels";
 import type { Lang } from "@/lib/i18n/dictionaries";
@@ -24,6 +24,8 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
   const [open, setOpen] = useState<SharedDetail | null>(null);
   const [compose, setCompose] = useState<{ to: string; cc: string; subject: string; body: string; inReplyTo: string | null; references: string[]; threadId: string | null } | null>(null);
   const [notice, setNotice] = useState("");
+  const [view, setView] = useState<"inbox" | "archive">("inbox");
+  const [archived, setArchived] = useState<ArchivedMessage[]>([]);
   const [sending, startSend] = useTransition();
 
   function refresh(id = boxId) {
@@ -68,8 +70,14 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
       if ("error" in r) setNotice(r.error); else { setNotice(fr ? "Envoyé." : "Sent."); setCompose(null); }
     });
   }
+  async function showArchive() {
+    setView("archive");
+    setOpen(null);
+    setArchived(await listArchivedMessagesAction(boxId));
+  }
   async function toggleComplete(m: { key: string }, done: boolean) {
-    await setSharedCompleteAction(boxId, m.key, done);
+    const r = await setSharedCompleteAction(boxId, m.key, done);
+    if (done) setNotice(r.archived ? (fr ? "Complété. Une copie est conservée dans le CRM." : "Marked done. A copy is kept in the CRM.") : fr ? "Complété (copie non enregistrée : message introuvable)." : "Marked done (no copy saved: message could not be fetched).");
     setMessages((list) => list.map((x) => (x.key === m.key ? { ...x, completed: done } : x)));
   }
   async function download(key: string, i: number) {
@@ -87,7 +95,8 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
         <select value={boxId} onChange={(e) => { setBoxId(e.target.value); setOpen(null); setCompose(null); }} className={`${FIELD} max-w-xs`}>
           {boxes.map((b) => <option key={b.id} value={b.id}>{b.name} · {b.address}</option>)}
         </select>
-        <button type="button" onClick={() => refresh()} disabled={loading} className={BTN}>{loading ? "…" : fr ? "Actualiser" : "Refresh"}</button>
+        <button type="button" onClick={() => { setView("inbox"); refresh(); }} disabled={loading} className={BTN}>{loading ? "…" : view === "archive" ? (fr ? "Boîte de réception" : "Inbox") : fr ? "Actualiser" : "Refresh"}</button>
+        <button type="button" onClick={showArchive} data-readonly-ok className={BTN}>{fr ? "Archives" : "Archive"}</button>
         {canSend && (
           <button type="button" onClick={() => { setOpen(null); setCompose({ to: "", cc: "", subject: "", body: "", inReplyTo: null, references: [], threadId: null }); }} className={BTN}>{fr ? "Nouveau courriel" : "New email"}</button>
         )}
@@ -140,6 +149,22 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
         </div>
       )}
 
+      {view === "archive" ? (
+        <div className="space-y-1">
+          <p className="text-xs text-soft">{fr ? "Copies conservées dans le CRM (messages complétés). Elles restent lisibles même si le fournisseur supprime l'original." : "Copies kept in the CRM (messages marked Done). They stay readable even if the provider deletes the original."}</p>
+          <ul className="divide-y divide-card-border rounded-md border border-card-border">
+            {archived.map((m) => (
+              <li key={m.key}>
+                <button type="button" onClick={() => openMessage(m.key)} data-readonly-ok className="w-full px-3 py-2 text-left">
+                  <p className="truncate text-sm text-ink">{m.subject || (fr ? "(sans objet)" : "(no subject)")}</p>
+                  <p className="truncate text-xs text-soft">{m.from} · {m.date ? new Date(m.date).toLocaleString(fr ? "fr-CA" : "en-CA") : ""}{m.truncated ? (fr ? " · sans pièces jointes (trop volumineux)" : " · attachments not kept (too large)") : ""}</p>
+                </button>
+              </li>
+            ))}
+            {archived.length === 0 && <li className="px-3 py-4 text-sm text-soft">{fr ? "Aucune copie pour le moment." : "No saved copies yet."}</li>}
+          </ul>
+        </div>
+      ) : (
       <ul className="divide-y divide-card-border rounded-md border border-card-border">
         {messages.map((m) => (
           <li key={m.key} className={`flex items-center gap-2 px-3 py-2 ${m.completed ? "opacity-60" : ""}`}>
@@ -155,6 +180,7 @@ export default function SharedInbox({ boxes, lang }: { boxes: MyMailbox[]; lang:
         ))}
         {messages.length === 0 && !loading && !error && <li className="px-3 py-4 text-sm text-soft">{fr ? "Aucun message." : "No messages."}</li>}
       </ul>
+      )}
     </div>
   );
 }

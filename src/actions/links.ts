@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { requireAccess } from "@/lib/permissions";
+import { archiveLinkedThread } from "@/lib/email-archive";
 
 // Both Gmail threads and Google Calendar events live outside our database —
 // these actions just point a stable external id (thread id / event id) at
@@ -59,6 +60,12 @@ export async function saveEmailLink(
       });
     }
   });
+
+  // A saved copy of the linked thread, so it survives the provider deleting the original. Sequential, after the link is
+  // stored, and never fails the link.
+  if (contactId || projectId || taskId || affiliateProgramId) {
+    await withScopedPrismaClient((db) => archiveLinkedThread(db, session.user.id, gmailThreadId));
+  }
 
   // Deliberately no revalidatePath("/email") — the Email page is a client
   // component that already patches its own state the instant a link save

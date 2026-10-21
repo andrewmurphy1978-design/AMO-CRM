@@ -2322,3 +2322,25 @@ model SharedMailboxCompletion {
   @@unique([mailboxId, messageKey])
   @@map("shared_mailbox_completions")
 }
+
+// A saved copy of an email, kept in the CRM when it is linked to a contact / project or marked Done, so it survives the
+// provider deleting or purging the original. rawBase64 is the full message (attachments included) base64-encoded;
+// truncated means it was too large and only the text / HTML was kept.
+model EmailArchive {
+  id           String   @id @default(cuid())
+  source       String // "gmail:<userId>" | "ionos:<userId>" | "shared:<mailboxId>"
+  messageKey   String // Gmail message id, "ionos:<uid>", or the shared mailbox's message key
+  threadKey    String? // EmailLink.gmailThreadId for linked messages
+  subject      String?
+  fromLabel    String?
+  messageDate  DateTime?
+  rawBase64    String   @db.Text
+  truncated    Boolean  @default(false)
+  reason       String // "linked" | "done"
+  archivedById String?
+  archivedAt   DateTime @default(now())
+
+  @@unique([source, messageKey])
+  @@index([threadKey])
+  @@map("email_archive")
+}

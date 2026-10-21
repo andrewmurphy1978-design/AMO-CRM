@@ -11,6 +11,7 @@ import { parseMessage, extractAttachmentBytes, encodeBase64, type AttachmentMeta
 import { buildMimeMessage } from "@/lib/mail/mime-build";
 import type { MailSecurity } from "@/lib/mail/socket";
 import { loadMailbox, getMailboxAccessToken, loadCredentials, imapOf, smtpOf, encryptCredentials, mailboxLevel, type SharedCredentials } from "@/lib/mail/shared-mailbox";
+import { archiveRaw, fromB64 } from "@/lib/email-archive";
 import { mailboxAtLeast, type MailboxLevel } from "@/lib/mail/shared-levels";
 
 type FormState = { error?: string; success?: string; id?: string } | undefined;
@@ -192,6 +193,15 @@ export interface SharedDetail {
 
 // The full raw message, from Gmail's API or the IMAP server, whichever the mailbox uses.
 async function fetchRaw(db: Parameters<typeof loadMailbox>[0], mailboxId: string, key: string): Promise<{ raw: string; threadId: string | null } | { error: string }> {
+  const live = await fetchRawLive(db, mailboxId, key).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  if (!("error" in live)) return live;
+  // Gone from the provider (deleted or purged)? Fall back to the copy saved when it was marked Done.
+  const saved = await db.emailArchive.findUnique({ where: { source_messageKey: { source: `shared:${mailboxId}`, messageKey: key } } });
+  if (saved) return { raw: fromB64(saved.rawBase64), threadId: null };
+  return live;
+}
+
+async function fetchRawLive(db: Parameters<typeof loadMailbox>[0], mailboxId: string, key: string): Promise<{ raw: string; threadId: string | null } | { error: string }> {
   const box = await loadMailbox(db, mailboxId);
   if (!box) return { error: "Mailbox not found." };
   if (box.kind === "google") {
@@ -276,10 +286,21 @@ export async function sendSharedMessageAction(mailboxId: string, input: SharedSe
   });
 }
 
-export async function setSharedCompleteAction(mailboxId: string, key: string, done: boolean): Promise<void> {
+export async function setSharedCompleteAction(mailboxId: string, key: string, done: boolean): Promise<{ archived: boolean }> {
   const session = await guard(mailboxId, "COMPLETE");
+  let archived = false;
   await withScopedPrismaClient(async (db) => {
     if (done) {
+      // Keep a saved copy of what is marked Done, so it outlives the provider's copy. A failure here never blocks "Done".
+      try {
+        const live = await fetchRawLive(db, mailboxId, key);
+        if (!("error" in live)) {
+          await archiveRaw(db, { source: `shared:${mailboxId}`, messageKey: key, raw: live.raw, reason: "done", userId: session.user.id });
+          archived = true;
+        }
+      } catch {
+        // ignore
+      }
       await db.sharedMailboxCompletion.upsert({
         where: { mailboxId_messageKey: { mailboxId, messageKey: key } },
         update: {},
@@ -289,6 +310,18 @@ export async function setSharedCompleteAction(mailboxId: string, key: string, do
       await db.sharedMailboxCompletion.deleteMany({ where: { mailboxId, messageKey: key } });
     }
   });
+  return { archived };
+}
+
+export interface ArchivedMessage { key: string; subject: string; from: string; date: string | null; truncated: boolean }
+
+/** Saved copies for this mailbox: still readable after the provider deletes the originals. */
+export async function listArchivedMessagesAction(mailboxId: string): Promise<ArchivedMessage[]> {
+  await guard(mailboxId, "READ");
+  const rows = await withScopedPrismaClient((db) =>
+    db.emailArchive.findMany({ where: { source: `shared:${mailboxId}` }, orderBy: { messageDate: "desc" }, take: 200, select: { messageKey: true, subject: true, fromLabel: true, messageDate: true, truncated: true } })
+  );
+  return rows.map((r) => ({ key: r.messageKey, subject: r.subject ?? "", from: r.fromLabel ?? "", date: r.messageDate?.toISOString() ?? null, truncated: r.truncated }));
 }
 
 /** Admin: set who may use one mailbox (userId -> level). Same data as the per-person list in Team access. */
