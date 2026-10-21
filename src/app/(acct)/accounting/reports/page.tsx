@@ -7,14 +7,14 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks } from "@/lib/accounting/options";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
-import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, periodTotals, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
+import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, periodGroupTotals, periodTotals, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
 import MoveAccountButton from "./move-account-button";
 import BarChart from "./bar-chart";
 import { seriesRanges, yearBefore, type By } from "@/lib/accounting/periods";
 import RecategorizeButton, { type RecatTx } from "./recategorize-button";
 import { isoDate, money } from "@/lib/accounting/format";
 
-type Sp = { entity?: string; year?: string; r?: string; account?: string; month?: string; from?: string; to?: string; metric?: string; by?: string; count?: string; yoy?: string };
+type Sp = { entity?: string; year?: string; r?: string; account?: string; month?: string; from?: string; to?: string; metric?: string; by?: string; count?: string; yoy?: string; group?: string };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -60,7 +60,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       const ranges = seriesRanges(by, count, entity.fiscalYearEndMonth);
       const yoy = sp.yoy === "1" && by !== "year";
       const totals = await periodTotals(db, entity.id, yoy ? [...ranges, ...ranges.map(yearBefore)] : ranges);
-      data.cmp = { by, count, yoy, labels: ranges.map((r) => r.label), current: totals.slice(0, ranges.length), previous: yoy ? totals.slice(ranges.length) : null };
+      const grouped = sp.group === "1" && (sp.metric === "income" || sp.metric === "expenses");
+      const breakdown = grouped ? await periodGroupTotals(db, entity.id, sp.metric === "income" ? "INCOME" : "EXPENSE", ranges) : null;
+      data.cmp = { by, count, yoy, labels: ranges.map((r) => r.label), current: totals.slice(0, ranges.length), previous: yoy ? totals.slice(ranges.length) : null, breakdown };
     }
     else if (report === "gl") {
       const accountId = options.find((o) => o.id === sp.account && o.entityId === entity.id && !o.isGroup)?.id ?? options.find((o) => o.entityId === entity.id && !o.bank && !o.isGroup)?.id;
@@ -245,7 +247,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         {report !== "cmp" && <p className="text-xs text-soft">{isoDate(range.from)} → {isoDate(range.to)} · {cur}</p>}
 
         {report === "cmp" && data.cmp ? (() => {
-          const c = data.cmp as { by: By; count: number; yoy: boolean; labels: string[]; current: { income: number; expenses: number; net: number }[]; previous: { income: number; expenses: number; net: number }[] | null };
+          const c = data.cmp as { by: By; count: number; yoy: boolean; labels: string[]; current: { income: number; expenses: number; net: number }[]; previous: { income: number; expenses: number; net: number }[] | null; breakdown: { groups: { id: string; code: string; name: string; nameFr: string | null }[]; values: number[][] } | null };
           const metric = sp.metric === "income" || sp.metric === "expenses" || sp.metric === "net" ? sp.metric : "both";
           const label = { income: fr ? "Revenus" : "Income", expenses: fr ? "Dépenses" : "Expenses", net: fr ? "Résultat net" : "Net" };
           const GREEN = "#059669";
@@ -257,8 +259,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           } else {
             const color = metric === "income" ? GREEN : metric === "expenses" ? ROSE : BLUE;
             series.push({ name: label[metric], color, values: c.current.map((t) => t[metric]) });
-            if (c.previous) series.push({ name: `${label[metric]} — ${fr ? "année précédente" : "previous year"}`, color: color + "66", values: c.previous.map((t) => t[metric]) });
+            if (c.previous && !c.breakdown) series.push({ name: `${label[metric]} — ${fr ? "année précédente" : "previous year"}`, color: color + "66", values: c.previous.map((t) => t[metric]) });
           }
+          const PALETTE = ["#2563eb", "#d97706", "#059669", "#7c3aed", "#e11d48", "#0891b2", "#65a30d", "#c026d3", "#64748b"];
+          const stackSeries = c.breakdown ? c.breakdown.groups.map((g, i) => ({ name: g.id === "__other__" ? (fr ? "Autres" : "Other") : fr && g.nameFr ? g.nameFr : g.name, color: PALETTE[i % PALETTE.length], values: c.breakdown!.values[i] })) : null;
           const rowMetric = metric === "both" ? "net" : metric;
           const pct = (cur: number, prev: number) => (prev === 0 ? "—" : `${(((cur - prev) / Math.abs(prev)) * 100).toFixed(0)} %`);
           return (
@@ -291,10 +295,36 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                 <label className="flex items-center gap-2 pb-2 text-soft">
                   <input type="checkbox" name="yoy" value="1" defaultChecked={c.yoy} disabled={false} /> {fr ? "Comparer à l'année précédente" : "Compare with the previous year"}
                 </label>
+                <label className="flex items-center gap-2 pb-2 text-soft" title={fr ? "Seulement pour « Revenus » ou « Dépenses »" : "Only for “Income” or “Expenses”"}>
+                  <input type="checkbox" name="group" value="1" defaultChecked={!!c.breakdown} /> {fr ? "Détailler par groupe" : "Break down by group"}
+                </label>
                 <button className="btn-primary rounded-lg px-4 py-1.5 font-semibold">{fr ? "Afficher" : "Show"}</button>
               </form>
-              <BarChart labels={c.labels} series={series} currency={cur} lang={lang} title={`${entity.name} — ${metric === "both" ? `${label.income} / ${label.expenses}` : label[metric]}`} />
-              <table className="w-full max-w-5xl text-sm">
+              {sp.group === "1" && !c.breakdown && <p className="text-xs text-amber-700">{fr ? "Choisissez « Revenus » ou « Dépenses » comme mesure pour détailler par groupe." : "Choose “Income” or “Expenses” as the measure to break down by group."}</p>}
+              <BarChart labels={c.labels} series={stackSeries ?? series} stacked={!!stackSeries} currency={cur} lang={lang} title={`${entity.name} — ${metric === "both" ? `${label.income} / ${label.expenses}` : label[metric]}`} />
+              {stackSeries && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs uppercase text-soft">
+                        <th className="py-1">{fr ? "Période" : "Period"}</th>
+                        {stackSeries.map((g) => <th key={g.name} className="text-right"><span className="mr-1 inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: g.color }} />{g.name}</th>)}
+                        <th className="text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-card-border">
+                      {c.labels.map((l, i) => (
+                        <tr key={l}>
+                          <td className="py-1 text-ink">{l}</td>
+                          {stackSeries.map((g) => <td key={g.name} className="text-right text-ink">{m(g.values[i] ?? 0)}</td>)}
+                          <td className="text-right font-semibold text-ink">{m(stackSeries.reduce((sum, g) => sum + (g.values[i] ?? 0), 0))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {!stackSeries && <table className="w-full max-w-5xl text-sm">
                 <thead>
                   <tr className="text-left text-xs uppercase text-soft">
                     <th className="py-1">{fr ? "Période" : "Period"}</th>
@@ -317,7 +347,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table>}
               <p className="text-xs text-soft">{fr ? "La dernière période va jusqu'à aujourd'hui." : "The last period runs to today."}</p>
             </div>
           );

@@ -227,3 +227,55 @@ export async function periodTotals(db: PrismaClient, entityId: string, ranges: {
     return { income: r2(income), expenses: r2(expenses), net: r2(income - expenses) };
   });
 }
+
+/**
+ * Income or expense per top-level group (an account with no parent, or the group header an account sits under) for
+ * each date range. The smallest groups are folded into "Other" beyond `max`.
+ */
+export async function periodGroupTotals(
+  db: PrismaClient,
+  entityId: string,
+  type: "INCOME" | "EXPENSE",
+  ranges: { from: Date; to: Date }[],
+  max = 8
+): Promise<{ groups: { id: string; code: string; name: string; nameFr: string | null }[]; values: number[][] }> {
+  const accounts = await db.accAccount.findMany({ where: { entityId, type }, select: { id: true, code: true, name: true, nameFr: true, parentId: true } });
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  const rootOf = (id: string) => {
+    let cur = byId.get(id);
+    for (let i = 0; cur?.parentId && i < 6; i++) cur = byId.get(cur.parentId) ?? cur;
+    return cur ?? byId.get(id);
+  };
+  if (ranges.length === 0) return { groups: [], values: [] };
+  const min = new Date(Math.min(...ranges.map((r) => r.from.getTime())));
+  const maxD = new Date(Math.max(...ranges.map((r) => r.to.getTime())));
+  const lines = await db.accJournalLine.findMany({
+    where: { account: { type, entityId }, entry: { entityId, date: { gte: min, lte: maxD } } },
+    select: { debit: true, credit: true, accountId: true, entry: { select: { date: true } } },
+  });
+  const sums = new Map<string, number[]>();
+  for (const l of lines) {
+    const root = rootOf(l.accountId);
+    if (!root) continue;
+    const t = l.entry.date.getTime();
+    ranges.forEach((r, i) => {
+      if (t < r.from.getTime() || t > r.to.getTime()) return;
+      const row = sums.get(root.id) ?? ranges.map(() => 0);
+      row[i] += type === "INCOME" ? l.credit - l.debit : l.debit - l.credit;
+      sums.set(root.id, row);
+    });
+  }
+  const ranked = [...sums.entries()].map(([id, row]) => ({ id, row, total: row.reduce((x, y) => x + Math.abs(y), 0) })).sort((a, b) => b.total - a.total);
+  const top = ranked.slice(0, max);
+  const rest = ranked.slice(max);
+  const groups = top.map((g) => {
+    const a = byId.get(g.id)!;
+    return { id: g.id, code: a.code, name: a.name, nameFr: a.nameFr };
+  });
+  const values = top.map((g) => g.row.map(r2));
+  if (rest.length > 0) {
+    groups.push({ id: "__other__", code: "", name: "Other", nameFr: "Autres" });
+    values.push(ranges.map((_, i) => r2(rest.reduce((x, g) => x + g.row[i], 0))));
+  }
+  return { groups, values };
+}
