@@ -20,7 +20,7 @@ import type { SocialPlatform } from "@/lib/social";
 import UserManagement from "./user-management";
 import SharedMailboxesForm, { type SharedMailboxRow } from "./shared-mailboxes-form";
 import { loadCredentials, loadMailbox } from "@/lib/mail/shared-mailbox";
-import { resolvePermissions } from "@/lib/permissions";
+import { resolvePermissions, currentPermissions, atLeast, type Section } from "@/lib/permissions";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
 import WorldClockForm from "./world-clock-form";
@@ -626,6 +626,19 @@ export default async function SettingsPage({
     });
   }
 
+  // Only the settings that belong to what this person may use: a section's settings need at least read access to it.
+  const myAccess = await currentPermissions();
+  const needs: Record<string, Section[]> = {
+    "world-clock": ["dashboard"], markets: ["dashboard"], sports: ["dashboard"], "header-widgets": ["dashboard"],
+    "email-compose": ["email"], "email-screening": ["email"], ionos: ["email"], "email-colors": ["email"],
+    google: ["email", "calendar", "tasks", "contacts"],
+  };
+  const visibleSections = sections.filter((sec) => {
+    const required = needs[sec.id];
+    if (!required || !myAccess || myAccess.admin) return true;
+    return required.some((k) => atLeast(myAccess.perms[k], "READ"));
+  });
+
   return (
     // Mobile: same -mx-4/px-2 inset-cancelling trick as the Dashboard/
     // Marketing/Contact Info pages, plus a tighter vertical rhythm.
@@ -642,7 +655,7 @@ export default async function SettingsPage({
         location={t.dashboard.myLocation}
       />
       <SettingsLayout
-        sections={sections}
+        sections={visibleSections}
         labels={{ mine: t.settings.tabMySettings, admin: t.settings.tabAdminSettings, search: t.settings.menuSearch, noMatch: t.settings.menuNoMatch, menu: t.settings.menuLabel }}
       />
     </div>
