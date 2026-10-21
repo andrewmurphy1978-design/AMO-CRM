@@ -9,6 +9,8 @@ import { getDict } from "@/lib/i18n/dictionaries";
 import { getHour12 } from "@/lib/time-format";
 import PageHeader from "@/app/(app)/page-header";
 import AccountingIcon from "@/app/(app)/accounting-icon";
+import AccessScope from "@/components/access-scope";
+import { resolvePermissions } from "@/lib/permissions-shared";
 import AccountingNav from "./accounting-nav";
 
 // Accounting holds personal bank data: admins and the team members given access, each with their own books.
@@ -27,6 +29,7 @@ export default async function AccountingLayout({ children }: { children: ReactNo
     };
   });
   if (!me) redirect("/");
+  const level = session?.user.role === "ADMIN" ? "DELETE" : resolvePermissions(await withScopedPrismaClient((db) => db.user.findUniqueOrThrow({ where: { id: session!.user.id }, select: { role: true, permissions: true, accountingAccess: true, accountingOnly: true } }))).accounting;
   return (
     <div className="space-y-6">
       <PageHeader
@@ -41,7 +44,7 @@ export default async function AccountingLayout({ children }: { children: ReactNo
         location={t.dashboard.myLocation}
       />
       <AccountingNav lang={lang} toCategorize={toCategorize} />
-      {children}
+      <AccessScope level={level}>{children}</AccessScope>
     </div>
   );
 }
