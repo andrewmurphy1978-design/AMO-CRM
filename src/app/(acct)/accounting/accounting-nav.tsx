@@ -18,7 +18,7 @@ export default function AccountingNav({ lang, toCategorize }: { lang: "en" | "fr
     { href: "/accounting/setup", label: fr ? "Configuration" : "Setup" },
   ];
   return (
-    <nav className="flex gap-2 overflow-x-auto border-b border-card-border pb-px" aria-label="Accounting">
+    <nav data-print-hide className="flex gap-2 overflow-x-auto border-b border-card-border pb-px" aria-label="Accounting">
       {tabs.map((t) => {
         const active = t.exact ? pathname === t.href : pathname.startsWith(t.href);
         return (

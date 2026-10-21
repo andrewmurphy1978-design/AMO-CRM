@@ -181,3 +181,37 @@ body {
 .btn-secondary:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.04);
 }
+
+
+/* Printing a report (Accounting): only the report itself — no sidebar, header, tabs or controls — on a plain white page,
+   so "Save as PDF" in the print dialog gives a clean PDF. */
+@media print {
+  aside,
+  header,
+  .amo-bg-image,
+  .amo-bg-overlay,
+  [data-print-hide] {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  section {
+    box-shadow: none !important;
+    break-inside: auto;
+  }
+  tr {
+    break-inside: avoid;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page {
+    margin: 12mm;
+  }
+}

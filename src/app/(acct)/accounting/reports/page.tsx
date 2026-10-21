@@ -7,17 +7,17 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { ensureAccountingSetup } from "@/lib/accounting/ledger";
 import { loadBooks } from "@/lib/accounting/options";
 import { ASSET_SECTIONS, LIABILITY_SECTIONS } from "@/lib/accounting/charts";
-import { balanceSheet, fiscalYearRange, generalLedger, incomeStatement, periodAccountTotals, periodGroupTotals, periodTotals, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
+import { balanceSheet, generalLedger, incomeStatement, periodAccountTotals, periodGroupTotals, periodTotals, salesTaxReport, taxSummary, trialBalance, type AccountRow } from "@/lib/accounting/reports";
 import MoveAccountButton from "./move-account-button";
 import BarChart from "./bar-chart";
+import PrintButton from "./print-button";
+import { resolveRange } from "@/lib/accounting/report-range";
 import { seriesRanges, yearBefore, type By } from "@/lib/accounting/periods";
 import RecategorizeButton, { type RecatTx } from "./recategorize-button";
 import { isoDate, money } from "@/lib/accounting/format";
 
 type Sp = { entity?: string; year?: string; r?: string; account?: string; month?: string; from?: string; to?: string; metric?: string; by?: string; count?: string; yoy?: string; group?: string; acc?: string | string[]; is?: string };
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const me = await requireAccountingUser();
@@ -31,21 +31,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     await ensureAccountingSetup(db, me);
     const { entities, options } = await loadBooks(db, me.id);
     const entity = entities.find((e) => e.id === sp.entity) ?? entities[0];
-    // The period: a date interval, a single month, or the fiscal year (the default).
-    const interval = DATE_RE.test(sp.from ?? "") && DATE_RE.test(sp.to ?? "") && (sp.from as string) <= (sp.to as string);
-    const monthly = !interval && MONTH_RE.test(sp.month ?? "");
-    const range = interval
-      ? { from: new Date(`${sp.from}T00:00:00.000Z`), to: new Date(`${sp.to}T00:00:00.000Z`) }
-      : monthly
-        ? (() => {
-            const [y, mo] = (sp.month as string).split("-").map(Number);
-            return { from: new Date(Date.UTC(y, mo - 1, 1)), to: new Date(Date.UTC(y, mo, 0)) };
-          })()
-        : fiscalYearRange(entity.fiscalYearEndMonth, year);
-    // The balance sheet's current-year earnings run from the start of the fiscal year the period ends in.
-    const endY = range.to.getUTCFullYear() + (range.to.getUTCMonth() + 1 > entity.fiscalYearEndMonth ? 1 : 0);
-    const fyStart = fiscalYearRange(entity.fiscalYearEndMonth, endY).from;
-    const periodMode: "interval" | "month" | "year" = interval ? "interval" : monthly ? "month" : "year";
+    const { range, fyStart, periodMode } = resolveRange(sp, entity.fiscalYearEndMonth);
     const cur = entity.currency;
     const data: Record<string, unknown> = {};
     if (report === "tb") data.tb = await trialBalance(db, entity.id, range.to);
@@ -99,6 +85,12 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     return `/accounting/reports?${p}`;
   };
 
+  // The CSV of what is on screen: the same report, entity, period and compare choices.
+  const exportQuery = new URLSearchParams();
+  for (const [k, v] of Object.entries({ ...sp, entity: entity.id, r: report })) {
+    for (const x of Array.isArray(v) ? v : v ? [v] : []) exportQuery.append(k, x);
+  }
+  const exportHref = `/accounting/reports/export?${exportQuery}`;
   const optById = new Map(options.map((o) => [o.id, o]));
   // Four amount columns, from the lowest level on the left to the report total on the right: sub-account amounts,
   // account totals, section (or group) totals, and the total of the whole block (assets, income...).
@@ -204,7 +196,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
+      <div data-print-hide className="flex flex-wrap items-center gap-2 text-sm">
         {entities.map((e) => (
           <Link key={e.id} href={href({ entity: e.id, account: "" })} className={e.id === entity.id ? "btn-primary rounded-lg px-3 py-1 font-semibold" : "rounded-lg border border-card-border px-3 py-1 hover:bg-black/5"}>
             {e.name}
@@ -217,7 +209,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           </Link>
         ))}
       </div>
-      {report !== "cmp" && <form method="get" action="/accounting/reports" className="flex flex-wrap items-end gap-3 text-sm">
+      {report !== "cmp" && <form data-print-hide method="get" action="/accounting/reports" className="flex flex-wrap items-end gap-3 text-sm">
         <input type="hidden" name="entity" value={entity.id} />
         <input type="hidden" name="r" value={report} />
         <input type="hidden" name="year" value={year} />
@@ -238,16 +230,24 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <button className="btn-primary rounded-lg px-4 py-1.5 font-semibold">{fr ? "Afficher la période" : "Show period"}</button>
         {periodMode !== "year" && <Link href={href({ month: "", from: "", to: "" })} className="pb-2 text-soft underline">{fr ? "Retour à l'exercice" : "Back to the fiscal year"}</Link>}
       </form>}
-      <div className="flex flex-wrap gap-2 text-sm">
+      <div data-print-hide className="flex flex-wrap items-center gap-2 text-sm">
         {tabs.map(([k, label]) => (
           <Link key={k} href={href({ r: k })} className={k === report ? "rounded-lg bg-ink px-3 py-1 font-medium text-white" : "rounded-lg border border-card-border px-3 py-1 text-ink hover:bg-black/5"}>
             {label}
           </Link>
         ))}
+        <span className="ml-auto flex items-center gap-2">
+          <a href={exportHref} className="rounded-lg border border-card-border px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5">{fr ? "Exporter en CSV" : "Export to CSV"}</a>
+          <PrintButton label={fr ? "Imprimer / PDF" : "Print / PDF"} />
+        </span>
       </div>
 
       <Card color="statistics" title={<>{entity.name} · {tabs.find(([k]) => k === report)?.[1]}</>}>
-        {report !== "cmp" && <p className="text-xs text-soft">{isoDate(range.from)} → {isoDate(range.to)} · {cur}</p>}
+        <div className="hidden print:block">
+          <p className="font-display text-xl font-semibold text-ink">{entity.name}</p>
+          <p className="text-sm text-soft">{tabs.find(([k]) => k === report)?.[1]}{report !== "cmp" ? ` — ${isoDate(range.from)} → ${isoDate(range.to)}` : ""} · {cur}</p>
+        </div>
+        {report !== "cmp" && <p className="text-xs text-soft print:hidden">{isoDate(range.from)} → {isoDate(range.to)} · {cur}</p>}
 
         {report === "cmp" && data.cmp ? (() => {
           const c = data.cmp as { by: By; count: number; yoy: boolean; labels: string[]; current: { income: number; expenses: number; net: number }[]; previous: { income: number; expenses: number; net: number }[] | null; breakdown: { groups: { id: string; code: string; name: string; nameFr: string | null }[]; values: number[][] } | null; selected: string[]; accountTotals: [string, number[]][] };
@@ -281,7 +281,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           const pct = (cur: number, prev: number) => (prev === 0 ? "—" : `${(((cur - prev) / Math.abs(prev)) * 100).toFixed(0)} %`);
           return (
             <div className="space-y-3">
-              <form method="get" action="/accounting/reports" className="flex flex-wrap items-end gap-3 text-sm">
+              <form data-print-hide method="get" action="/accounting/reports" className="flex flex-wrap items-end gap-3 text-sm">
                 <input type="hidden" name="entity" value={entity.id} />
                 <input type="hidden" name="r" value="cmp" />
                 <label className="flex flex-col gap-1">
@@ -489,7 +489,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
         {report === "gl" && (
           <div className="mt-3 space-y-3">
-            <form className="flex items-center gap-2 text-sm">
+            <form data-print-hide className="flex items-center gap-2 text-sm">
               <input type="hidden" name="entity" value={entity.id} /><input type="hidden" name="year" value={year} /><input type="hidden" name="r" value="gl" />
               <select name="account" defaultValue={sp.account} className="rounded-lg border border-card-border bg-white px-2 py-1.5">
                 {options.filter((o) => o.entityId === entity.id && !o.isGroup).map((o) => (<option key={o.id} value={o.id}>{o.code} {fr ? o.labelFr : o.label}</option>))}
@@ -498,7 +498,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             </form>
             {data.gl ? (() => {
               const cur = options.find((o) => o.id === (data.gl as Awaited<ReturnType<typeof generalLedger>>).account.id);
-              return cur ? <div><MoveAccountButton lang={lang} from={cur} options={options} /></div> : null;
+              return cur ? <div data-print-hide><MoveAccountButton lang={lang} from={cur} options={options} /></div> : null;
             })() : null}
             {data.gl ? (() => {
               const g = data.gl as Awaited<ReturnType<typeof generalLedger>>;
@@ -507,7 +507,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
                   <thead><tr className="text-left text-xs uppercase text-soft"><th>Date</th><th>{fr ? "Description" : "Description"}</th><th className="text-right">{fr ? "Débit" : "Debit"}</th><th className="text-right">{fr ? "Crédit" : "Credit"}</th><th className="text-right">{fr ? "Solde" : "Balance"}</th><th /></tr></thead>
                   <tbody className="divide-y divide-card-border">
                     <tr className="text-soft"><td /><td className="py-1">{fr ? "Solde d'ouverture" : "Opening balance"}</td><td /><td /><td className="text-right">{m(g.openingBalance)}</td><td /></tr>
-                    {g.lines.map((l) => (<tr key={l.id}><td className="py-1 whitespace-nowrap text-soft">{isoDate(l.date)}</td><td className="text-ink">{l.memo}</td><td className="text-right">{l.debit ? m(l.debit) : ""}</td><td className="text-right">{l.credit ? m(l.credit) : ""}</td><td className="text-right">{m(l.balance)}</td><td className="pl-3 text-right">{l.transactionId && glTx.get(l.transactionId) ? <RecategorizeButton lang={lang} tx={glTx.get(l.transactionId)!} entities={entities} options={options} currency={cur} /> : null}</td></tr>))}
+                    {g.lines.map((l) => (<tr key={l.id}><td className="py-1 whitespace-nowrap text-soft">{isoDate(l.date)}</td><td className="text-ink">{l.memo}</td><td className="text-right">{l.debit ? m(l.debit) : ""}</td><td className="text-right">{l.credit ? m(l.credit) : ""}</td><td className="text-right">{m(l.balance)}</td><td data-print-hide className="pl-3 text-right">{l.transactionId && glTx.get(l.transactionId) ? <RecategorizeButton lang={lang} tx={glTx.get(l.transactionId)!} entities={entities} options={options} currency={cur} /> : null}</td></tr>))}
                   </tbody>
                 </table>
               );
