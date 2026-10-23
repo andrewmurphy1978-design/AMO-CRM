@@ -26,6 +26,9 @@ export type SharedMailboxRow = {
 const FIELD = "mt-1 w-full rounded-md border border-card-border bg-field-bg px-3 py-2 text-sm text-ink shadow-sm focus:border-amo-gold focus:outline-none focus:ring-2 focus:ring-amo-gold/30";
 const LABEL = "block text-xs font-semibold uppercase tracking-wide text-soft";
 
+// Only Google mailboxes (Workspace or Gmail) can sign in with Google; others stay on IMAP / SMTP.
+const isGoogleMailbox = (m: { provider: string; address: string }) => m.provider === "google" || m.provider === "google-oauth" || /@(gmail|googlemail)\.com$/i.test(m.address);
+
 function Editor({ box, fr, onDone }: { box?: SharedMailboxRow; fr: boolean; onDone?: () => void }) {
   const [saveState, saveAction, savePending] = useActionState(saveSharedMailboxAction, undefined);
   const [testState, testAction, testPending] = useActionState(testSharedMailboxAction, undefined);
@@ -134,6 +137,7 @@ export default function SharedMailboxesForm({ mailboxes, lang, members, access }
         <details key={m.id} className="rounded-md border border-card-border p-3">
           <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-medium text-ink">
             <span>{m.name} · <span className="text-soft">{m.address}</span>{m.googleConnected && <span className="ml-2 text-xs font-medium text-emerald-700">{fr ? "Google connecté" : "Google connected"}</span>}</span>
+            {isGoogleMailbox(m) && (
             <a
               href={`/api/google/shared/connect?mailboxId=${m.id}`}
               onClick={(e) => e.stopPropagation()}
@@ -141,6 +145,7 @@ export default function SharedMailboxesForm({ mailboxes, lang, members, access }
             >
               {m.googleConnected ? (fr ? "Reconnecter avec Google" : "Reconnect with Google") : fr ? "Connecter avec Google" : "Connect with Google"}
             </a>
+            )}
           </summary>
           <div className="mt-3 space-y-4"><Editor box={m} fr={fr} /><div className="border-t border-card-border pt-3"><MailboxMembers mailboxId={m.id} members={members} initial={access[m.id] ?? {}} fr={fr} /></div></div>
         </details>
