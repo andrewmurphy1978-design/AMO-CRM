@@ -28,6 +28,7 @@ import TrendChart, { type TrendSeries } from "./trend-chart";
 import BarChart, { type BarDatum } from "./bar-chart";
 import SocialPageLinks from "./social-page-links";
 import PostsTab from "./posts-tab";
+import PlatformTabs from "./platform-tabs";
 import Link from "next/link";
 
 // A single hard-coded "external tool" link (unlike the per-platform
@@ -36,21 +37,28 @@ import Link from "next/link";
 // Buffer user, so there's nothing for an admin to configure here.
 const BUFFER_ANALYTICS_URL = "https://publish.buffer.com/analytics";
 
-export default async function SocialAnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  const tab = (await searchParams).tab === "posts" ? "posts" : "analytics";
+export default async function SocialAnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; platform?: string }> }) {
+  const sp = await searchParams;
+  const tab = sp.tab === "posts" ? "posts" : "analytics";
+  const platformParam = (SOCIAL_PLATFORMS as readonly string[]).includes(sp.platform ?? "") ? (sp.platform as SocialPlatform) : null;
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
   const dateLocale = getDateLocale(lang);
 
   // One shared client — see src/lib/prisma.ts for why.
-  const { snapshots, history, links, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { snapshots: allSnapshots, history: allHistory, links, hour12 } = await withScopedPrismaClient(async (db) => {
     const snapshots = await getLatestSocialSnapshots(db);
     const history = await getSocialSnapshotHistory(db, 30);
     const links = await getSocialLinks(db);
     const hour12 = await getHour12(session, db);
     return { snapshots, history, links, hour12 };
   });
+
+  // One platform chosen in the platform tabs narrows everything below to it.
+  const snapshots = platformParam ? allSnapshots.filter((x) => x.platform === platformParam) : allSnapshots;
+  const history = platformParam ? allHistory.filter((x) => x.platform === platformParam) : allHistory;
+  const platformsShown = platformParam ? [platformParam] : [...SOCIAL_PLATFORMS];
 
   const summary = summarizeSocialSnapshots(snapshots);
   const growth = summary.followersGrowth;
@@ -159,7 +167,7 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
         {(["analytics", "posts"] as const).map((k) => (
           <Link
             key={k}
-            href={k === "analytics" ? "/social-analytics" : "/social-analytics?tab=posts"}
+            href={`/social-analytics${[k === "posts" ? "tab=posts" : "", platformParam ? `platform=${platformParam}` : ""].filter(Boolean).length ? `?${[k === "posts" ? "tab=posts" : "", platformParam ? `platform=${platformParam}` : ""].filter(Boolean).join("&")}` : ""}`}
             prefetch={false}
             className={
               tab === k
@@ -172,8 +180,11 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
         ))}
       </nav>
 
+      <PlatformTabs active={platformParam} tab={tab} names={platformNames} />
+
       {tab === "posts" ? (
         <PostsTab
+          platform={platformParam}
           lang={lang}
           isAdmin={session?.user.role === "ADMIN"}
           dateLocale={dateLocale}
@@ -220,7 +231,7 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
           </span>
         </div>
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {SOCIAL_PLATFORMS.map((platform) => (
+          {platformsShown.map((platform) => (
             <div key={platform}>
               <p className="text-xs font-semibold uppercase tracking-wide text-soft">{platformNames[platform]}</p>
               <TrendChart
@@ -267,6 +278,7 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
         </div>
         <div className="mt-3">
           <SocialPageLinks
+            only={platformParam}
             links={links}
             platformNames={platformNames}
             languageEn={t.dashboard.socialLanguageEn}

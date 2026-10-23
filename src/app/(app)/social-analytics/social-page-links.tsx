@@ -12,7 +12,9 @@ export default function SocialPageLinks({
   languageEn,
   languageFr,
   notSetLabel,
+  only,
 }: {
+  only?: SocialPlatform | null;
   links: Record<string, string>;
   platformNames: Record<SocialPlatform, string>;
   languageEn: string;
@@ -21,7 +23,7 @@ export default function SocialPageLinks({
 }) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {SOCIAL_PLATFORMS.map((platform) => {
+      {SOCIAL_PLATFORMS.filter((p) => !only || p === only).map((platform) => {
         const style = ROW_STYLE[platform];
         return (
           <div key={platform} className={clsx("flex items-center gap-2 rounded-lg px-2 py-2", style.rowBg)}>

@@ -10,9 +10,9 @@ const SHOW_SENT = 10;
 
 // Recent posts by platform: what is queued (next up first) and what was sent (newest first), each with the results
 // Buffer reports for it. Read from the cache that "Refresh from Buffer" fills.
-export default async function PostsTab({ lang, isAdmin, labels, dateLocale }: { lang: "en" | "fr"; isAdmin: boolean; labels: Labels; dateLocale: Locale | undefined }) {
+export default async function PostsTab({ platform: only, lang, isAdmin, labels, dateLocale }: { platform: SocialPlatform | null; lang: "en" | "fr"; isAdmin: boolean; labels: Labels; dateLocale: Locale | undefined }) {
   const fr = lang === "fr";
-  const posts = await withScopedPrismaClient((db) => db.socialPost.findMany({ orderBy: { postedAt: "desc" }, take: 600 }));
+  const posts = await withScopedPrismaClient((db) => db.socialPost.findMany({ where: only ? { platform: only } : {}, orderBy: { postedAt: "desc" }, take: 600 }));
   const latest = posts.reduce((m, p) => Math.max(m, p.fetchedAt.getTime()), 0);
   const when = (d: Date | null) => (d ? format(d, "MMM d, yyyy · HH:mm", { locale: dateLocale }) : "—");
 
@@ -24,7 +24,7 @@ export default async function PostsTab({ lang, isAdmin, labels, dateLocale }: { 
           {fr ? "Aucune publication pour le moment. Elles sont lues depuis Buffer (publiées et en file d'attente)." : "No posts yet. They are read from Buffer (sent and queued)."}
         </p>
       )}
-      {SOCIAL_PLATFORMS.map((platform) => {
+      {SOCIAL_PLATFORMS.filter((p) => !only || p === only).map((platform) => {
         const mine = posts.filter((p) => p.platform === platform);
         if (mine.length === 0) return null;
         const queued = mine.filter((p) => p.status === "QUEUED").sort((a, b) => (a.postedAt?.getTime() ?? 0) - (b.postedAt?.getTime() ?? 0));
