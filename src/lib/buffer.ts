@@ -39,7 +39,7 @@ function isAuthError(status: number, body: Record<string, unknown>): boolean {
   });
 }
 
-interface BufferChannel {
+export interface BufferChannel {
   id: string;
   name: string;
   service: string; // e.g. "instagram" | "tiktok" | "twitter" | "facebook" | "linkedin"
@@ -50,6 +50,10 @@ interface BufferMetric {
   name: string;
   value: number;
 }
+
+export interface TypeRef { kind: string; name: string | null; ofType: TypeRef | null }
+export interface SchemaField { name: string; type: TypeRef; args?: { name: string; type: TypeRef }[] }
+export interface SchemaType { kind: string; name: string; fields: SchemaField[] | null; inputFields: SchemaField[] | null; enumValues: { name: string }[] | null }
 
 export class BufferClient {
   constructor(private apiKey: string) {}
@@ -90,6 +94,22 @@ export class BufferClient {
     );
     const data = body.data as { __type?: { fields?: { name: string }[] } } | undefined;
     return data?.__type?.fields?.map((f) => f.name) ?? body;
+  }
+
+  /** Any query, with Buffer's usual error handling (bad key, GraphQL errors). */
+  async query<T = Record<string, unknown>>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    return this.request<T>(query, variables);
+  }
+
+  /** One type from Buffer's live schema (its fields / input fields / enum values), or null when it does not exist. */
+  async typeInfo(name: string): Promise<SchemaType | null> {
+    const ref = `kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } }`;
+    const { body } = await this.raw(
+      `query($n: String!) { __type(name: $n) { kind name fields { name args { name type { ${ref} } } type { ${ref} } } inputFields { name type { ${ref} } } enumValues { name } } }`,
+      { n: name }
+    );
+    const t = (body.data as { __type?: SchemaType | null } | undefined)?.__type;
+    return t ?? null;
   }
 
   async getOrganizationId(): Promise<string> {
@@ -136,9 +156,9 @@ export class BufferClient {
 // "andrewlmurphy" is Andrew's personal LinkedIn profile, connected to
 // Buffer alongside the two company pages — it isn't a language variant of
 // anything and shouldn't be folded into either EN or FR company stats.
-const EXCLUDED_CHANNEL_NAMES = new Set(["andrewlmurphy"]);
+export const EXCLUDED_CHANNEL_NAMES = new Set(["andrewlmurphy"]);
 
-const SERVICE_TO_PLATFORM: Record<string, SocialPlatform> = {
+export const SERVICE_TO_PLATFORM: Record<string, SocialPlatform> = {
   instagram: "instagram",
   tiktok: "tiktok",
   twitter: "x",
@@ -154,7 +174,7 @@ const SERVICE_TO_PLATFORM: Record<string, SocialPlatform> = {
 // finally a bare "en"/"fr" suffix at the very end of the name. Returns
 // null when nothing matches, so the caller can log it as a warning
 // instead of silently guessing.
-function detectLanguageFromChannelName(name: string): SocialLanguage | null {
+export function detectLanguageFromChannelName(name: string): SocialLanguage | null {
   const lower = name.toLowerCase();
   if (/fran[cç]ais|french/.test(lower)) return "FR";
   if (/english|anglais/.test(lower)) return "EN";
@@ -165,7 +185,7 @@ function detectLanguageFromChannelName(name: string): SocialLanguage | null {
   return null;
 }
 
-interface BufferAccountConfig {
+export interface BufferAccountConfig {
   provider: string;
   languageMode: "fixed" | "detect";
   fixedLanguage: SocialLanguage | null;
@@ -174,7 +194,7 @@ interface BufferAccountConfig {
 // buffer_en/buffer_fr each hold one language's Instagram/TikTok/X
 // channels; buffer_fb/buffer_li each hold BOTH languages' channels for
 // that one platform, split by channel name (see detectLanguageFromChannelName).
-const BUFFER_ACCOUNTS: BufferAccountConfig[] = [
+export const BUFFER_ACCOUNTS: BufferAccountConfig[] = [
   { provider: "buffer_en", languageMode: "fixed", fixedLanguage: "EN" },
   { provider: "buffer_fr", languageMode: "fixed", fixedLanguage: "FR" },
   { provider: "buffer_fb", languageMode: "detect", fixedLanguage: null },

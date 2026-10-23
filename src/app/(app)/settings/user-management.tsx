@@ -283,7 +283,7 @@ export default function UserManagement({
 const LABELS: Record<string, [string, string]> = {
   dashboard: ["Dashboard", "Tableau de bord"], email: ["Email", "Courriel"], sms: ["SMS", "SMS"], calendar: ["Calendar", "Calendrier"],
   tasks: ["Tasks", "Tâches"], contacts: ["Contacts", "Contacts"], projects: ["Projects", "Projets"], invoices: ["Invoices", "Factures"],
-  accounting: ["Accounting", "Comptabilité"], marketing: ["Marketing", "Marketing"], socialAnalytics: ["Social analytics", "Analytique sociale"],
+  accounting: ["Accounting", "Comptabilité"], marketing: ["Marketing", "Marketing"], socialAnalytics: ["Social media", "Médias sociaux"],
   bookings: ["Bookings", "Réservations"], settings: ["Settings", "Paramètres"],
 };
 const LEVEL_OPTS: { v: Level; en: string; fr: string }[] = [

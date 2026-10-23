@@ -27,6 +27,8 @@ import PageHeader from "../page-header";
 import TrendChart, { type TrendSeries } from "./trend-chart";
 import BarChart, { type BarDatum } from "./bar-chart";
 import SocialPageLinks from "./social-page-links";
+import PostsTab from "./posts-tab";
+import Link from "next/link";
 
 // A single hard-coded "external tool" link (unlike the per-platform
 // profile links below, which are account-specific and editable in
@@ -34,7 +36,8 @@ import SocialPageLinks from "./social-page-links";
 // Buffer user, so there's nothing for an admin to configure here.
 const BUFFER_ANALYTICS_URL = "https://publish.buffer.com/analytics";
 
-export default async function SocialAnalyticsPage() {
+export default async function SocialAnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const tab = (await searchParams).tab === "posts" ? "posts" : "analytics";
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
@@ -152,6 +155,32 @@ export default async function SocialAnalyticsPage() {
         }
       />
 
+      <nav className="flex gap-2" aria-label="Social Media">
+        {(["analytics", "posts"] as const).map((k) => (
+          <Link
+            key={k}
+            href={k === "analytics" ? "/social-analytics" : "/social-analytics?tab=posts"}
+            prefetch={false}
+            className={
+              tab === k
+                ? "btn-primary rounded-lg px-4 py-2 text-sm font-semibold shadow-sm"
+                : "rounded-lg border border-card-border bg-card-bg px-4 py-2 text-sm font-medium text-soft hover:text-ink"
+            }
+          >
+            {k === "analytics" ? t.socialAnalyticsPage.tabAnalytics : t.socialAnalyticsPage.tabPosts}
+          </Link>
+        ))}
+      </nav>
+
+      {tab === "posts" ? (
+        <PostsTab
+          lang={lang}
+          isAdmin={session?.user.role === "ADMIN"}
+          dateLocale={dateLocale}
+          labels={{ statLabels: socialLabels.statLabels, platformNames, languageEn: t.dashboard.socialLanguageEn, languageFr: t.dashboard.socialLanguageFr }}
+        />
+      ) : (
+      <>
       <div className={`relative overflow-hidden rounded-2xl border border-card-border p-3 shadow-sm sm:p-5 ${SOCIAL_CARD_BG}`}>
         <div className={`absolute inset-x-0 top-0 h-[3px] ${SOCIAL_CARD_ACCENT_BAR}`} />
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
@@ -253,6 +282,8 @@ export default async function SocialAnalyticsPage() {
           <SocialCard snapshots={snapshots} labels={socialLabels} isAdmin={session?.user.role === "ADMIN"} dateLocale={dateLocale} />
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

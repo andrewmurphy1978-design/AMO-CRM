@@ -1928,6 +1928,27 @@ model SocialAnalyticsSnapshot {
   @@map("social_analytics_snapshots")
 }
 
+// Recent posts read from Buffer (sent and queued), kept so the Social Media > Posts tab opens fast. Queued posts that
+// are no longer queued (sent or removed) are dropped on every refresh; sent posts stay as history.
+model SocialPost {
+  id        String    @id @default(cuid())
+  provider  String // which Buffer account: buffer_en | buffer_fr | buffer_fb | buffer_li
+  bufferId  String
+  channelId String
+  platform  String
+  language  String
+  status    String // "SENT" | "QUEUED"
+  text      String?   @db.Text
+  link      String?
+  postedAt  DateTime? // sent time, or the scheduled time for a queued post
+  metrics   Json?
+  fetchedAt DateTime  @default(now())
+
+  @@unique([provider, bufferId])
+  @@index([platform, status, postedAt])
+  @@map("social_posts")
+}
+
 model SyncLog {
   id             String    @id @default(cuid())
   provider       String

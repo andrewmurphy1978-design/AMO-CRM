@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { runBufferSync } from "@/lib/buffer";
+import { withScopedPrismaClient } from "@/lib/prisma";
+import { syncBufferPosts } from "@/lib/buffer-posts";
 
 // The same GitHub Actions workflow that pings systeme-io-sync every 15
 // minutes also pings this route — it just runs once a day, at 08:00
@@ -31,5 +33,6 @@ export async function GET(request: Request) {
   }
 
   const result = await runBufferSync();
-  return NextResponse.json({ ok: true, ...result });
+  const posts = await withScopedPrismaClient((db) => syncBufferPosts(db)).catch((e) => ({ saved: 0, errors: [String(e)] }));
+  return NextResponse.json({ ok: true, ...result, posts });
 }
