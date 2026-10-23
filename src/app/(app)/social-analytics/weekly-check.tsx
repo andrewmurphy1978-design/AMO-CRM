@@ -1,11 +1,10 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getWeeklyCheck } from "@/lib/social-weekly";
 import type { SocialPlatform } from "@/lib/social";
-import MakeChecksForm from "./make-checks-form";
 
 // "Are next week's posts made and queued?" — the Thursday task's own report, checked against Buffer's queue and the
 // recent runs of the Make scenarios that publish directly.
-export default async function WeeklyCheck({ lang, isAdmin, platformNames }: { lang: "en" | "fr"; isAdmin: boolean; platformNames: Record<SocialPlatform, string> }) {
+export default async function WeeklyCheck({ lang, platformNames }: { lang: "en" | "fr"; platformNames: Record<SocialPlatform, string> }) {
   const fr = lang === "fr";
   const check = await withScopedPrismaClient((db) => getWeeklyCheck(db));
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(fr ? "fr-CA" : "en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Montreal" }) : "—");
@@ -25,26 +24,26 @@ export default async function WeeklyCheck({ lang, isAdmin, platformNames }: { la
       </p>
       {check.report?.note && <p className="mt-1 text-xs text-soft">{check.report.note}</p>}
       {check.report?.errors.map((e, i) => <p key={i} className="mt-1 text-xs text-red-600">{e}</p>)}
+      {check.failedInMake ? (
+        <p className="mt-2 text-xs text-amber-700">
+          {fr ? `⚠️ ${check.failedInMake} publication(s) échouée(s) conservée(s) dans Make (« Failed Social Posts »).` : `⚠️ ${check.failedInMake} failed post(s) are kept in Make ("Failed Social Posts").`}
+        </p>
+      ) : null}
+      {check.makeError && <p className="mt-2 text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{check.makeError}</p>}
       <ul className="mt-3 divide-y divide-card-border text-sm">
         {check.rows.map((r) => (
           <li key={r.platform} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2">
             <span className="w-6">{mark(r.ok)}</span>
             <span className="w-28 font-medium text-ink">{platformNames[r.platform]}</span>
             <span className="text-xs text-soft">
-              {r.via === "both" ? "Buffer + Make" : r.via === "make" ? "Make" : r.via === "buffer" ? "Buffer" : "—"}
-              {r.expected != null ? ` · ${fr ? "prévues" : "expected"} ${r.expected}` : ""}
-              {r.bufferQueued != null ? ` · Buffer ${fr ? "en file" : "queued"} ${r.bufferQueued}` : ""}
-              {r.make ? ` · Make ${r.make.lastRunAt ? `${r.make.lastStatus} ${when(r.make.lastRunAt)}` : fr ? "aucune exécution" : "no run"}` : ""}
+              {r.expected != null ? `${fr ? "prévues" : "expected"} ${r.expected} · ` : ""}
+              {r.makeQueued != null ? `Make ${fr ? "en file" : "queued"} ${r.makeQueued}` : "Make —"}
+              {` · Buffer ${fr ? "en file" : "queued"} ${r.bufferQueued}`}
             </span>
             {r.problem && <span className="w-full pl-10 text-xs text-amber-700">{r.problem}</span>}
           </li>
         ))}
       </ul>
-      {isAdmin && (
-        <div className="mt-3 border-t border-card-border pt-3">
-          <MakeChecksForm keywords={check.keywords} fr={fr} />
-        </div>
-      )}
     </div>
   );
 }

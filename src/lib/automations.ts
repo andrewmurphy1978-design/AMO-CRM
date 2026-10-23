@@ -19,6 +19,14 @@ export async function getMakeClient(): Promise<{ client: MakeClient; teamId: num
   });
 }
 
+/** The Make client for a caller that already has a db client open (never opens a second one). */
+export async function makeClientWith(db: PrismaClient): Promise<MakeClient | null> {
+  const setting = await db.integrationSetting.findUnique({ where: { provider: "make" } });
+  if (!setting?.apiKeyEncrypted) return null;
+  const metadata = (setting.metadata as MakeMetadata | null) ?? {};
+  return new MakeClient(await decryptSecret(setting.apiKeyEncrypted), metadata.zone || "us2.make.com");
+}
+
 export interface MakeSyncResult {
   executionsSynced: number;
 }

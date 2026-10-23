@@ -87,6 +87,12 @@ export class MakeClient {
     return extractItems(data).map(mapExecution);
   }
 
+  /** Records currently held in a Make data store (e.g. the "Social Post Queue"). */
+  async listDataStoreRecords(dataStoreId: number, limit = 500): Promise<{ key: string; data: Record<string, unknown> }[]> {
+    const data = await this.request<unknown>(`/data-stores/${dataStoreId}/data`, { "pg[limit]": limit });
+    return extractItems(data).map((r) => ({ key: String(r.key ?? ""), data: ((r.data as Record<string, unknown> | undefined) ?? {}) }));
+  }
+
   /** Confirms the API key is valid by requesting the team's scenario list. */
   async verifyApiKey(teamId: number): Promise<boolean> {
     try {
@@ -105,7 +111,7 @@ function extractItems(data: unknown): Record<string, unknown>[] {
   if (Array.isArray(data)) return data as Record<string, unknown>[];
   if (data && typeof data === "object") {
     const obj = data as Record<string, unknown>;
-    for (const key of ["scenarioLogs", "logs", "scenarios", "items", "data"]) {
+    for (const key of ["scenarioLogs", "logs", "scenarios", "records", "items", "data"]) {
       if (Array.isArray(obj[key])) return obj[key] as Record<string, unknown>[];
     }
   }
