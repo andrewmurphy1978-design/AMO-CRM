@@ -28,7 +28,7 @@ const isList = (t: TypeRef | null): boolean => {
 };
 const typeString = (t: TypeRef): string => (t.kind === "NON_NULL" ? `${typeString(t.ofType as TypeRef)}!` : t.kind === "LIST" ? `[${typeString(t.ofType as TypeRef)}]` : (t.name ?? "String"));
 
-class Schema {
+export class Schema {
   private cache = new Map<string, SchemaType | null>();
   constructor(private client: BufferClient) {}
   async get(name: string | null | undefined): Promise<SchemaType | null> {
@@ -126,8 +126,8 @@ function normMetrics(m: unknown, out: Record<string, number> = {}): Record<strin
   return out;
 }
 
-export async function fetchBufferPosts(client: BufferClient, orgId: string, channelIds: string[], status: PostStatus): Promise<{ posts: BufferPost[]; statusApplied: boolean }> {
-  const schema = new Schema(client);
+export async function fetchBufferPosts(client: BufferClient, orgId: string, channelIds: string[], status: PostStatus, sharedSchema?: Schema): Promise<{ posts: BufferPost[]; statusApplied: boolean }> {
+  const schema = sharedSchema ?? new Schema(client);
   const root = await schema.get("Query");
   const field = root?.fields?.find((f) => f.name === "posts");
   if (!field) throw new Error(`Buffer's API has no "posts" query (it offers: ${(root?.fields ?? []).map((f) => f.name).join(", ")})`);
@@ -204,11 +204,15 @@ export async function fetchBufferPosts(client: BufferClient, orgId: string, chan
 
 // ---------------------------------------------------------------- sync into the database
 
-export interface PostsSyncResult { saved: number; errors: string[] }
+export interface ChannelPostCount { name: string; platform: string; language: string; sent: number; queued: number; error?: string }
+export interface PostsSyncResult { saved: number; errors: string[]; channels: ChannelPostCount[] }
 
+// Each channel is asked for separately: one combined query returns only Buffer's newest 50 posts across every channel,
+// which can crowd out a quieter channel (Instagram, TikTok) entirely. The counts per channel are returned so the Posts
+// tab can show which channels returned nothing.
 export async function syncBufferPosts(db: PrismaClient): Promise<PostsSyncResult> {
   const accounts = await db.integrationSetting.findMany({ where: { provider: { in: BUFFER_ACCOUNTS.map((a) => a.provider) } } });
-  const result: PostsSyncResult = { saved: 0, errors: [] };
+  const result: PostsSyncResult = { saved: 0, errors: [], channels: [] };
   for (const account of accounts) {
     if (!account.apiKeyEncrypted) continue;
     const config = BUFFER_ACCOUNTS.find((a) => a.provider === account.provider);
@@ -217,40 +221,45 @@ export async function syncBufferPosts(db: PrismaClient): Promise<PostsSyncResult
       const client = new BufferClient(await decryptSecret(account.apiKeyEncrypted));
       const orgId = await client.getOrganizationId();
       const channels = await client.listChannels(orgId);
-      const info = new Map<string, { platform: SocialPlatform; language: SocialLanguage }>();
+      const schema = new Schema(client);
+      const queuedSeen: string[] = [];
+      let queuedComplete = true;
+
       for (const c of channels) {
         if (EXCLUDED_CHANNEL_NAMES.has(c.name.toLowerCase())) continue;
-        const platform = SERVICE_TO_PLATFORM[c.service];
+        const platform = SERVICE_TO_PLATFORM[c.service] as SocialPlatform | undefined;
         if (!platform) continue;
-        const language = config.languageMode === "fixed" && config.fixedLanguage ? config.fixedLanguage : (detectLanguageFromChannelName(c.name) ?? "EN");
-        info.set(c.id, { platform, language });
-      }
-      const channelIds = [...info.keys()];
-      if (channelIds.length === 0) continue;
+        const language: SocialLanguage = config.languageMode === "fixed" && config.fixedLanguage ? config.fixedLanguage : (detectLanguageFromChannelName(c.name) ?? "EN");
+        const count: ChannelPostCount = { name: c.name, platform, language, sent: 0, queued: 0 };
+        result.channels.push(count);
 
-      for (const status of ["SENT", "QUEUED"] as PostStatus[]) {
-        try {
-          const { posts, statusApplied } = await fetchBufferPosts(client, orgId, channelIds, status);
-          const seen: string[] = [];
-          for (const p of posts) {
-            // When the status could not be filtered in the query, sort the posts by their own status here.
-            if (!statusApplied) {
-              const kind = /sent|publish/i.test(p.statusRaw) ? "SENT" : /sched|queue|pend/i.test(p.statusRaw) ? "QUEUED" : null;
-              if (kind !== status) continue;
+        for (const status of ["SENT", "QUEUED"] as PostStatus[]) {
+          try {
+            const { posts, statusApplied } = await fetchBufferPosts(client, orgId, [c.id], status, schema);
+            for (const p of posts) {
+              // When the status could not be filtered in the query, sort the posts by their own status here.
+              if (!statusApplied) {
+                const kind = /sent|publish/i.test(p.statusRaw) ? "SENT" : /sched|queue|pend/i.test(p.statusRaw) ? "QUEUED" : null;
+                if (kind !== status) continue;
+              }
+              if (p.channelId && p.channelId !== c.id) continue;
+              if (status === "QUEUED") queuedSeen.push(p.id);
+              const data = { channelId: c.id, platform, language, status, text: p.text, link: p.link, postedAt: p.postedAt ? new Date(p.postedAt) : null, metrics: p.metrics as never, fetchedAt: new Date() };
+              await db.socialPost.upsert({ where: { provider_bufferId: { provider: account.provider, bufferId: p.id } }, update: data, create: { provider: account.provider, bufferId: p.id, ...data } });
+              result.saved++;
+              if (status === "SENT") count.sent++;
+              else count.queued++;
             }
-            const ch = p.channelId ? info.get(p.channelId) : undefined;
-            if (!ch || !p.channelId) continue;
-            seen.push(p.id);
-            const data = { channelId: p.channelId, platform: ch.platform, language: ch.language, status, text: p.text, link: p.link, postedAt: p.postedAt ? new Date(p.postedAt) : null, metrics: p.metrics as never, fetchedAt: new Date() };
-            await db.socialPost.upsert({ where: { provider_bufferId: { provider: account.provider, bufferId: p.id } }, update: data, create: { provider: account.provider, bufferId: p.id, ...data } });
-            result.saved++;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            count.error = count.error ? `${count.error}; ${status}: ${message}` : `${status}: ${message}`;
+            if (status === "QUEUED") queuedComplete = false;
+            if (!result.errors.some((x) => x.endsWith(message))) result.errors.push(`${account.provider} ${c.name} ${status}: ${message}`);
           }
-          // A post that is no longer queued has been sent or removed: drop it from the queued list.
-          if (status === "QUEUED") await db.socialPost.deleteMany({ where: { provider: account.provider, status: "QUEUED", bufferId: { notIn: seen } } });
-        } catch (e) {
-          result.errors.push(`${account.provider} ${status}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
+      // A post that is no longer queued has been sent or removed: drop it (only when every channel answered).
+      if (queuedComplete) await db.socialPost.deleteMany({ where: { provider: account.provider, status: "QUEUED", bufferId: { notIn: queuedSeen } } });
     } catch (e) {
       result.errors.push(`${account.provider}: ${e instanceof Error ? e.message : String(e)}`);
     }

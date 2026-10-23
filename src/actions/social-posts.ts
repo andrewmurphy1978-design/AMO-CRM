@@ -7,7 +7,7 @@ import { requireAccess } from "@/lib/permissions";
 import { syncBufferPosts, describeBufferSchema } from "@/lib/buffer-posts";
 
 /** Reads the latest sent and queued posts from Buffer into the CRM. */
-export async function refreshSocialPostsAction(): Promise<{ saved: number; errors: string[] }> {
+export async function refreshSocialPostsAction(): Promise<{ saved: number; errors: string[]; channels: { name: string; platform: string; language: string; sent: number; queued: number; error?: string }[] }> {
   await requireAccess("socialAnalytics", "READ");
   const result = await withScopedPrismaClient((db) => syncBufferPosts(db));
   revalidatePath("/social-analytics");
