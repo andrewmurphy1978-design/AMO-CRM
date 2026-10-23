@@ -37,3 +37,7 @@ jobs:
         run: |
           curl -sS -f -X GET "https://crm.andrewmurphy.online/api/cron/email-poll" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - name: Trigger accounting invoice pickup from email
+        run: |
+          curl -sS -f -X GET "https://crm.andrewmurphy.online/api/cron/accounting-invoices" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

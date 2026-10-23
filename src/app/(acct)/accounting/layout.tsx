@@ -11,6 +11,7 @@ import PageHeader from "@/app/(app)/page-header";
 import AccountingIcon from "@/app/(app)/accounting-icon";
 import AccessScope from "@/components/access-scope";
 import { resolvePermissions } from "@/lib/permissions-shared";
+import { waitingWhere } from "@/lib/accounting/documents";
 import AccountingNav from "./accounting-nav";
 
 // Accounting holds personal bank data: admins and the team members given access, each with their own books.
@@ -18,13 +19,14 @@ export default async function AccountingLayout({ children }: { children: ReactNo
   const session = await auth();
   const lang = await getLang();
   const t = getDict(lang);
-  const { hour12, toCategorize, me } = await withScopedPrismaClient(async (db) => {
+  const { hour12, toCategorize, waitingDocs, me } = await withScopedPrismaClient(async (db) => {
     const me = await accountingUserFor(db, session);
     // Keeps every entity's chart up to date (new template accounts, moved accounts) before any page or action uses it.
     if (me) await ensureAccountingSetup(db, me);
     return {
       me,
       hour12: await getHour12(session, db),
+      waitingDocs: me ? await db.accDocument.count({ where: waitingWhere(me.id) }) : 0,
       toCategorize: me ? await db.accTransaction.count({ where: { status: { in: ["NEW", "SUGGESTED"] }, account: { entity: { ownerId: me.id } } } }) : 0,
     };
   });
@@ -43,7 +45,7 @@ export default async function AccountingLayout({ children }: { children: ReactNo
         lang={lang}
         location={t.dashboard.myLocation}
       />
-      <AccountingNav lang={lang} toCategorize={toCategorize} />
+      <AccountingNav lang={lang} toCategorize={toCategorize} waitingDocs={waitingDocs} />
       <AccessScope level={level}>{children}</AccessScope>
     </div>
   );

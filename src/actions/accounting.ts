@@ -27,6 +27,7 @@ import { accountingUserFor, type AccountingUser } from "@/lib/accounting/access"
 import { assertUnlocked, monthRange, reconcileSummary } from "@/lib/accounting/reconcile";
 import { supplierName, supplierKey } from "@/lib/accounting/supplier";
 import { requireAccess } from "@/lib/permissions";
+import { MAX_DOC_BYTES, candidatesFor, matchWaitingDocuments, scanEmailForInvoices, type ScanResult } from "@/lib/accounting/documents";
 
 // Accounting holds personal bank data: admins, and team members who were given access. Each user has their own
 // books, so every id received from the browser is checked to belong to the signed-in user before it is used.
@@ -410,7 +411,7 @@ export async function deleteRule(id: string): Promise<void> {
 
 // ---------------------------------------------------------------- import
 
-export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1, format?: { signature: string; map: unknown } | null): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number; skipped: { date: string; description: string; amount: number; reason: "duplicate" | "swapped" }[] } }> {
+export async function importStatement(accountId: string, rows: ImportRow[], fileName: string, fxRate = 1, format?: { signature: string; map: unknown } | null): Promise<Result & { counts?: { rows: number; added: number; duplicates: number; dateMismatches: number; autoPosted: number; transfersLinked: number; documentsAttached?: number; skipped: { date: string; description: string; amount: number; reason: "duplicate" | "swapped" }[] } }> {
   await requireAccess("accounting", "WRITE");
   const me = await access();
   if (rows.length === 0) return { error: "There is nothing to import." };
@@ -421,7 +422,9 @@ export async function importStatement(accountId: string, rows: ImportRow[], file
       const c = await importTransactions(db, accountId, rows, fileName, fxRate);
       // Remember how this account's statements are laid out (columns, date order) for the next import.
       if (format) await db.accAccount.update({ where: { id: accountId }, data: { importFormat: format as never } });
-      return c;
+      // Invoices that arrived by email before this transaction existed are matched now.
+      const documentsAttached = await matchWaitingDocuments(db, me.id).catch(() => 0);
+      return { ...c, documentsAttached };
     });
     refresh();
     return { success: "Imported.", counts };
@@ -1074,5 +1077,136 @@ export async function setRelationshipAccount(entityId: string, otherId: string, 
   } catch (error) {
     if (error instanceof Error && error.message === "Not found") throw error;
     return { error: error instanceof Error ? error.message : "Could not save." };
+  }
+}
+
+
+// ---------------------------------------------------------------- receipts and invoices
+
+async function ownDocument(db: Db, me: AccountingUser, id: string) {
+  const doc = await db.accDocument.findFirst({ where: { id, ownerId: me.id }, select: { id: true, transactionId: true, status: true } });
+  if (!doc) throw deny();
+  return doc;
+}
+
+export type DocumentInfo = { id: string; filename: string; mimeType: string; sizeBytes: number; source: string; subject: string | null; vendor: string | null; docDate: string | null; amount: number | null; currency: string | null };
+
+const infoSelect = { id: true, filename: true, mimeType: true, sizeBytes: true, source: true, subject: true, vendor: true, docDate: true, amount: true, currency: true } as const;
+const toInfo = (d: { id: string; filename: string; mimeType: string; sizeBytes: number; source: string; subject: string | null; vendor: string | null; docDate: Date | null; amount: number | null; currency: string | null }): DocumentInfo => ({
+  ...d,
+  docDate: d.docDate ? d.docDate.toISOString().slice(0, 10) : null,
+});
+
+/** Adds a receipt or invoice (PDF or image) to a transaction by hand. */
+export async function uploadDocument(transactionId: string, file: { filename: string; mimeType: string; base64: string }): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
+  const me = await access();
+  if (!/^(application\/pdf|image\/(png|jpe?g|webp|gif))$/i.test(file.mimeType)) return { error: "Add a PDF or an image (PNG, JPG, WEBP)." };
+  const size = Math.floor((file.base64.length * 3) / 4);
+  if (size > MAX_DOC_BYTES) return { error: "That file is too large (max 8 MB)." };
+  await withScopedPrismaClient(async (db) => {
+    if ((await ownTxIds(db, me, [transactionId])).length === 0) throw deny();
+    await db.accDocument.create({
+      data: { ownerId: me.id, transactionId, filename: file.filename.slice(0, 200) || "document", mimeType: file.mimeType.toLowerCase(), sizeBytes: size, dataBase64: file.base64, source: "upload", status: "ATTACHED", matchedBy: "USER" },
+    });
+  });
+  refresh();
+  return { success: "Added." };
+}
+
+export async function listTransactionDocuments(transactionId: string): Promise<DocumentInfo[]> {
+  await requireAccess("accounting", "READ");
+  const me = await access();
+  return withScopedPrismaClient(async (db) => {
+    if ((await ownTxIds(db, me, [transactionId])).length === 0) throw deny();
+    return (await db.accDocument.findMany({ where: { transactionId, ownerId: me.id }, orderBy: { createdAt: "asc" }, select: infoSelect })).map(toInfo);
+  });
+}
+
+/** The file itself, for viewing or downloading. */
+export async function getDocumentFile(id: string): Promise<{ filename: string; mimeType: string; base64: string } | { error: string }> {
+  await requireAccess("accounting", "READ");
+  const me = await access();
+  return withScopedPrismaClient(async (db) => {
+    const d = await db.accDocument.findFirst({ where: { id, ownerId: me.id }, select: { filename: true, mimeType: true, dataBase64: true } });
+    return d ? { filename: d.filename, mimeType: d.mimeType, base64: d.dataBase64 } : { error: "Not found." };
+  });
+}
+
+/** Attaches a waiting document to a transaction chosen by hand. */
+export async function attachDocument(docId: string, transactionId: string): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
+  const me = await access();
+  await withScopedPrismaClient(async (db) => {
+    await ownDocument(db, me, docId);
+    if ((await ownTxIds(db, me, [transactionId])).length === 0) throw deny();
+    await db.accDocument.update({ where: { id: docId }, data: { transactionId, status: "ATTACHED", matchedBy: "USER" } });
+  });
+  refresh();
+  return { success: "Attached." };
+}
+
+/** Takes a document off its transaction; an emailed one goes back to waiting, an uploaded one is kept aside too. */
+export async function detachDocument(docId: string): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
+  const me = await access();
+  await withScopedPrismaClient(async (db) => {
+    await ownDocument(db, me, docId);
+    await db.accDocument.update({ where: { id: docId }, data: { transactionId: null, status: "UNMATCHED", matchedBy: null } });
+  });
+  refresh();
+  return {};
+}
+
+export async function dismissDocument(docId: string): Promise<Result> {
+  await requireAccess("accounting", "WRITE");
+  const me = await access();
+  await withScopedPrismaClient(async (db) => {
+    await ownDocument(db, me, docId);
+    await db.accDocument.update({ where: { id: docId }, data: { transactionId: null, status: "DISMISSED" } });
+  });
+  refresh();
+  return {};
+}
+
+export async function deleteDocument(docId: string): Promise<Result> {
+  await requireAccess("accounting", "DELETE");
+  const me = await access();
+  await withScopedPrismaClient(async (db) => {
+    await ownDocument(db, me, docId);
+    await db.accDocument.delete({ where: { id: docId } });
+  });
+  refresh();
+  return {};
+}
+
+export type DocumentCandidate = { id: string; date: string; supplier: string; amount: number; exact: boolean };
+
+/** Transactions that could belong to a waiting document: same amount, paid around its date. */
+export async function candidatesForDocument(docId: string): Promise<DocumentCandidate[]> {
+  await requireAccess("accounting", "READ");
+  const me = await access();
+  return withScopedPrismaClient(async (db) => {
+    await ownDocument(db, me, docId);
+    const d = await db.accDocument.findUniqueOrThrow({ where: { id: docId }, select: { vendor: true, docDate: true, amount: true, currency: true } });
+    const list = await candidatesFor(db, me.id, { ...d, docDate: null });
+    return list.slice(0, 15).map((c) => ({ id: c.id, date: c.date.toISOString().slice(0, 10), supplier: c.supplier || c.description, amount: c.amount, exact: c.vendorHit }));
+  });
+}
+
+/** "Check email now": reads recent emails for invoices, then tries every waiting one against the books. */
+export async function scanInvoicesNow(): Promise<Result & { scan?: ScanResult; matchedLater?: number }> {
+  await requireAccess("accounting", "WRITE");
+  const me = await access();
+  try {
+    const out = await withScopedPrismaClient(async (db) => {
+      const scan = await scanEmailForInvoices(db, me.id, { maxMessages: 15, maxAi: 8 });
+      const matchedLater = await matchWaitingDocuments(db, me.id);
+      return { scan, matchedLater };
+    });
+    refresh();
+    return { success: "Done.", ...out };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "The email check failed." };
   }
 }

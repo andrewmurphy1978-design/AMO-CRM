@@ -2201,7 +2201,8 @@ model AccTransaction {
   matchedTransactionId String?
   createdAt            DateTime        @default(now())
 
-  entries AccJournalEntry[]
+  entries   AccJournalEntry[]
+  documents AccDocument[]
 
   @@unique([accountId, dedupeKey])
   @@index([accountId, date])
@@ -2343,4 +2344,47 @@ model EmailArchive {
   @@unique([source, messageKey])
   @@index([threadKey])
   @@map("email_archive")
+}
+
+// A receipt or invoice for a transaction: uploaded by hand, or picked up from an email. Until it is matched to a
+// transaction (status UNMATCHED) it waits, and is matched automatically on the next import or by hand.
+// status: ATTACHED | UNMATCHED | DISMISSED. The file itself is kept in the database (base64).
+model AccDocument {
+  id            String          @id @default(cuid())
+  ownerId       String
+  transactionId String?
+  transaction   AccTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  filename      String
+  mimeType      String
+  sizeBytes     Int
+  dataBase64    String          @db.Text
+  source        String // "upload" | "email"
+  emailSource   String? // "gmail:<userId>" | "shared:<mailboxId>"
+  emailKey      String?
+  subject       String?
+  fromLabel     String?
+  vendor        String?
+  docDate       DateTime?       @db.Date
+  amount        Float?
+  currency      String?
+  invoiceNumber String?
+  status        String
+  matchedBy     String? // "AUTO" | "USER"
+  createdAt     DateTime        @default(now())
+
+  @@index([ownerId, status])
+  @@index([transactionId])
+  @@map("acc_documents")
+}
+
+// Emails already looked at for invoices (so each one is read once).
+model AccScannedEmail {
+  id         String   @id @default(cuid())
+  ownerId    String
+  source     String
+  messageKey String
+  scannedAt  DateTime @default(now())
+
+  @@unique([ownerId, source, messageKey])
+  @@map("acc_scanned_emails")
 }

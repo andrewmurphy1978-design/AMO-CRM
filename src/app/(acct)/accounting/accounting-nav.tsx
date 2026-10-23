@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // The Accounting section's own tabs (Overview, Transactions, Import, Reports, Journal, Setup).
-export default function AccountingNav({ lang, toCategorize }: { lang: "en" | "fr"; toCategorize?: number }) {
+export default function AccountingNav({ lang, toCategorize, waitingDocs }: { lang: "en" | "fr"; toCategorize?: number; waitingDocs?: number }) {
   const pathname = usePathname();
   const fr = lang === "fr";
   const tabs = [
     { href: "/accounting", label: fr ? "Aperçu" : "Overview", exact: true },
     { href: "/accounting/entities", label: fr ? "Entités" : "Entities" },
     { href: "/accounting/transactions", label: fr ? "Transactions" : "Transactions", badge: toCategorize },
+    { href: "/accounting/documents", label: fr ? "Factures" : "Invoices", badge: waitingDocs },
     { href: "/accounting/import", label: fr ? "Importer" : "Import" },
     { href: "/accounting/reconcile", label: fr ? "Rapprochement" : "Reconcile" },
     { href: "/accounting/reports", label: fr ? "Rapports" : "Reports" },

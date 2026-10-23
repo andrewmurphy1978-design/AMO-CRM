@@ -6,6 +6,7 @@ import { setFxRate, categorizeTransactions, confirmSuggestions, deleteTransactio
 import type { AccountOption, EntityInfo } from "@/lib/accounting/options";
 import { GROUP_LABEL } from "@/lib/accounting/options";
 import { money } from "@/lib/accounting/format";
+import TxDocuments from "./tx-documents";
 
 export interface TxRow {
   id: string;
@@ -22,6 +23,7 @@ export interface TxRow {
   categoryText: string;
   suggestionText: string;
   suggestion: { entityId: string; accountId: string; pct?: number }[] | null;
+  docCount: number;
 }
 
 type Line = { pick: string; pct: number; tax: boolean };
@@ -295,6 +297,7 @@ export default function TransactionsTable({
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      <TxDocuments txId={t.id} count={t.docCount} lang={lang} />
                       <button disabled={busy} onClick={() => save(t)} className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50">
                         {t.status === "SUGGESTED" ? (fr ? "Confirmer" : "Confirm") : fr ? "Enregistrer" : "Save"}
                       </button>
@@ -334,6 +337,7 @@ export default function TransactionsTable({
                     </td>
                     <td className={`pr-3 text-right whitespace-nowrap ${t.amount < 0 ? "text-ink" : "text-emerald-700"}`}>{money(t.amount, t.currency, lang)}{t.currency !== t.entityCurrency && <span className="block text-xs text-soft">× {t.fxRate} {t.entityCurrency}</span>}</td>
                     <td className="space-x-2 text-right whitespace-nowrap text-xs">
+                      <span className="inline-block align-middle"><TxDocuments txId={t.id} count={t.docCount} lang={lang} /></span>
                       <button disabled={busy} className="text-soft underline" onClick={() => run(async () => { if (t.status === "IGNORED") await ignoreTransactions([t.id], false); else await uncategorizeTransactions([t.id]); })}>
                         {fr ? "Modifier" : "Change"}
                       </button>

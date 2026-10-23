@@ -35,6 +35,8 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       }),
       db.accTransaction.count({ where: { ...base, status: sp.show === "ignored" ? "IGNORED" : "POSTED" } }),
     ]);
+    const docRows = await db.accDocument.groupBy({ by: ["transactionId"], where: { ownerId: me.id, transactionId: { in: [...pending, ...done].map((t) => t.id) } }, _count: { _all: true } });
+    const docCounts = new Map(docRows.map((r) => [r.transactionId as string, r._count._all]));
     const bankCur = new Map(banks.map((b) => [b.id, b.currency ?? books.entities.find((e) => e.id === b.entityId)?.currency ?? "CAD"]));
     const entCur = new Map(banks.map((b) => [b.id, books.entities.find((e) => e.id === b.entityId)?.currency ?? "CAD"]));
     const label = new Map<string, string>();
@@ -60,6 +62,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         categoryText: alloc.length ? describe(alloc) : "",
         suggestionText: sug?.allocations?.length ? describe(sug.allocations) : "",
         suggestion: sug?.allocations ?? null,
+        docCount: docCounts.get(t.id) ?? 0,
       };
     };
     return { books, banks, pending: pending.map(toRow), done: done.map(toRow), doneCount };
