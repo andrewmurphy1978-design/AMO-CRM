@@ -1949,6 +1949,21 @@ model SocialPost {
   @@map("social_posts")
 }
 
+// What the weekly Claude scheduled task (Thursday, posts for the following Monday-Sunday) reports when it finishes:
+// per platform how many posts it prepared and where they were sent (Buffer, Make or both).
+model SocialWeeklyRun {
+  id         String   @id @default(cuid())
+  weekStart  DateTime @db.Date // the Monday the posts start
+  status     String // "success" | "error"
+  posts      Json? // [{ platform, language?, count, via: "buffer" | "make" | "both" }]
+  errors     Json?
+  note       String?  @db.Text
+  reportedAt DateTime @default(now())
+
+  @@index([weekStart])
+  @@map("social_weekly_runs")
+}
+
 model SyncLog {
   id             String    @id @default(cuid())
   provider       String

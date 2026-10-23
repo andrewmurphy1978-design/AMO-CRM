@@ -3,6 +3,7 @@ import type { Locale } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { SOCIAL_PLATFORMS, SOCIAL_CHART_COLOR, type SocialPlatform } from "@/lib/social";
 import PostsRefresh from "./posts-refresh";
+import WeeklyCheck from "./weekly-check";
 
 type Labels = { statLabels: Record<string, string>; platformNames: Record<SocialPlatform, string>; languageEn: string; languageFr: string };
 
@@ -19,6 +20,7 @@ export default async function PostsTab({ platform: only, lang, isAdmin, labels, 
   return (
     <div className="space-y-6">
       <PostsRefresh latestFetch={latest} isAdmin={isAdmin} lang={lang} />
+      <WeeklyCheck lang={lang} isAdmin={isAdmin} platformNames={labels.platformNames} />
       {posts.length === 0 && (
         <p className="rounded-2xl border border-card-border bg-card-bg p-5 text-sm text-soft">
           {fr ? "Aucune publication pour le moment. Elles sont lues depuis Buffer (publiées et en file d'attente)." : "No posts yet. They are read from Buffer (sent and queued)."}
