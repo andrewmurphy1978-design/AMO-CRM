@@ -6,6 +6,7 @@ import { withScopedPrismaClient } from "@/lib/prisma";
 import { requireAccess } from "@/lib/permissions";
 import { syncBufferPosts, describeBufferSchema } from "@/lib/buffer-posts";
 import { runMakeSync } from "@/lib/automations";
+import { SOCIAL_LANGUAGES, todaySocialDateKey } from "@/lib/social";
 
 /** Reads the latest sent and queued posts from Buffer into the CRM. */
 export async function refreshSocialPostsAction(): Promise<{ saved: number; errors: string[]; channels: { name: string; platform: string; language: string; sent: number; queued: number; error?: string }[] }> {
@@ -27,4 +28,33 @@ export async function inspectBufferSchemaAction(): Promise<{ text: string } | { 
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+const MANUAL_PLATFORMS = ["x", "tiktok", "youtube"] as const;
+
+/** Today's follower counts typed in by hand, for platforms no automation can read (X, TikTok, YouTube). */
+export async function saveManualFollowersAction(
+  entries: { platform: string; language: string; followers: number | null }[],
+): Promise<{ ok: true; saved: number } | { ok: false; error: string }> {
+  await requireAccess("socialAnalytics", "WRITE");
+  const dateKey = todaySocialDateKey();
+  let saved = 0;
+  await withScopedPrismaClient(async (db) => {
+    for (const e of entries) {
+      const platform = e.platform.toLowerCase();
+      const language = e.language.toUpperCase();
+      if (!(MANUAL_PLATFORMS as readonly string[]).includes(platform)) continue;
+      if (!(SOCIAL_LANGUAGES as readonly string[]).includes(language)) continue;
+      if (e.followers === null || !Number.isFinite(e.followers) || e.followers < 0) continue;
+      const followers = Math.round(e.followers);
+      await db.socialAnalyticsSnapshot.upsert({
+        where: { platform_language_dateKey: { platform, language, dateKey } },
+        update: { followers, capturedAt: new Date() },
+        create: { platform, language, dateKey, followers, raw: { source: "manual" } },
+      });
+      saved += 1;
+    }
+  });
+  revalidatePath("/social-analytics");
+  return { ok: true, saved };
 }

@@ -29,6 +29,7 @@ import BarChart, { type BarDatum } from "./bar-chart";
 import SocialPageLinks from "./social-page-links";
 import PostsTab from "./posts-tab";
 import PlatformTabs from "./platform-tabs";
+import ManualFollowers from "./manual-followers";
 import Link from "next/link";
 
 // A single hard-coded "external tool" link (unlike the per-platform
@@ -267,6 +268,20 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
           </div>
         </div>
       </div>
+
+      {(["x", "tiktok", "youtube"] as const).some((p) => platformsShown.includes(p)) && (
+        <ManualFollowers
+          lang={lang}
+          rows={(["x", "tiktok", "youtube"] as const)
+            .filter((p) => platformsShown.includes(p))
+            .map((p) => ({
+              platform: p,
+              name: platformNames[p],
+              en: allSnapshots.find((x) => x.platform === p && x.language === "EN")?.followers ?? null,
+              fr: allSnapshots.find((x) => x.platform === p && x.language === "FR")?.followers ?? null,
+            }))}
+        />
+      )}
 
       <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
         <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
