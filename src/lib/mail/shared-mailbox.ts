@@ -38,7 +38,7 @@ export async function loadMailbox(db: PrismaClient, mailboxId: string): Promise<
 }
 
 export async function saveMailboxGoogleTokens(db: PrismaClient, mailboxId: string, tokens: GoogleMailboxTokens): Promise<void> {
-  await db.sharedMailbox.update({ where: { id: mailboxId }, data: { credentialsEncrypted: await encryptSecret(JSON.stringify(tokens)), lastError: null } });
+  await db.sharedMailbox.update({ where: { id: mailboxId }, data: { credentialsEncrypted: await encryptSecret(JSON.stringify(tokens)), provider: "google-oauth", lastError: null } });
 }
 
 /** A working Gmail access token for a "Connect with Google" mailbox, refreshed when it is about to expire. */

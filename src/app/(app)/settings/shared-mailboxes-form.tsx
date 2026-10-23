@@ -132,7 +132,16 @@ export default function SharedMailboxesForm({ mailboxes, lang, members, access }
       </p>
       {mailboxes.map((m) => (
         <details key={m.id} className="rounded-md border border-card-border p-3">
-          <summary className="cursor-pointer text-sm font-medium text-ink">{m.name} · <span className="text-soft">{m.address}</span></summary>
+          <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-medium text-ink">
+            <span>{m.name} · <span className="text-soft">{m.address}</span>{m.googleConnected && <span className="ml-2 text-xs font-medium text-emerald-700">{fr ? "Google connecté" : "Google connected"}</span>}</span>
+            <a
+              href={`/api/google/shared/connect?mailboxId=${m.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-md bg-[#0fa38a] px-3 py-1 text-xs font-medium text-[#f4faf6] hover:opacity-90"
+            >
+              {m.googleConnected ? (fr ? "Reconnecter avec Google" : "Reconnect with Google") : fr ? "Connecter avec Google" : "Connect with Google"}
+            </a>
+          </summary>
           <div className="mt-3 space-y-4"><Editor box={m} fr={fr} /><div className="border-t border-card-border pt-3"><MailboxMembers mailboxId={m.id} members={members} initial={access[m.id] ?? {}} fr={fr} /></div></div>
         </details>
       ))}
