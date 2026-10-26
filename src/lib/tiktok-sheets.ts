@@ -37,7 +37,16 @@ export async function readTiktokSheets(db: PrismaClient, userId: string): Promis
       { headers: { Authorization: `Bearer ${token}` } },
     );
     if (res.status === 401 || res.status === 403) {
-      return { ok: false, error: "Google has not allowed the CRM to read spreadsheets yet — reconnect Google in Settings (and make sure the Google Sheets API is enabled for the Google project)" };
+      const body = (await res.json().catch(() => null)) as { error?: { message?: string; status?: string; details?: { reason?: string }[] } } | null;
+      const reason = body?.error?.details?.[0]?.reason ?? body?.error?.status ?? "";
+      const detail = body?.error?.message ? ` Google says: ${body.error.message}` : "";
+      if (reason === "SERVICE_DISABLED" || /has not been used|is disabled/i.test(body?.error?.message ?? "")) {
+        return { ok: false, error: `The Google Sheets API is not enabled for the CRM's Google project — enable it in Google Cloud Console (APIs & Services > Library > Google Sheets API).${detail}` };
+      }
+      if (/insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(`${reason} ${body?.error?.message ?? ""}`)) {
+        return { ok: false, error: "This Google connection was made before Sheets access was added — disconnect and reconnect Google in Settings and accept the spreadsheets permission." };
+      }
+      return { ok: false, error: `Google refused access to the TikTok sheet (${res.status}).${detail}` };
     }
     if (res.status === 404) return { ok: false, error: `The ${sheet.language} TikTok sheet was not found with this Google account` };
     if (!res.ok) return { ok: false, error: `Google Sheets answered ${res.status}` };
