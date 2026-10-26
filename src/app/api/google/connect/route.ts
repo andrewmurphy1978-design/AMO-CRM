@@ -44,6 +44,8 @@ export async function GET(request: NextRequest) {
     "https://www.googleapis.com/auth/contacts",
     // Google Tasks sync (Settings > Google integration): read/write tasks.
     "https://www.googleapis.com/auth/tasks",
+    // Read-only: the Social Media weekly check counts the rows Make adds to the TikTok Google Sheets.
+    "https://www.googleapis.com/auth/spreadsheets.readonly",
   ].join(" ");
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");

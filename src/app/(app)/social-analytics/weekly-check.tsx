@@ -1,3 +1,4 @@
+import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getWeeklyCheck } from "@/lib/social-weekly";
 import type { SocialPlatform } from "@/lib/social";
@@ -6,7 +7,8 @@ import type { SocialPlatform } from "@/lib/social";
 // recent runs of the Make scenarios that publish directly.
 export default async function WeeklyCheck({ lang, platformNames }: { lang: "en" | "fr"; platformNames: Record<SocialPlatform, string> }) {
   const fr = lang === "fr";
-  const check = await withScopedPrismaClient((db) => getWeeklyCheck(db));
+  const session = await auth();
+  const check = await withScopedPrismaClient((db) => getWeeklyCheck(db, session?.user.id));
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(fr ? "fr-CA" : "en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Montreal" }) : "—");
   const mark = (ok: boolean | null) => (ok === true ? "✅" : ok === false ? "⚠️" : "❔");
   return (
@@ -37,8 +39,9 @@ export default async function WeeklyCheck({ lang, platformNames }: { lang: "en" 
             <span className="w-28 font-medium text-ink">{platformNames[r.platform]}</span>
             <span className="text-xs text-soft">
               {r.expected != null ? `${fr ? "prévues" : "expected"} ${r.expected} · ` : ""}
-              {r.makeQueued != null ? `Make ${fr ? "en file" : "queued"} ${r.makeQueued}` : "Make —"}
-              {` · Buffer ${fr ? "en file" : "queued"} ${r.bufferQueued}`}
+              {r.sheet
+                ? `${fr ? "Feuille TikTok" : "TikTok sheet"}: ${r.sheet.recent} ${fr ? "ajoutée(s) en 7 jours" : "added in 7 days"} · ${r.sheet.pending} pending`
+                : `${r.makeQueued != null ? `Make ${fr ? "en file" : "queued"} ${r.makeQueued}` : "Make —"} · Buffer ${fr ? "en file" : "queued"} ${r.bufferQueued}`}
             </span>
             {r.problem && <span className="w-full pl-10 text-xs text-amber-700">{r.problem}</span>}
           </li>

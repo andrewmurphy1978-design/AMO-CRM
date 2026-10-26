@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
+import { readTiktokSheets, type TiktokSheetCounts } from "@/lib/tiktok-sheets";
 
 // "Did next week's posts get made and queued?" — compares what the weekly Claude task reported with what is really
 // waiting to be published. How posts are published (read from the Make scenario "Social Media Poster", which runs every
@@ -29,6 +30,7 @@ export interface WeeklyRow {
   makeQueued: number | null; // waiting in the Make queue for the week (null = not read)
   bufferQueued: number;
   unverifiable: boolean;
+  sheet: TiktokSheetCounts | null; // TikTok only: rows in the two Google Sheets
   ok: boolean | null;
   problem: string | null;
 }
@@ -50,7 +52,7 @@ function montreal(now: Date): { weekday: number; hour: number; ymd: string } {
   return { weekday: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday")), hour: Number(get("hour")) % 24, ymd: `${get("year")}-${get("month")}-${get("day")}` };
 }
 
-export async function getWeeklyCheck(db: PrismaClient): Promise<WeeklyCheck> {
+export async function getWeeklyCheck(db: PrismaClient, userId?: string): Promise<WeeklyCheck> {
   const m = montreal(new Date());
   const today = new Date(`${m.ymd}T00:00:00Z`);
   // The Monday the next batch of posts starts (the Thursday task prepares it): always a future Monday.
@@ -97,13 +99,22 @@ export async function getWeeklyCheck(db: PrismaClient): Promise<WeeklyCheck> {
     const total = (make ?? 0) + buf;
     let ok: boolean | null = true;
     let problem: string | null = null;
+    let sheet: TiktokSheetCounts | null = null;
     if (unverifiable) {
-      // TikTok posts go to a Google Sheet and leave the Make queue at once, so only the Thursday report can vouch for them.
-      if (expected) {
-        problem = `${expected} sent to the TikTok Google Sheet according to Claude's report (the Sheet itself is not read here)`;
+      // TikTok posts go to Google Sheets and leave the Make queue at once, so the sheets (or, failing that, the
+      // Thursday report) are the only evidence.
+      const read = userId ? await readTiktokSheets(db, userId) : null;
+      if (read?.ok) {
+        sheet = read.counts;
+        if (sheet.recent < (expected ?? 1)) {
+          ok = false;
+          problem = `${sheet.recent} added to the TikTok sheets in the last 7 days, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
+        }
+      } else if (expected) {
+        problem = `${expected} sent to the TikTok sheets according to Claude's report (not verified: ${read?.error ?? "no Google account"})`;
       } else {
         ok = null;
-        problem = "TikTok posts are written to a Google Sheet, so only the Thursday report can confirm them";
+        problem = read?.error ?? "TikTok posts are written to Google Sheets; only the Thursday report can confirm them";
       }
     } else if (makeError && platform !== "instagram") {
       ok = null;
@@ -112,7 +123,7 @@ export async function getWeeklyCheck(db: PrismaClient): Promise<WeeklyCheck> {
       ok = false;
       problem = `${total} queued for the week, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
     }
-    rows.push({ platform, expected, makeQueued: make, bufferQueued: buf, unverifiable, ok, problem });
+    rows.push({ platform, expected, makeQueued: make, bufferQueued: buf, unverifiable, sheet, ok, problem });
   }
 
   return {
