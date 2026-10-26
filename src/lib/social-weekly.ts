@@ -29,6 +29,7 @@ export interface WeeklyRow {
   expected: number | null; // from the report
   makeQueued: number | null; // waiting in the Make queue for the week (null = not read)
   bufferQueued: number;
+  bufferSent: number; // already sent through Buffer during the week
   unverifiable: boolean;
   sheet: TiktokSheetCounts | null; // TikTok only: rows in the two Google Sheets
   ok: boolean | null;
@@ -37,6 +38,7 @@ export interface WeeklyRow {
 
 export interface WeeklyCheck {
   weekStart: string;
+  current: boolean; // the week in progress (otherwise next week)
   report: { reportedAt: string; status: string; note: string | null; errors: string[] } | null;
   reportMissing: boolean;
   rows: WeeklyRow[];
@@ -52,17 +54,29 @@ function montreal(now: Date): { weekday: number; hour: number; ymd: string } {
   return { weekday: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday")), hour: Number(get("hour")) % 24, ymd: `${get("year")}-${get("month")}-${get("day")}` };
 }
 
-export async function getWeeklyCheck(db: PrismaClient, userId?: string): Promise<WeeklyCheck> {
+/**
+ * The weeks the summary covers: the week in progress until Thursday, then the week in progress and next week (the
+ * Thursday task prepares the following Monday-Sunday).
+ */
+export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promise<WeeklyCheck[]> {
   const m = montreal(new Date());
   const today = new Date(`${m.ymd}T00:00:00Z`);
-  // The Monday the next batch of posts starts (the Thursday task prepares it): always a future Monday.
-  const monday = new Date(today.getTime() + (((8 - m.weekday) % 7) || 7) * DAY);
+  const thisMonday = new Date(today.getTime() - ((m.weekday + 6) % 7) * DAY);
+  const nextMonday = new Date(thisMonday.getTime() + 7 * DAY);
+  const fromThursday = m.weekday === 4 || m.weekday === 5 || m.weekday === 6 || m.weekday === 0;
+  const weeks = fromThursday ? [thisMonday, nextMonday] : [thisMonday];
+  const out: WeeklyCheck[] = [];
+  for (const monday of weeks) out.push(await getWeeklyCheck(db, userId, monday, monday.getTime() === thisMonday.getTime()));
+  return out;
+}
+
+async function getWeeklyCheck(db: PrismaClient, userId: string | undefined, monday: Date, current: boolean): Promise<WeeklyCheck> {
+  const m = montreal(new Date());
   const weekEnd = new Date(monday.getTime() + 7 * DAY);
   const weekStart = monday.toISOString().slice(0, 10);
-
   const run = await db.socialWeeklyRun.findFirst({ where: { weekStart: monday }, orderBy: { reportedAt: "desc" } });
   const afterThursdayNoon = m.weekday >= 5 || m.weekday === 0 || (m.weekday === 4 && m.hour >= 12);
-  const reportMissing = !run && afterThursdayNoon;
+  const reportMissing = !run && (current || afterThursdayNoon);
   const reported = (run?.posts as { platform: SocialPlatform; count: number }[] | null) ?? [];
 
   // Waiting in the Make queue
@@ -87,6 +101,8 @@ export async function getWeeklyCheck(db: PrismaClient, userId?: string): Promise
   // Waiting in Buffer's own queue
   const queued = await db.socialPost.groupBy({ by: ["platform"], where: { status: "QUEUED", postedAt: { gte: monday, lt: weekEnd } }, _count: { _all: true } });
   const bufferQueued = new Map(queued.map((q) => [q.platform, q._count._all]));
+  const sentRows = await db.socialPost.groupBy({ by: ["platform"], where: { status: "SENT", postedAt: { gte: monday, lt: weekEnd } }, _count: { _all: true } });
+  const bufferSent = new Map(sentRows.map((q) => [q.platform, q._count._all]));
 
   const rows: WeeklyRow[] = [];
   for (const platform of SOCIAL_PLATFORMS) {
@@ -96,7 +112,10 @@ export async function getWeeklyCheck(db: PrismaClient, userId?: string): Promise
     const unverifiable = platform === "tiktok";
     const make = makeError ? null : (makeQueued.get(platform) ?? 0);
     const buf = bufferQueued.get(platform) ?? 0;
-    const total = (make ?? 0) + buf;
+    const sentNow = bufferSent.get(platform) ?? 0;
+    // Posts Make publishes itself (Facebook, LinkedIn, French Instagram) leave no trace once published, so during the
+    // week in progress only what is still waiting, plus what Buffer sent, can be counted.
+    const total = (make ?? 0) + buf + (current ? sentNow : 0);
     let ok: boolean | null = true;
     let problem: string | null = null;
     let sheet: TiktokSheetCounts | null = null;
@@ -106,7 +125,7 @@ export async function getWeeklyCheck(db: PrismaClient, userId?: string): Promise
       const read = userId ? await readTiktokSheets(db, userId) : null;
       if (read?.ok) {
         sheet = read.counts;
-        if (sheet.recent < (expected ?? 1)) {
+        if (!current && sheet.recent < (expected ?? 1)) {
           ok = false;
           problem = `${sheet.recent} added to the TikTok sheets in the last 7 days, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
         }
@@ -119,15 +138,16 @@ export async function getWeeklyCheck(db: PrismaClient, userId?: string): Promise
     } else if (makeError && platform !== "instagram") {
       ok = null;
       problem = `Could not read the Make queue (${makeError})`;
-    } else if (total < (expected ?? 1)) {
+    } else if (!current && total < (expected ?? 1)) {
       ok = false;
       problem = `${total} queued for the week, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
     }
-    rows.push({ platform, expected, makeQueued: make, bufferQueued: buf, unverifiable, sheet, ok, problem });
+    rows.push({ platform, expected, makeQueued: make, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet, ok, problem });
   }
 
   return {
     weekStart,
+    current,
     report: run ? { reportedAt: run.reportedAt.toISOString(), status: run.status, note: run.note, errors: (run.errors as string[] | null) ?? [] } : null,
     reportMissing,
     rows,

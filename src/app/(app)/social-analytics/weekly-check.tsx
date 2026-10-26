@@ -1,20 +1,33 @@
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { getWeeklyCheck } from "@/lib/social-weekly";
+import { getWeeklyChecks, type WeeklyCheck as Check } from "@/lib/social-weekly";
 import type { SocialPlatform } from "@/lib/social";
 
 // "Are next week's posts made and queued?" — the Thursday task's own report, checked against Buffer's queue and the
 // recent runs of the Make scenarios that publish directly.
 export default async function WeeklyCheck({ lang, platformNames }: { lang: "en" | "fr"; platformNames: Record<SocialPlatform, string> }) {
-  const fr = lang === "fr";
   const session = await auth();
-  const check = await withScopedPrismaClient((db) => getWeeklyCheck(db, session?.user.id));
+  const checks = await withScopedPrismaClient((db) => getWeeklyChecks(db, session?.user.id));
+  // Two columns from Thursday on (this week and next week); one card before that.
+  return (
+    <div className={`grid grid-cols-1 gap-6 ${checks.length > 1 ? "lg:grid-cols-2" : ""}`}>
+      {checks.map((check) => (
+        <WeekCard key={check.weekStart} check={check} lang={lang} platformNames={platformNames} />
+      ))}
+    </div>
+  );
+}
+
+function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "fr"; platformNames: Record<SocialPlatform, string> }) {
+  const fr = lang === "fr";
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(fr ? "fr-CA" : "en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Montreal" }) : "—");
   const mark = (ok: boolean | null) => (ok === true ? "✅" : ok === false ? "⚠️" : "❔");
   return (
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
-      <h2 className="font-display text-lg font-semibold text-ink">{fr ? `Publications de la semaine du ${check.weekStart}` : `Posts for the week starting ${check.weekStart}`}</h2>
+      <h2 className="font-display text-lg font-semibold text-ink">{check.current
+          ? fr ? `Cette semaine (du ${check.weekStart})` : `This week (starting ${check.weekStart})`
+          : fr ? `Semaine prochaine (du ${check.weekStart})` : `Next week (starting ${check.weekStart})`}</h2>
       <p className="mt-1 text-sm text-soft">
         {check.report
           ? fr
@@ -41,7 +54,7 @@ export default async function WeeklyCheck({ lang, platformNames }: { lang: "en" 
               {r.expected != null ? `${fr ? "prévues" : "expected"} ${r.expected} · ` : ""}
               {r.sheet
                 ? `${fr ? "Feuille TikTok" : "TikTok sheet"}: ${r.sheet.recent} ${fr ? "ajoutée(s) en 7 jours" : "added in 7 days"} · ${r.sheet.pending} pending`
-                : `${r.makeQueued != null ? `Make ${fr ? "en file" : "queued"} ${r.makeQueued}` : "Make —"} · Buffer ${fr ? "en file" : "queued"} ${r.bufferQueued}`}
+                : `${r.makeQueued != null ? `Make ${fr ? "en file" : "queued"} ${r.makeQueued}` : "Make —"} · Buffer ${fr ? "en file" : "queued"} ${r.bufferQueued}${check.current ? ` · Buffer ${fr ? "envoyées" : "sent"} ${r.bufferSent}` : ""}`}
             </span>
             {r.problem && <span className="w-full pl-10 text-xs text-amber-700">{r.problem}</span>}
           </li>

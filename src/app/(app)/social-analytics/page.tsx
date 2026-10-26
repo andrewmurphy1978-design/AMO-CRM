@@ -181,7 +181,7 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
         ))}
       </nav>
 
-      <PlatformTabs active={platformParam} tab={tab} names={platformNames} />
+      <PlatformTabs active={platformParam} tab={tab} names={platformNames} summaryLabel={lang === "fr" ? "Sommaire" : "Summary"} />
 
       {tab === "posts" ? (
         <PostsTab

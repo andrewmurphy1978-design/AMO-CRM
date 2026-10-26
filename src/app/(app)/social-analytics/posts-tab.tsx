@@ -20,13 +20,13 @@ export default async function PostsTab({ platform: only, lang, isAdmin, labels, 
   return (
     <div className="space-y-6">
       <PostsRefresh latestFetch={latest} isAdmin={isAdmin} lang={lang} />
-      <WeeklyCheck lang={lang} platformNames={labels.platformNames} />
-      {posts.length === 0 && (
+      {!only && <WeeklyCheck lang={lang} platformNames={labels.platformNames} />}
+      {only && posts.length === 0 && (
         <p className="rounded-2xl border border-card-border bg-card-bg p-5 text-sm text-soft">
           {fr ? "Aucune publication pour le moment. Elles sont lues depuis Buffer (publiées et en file d'attente)." : "No posts yet. They are read from Buffer (sent and queued)."}
         </p>
       )}
-      {SOCIAL_PLATFORMS.filter((p) => !only || p === only).map((platform) => {
+      {SOCIAL_PLATFORMS.filter((p) => only && p === only).map((platform) => {
         const mine = posts.filter((p) => p.platform === platform);
         if (mine.length === 0) return null;
         const queued = mine.filter((p) => p.status === "QUEUED").sort((a, b) => (a.postedAt?.getTime() ?? 0) - (b.postedAt?.getTime() ?? 0));
