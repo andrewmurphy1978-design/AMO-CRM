@@ -8,7 +8,8 @@ import { makeClientWith } from "@/lib/automations";
 //  - Facebook, LinkedIn, X, Instagram (French, carousel, story): held in the Make queue until their scheduled time, then
 //    published by Make (X is handed to Buffer "now" at that moment, so it never waits in Buffer's own queue).
 //  - Instagram (English): handed to Buffer straight away with its scheduled time, so it waits in Buffer's queue.
-//  - TikTok: written to a Google Sheet as "pending" and not posted by Make, so it cannot be verified here.
+//  - TikTok: written to a Google Sheet as "pending" and not posted by Make; it leaves the Make queue at once, so only the
+//    Thursday report can confirm it.
 // Posts that fail on the Facebook / LinkedIn photo routes are kept in the Make data store "Failed Social Posts".
 
 export const MAKE_QUEUE_STORE_ID = 108624;
@@ -76,7 +77,7 @@ export async function getWeeklyCheck(db: PrismaClient): Promise<WeeklyCheck> {
       if (!base || !when || Number.isNaN(when.getTime()) || when < monday || when >= weekEnd) continue;
       makeQueued.set(base, (makeQueued.get(base) ?? 0) + 1);
     }
-    failedInMake = (await client.listDataStoreRecords(MAKE_FAILED_STORE_ID, 200)).length;
+    failedInMake = (await client.listDataStoreRecords(MAKE_FAILED_STORE_ID)).length;
   } catch (e) {
     makeError = e instanceof Error ? e.message : String(e);
   }
@@ -97,8 +98,13 @@ export async function getWeeklyCheck(db: PrismaClient): Promise<WeeklyCheck> {
     let ok: boolean | null = true;
     let problem: string | null = null;
     if (unverifiable) {
-      ok = null;
-      problem = "TikTok posts are written to a Google Sheet, so they cannot be checked here";
+      // TikTok posts go to a Google Sheet and leave the Make queue at once, so only the Thursday report can vouch for them.
+      if (expected) {
+        problem = `${expected} sent to the TikTok Google Sheet according to Claude's report (the Sheet itself is not read here)`;
+      } else {
+        ok = null;
+        problem = "TikTok posts are written to a Google Sheet, so only the Thursday report can confirm them";
+      }
     } else if (makeError && platform !== "instagram") {
       ok = null;
       problem = `Could not read the Make queue (${makeError})`;

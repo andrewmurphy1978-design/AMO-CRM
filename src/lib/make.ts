@@ -87,10 +87,17 @@ export class MakeClient {
     return extractItems(data).map(mapExecution);
   }
 
-  /** Records currently held in a Make data store (e.g. the "Social Post Queue"). */
-  async listDataStoreRecords(dataStoreId: number, limit = 500): Promise<{ key: string; data: Record<string, unknown> }[]> {
-    const data = await this.request<unknown>(`/data-stores/${dataStoreId}/data`, { "pg[limit]": limit });
-    return extractItems(data).map((r) => ({ key: String(r.key ?? ""), data: ((r.data as Record<string, unknown> | undefined) ?? {}) }));
+  /** Records currently held in a Make data store (e.g. the "Social Post Queue"). Make serves at most 100 per page. */
+  async listDataStoreRecords(dataStoreId: number, max = 1000): Promise<{ key: string; data: Record<string, unknown> }[]> {
+    const PAGE = 100;
+    const out: { key: string; data: Record<string, unknown> }[] = [];
+    for (let offset = 0; offset < max; offset += PAGE) {
+      const data = await this.request<unknown>(`/data-stores/${dataStoreId}/data`, { "pg[limit]": PAGE, "pg[offset]": offset });
+      const items = extractItems(data);
+      for (const r of items) out.push({ key: String(r.key ?? ""), data: ((r.data as Record<string, unknown> | undefined) ?? {}) });
+      if (items.length < PAGE) break;
+    }
+    return out;
   }
 
   /** Confirms the API key is valid by requesting the team's scenario list. */
