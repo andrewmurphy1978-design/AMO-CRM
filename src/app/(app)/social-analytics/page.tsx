@@ -29,6 +29,7 @@ import BarChart, { type BarDatum } from "./bar-chart";
 import SocialPageLinks from "./social-page-links";
 import PostsTab from "./posts-tab";
 import PlatformTabs from "./platform-tabs";
+import PostsRefresh from "./posts-refresh";
 import ManualFollowers from "./manual-followers";
 import Link from "next/link";
 
@@ -48,12 +49,14 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
   const dateLocale = getDateLocale(lang);
 
   // One shared client — see src/lib/prisma.ts for why.
-  const { snapshots: allSnapshots, history: allHistory, links, hour12 } = await withScopedPrismaClient(async (db) => {
+  const { snapshots: allSnapshots, history: allHistory, links, hour12, latestFetch } = await withScopedPrismaClient(async (db) => {
     const snapshots = await getLatestSocialSnapshots(db);
     const history = await getSocialSnapshotHistory(db, 30);
     const links = await getSocialLinks(db);
     const hour12 = await getHour12(session, db);
-    return { snapshots, history, links, hour12 };
+    // When Buffer was last read (decides whether the Posts tab refreshes on opening).
+    const latestFetch = tab === "posts" ? ((await db.socialPost.aggregate({ _max: { fetchedAt: true } }))._max.fetchedAt?.getTime() ?? 0) : 0;
+    return { snapshots, history, links, hour12, latestFetch };
   });
 
   // One platform chosen in the platform tabs narrows everything below to it.
@@ -164,6 +167,7 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
         }
       />
 
+      <div className="flex flex-wrap items-center gap-2">
       <nav className="flex gap-2" aria-label="Social Media">
         {(["analytics", "posts"] as const).map((k) => (
           <Link
@@ -180,6 +184,8 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
           </Link>
         ))}
       </nav>
+      {tab === "posts" && <PostsRefresh latestFetch={latestFetch} isAdmin={session?.user.role === "ADMIN"} lang={lang} />}
+      </div>
 
       <PlatformTabs active={platformParam} tab={tab} names={platformNames} summaryLabel={lang === "fr" ? "Sommaire" : "Summary"} />
 
@@ -187,7 +193,6 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
         <PostsTab
           platform={platformParam}
           lang={lang}
-          isAdmin={session?.user.role === "ADMIN"}
           dateLocale={dateLocale}
           labels={{ statLabels: socialLabels.statLabels, platformNames, languageEn: t.dashboard.socialLanguageEn, languageFr: t.dashboard.socialLanguageFr }}
         />

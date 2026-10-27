@@ -40,8 +40,9 @@ export default function PostsRefresh({ latestFetch, isAdmin, lang }: { latestFet
   }, []);
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+    // display: contents — the buttons sit on the Analytics / Posts tab line; the results below take a full line of their own.
+    <div className="contents">
+      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
         <button type="button" data-readonly-ok disabled={busy} onClick={refresh} className="rounded-lg border border-card-border bg-card-bg px-3 py-1.5 text-sm font-medium text-ink hover:bg-black/5 disabled:opacity-60">
           {busy ? (fr ? "Mise à jour…" : "Updating…") : fr ? "Actualiser depuis Buffer" : "Refresh from Buffer"}
         </button>
@@ -70,12 +71,12 @@ export default function PostsRefresh({ latestFetch, isAdmin, lang }: { latestFet
         )}
       </div>
       {errors.length > 0 && (
-        <ul className="space-y-1 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+        <ul className="w-full basis-full space-y-1 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
           {errors.map((e, i) => <li key={i} className="break-words">{e}</li>)}
         </ul>
       )}
       {channels.length > 0 && (
-        <details className="rounded-lg border border-card-border bg-card-bg p-3 text-xs text-ink">
+        <details className="w-full basis-full rounded-lg border border-card-border bg-card-bg p-3 text-xs text-ink">
           <summary className="cursor-pointer font-medium">{fr ? "Canaux lus dans Buffer" : "Channels read from Buffer"}</summary>
           <ul className="mt-2 space-y-1">
             {channels.map((c, i) => (
@@ -87,7 +88,7 @@ export default function PostsRefresh({ latestFetch, isAdmin, lang }: { latestFet
           </ul>
         </details>
       )}
-      {schema && <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-card-border bg-field-bg p-3 text-xs text-ink">{schema}</pre>}
+      {schema && <pre className="w-full basis-full max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-card-border bg-field-bg p-3 text-xs text-ink">{schema}</pre>}
     </div>
   );
 }

@@ -17,7 +17,7 @@ import { getProfileNames, profileName } from "@/lib/social-profiles";
 export const MAKE_QUEUE_STORE_ID = 108624;
 export const MAKE_FAILED_STORE_ID = 114391;
 
-const BASE: Record<string, SocialPlatform> = {
+export const BASE: Record<string, SocialPlatform> = {
   facebook: "facebook", "facebook-photo": "facebook",
   linkedin: "linkedin", "linkedin-photo": "linkedin",
   x: "x",
