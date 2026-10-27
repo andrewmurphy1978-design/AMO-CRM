@@ -14,6 +14,7 @@ import SubCard from "./summary-sub-card";
 export interface EmailSummaryLabels {
   title: string;
   todayLabel: string;
+  smsTodayLabel: string;
   draftsLabel: string;
   awaitingReplyLabel: string;
   needsAttentionLabel: string;
@@ -22,6 +23,7 @@ export interface EmailSummaryLabels {
 
 export interface EmailSummaryCounts {
   today: number;
+  smsToday: number;
   awaitingReply: number;
   needsAttention: number;
   canWait: number;
@@ -72,15 +74,19 @@ export default function EmailSummaryCard({
             {labels.title}
           </h3>
         </div>
-        <SubCard
-          bg={EMAIL_CARD_ACCENT_DOT}
-          text="text-white"
-          value={counts.today}
-          label={labels.todayLabel}
-          layout="row"
-          twoLine
-          className="col-span-2"
-        />
+        {/* Two cards side by side in one block (same structure as the Calendar Summary card's this week / next week):
+            new emails today and new SMS today. */}
+        <div className={`col-span-2 flex items-center justify-center gap-3 rounded-lg px-2 py-2 text-center text-white ${EMAIL_CARD_ACCENT_DOT}`}>
+          <div>
+            <span className="font-display text-xl font-bold leading-none sm:text-2xl">{counts.today}</span>
+            <p className="text-[10px] font-medium leading-tight sm:text-xs">{labels.todayLabel}</p>
+          </div>
+          <div className="h-8 w-px bg-white/30" />
+          <div>
+            <span className="font-display text-xl font-bold leading-none sm:text-2xl">{counts.smsToday}</span>
+            <p className="text-[10px] font-medium leading-tight sm:text-xs">{labels.smsTodayLabel}</p>
+          </div>
+        </div>
         <SubCard
           bg={EMAIL_SECTION_COLORS.DRAFTS.headerBg}
           text={EMAIL_SECTION_COLORS.DRAFTS.headerText}

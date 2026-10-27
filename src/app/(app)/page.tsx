@@ -226,6 +226,7 @@ export default async function DashboardPage() {
     linkTasks,
     linkAffiliatePrograms,
     allAffiliatePrograms,
+    smsToday,
   } = await withScopedPrismaClient(async (db) => {
     // Was ~25 sequential `await`s in a row — nothing here actually depends
     // on anything else in this batch, so each `await` was pure serialized
@@ -430,7 +431,11 @@ export default async function DashboardPage() {
           })()
         : null;
 
+    // Feeds the "New SMS today" half of the Email and SMS Summary card: texts received since the start of today.
+    const smsToday = await db.interaction.count({ where: { type: "SMS", direction: "INBOUND", occurredAt: { gte: todayStart } } });
+
     return {
+      smsToday,
       activeProjectCount,
       activePhaseCount,
       activeTaskCount,
@@ -731,9 +736,11 @@ export default async function DashboardPage() {
     awaitingReplyLabel: t.dashboard.emailSummaryAwaitingReplyLabel,
     needsAttentionLabel: t.dashboard.emailSummaryNeedsAttentionLabel,
     canWaitLabel: t.dashboard.emailSummaryCanWaitLabel,
+    smsTodayLabel: t.dashboard.emailSummarySmsTodayLabel,
   };
   const emailSummaryCounts = {
     today: emailToday,
+    smsToday,
     awaitingReply: emailAwaitingReply,
     needsAttention: emailNeedsAttention,
     canWait: emailCanWait,
