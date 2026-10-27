@@ -76,7 +76,7 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
                   const pid = r.profileNames[lg];
                   return (
                     <div key={lg} className="min-w-0">
-                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${dark ? "bg-white/15 text-white" : "bg-white/70 text-ink"}`}>
+                      <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${lg === "EN" ? "bg-red-100 text-red-800" : "bg-sky-100 text-sky-800"}`}>
                         {lg === "EN" ? (fr ? "Anglais" : "English") : fr ? "Français" : "French"}
                       </span>
                       {none && d.expected == null ? (
