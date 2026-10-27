@@ -53,6 +53,8 @@ import PendingAffiliateProgramsCard, {
 import { dashboardBucketOf } from "@/lib/affiliate-status";
 import ProjectsIcon from "./projects-icon";
 import TasksIcon from "./tasks-icon";
+import ProposalsInvoicesSummaryCard, { PROPOSALS_INVOICES_CARD_ID } from "./proposals-invoices-summary-card";
+import { AccountingSummaryCardServer, AccountingEntityCards } from "./accounting-cards";
 import ProposalsInvoicesCard, { type ProposalsInvoicesLabels } from "./proposals-invoices-card";
 import { PROJECT_CARD_ACCENT_BAR, PROJECT_CARD_BG } from "./project-summary-colors";
 import { TASK_CARD_ACCENT_BAR, TASK_CARD_BG } from "./task-card-colors";
@@ -938,6 +940,33 @@ export default async function DashboardPage() {
     languageEn: t.dashboard.socialLanguageEn,
     languageFr: t.dashboard.socialLanguageFr,
   };
+  const proposalsSummaryLabels = {
+    title: t.dashboard.proposalsSummaryTitle,
+    openLabel: t.dashboard.proposalsSummaryOpenLabel,
+    sentLabel: t.dashboard.proposalsSummarySentLabel,
+    unpaidLabel: t.dashboard.proposalsSummaryUnpaidLabel,
+    overdueLabel: t.dashboard.proposalsSummaryOverdueLabel,
+    owedLabel: t.dashboard.proposalsSummaryOwedLabel,
+  };
+  const accountingSummaryLabels = {
+    title: t.dashboard.accountingSummaryTitle,
+    entitiesLabel: t.dashboard.accountingSummaryEntitiesLabel,
+    toCategorizeLabel: t.dashboard.accountingSummaryToCategorizeLabel,
+    toConfirmLabel: t.dashboard.accountingSummaryToConfirmLabel,
+    banksLabel: t.dashboard.accountingSummaryBanksLabel,
+    taxLabel: t.dashboard.accountingSummaryTaxLabel,
+  };
+  const accountingEntityLabels = {
+    income: t.dashboard.accountingEntityIncome,
+    expenses: t.dashboard.accountingEntityExpenses,
+    net: t.dashboard.accountingEntityNet,
+    ytd: t.dashboard.accountingEntityYtd,
+    mtd: t.dashboard.accountingEntityMtd,
+    toCategorize: t.dashboard.accountingEntityToCategorize,
+    toConfirm: t.dashboard.accountingEntityToConfirm,
+    salesTax: t.dashboard.accountingEntitySalesTax,
+    open: t.dashboard.accountingEntityOpen,
+  };
   const proposalsInvoicesLabels: ProposalsInvoicesLabels = {
     title: t.dashboard.proposalsInvoicesTitle,
     proposals: t.dashboard.proposalsInvoicesProposals,
@@ -1198,6 +1227,16 @@ export default async function DashboardPage() {
           </Suspense>
         </div>
 
+        {/* Third summary row. */}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+          <Suspense fallback={<CardSkeleton title={t.dashboard.proposalsSummaryTitle.replace("\n", " ")} />}>
+            <ProposalsInvoicesSummaryCard lang={lang} labels={proposalsSummaryLabels} />
+          </Suspense>
+          <Suspense fallback={<CardSkeleton title={t.dashboard.accountingSummaryTitle} />}>
+            <AccountingSummaryCardServer labels={accountingSummaryLabels} />
+          </Suspense>
+        </div>
+
         {/* A single flat grid (not three separately-flowing column divs) so
           each card can carry its own placement: no col-start below `lg`
           stacks every card full-width in DOM order (the mobile reading
@@ -1408,8 +1447,14 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            <Suspense fallback={<CardSkeleton title={t.dashboard.proposalsInvoicesTitle} />}>
-              <ProposalsInvoicesCard lang={lang} labels={proposalsInvoicesLabels} />
+            <div id={PROPOSALS_INVOICES_CARD_ID} className="scroll-mt-20">
+              <Suspense fallback={<CardSkeleton title={t.dashboard.proposalsInvoicesTitle} />}>
+                <ProposalsInvoicesCard lang={lang} labels={proposalsInvoicesLabels} />
+              </Suspense>
+            </div>
+
+            <Suspense fallback={null}>
+              <AccountingEntityCards lang={lang} labels={accountingEntityLabels} />
             </Suspense>
           </div>
 
