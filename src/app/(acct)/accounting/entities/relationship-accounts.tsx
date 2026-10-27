@@ -13,23 +13,19 @@ export interface RelationshipRow {
   choices: { id: string; label: string }[];
 }
 
-// For each pair of entities: which account of one entity's books holds the money going to / from the other (a loan to or from it).
+// Inside one entity's card: for each other entity, which account of this entity's books holds the money going to / from it (a loan or contribution).
 export default function RelationshipAccounts({ lang, rows }: { lang: "en" | "fr"; rows: RelationshipRow[] }) {
   const fr = lang === "fr";
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   return (
     <div className="space-y-2">
-      <p className="text-sm text-soft">
-        {fr
-          ? "Quand une transaction d'une entité sert une autre (par exemple un compte personnel qui paie une dépense d'Andrew Murphy Online), l'écriture passe par un compte de prêt ou d'apport. Choisissez ici le compte à utiliser dans les livres de chaque entité ; « automatique » en crée un au besoin."
-          : "When a transaction of one entity serves another (for example a personal account paying an Andrew Murphy Online expense), the entry goes through a loan or contribution account. Choose here which account to use in each entity's books; “automatic” creates one when needed."}
-      </p>
+      <p className="text-xs font-semibold uppercase text-soft">{fr ? "Comptes entre entités (prêts et apports)" : "Accounts between entities (loans and contributions)"}</p>
       <div className="divide-y divide-card-border">
         {rows.map((r) => (
           <div key={`${r.entityId}-${r.otherId}`} className="grid gap-2 py-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center">
             <p className="text-sm text-ink">
-              {fr ? "Dans les livres de " : "In the books of "}<b>{r.entityName}</b>{fr ? ", compte pour l'argent avec " : ", the account for money with "}<b>{r.otherName}</b>
+              {fr ? "Compte pour l'argent avec " : "Account for money with "}<b>{r.otherName}</b>
             </p>
             <select
               disabled={pending}

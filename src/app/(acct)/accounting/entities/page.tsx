@@ -39,16 +39,11 @@ export default async function EntitiesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-3xl text-sm text-soft">
           {fr
-            ? "Chaque entité a ses propres livres (actifs, passifs, capitaux propres, revenus, dépenses). Les transactions entre entités passent par des comptes inter-entités / prêt d'actionnaire, comme un comptable le ferait. La couleur indique le personnel, la province ou le pays."
-            : "Each entity has its own books (assets, liabilities, equity, income, expenses). Money between entities goes through inter-entity / shareholder-loan accounts, the way an accountant would do it. The colour shows personal, province or country."}
+            ? "Chaque entité a ses propres livres (actifs, passifs, capitaux propres, revenus, dépenses). Les transactions entre entités passent par des comptes inter-entités / prêt d'actionnaire, comme un comptable le ferait. La couleur indique le personnel, la province ou le pays. Dans chaque entité, choisissez le compte de prêt ou d'apport utilisé pour l'argent avec les autres entités (« automatique » en crée un au besoin)."
+            : "Each entity has its own books (assets, liabilities, equity, income, expenses). Money between entities goes through inter-entity / shareholder-loan accounts, the way an accountant would do it. The colour shows personal, province or country. In each entity, choose the loan or contribution account used for money with the other entities (“automatic” creates one when needed)."}
         </p>
         {me.admin && <AddEntityDialog lang={lang} />}
       </div>
-      {pairs.length > 0 && (
-        <Card color="billing" title={fr ? "Comptes entre entités (prêts et apports)" : "Accounts between entities (loans and contributions)"}>
-          <RelationshipAccounts lang={lang} rows={pairs} />
-        </Card>
-      )}
       <div className="grid gap-4 lg:grid-cols-2">
         {books.entities.map((e) => (
           <Card
@@ -69,6 +64,11 @@ export default async function EntitiesPage() {
                 </dd>
               </div>
             </dl>
+            {pairs.some((r) => r.entityId === e.id) && (
+              <div className="mt-4 border-t border-card-border pt-3">
+                <RelationshipAccounts lang={lang} rows={pairs.filter((r) => r.entityId === e.id)} />
+              </div>
+            )}
           </Card>
         ))}
       </div>
