@@ -25,7 +25,10 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
   // "October 26, 2026" / "26 octobre 2026"
   const day = (ymd: string) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString(locale, { dateStyle: "long", timeZone: "UTC" });
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(locale, { dateStyle: "long", timeStyle: "short", timeZone: "America/Montreal" }) : "—");
-  const mark = (ok: boolean | null) => (ok === true ? "✅" : ok === false ? "⚠️" : "❔");
+  const mark = (ok: boolean | null, why?: string | null) =>
+    ok === true ? "✅" : ok === false ? "⚠️" : (
+      <span title={why ?? undefined} className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-800 text-xs font-extrabold leading-none text-white ring-2 ring-red-300">?</span>
+    );
   return (
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
@@ -60,7 +63,7 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
               <div className="flex items-center gap-2">
                 <PlatformIcon platform={r.platform} style={st} />
                 <span className="font-semibold">{platformNames[r.platform]}</span>
-                <span className="ml-auto text-base" title={r.problem ?? undefined}>{mark(r.ok)}</span>
+                <span className="ml-auto text-base" title={r.problem ?? undefined}>{mark(r.ok, r.problem)}</span>
               </div>
               {r.expected != null && r.langs.EN.expected == null && r.langs.FR.expected == null && (
                 <p className={`mt-2 text-xs ${st.soft}`}>{fr ? `Prévues (total) : ${r.expected}` : `Expected (total): ${r.expected}`}</p>
@@ -73,27 +76,21 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
                   if (d.expected != null) lines.push([fr ? "Prévues" : "Expected", d.expected]);
                   // One queue: what waits in Make plus what waits in Buffer.
                   lines.push([fr ? "En file" : "Queue", (d.makeQueued ?? 0) + d.bufferQueued]);
-                  if (check.current) lines.push([fr ? "Envoyées" : "Sent", d.bufferSent]);
-                  if (d.sheetRecent != null) lines.push([fr ? "Feuille (7 j)" : "Sheet (7 d)", d.sheetRecent]);
-                  const none = lines.every(([, v]) => v === 0 || v === "");
+                  lines.push([fr ? "Envoyées" : "Sent", d.bufferSent]);
                   const pid = r.profileNames[lg];
                   return (
                     <div key={lg} className="flex min-w-0 flex-col">
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${lg === "EN" ? "bg-red-100 text-red-800" : "bg-sky-100 text-sky-800"}`}>
                         {lg === "EN" ? (fr ? "Anglais" : "English") : fr ? "Français" : "French"}
                       </span>
-                      {none && d.expected == null ? (
-                        <p className={`mt-2 ${st.soft}`}>—</p>
-                      ) : (
-                        <dl className="mt-2 space-y-0.5">
-                          {lines.map(([k, v]) => (
-                            <div key={k} className="flex justify-between gap-2">
-                              <dt className={st.soft}>{k}</dt>
-                              <dd className="font-semibold">{v}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                      )}
+                      <dl className="mt-2 space-y-0.5">
+                        {lines.map(([k, v]) => (
+                          <div key={k} className="flex justify-between gap-2">
+                            <dt className={st.soft}>{k}</dt>
+                            <dd className="font-semibold">{v === 0 ? "—" : v}</dd>
+                          </div>
+                        ))}
+                      </dl>
                       <p className={`mt-auto break-all pt-2 text-[10px] ${st.soft}`} title={fr ? "Nom d'utilisateur" : "Username"}>
                         {pid ?? "—"}
                       </p>
