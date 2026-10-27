@@ -193,7 +193,7 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
         <PostsTab
           platform={platformParam}
           lang={lang}
-          dateLocale={dateLocale}
+          hour12={hour12}
           labels={{ statLabels: socialLabels.statLabels, platformNames, languageEn: t.dashboard.socialLanguageEn, languageFr: t.dashboard.socialLanguageFr }}
         />
       ) : (

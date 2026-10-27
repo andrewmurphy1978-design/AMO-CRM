@@ -1,5 +1,3 @@
-import { format } from "date-fns";
-import type { Locale } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { SOCIAL_CHART_COLOR, daysAgo, montrealWeekStart, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
@@ -147,7 +145,7 @@ function SubCard({ title, count, badge, pairs, sent, empty, fr, when, labels, by
 // Recent posts for the chosen platform: Queue and Sent sub-cards, English on the left and French on the right with
 // matching posts on the same row. Buffer's posts come from the cache that "Refresh from Buffer" fills; Make's queue is
 // read live for the platforms Make publishes itself.
-export default async function PostsTab({ platform: only, lang, labels, dateLocale }: { platform: SocialPlatform | null; lang: "en" | "fr"; labels: Labels; dateLocale: Locale | undefined }) {
+export default async function PostsTab({ platform: only, lang, labels, hour12 }: { platform: SocialPlatform | null; lang: "en" | "fr"; labels: Labels; hour12: boolean }) {
   const fr = lang === "fr";
   const { posts, make } = await withScopedPrismaClient(async (db) => {
     const [posts, make] = await Promise.all([
@@ -162,7 +160,15 @@ export default async function PostsTab({ platform: only, lang, labels, dateLocal
     ]);
     return { posts, make };
   });
-  const when = (d: Date | null) => (d ? format(d, fr ? "d MMMM yyyy · HH:mm" : "MMMM d, yyyy · HH:mm", { locale: dateLocale }) : "—");
+  // "Tuesday, October 27, 2026 · 9:00 AM" / "Mardi, 27 octobre 2026 · 09:00", in Québec local time.
+  const when = (d: Date | null) => {
+    if (!d) return "—";
+    const locale = fr ? "fr-CA" : "en-US";
+    const weekday = d.toLocaleDateString(locale, { weekday: "long", timeZone: "America/Montreal" });
+    const date = d.toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric", timeZone: "America/Montreal" });
+    const time = d.toLocaleTimeString(locale, { hour: hour12 ? "numeric" : "2-digit", minute: "2-digit", hour12, timeZone: "America/Montreal" });
+    return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)}, ${date} · ${time}`;
+  };
 
   const toItem = (p: (typeof posts)[number]): Item => ({
     id: p.id,
