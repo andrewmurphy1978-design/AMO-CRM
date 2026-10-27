@@ -53,7 +53,7 @@ import PendingAffiliateProgramsCard, {
 import { dashboardBucketOf } from "@/lib/affiliate-status";
 import ProjectsIcon from "./projects-icon";
 import TasksIcon from "./tasks-icon";
-import ProposalsInvoicesCard from "./proposals-invoices-card";
+import ProposalsInvoicesCard, { type ProposalsInvoicesLabels } from "./proposals-invoices-card";
 import { PROJECT_CARD_ACCENT_BAR, PROJECT_CARD_BG } from "./project-summary-colors";
 import { TASK_CARD_ACCENT_BAR, TASK_CARD_BG } from "./task-card-colors";
 import {
@@ -938,6 +938,22 @@ export default async function DashboardPage() {
     languageEn: t.dashboard.socialLanguageEn,
     languageFr: t.dashboard.socialLanguageFr,
   };
+  const proposalsInvoicesLabels: ProposalsInvoicesLabels = {
+    title: t.dashboard.proposalsInvoicesTitle,
+    proposals: t.dashboard.proposalsInvoicesProposals,
+    invoices: t.dashboard.proposalsInvoicesInvoices,
+    emptyProposals: t.dashboard.proposalsInvoicesEmptyProposals,
+    emptyInvoices: t.dashboard.proposalsInvoicesEmptyInvoices,
+    all: t.dashboard.proposalsInvoicesAll,
+    due: t.dashboard.proposalsInvoicesDue,
+    invoiceFallback: t.dashboard.proposalsInvoicesInvoiceFallback,
+    status: {
+      DRAFT: t.dashboard.proposalsInvoicesStatusDraft,
+      APPROVED: t.dashboard.proposalsInvoicesStatusApproved,
+      SENT: t.dashboard.proposalsInvoicesStatusSent,
+      OVERDUE: t.dashboard.proposalsInvoicesStatusOverdue,
+    },
+  };
   const postsDetailCard = (
     <Suspense fallback={<CardSkeleton title={t.dashboard.postsDetailTitle} />}>
       <PostsDetailCard lang={lang} hour12={hour12} labels={postsDetailLabels} />
@@ -1392,8 +1408,8 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            <Suspense fallback={<CardSkeleton title={lang === "fr" ? "Propositions et factures" : "Proposals & Invoices"} />}>
-              <ProposalsInvoicesCard lang={lang} />
+            <Suspense fallback={<CardSkeleton title={t.dashboard.proposalsInvoicesTitle} />}>
+              <ProposalsInvoicesCard lang={lang} labels={proposalsInvoicesLabels} />
             </Suspense>
           </div>
 

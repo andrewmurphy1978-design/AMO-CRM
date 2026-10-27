@@ -2,28 +2,17 @@ import Link from "next/link";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import InvoicesIcon from "./invoices-icon";
 
-const TEXT = {
-  en: {
-    title: "Proposals & Invoices",
-    proposals: "Proposals",
-    invoices: "Invoices to collect",
-    emptyProposals: "No open proposals.",
-    emptyInvoices: "No unpaid invoices.",
-    all: "All invoices",
-    due: "due",
-    status: { DRAFT: "Draft", APPROVED: "Approved", SENT: "Sent", OVERDUE: "Overdue" } as Record<string, string>,
-  },
-  fr: {
-    title: "Propositions et factures",
-    proposals: "Propositions",
-    invoices: "Factures à encaisser",
-    emptyProposals: "Aucune proposition en cours.",
-    emptyInvoices: "Aucune facture impayée.",
-    all: "Toutes les factures",
-    due: "échéance",
-    status: { DRAFT: "Brouillon", APPROVED: "Approuvée", SENT: "Envoyée", OVERDUE: "En retard" } as Record<string, string>,
-  },
-};
+export interface ProposalsInvoicesLabels {
+  title: string;
+  proposals: string;
+  invoices: string;
+  emptyProposals: string;
+  emptyInvoices: string;
+  all: string;
+  due: string;
+  invoiceFallback: string;
+  status: Record<string, string>;
+}
 
 function money(n: number, currency: string, lang: "en" | "fr"): string {
   return n.toLocaleString(lang === "fr" ? "fr-CA" : "en-CA", { style: "currency", currency });
@@ -42,8 +31,7 @@ function Section({ title, count, headerBg, children }: { title: string; count: n
 }
 
 // Dashboard "Proposals & Invoices": proposals still in progress and invoices not yet paid.
-export default async function ProposalsInvoicesCard({ lang }: { lang: "en" | "fr" }) {
-  const t = TEXT[lang];
+export default async function ProposalsInvoicesCard({ lang, labels: t }: { lang: "en" | "fr"; labels: ProposalsInvoicesLabels }) {
   const { proposals, invoices } = await withScopedPrismaClient(async (db) => ({
     proposals: await db.proposal.findMany({
       where: { status: { in: ["DRAFT", "APPROVED", "SENT"] } },
@@ -102,7 +90,7 @@ export default async function ProposalsInvoicesCard({ lang }: { lang: "en" | "fr
                 <li key={inv.id} className="flex items-start gap-2 py-2 text-sm">
                   <div className="min-w-0 flex-1">
                     <Link href={`/projects/${inv.projectId}/invoices/${inv.id}`} className="font-medium text-ink hover:underline">
-                      {inv.number ? `#${inv.number}` : lang === "fr" ? "Facture" : "Invoice"}
+                      {inv.number ? `#${inv.number}` : t.invoiceFallback}
                     </Link>
                     <p className="truncate text-xs text-soft">
                       {inv.project.name}
