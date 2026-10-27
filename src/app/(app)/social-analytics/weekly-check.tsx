@@ -68,8 +68,8 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
                 const d = r.langs[lg];
                 const lines: [string, string | number][] = [];
                 if (d.expected != null) lines.push([fr ? "Prévues" : "Expected", d.expected]);
-                if (d.makeQueued != null && !(r.platform === "tiktok")) lines.push([fr ? "Make en file" : "Make queue", d.makeQueued]);
-                lines.push(["Buffer " + (fr ? "en file" : "queue"), d.bufferQueued]);
+                // One queue: what waits in Make plus what waits in Buffer.
+                lines.push([fr ? "En file" : "Queue", (d.makeQueued ?? 0) + d.bufferQueued]);
                 if (check.current) lines.push(["Buffer " + (fr ? "envoyées" : "sent"), d.bufferSent]);
                 if (d.sheetRecent != null) lines.push([fr ? "Feuille (7 j)" : "Sheet (7 d)", d.sheetRecent]);
                 if (d.sheetPending != null) lines.push([fr ? "En attente" : "Pending", d.sheetPending]);
