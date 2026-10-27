@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { refreshSocialPostsAction, inspectBufferSchemaAction } from "@/actions/social-posts";
+import { refreshSocialPostsAction, inspectBufferSchemaAction, inspectBufferPostsAction } from "@/actions/social-posts";
 
 // Refreshes the cached posts from Buffer (automatically when they are stale, or on the button) and, for admins,
 // shows what Buffer's live API offers.
@@ -55,6 +55,17 @@ export default function PostsRefresh({ latestFetch, isAdmin, lang }: { latestFet
             className="rounded-lg border border-card-border bg-card-bg px-3 py-1.5 text-sm text-soft hover:bg-black/5 disabled:opacity-60"
           >
             {fr ? "Vérifier les champs de l'API Buffer" : "Check Buffer API fields"}
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            data-readonly-ok
+            disabled={busy}
+            onClick={() => start(async () => { const r = await inspectBufferPostsAction(); setSchema("error" in r ? r.error : r.text); })}
+            className="rounded-lg border border-card-border bg-card-bg px-3 py-1.5 text-sm text-soft hover:bg-black/5 disabled:opacity-60"
+          >
+            {fr ? "Vérifier les publications reçues de Buffer" : "Check posts returned by Buffer"}
           </button>
         )}
       </div>

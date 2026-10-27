@@ -39,6 +39,7 @@ export class Schema {
 }
 
 export type PostStatus = "SENT" | "QUEUED";
+type QueryStatus = PostStatus | "ANY"; // ANY = no status filter (used by the admin check)
 
 function pickEnum(values: string[], status: PostStatus): string | null {
   const exact = status === "SENT" ? /^(sent|published)$/i : /^(scheduled|queued|pending)$/i;
@@ -46,7 +47,7 @@ function pickEnum(values: string[], status: PostStatus): string | null {
   return values.find((v) => exact.test(v)) ?? values.find((v) => loose.test(v)) ?? null;
 }
 
-interface Ctx { orgId: string; channelIds: string[]; status: PostStatus; statusApplied: boolean; after: string | null }
+interface Ctx { orgId: string; channelIds: string[]; status: QueryStatus; statusApplied: boolean; after: string | null }
 
 async function fillInput(schema: Schema, typeName: string, ctx: Ctx, depth = 0): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
@@ -58,7 +59,7 @@ async function fillInput(schema: Schema, typeName: string, ctx: Ctx, depth = 0):
     else if (/^channelIds?$/i.test(f.name)) {
       if (list) out[f.name] = ctx.channelIds;
     } else if (/^(status|statuses|state)$/i.test(f.name) && nt?.kind === "ENUM") {
-      const v = pickEnum(((await schema.get(nt.name))?.enumValues ?? []).map((e) => e.name), ctx.status);
+      const v = ctx.status === "ANY" ? null : pickEnum(((await schema.get(nt.name))?.enumValues ?? []).map((e) => e.name), ctx.status);
       if (v) {
         out[f.name] = list ? [v] : v;
         ctx.statusApplied = true;
@@ -126,7 +127,7 @@ function normMetrics(m: unknown, out: Record<string, number> = {}): Record<strin
   return out;
 }
 
-export async function fetchBufferPosts(client: BufferClient, orgId: string, channelIds: string[], status: PostStatus, sharedSchema?: Schema, after: string | null = null): Promise<{ posts: BufferPost[]; statusApplied: boolean; next: string | null }> {
+export async function fetchBufferPosts(client: BufferClient, orgId: string, channelIds: string[], status: QueryStatus, sharedSchema?: Schema, after: string | null = null): Promise<{ posts: BufferPost[]; statusApplied: boolean; next: string | null }> {
   const schema = sharedSchema ?? new Schema(client);
   const root = await schema.get("Query");
   const field = root?.fields?.find((f) => f.name === "posts");
@@ -146,7 +147,7 @@ export async function fetchBufferPosts(client: BufferClient, orgId: string, chan
     else if (/^channelIds?$/i.test(a.name) && isList(a.type)) value = channelIds;
     else if (/^(first|limit|pageSize)$/i.test(a.name) && nt?.name === "Int") value = 50;
     else if (/^(status|statuses)$/i.test(a.name) && nt?.kind === "ENUM") {
-      const v = pickEnum(((await schema.get(nt.name))?.enumValues ?? []).map((e) => e.name), status);
+      const v = status === "ANY" ? null : pickEnum(((await schema.get(nt.name))?.enumValues ?? []).map((e) => e.name), status);
       if (v) {
         value = isList(a.type) ? [v] : v;
         ctx.statusApplied = true;
@@ -322,6 +323,41 @@ export async function syncBufferPosts(db: PrismaClient): Promise<PostsSyncResult
     await db.integrationSetting.upsert({ where: { provider: "social_channels" }, update: { metadata }, create: { provider: "social_channels", metadata } });
   }
   return result;
+}
+
+/** Admin check: what Buffer returns per channel with the "sent" filter and with no filter at all (first page each). */
+export async function describeBufferPosts(db: PrismaClient): Promise<string> {
+  const accounts = await db.integrationSetting.findMany({ where: { provider: { in: BUFFER_ACCOUNTS.map((a) => a.provider) } } });
+  const lines: string[] = [];
+  const day = (iso: string | null) => (iso ? iso.slice(0, 16).replace("T", " ") : "—");
+  for (const account of accounts) {
+    if (!account.apiKeyEncrypted) continue;
+    try {
+      const client = new BufferClient(await decryptSecret(account.apiKeyEncrypted));
+      const orgId = await client.getOrganizationId();
+      const channels = await client.listChannels(orgId);
+      const schema = new Schema(client);
+      for (const c of channels) {
+        if (EXCLUDED_CHANNEL_NAMES.has(c.name.toLowerCase())) continue;
+        const parts: string[] = [];
+        for (const status of ["SENT", "ANY"] as const) {
+          try {
+            const r = await fetchBufferPosts(client, orgId, [c.id], status, schema);
+            const dates = r.posts.map((p) => p.postedAt).filter((d): d is string => !!d).sort();
+            const byStatus = new Map<string, number>();
+            for (const p of r.posts) byStatus.set(p.statusRaw || "?", (byStatus.get(p.statusRaw || "?") ?? 0) + 1);
+            parts.push(`${status === "SENT" ? "sent filter" : "no filter"}: ${r.posts.length} posts${r.next ? " (more pages)" : ""}, newest ${day(dates[dates.length - 1] ?? null)}, oldest ${day(dates[0] ?? null)}, statuses ${[...byStatus].map(([k, v]) => `${k}=${v}`).join(" ") || "—"}`);
+          } catch (e) {
+            parts.push(`${status}: error ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        lines.push(`${account.provider} · ${c.name} [${c.service}]\n   ${parts.join("\n   ")}`);
+      }
+    } catch (e) {
+      lines.push(`${account.provider}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return lines.join("\n") || "No Buffer account is configured.";
 }
 
 /** A readable summary of the parts of Buffer's live schema that posts depend on (for the admin check). */

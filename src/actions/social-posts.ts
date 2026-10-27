@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { requireAccess } from "@/lib/permissions";
-import { syncBufferPosts, describeBufferSchema } from "@/lib/buffer-posts";
+import { syncBufferPosts, describeBufferSchema, describeBufferPosts } from "@/lib/buffer-posts";
 import { runMakeSync } from "@/lib/automations";
 import { SOCIAL_LANGUAGES, todaySocialDateKey } from "@/lib/social";
 
@@ -57,4 +57,16 @@ export async function saveManualFollowersAction(
   });
   revalidatePath("/social-analytics");
   return { ok: true, saved };
+}
+
+/** Admin only: what Buffer returns per channel with and without the "sent" filter (to see why posts are missing). */
+export async function inspectBufferPostsAction(): Promise<{ text: string } | { error: string }> {
+  await requireAccess("socialAnalytics", "READ");
+  const session = await auth();
+  if (!session || session.user.role !== "ADMIN") return { error: "Only admins can run this check." };
+  try {
+    return { text: await withScopedPrismaClient((db) => describeBufferPosts(db)) };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
 }
