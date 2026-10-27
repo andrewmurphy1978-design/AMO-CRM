@@ -1,5 +1,5 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { SOCIAL_CHART_COLOR, daysAgo, montrealWeekStart, type SocialPlatform } from "@/lib/social";
+import { daysAgo, montrealWeekStart, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
 import { BASE, MAKE_QUEUE_STORE_ID } from "@/lib/social-weekly";
 import WeeklyCheck from "./weekly-check";
@@ -72,7 +72,9 @@ function Cell({ item, sent, fr, when, labels }: { item: Item | null; sent: boole
     <div className="space-y-1.5 rounded-xl border border-card-border bg-card-bg p-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-soft">
         <span>{when(item.postedAt)}</span>
-        {item.source === "make" && <span className="rounded bg-black/5 px-1.5 py-0.5 font-semibold">Make</span>}
+        {!sent && (
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${item.source === "make" ? "bg-[#6D00CC]" : "bg-[#2C4BFF]"}`}>{item.source === "make" ? "Make" : "Buffer"}</span>
+        )}
         {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer" className="ml-auto font-semibold text-amo-lime hover:underline">{fr ? "Voir" : "View"} ↗</a>}
       </div>
       <p className="whitespace-pre-line break-words text-sm text-ink">{(item.text ?? "").slice(0, 280) || (fr ? "(sans texte)" : "(no text)")}{(item.text ?? "").length > 280 ? "…" : ""}</p>
@@ -93,7 +95,7 @@ function Cell({ item, sent, fr, when, labels }: { item: Item | null; sent: boole
   );
 }
 
-function SubCard({ title, count, badge, pairs, sent, empty, fr, when, labels, byWeek }: { title: string; count: number; badge: string; pairs: Pair[]; sent: boolean; empty: string; fr: boolean; when: (d: Date | null) => string; labels: Labels; byWeek?: boolean }) {
+function SubCard({ title, count, headerBg, pairs, sent, empty, fr, when, labels, byWeek }: { title: string; count: number; headerBg: string; pairs: Pair[]; sent: boolean; empty: string; fr: boolean; when: (d: Date | null) => string; labels: Labels; byWeek?: boolean }) {
   // Optionally grouped under a heading per week (Monday to Sunday), newest week first.
   const groups: { week: string | null; pairs: Pair[] }[] = [];
   for (const pair of pairs) {
@@ -105,15 +107,17 @@ function SubCard({ title, count, badge, pairs, sent, empty, fr, when, labels, by
   }
   const weekTitle = (ymd: string) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString(fr ? "fr-CA" : "en-US", { dateStyle: "long", timeZone: "UTC" });
   return (
-    <section className="rounded-2xl border border-card-border bg-black/[0.02] p-3 sm:p-4">
-      <h3 className="flex items-center gap-2 font-display text-base font-semibold text-ink">
-        {title}
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${badge}`}>{count}</span>
-      </h3>
+    // Same look as the categories of the Email page: a coloured header band with the title and a count badge.
+    <section className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
+      <div className={`flex items-center gap-2 px-4 py-2.5 ${headerBg}`}>
+        <h3 className="min-w-0 truncate text-sm font-semibold uppercase tracking-wide text-white">{title}</h3>
+        <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-xs font-semibold text-white">{count}</span>
+      </div>
+      <div className="bg-card-bg p-3 sm:p-4">
       {pairs.length === 0 ? (
-        <p className="mt-2 text-sm text-soft">{empty}</p>
+        <p className="text-sm text-soft">{empty}</p>
       ) : (
-        <div className="mt-3 space-y-3">
+        <div className="space-y-3">
           <div className="hidden grid-cols-2 gap-3 sm:grid">
             <span className="w-fit rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-800">{labels.languageEn}</span>
             <span className="w-fit rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{labels.languageFr}</span>
@@ -138,6 +142,7 @@ function SubCard({ title, count, badge, pairs, sent, empty, fr, when, labels, by
           ))}
         </div>
       )}
+      </div>
     </section>
   );
 }
@@ -188,11 +193,10 @@ export default async function PostsTab({ platform: only, lang, labels, hour12 }:
     <div className="space-y-6">
       {!only && <WeeklyCheck lang={lang} platformNames={labels.platformNames} />}
       {only && (
-        <div className="relative space-y-4 overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
-          <div className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: SOCIAL_CHART_COLOR[only] }} />
+        <div className="space-y-4">
           {make.error && <p className="text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{make.error}</p>}
-          <SubCard fr={fr} when={when} labels={labels} title={fr ? "En file d'attente" : "Queue"} count={queuedAll.length} badge="bg-amber-100 text-amber-800" pairs={queuePairs} sent={false} empty={fr ? "Rien en file d'attente." : "Nothing in the queue."} />
-          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées (4 dernières semaines)" : "Sent (last 4 weeks)"} count={sentAll.length} badge="bg-emerald-100 text-emerald-800" pairs={sentPairs} sent byWeek empty={fr ? "Aucune publication envoyée au cours des 4 dernières semaines." : "No posts sent in the last 4 weeks."} />
+          <SubCard fr={fr} when={when} labels={labels} title={fr ? "En file d'attente" : "Queue"} count={queuedAll.length} headerBg="bg-amber-500" pairs={queuePairs} sent={false} empty={fr ? "Rien en file d'attente." : "Nothing in the queue."} />
+          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées (4 dernières semaines)" : "Sent (last 4 weeks)"} count={sentAll.length} headerBg="bg-emerald-500" pairs={sentPairs} sent byWeek empty={fr ? "Aucune publication envoyée au cours des 4 dernières semaines." : "No posts sent in the last 4 weeks."} />
         </div>
       )}
     </div>
