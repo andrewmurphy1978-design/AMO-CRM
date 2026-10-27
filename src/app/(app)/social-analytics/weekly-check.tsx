@@ -53,7 +53,7 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
             <span className="text-xs text-soft">
               {r.expected != null ? `${fr ? "prévues" : "expected"} ${r.expected} · ` : ""}
               {r.sheet
-                ? `${fr ? "Feuille TikTok" : "TikTok sheet"}: ${r.sheet.recent} ${fr ? "ajoutée(s) en 7 jours" : "added in 7 days"} · ${r.sheet.pending} pending`
+                ? `${r.sheet.kind === "tiktok" ? (fr ? "Feuilles TikTok" : "TikTok sheets") : fr ? "Feuille EN (carrousel / story)" : "EN sheet (carousel / story)"}: ${r.sheet.recent} ${fr ? "ajoutée(s) en 7 jours" : "added in 7 days"} · ${r.sheet.pending} pending${r.sheet.kind === "instagram" ? ` · Make ${r.makeQueued ?? "—"} · Buffer ${r.bufferQueued}` : ""}`
                 : `${r.makeQueued != null ? `Make ${fr ? "en file" : "queued"} ${r.makeQueued}` : "Make —"} · Buffer ${fr ? "en file" : "queued"} ${r.bufferQueued}${check.current ? ` · Buffer ${fr ? "envoyées" : "sent"} ${r.bufferSent}` : ""}`}
             </span>
             {r.problem && <span className="w-full pl-10 text-xs text-amber-700">{r.problem}</span>}

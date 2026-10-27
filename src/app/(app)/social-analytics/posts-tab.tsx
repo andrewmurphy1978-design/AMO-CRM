@@ -13,8 +13,13 @@ const SHOW_SENT = 10;
 // Buffer reports for it. Read from the cache that "Refresh from Buffer" fills.
 export default async function PostsTab({ platform: only, lang, isAdmin, labels, dateLocale }: { platform: SocialPlatform | null; lang: "en" | "fr"; isAdmin: boolean; labels: Labels; dateLocale: Locale | undefined }) {
   const fr = lang === "fr";
-  const posts = await withScopedPrismaClient((db) => db.socialPost.findMany({ where: only ? { platform: only } : {}, orderBy: { postedAt: "desc" }, take: 600 }));
-  const latest = posts.reduce((m, p) => Math.max(m, p.fetchedAt.getTime()), 0);
+  // The Summary (no platform chosen) only shows the weekly cards, so the post list is read only for one platform; the
+  // last-fetch time (which decides whether the tab refreshes from Buffer on opening) comes from a cheap aggregate.
+  const { posts, latest } = await withScopedPrismaClient(async (db) => {
+    const posts = only ? await db.socialPost.findMany({ where: { platform: only }, orderBy: { postedAt: "desc" }, take: 300 }) : [];
+    const last = await db.socialPost.aggregate({ _max: { fetchedAt: true } });
+    return { posts, latest: last._max.fetchedAt?.getTime() ?? 0 };
+  });
   const when = (d: Date | null) => (d ? format(d, "MMM d, yyyy · HH:mm", { locale: dateLocale }) : "—");
 
   return (

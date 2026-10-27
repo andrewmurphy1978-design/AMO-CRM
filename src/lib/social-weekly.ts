@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@/lib/prisma";
 import { SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
-import { readTiktokSheets, type TiktokSheetCounts } from "@/lib/tiktok-sheets";
+import { readTiktokSheets } from "@/lib/tiktok-sheets";
 
 // "Did next week's posts get made and queued?" — compares what the weekly Claude task reported with what is really
 // waiting to be published. How posts are published (read from the Make scenario "Social Media Poster", which runs every
@@ -31,7 +31,7 @@ export interface WeeklyRow {
   bufferQueued: number;
   bufferSent: number; // already sent through Buffer during the week
   unverifiable: boolean;
-  sheet: TiktokSheetCounts | null; // TikTok only: rows in the two Google Sheets
+  sheet: { recent: number; pending: number; kind: "tiktok" | "instagram" } | null; // rows in the Google Sheets Make writes to
   ok: boolean | null;
   problem: string | null;
 }
@@ -56,7 +56,8 @@ function montreal(now: Date): { weekday: number; hour: number; ymd: string } {
 
 /**
  * The weeks the summary covers: the week in progress until Thursday, then the week in progress and next week (the
- * Thursday task prepares the following Monday-Sunday).
+ * Thursday task prepares the following Monday-Sunday). Everything the cards need (Make queue, Google Sheets, Buffer
+ * posts, Claude's reports) is read once, in parallel, and shared by both cards.
  */
 export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promise<WeeklyCheck[]> {
   const m = montreal(new Date());
@@ -65,44 +66,56 @@ export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promis
   const nextMonday = new Date(thisMonday.getTime() + 7 * DAY);
   const fromThursday = m.weekday === 4 || m.weekday === 5 || m.weekday === 6 || m.weekday === 0;
   const weeks = fromThursday ? [thisMonday, nextMonday] : [thisMonday];
-  const out: WeeklyCheck[] = [];
-  for (const monday of weeks) out.push(await getWeeklyCheck(db, userId, monday, monday.getTime() === thisMonday.getTime()));
-  return out;
+  const windowEnd = new Date(weeks[weeks.length - 1].getTime() + 7 * DAY);
+
+  const [make, sheets, posts, runs] = await Promise.all([
+    (async () => {
+      try {
+        const client = await makeClientWith(db);
+        if (!client) throw new Error("Make is not connected in Settings");
+        const [queue, failed] = await Promise.all([client.listDataStoreRecords(MAKE_QUEUE_STORE_ID), client.listDataStoreRecords(MAKE_FAILED_STORE_ID)]);
+        return { queue, failed: failed.length, error: null as string | null };
+      } catch (e) {
+        return { queue: [], failed: null as number | null, error: e instanceof Error ? e.message : String(e) };
+      }
+    })(),
+    userId ? readTiktokSheets(db, userId) : Promise.resolve(null),
+    db.socialPost.findMany({ where: { postedAt: { gte: thisMonday, lt: windowEnd }, status: { in: ["QUEUED", "SENT"] } }, select: { platform: true, status: true, postedAt: true } }),
+    db.socialWeeklyRun.findMany({ where: { weekStart: { in: weeks } }, orderBy: { reportedAt: "desc" } }),
+  ]);
+
+  return weeks.map((monday) => buildCheck({ monday, current: monday.getTime() === thisMonday.getTime(), m, make, sheets, posts, runs }));
 }
 
-async function getWeeklyCheck(db: PrismaClient, userId: string | undefined, monday: Date, current: boolean): Promise<WeeklyCheck> {
-  const m = montreal(new Date());
+type Shared = {
+  monday: Date;
+  current: boolean;
+  m: ReturnType<typeof montreal>;
+  make: { queue: { key: string; data: Record<string, unknown> }[]; failed: number | null; error: string | null };
+  sheets: Awaited<ReturnType<typeof readTiktokSheets>> | null;
+  posts: { platform: string; status: string; postedAt: Date | null }[];
+  runs: { weekStart: Date; reportedAt: Date; status: string; note: string | null; errors: unknown; posts: unknown }[];
+};
+
+function buildCheck({ monday, current, m, make, sheets, posts, runs }: Shared): WeeklyCheck {
   const weekEnd = new Date(monday.getTime() + 7 * DAY);
   const weekStart = monday.toISOString().slice(0, 10);
-  const run = await db.socialWeeklyRun.findFirst({ where: { weekStart: monday }, orderBy: { reportedAt: "desc" } });
+  const run = runs.find((r) => r.weekStart.getTime() === monday.getTime());
   const afterThursdayNoon = m.weekday >= 5 || m.weekday === 0 || (m.weekday === 4 && m.hour >= 12);
   const reportMissing = !run && (current || afterThursdayNoon);
   const reported = (run?.posts as { platform: SocialPlatform; count: number }[] | null) ?? [];
+  const makeError = make.error;
 
-  // Waiting in the Make queue
   const makeQueued = new Map<SocialPlatform, number>();
-  let makeError: string | null = null;
-  let failedInMake: number | null = null;
-  try {
-    const client = await makeClientWith(db);
-    if (!client) throw new Error("Make is not connected in Settings");
-    const records = await client.listDataStoreRecords(MAKE_QUEUE_STORE_ID);
-    for (const r of records) {
-      const base = BASE[String(r.data.platform ?? "").toLowerCase()];
-      const when = r.data.scheduled_time ? new Date(String(r.data.scheduled_time)) : null;
-      if (!base || !when || Number.isNaN(when.getTime()) || when < monday || when >= weekEnd) continue;
-      makeQueued.set(base, (makeQueued.get(base) ?? 0) + 1);
-    }
-    failedInMake = (await client.listDataStoreRecords(MAKE_FAILED_STORE_ID)).length;
-  } catch (e) {
-    makeError = e instanceof Error ? e.message : String(e);
+  for (const r of make.queue) {
+    const base = BASE[String(r.data.platform ?? "").toLowerCase()];
+    const when = r.data.scheduled_time ? new Date(String(r.data.scheduled_time)) : null;
+    if (!base || !when || Number.isNaN(when.getTime()) || when < monday || when >= weekEnd) continue;
+    makeQueued.set(base, (makeQueued.get(base) ?? 0) + 1);
   }
 
-  // Waiting in Buffer's own queue
-  const queued = await db.socialPost.groupBy({ by: ["platform"], where: { status: "QUEUED", postedAt: { gte: monday, lt: weekEnd } }, _count: { _all: true } });
-  const bufferQueued = new Map(queued.map((q) => [q.platform, q._count._all]));
-  const sentRows = await db.socialPost.groupBy({ by: ["platform"], where: { status: "SENT", postedAt: { gte: monday, lt: weekEnd } }, _count: { _all: true } });
-  const bufferSent = new Map(sentRows.map((q) => [q.platform, q._count._all]));
+  const inWeek = posts.filter((p) => p.postedAt && p.postedAt >= monday && p.postedAt < weekEnd);
+  const count = (status: string, platform: string) => inWeek.filter((p) => p.status === status && p.platform === platform).length;
 
   const rows: WeeklyRow[] = [];
   for (const platform of SOCIAL_PLATFORMS) {
@@ -110,30 +123,38 @@ async function getWeeklyCheck(db: PrismaClient, userId: string | undefined, mond
     const exp = reported.filter((r) => r.platform === platform);
     const expected = exp.length ? exp.reduce((s, r) => s + (r.count || 0), 0) : null;
     const unverifiable = platform === "tiktok";
-    const make = makeError ? null : (makeQueued.get(platform) ?? 0);
-    const buf = bufferQueued.get(platform) ?? 0;
-    const sentNow = bufferSent.get(platform) ?? 0;
+    const queued = makeError ? null : (makeQueued.get(platform) ?? 0);
+    const buf = count("QUEUED", platform);
+    const sentNow = count("SENT", platform);
+    // English Instagram carousels and stories go through the EN Google Sheet as text-only rows, like TikTok rows go
+    // through the sheets with a video; the sheets carry no platform column, so a video marks TikTok and a text-only
+    // row marks Instagram.
+    const sheetOk = sheets?.ok ? sheets.counts : null;
+    const sheetRow: WeeklyRow["sheet"] = !sheetOk
+      ? null
+      : platform === "tiktok"
+        ? { kind: "tiktok", recent: sheetOk.FR.recentVideo + sheetOk.EN.recentVideo, pending: sheetOk.FR.pendingVideo + sheetOk.EN.pendingVideo }
+        : platform === "instagram"
+          ? { kind: "instagram", recent: sheetOk.EN.recentText, pending: sheetOk.EN.pendingText }
+          : null;
     // Posts Make publishes itself (Facebook, LinkedIn, French Instagram) leave no trace once published, so during the
     // week in progress only what is still waiting, plus what Buffer sent, can be counted.
-    const total = (make ?? 0) + buf + (current ? sentNow : 0);
+    const total = (queued ?? 0) + buf + (current ? sentNow : 0) + (!current && platform === "instagram" ? (sheetRow?.recent ?? 0) : 0);
     let ok: boolean | null = true;
     let problem: string | null = null;
-    let sheet: TiktokSheetCounts | null = null;
     if (unverifiable) {
       // TikTok posts go to Google Sheets and leave the Make queue at once, so the sheets (or, failing that, the
       // Thursday report) are the only evidence.
-      const read = userId ? await readTiktokSheets(db, userId) : null;
-      if (read?.ok) {
-        sheet = read.counts;
-        if (!current && sheet.recent < (expected ?? 1)) {
+      if (sheetRow) {
+        if (!current && sheetRow.recent < (expected ?? 1)) {
           ok = false;
-          problem = `${sheet.recent} added to the TikTok sheets in the last 7 days, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
+          problem = `${sheetRow.recent} added to the TikTok sheets in the last 7 days, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
         }
       } else if (expected) {
-        problem = `${expected} sent to the TikTok sheets according to Claude's report (not verified: ${read?.error ?? "no Google account"})`;
+        problem = `${expected} sent to the TikTok sheets according to Claude's report (not verified: ${sheets && !sheets.ok ? sheets.error : "no Google account"})`;
       } else {
         ok = null;
-        problem = read?.error ?? "TikTok posts are written to Google Sheets; only the Thursday report can confirm them";
+        problem = sheets && !sheets.ok ? sheets.error : "TikTok posts are written to Google Sheets; only the Thursday report can confirm them";
       }
     } else if (makeError && platform !== "instagram") {
       ok = null;
@@ -142,7 +163,7 @@ async function getWeeklyCheck(db: PrismaClient, userId: string | undefined, mond
       ok = false;
       problem = `${total} queued for the week, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
     }
-    rows.push({ platform, expected, makeQueued: make, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet, ok, problem });
+    rows.push({ platform, expected, makeQueued: queued, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet: sheetRow, ok, problem });
   }
 
   return {
@@ -152,6 +173,6 @@ async function getWeeklyCheck(db: PrismaClient, userId: string | undefined, mond
     reportMissing,
     rows,
     makeError,
-    failedInMake,
+    failedInMake: make.failed,
   };
 }
