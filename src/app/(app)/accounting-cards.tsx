@@ -32,6 +32,7 @@ export interface AccountingEntityLabels {
   toConfirm: string;
   salesTax: string;
   open: string;
+  betweenEntities: string;
 }
 
 // Accounting is only for users allowed to use it (admins, and team members with Accounting turned on); everyone else
@@ -116,6 +117,21 @@ export async function AccountingEntityCards({ lang, labels }: { lang: "en" | "fr
               <Row label={labels.net} ytd={e.ytd.net} mtd={e.mtd.net} currency={e.currency} lang={lang} strong />
             </tbody>
           </table>
+          {e.links.length > 0 && (
+            <div className="mt-3 rounded-lg bg-black/[0.03] p-2">
+              <p className="text-xs font-semibold uppercase text-soft">{labels.betweenEntities}</p>
+              <ul className="mt-1 divide-y divide-card-border text-sm">
+                {e.links.map((l) => (
+                  <li key={l.id} className="flex items-baseline justify-between gap-2 py-1">
+                    <span className="min-w-0 truncate text-soft">
+                      <span className="text-ink">{lang === "fr" ? l.nameFr ?? l.name : l.name}</span> · {l.otherEntity}
+                    </span>
+                    <span className={`shrink-0 font-semibold tabular-nums ${l.balance < 0 ? "text-red-600" : "text-ink"}`}>{money(l.balance, e.currency, lang)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {(e.toCategorize > 0 || e.toConfirm > 0 || e.salesTaxRegistered) && (
             <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-semibold">
               {e.toCategorize > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">{e.toCategorize} {labels.toCategorize}</span>}

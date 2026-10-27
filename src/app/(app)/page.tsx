@@ -966,6 +966,7 @@ export default async function DashboardPage() {
     toConfirm: t.dashboard.accountingEntityToConfirm,
     salesTax: t.dashboard.accountingEntitySalesTax,
     open: t.dashboard.accountingEntityOpen,
+    betweenEntities: t.dashboard.accountingEntityBetweenEntities,
   };
   const proposalsInvoicesLabels: ProposalsInvoicesLabels = {
     title: t.dashboard.proposalsInvoicesTitle,
