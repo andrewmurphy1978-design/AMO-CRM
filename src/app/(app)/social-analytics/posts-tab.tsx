@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { SOCIAL_CHART_COLOR, daysAgo, type SocialPlatform } from "@/lib/social";
+import { SOCIAL_CHART_COLOR, daysAgo, montrealWeekStart, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
 import { BASE, MAKE_QUEUE_STORE_ID } from "@/lib/social-weekly";
 import WeeklyCheck from "./weekly-check";
@@ -95,7 +95,17 @@ function Cell({ item, sent, fr, when, labels }: { item: Item | null; sent: boole
   );
 }
 
-function SubCard({ title, count, badge, pairs, sent, empty, fr, when, labels }: { title: string; count: number; badge: string; pairs: Pair[]; sent: boolean; empty: string; fr: boolean; when: (d: Date | null) => string; labels: Labels }) {
+function SubCard({ title, count, badge, pairs, sent, empty, fr, when, labels, byWeek }: { title: string; count: number; badge: string; pairs: Pair[]; sent: boolean; empty: string; fr: boolean; when: (d: Date | null) => string; labels: Labels; byWeek?: boolean }) {
+  // Optionally grouped under a heading per week (Monday to Sunday), newest week first.
+  const groups: { week: string | null; pairs: Pair[] }[] = [];
+  for (const pair of pairs) {
+    const at = pair.en?.postedAt ?? pair.fr?.postedAt ?? null;
+    const week = byWeek && at ? montrealWeekStart(at) : null;
+    const last = groups[groups.length - 1];
+    if (last && last.week === week) last.pairs.push(pair);
+    else groups.push({ week, pairs: [pair] });
+  }
+  const weekTitle = (ymd: string) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString(fr ? "fr-CA" : "en-US", { dateStyle: "long", timeZone: "UTC" });
   return (
     <section className="rounded-2xl border border-card-border bg-black/[0.02] p-3 sm:p-4">
       <h3 className="flex items-center gap-2 font-display text-base font-semibold text-ink">
@@ -110,12 +120,22 @@ function SubCard({ title, count, badge, pairs, sent, empty, fr, when, labels }: 
             <span className="w-fit rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-800">{labels.languageEn}</span>
             <span className="w-fit rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800">{labels.languageFr}</span>
           </div>
-          {pairs.map((pair, idx) => (
-            <div key={`${pair.en?.id ?? "-"}-${pair.fr?.id ?? "-"}-${idx}`} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {pair.en && <span className="w-fit rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-800 sm:hidden">{labels.languageEn}</span>}
-              <Cell item={pair.en} sent={sent} fr={fr} when={when} labels={labels} />
-              {pair.fr && <span className="w-fit rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800 sm:hidden">{labels.languageFr}</span>}
-              <Cell item={pair.fr} sent={sent} fr={fr} when={when} labels={labels} />
+          {groups.map((g, gi) => (
+            <div key={`${g.week ?? "all"}-${gi}`} className="space-y-3">
+              {g.week && (
+                <h4 className="flex items-center gap-2 border-b border-card-border pb-1 text-xs font-semibold uppercase tracking-wide text-soft">
+                  {fr ? "Semaine du" : "Week of"} {weekTitle(g.week)}
+                  <span className="rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-ink">{g.pairs.reduce((n, p) => n + (p.en ? 1 : 0) + (p.fr ? 1 : 0), 0)}</span>
+                </h4>
+              )}
+              {g.pairs.map((pair, idx) => (
+                <div key={`${pair.en?.id ?? "-"}-${pair.fr?.id ?? "-"}-${idx}`} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {pair.en && <span className="w-fit rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-800 sm:hidden">{labels.languageEn}</span>}
+                  <Cell item={pair.en} sent={sent} fr={fr} when={when} labels={labels} />
+                  {pair.fr && <span className="w-fit rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800 sm:hidden">{labels.languageFr}</span>}
+                  <Cell item={pair.fr} sent={sent} fr={fr} when={when} labels={labels} />
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -166,7 +186,7 @@ export default async function PostsTab({ platform: only, lang, labels, dateLocal
           <div className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: SOCIAL_CHART_COLOR[only] }} />
           {make.error && <p className="text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{make.error}</p>}
           <SubCard fr={fr} when={when} labels={labels} title={fr ? "En file d'attente" : "Queue"} count={queuedAll.length} badge="bg-amber-100 text-amber-800" pairs={queuePairs} sent={false} empty={fr ? "Rien en file d'attente." : "Nothing in the queue."} />
-          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées (4 dernières semaines)" : "Sent (last 4 weeks)"} count={sentAll.length} badge="bg-emerald-100 text-emerald-800" pairs={sentPairs} sent empty={fr ? "Aucune publication envoyée au cours des 4 dernières semaines." : "No posts sent in the last 4 weeks."} />
+          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées (4 dernières semaines)" : "Sent (last 4 weeks)"} count={sentAll.length} badge="bg-emerald-100 text-emerald-800" pairs={sentPairs} sent byWeek empty={fr ? "Aucune publication envoyée au cours des 4 dernières semaines." : "No posts sent in the last 4 weeks."} />
         </div>
       )}
     </div>

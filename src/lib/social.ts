@@ -193,3 +193,12 @@ export async function getSocialLinks(db: PrismaClient): Promise<Record<string, s
 export function daysAgo(days: number): Date {
   return new Date(Date.now() - days * 86_400_000);
 }
+
+/** The Monday (YYYY-MM-DD, America/Montreal) of the week a moment falls in. */
+export function montrealWeekStart(d: Date): string {
+  const f = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Montreal", weekday: "short", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+  const get = (t: string) => f.find((p) => p.type === t)?.value ?? "";
+  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
+  const day = new Date(`${get("year")}-${get("month")}-${get("day")}T00:00:00Z`);
+  return new Date(day.getTime() - ((weekday + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
+}
