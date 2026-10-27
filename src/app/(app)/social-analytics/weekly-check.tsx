@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getWeeklyChecks, type WeeklyCheck as Check } from "@/lib/social-weekly";
 import type { SocialPlatform } from "@/lib/social";
+import { PlatformIcon, ROW_STYLE } from "../social-card";
 
 // "Are next week's posts made and queued?" — the Thursday task's own report, checked against Buffer's queue and the
 // recent runs of the Make scenarios that publish directly.
@@ -54,21 +55,51 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
         </p>
       ) : null}
       {check.makeError && <p className="mt-2 text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{check.makeError}</p>}
-      <ul className="mt-3 divide-y divide-card-border text-sm">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {check.rows.map((r) => (
-          <li key={r.platform} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2">
-            <span className="w-6">{mark(r.ok)}</span>
-            <span className="w-28 font-medium text-ink">{platformNames[r.platform]}</span>
-            <span className="text-xs text-soft">
-              {r.expected != null ? `${fr ? "prévues" : "expected"} ${r.expected} · ` : ""}
-              {r.sheet
-                ? `${r.sheet.kind === "tiktok" ? (fr ? "Feuilles TikTok" : "TikTok sheets") : fr ? "Feuille EN (carrousel / story)" : "EN sheet (carousel / story)"}: ${r.sheet.recent} ${fr ? "ajoutée(s) en 7 jours" : "added in 7 days"} · ${r.sheet.pending} pending${r.sheet.kind === "instagram" ? ` · Make ${r.makeQueued ?? "—"} · Buffer ${r.bufferQueued}` : ""}`
-                : `${r.makeQueued != null ? `Make ${fr ? "en file" : "queued"} ${r.makeQueued}` : "Make —"} · Buffer ${fr ? "en file" : "queued"} ${r.bufferQueued}${check.current ? ` · Buffer ${fr ? "envoyées" : "sent"} ${r.bufferSent}` : ""}`}
-            </span>
-            {r.problem && <span className="w-full pl-10 text-xs text-amber-700">{r.problem}</span>}
-          </li>
+          <div key={r.platform} className="rounded-xl border border-card-border bg-card-bg/60 p-3">
+            <div className="flex items-center gap-2">
+              <PlatformIcon platform={r.platform} style={r.platform === "tiktok" ? { ...ROW_STYLE.tiktok, iconBg: "bg-black", iconFill: "#fff" } : ROW_STYLE[r.platform]} />
+              <span className="font-medium text-ink">{platformNames[r.platform]}</span>
+              <span className="ml-auto text-base" title={r.problem ?? undefined}>{mark(r.ok)}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 divide-x divide-card-border text-xs">
+              {(["EN", "FR"] as const).map((lg) => {
+                const d = r.langs[lg];
+                const lines: [string, string | number][] = [];
+                if (d.expected != null) lines.push([fr ? "Prévues" : "Expected", d.expected]);
+                if (d.makeQueued != null && !(r.platform === "tiktok")) lines.push([fr ? "Make en file" : "Make queue", d.makeQueued]);
+                lines.push(["Buffer " + (fr ? "en file" : "queue"), d.bufferQueued]);
+                if (check.current) lines.push(["Buffer " + (fr ? "envoyées" : "sent"), d.bufferSent]);
+                if (d.sheetRecent != null) lines.push([fr ? "Feuille (7 j)" : "Sheet (7 d)", d.sheetRecent]);
+                if (d.sheetPending != null) lines.push([fr ? "En attente" : "Pending", d.sheetPending]);
+                const none = lines.every(([, v]) => v === 0 || v === "");
+                return (
+                  <div key={lg} className={lg === "FR" ? "pl-3" : "pr-3"}>
+                    <p className="mb-1 font-semibold uppercase tracking-wide text-soft">{lg}</p>
+                    {none && d.expected == null ? (
+                      <p className="text-soft">—</p>
+                    ) : (
+                      <dl className="space-y-0.5">
+                        {lines.filter(([k]) => k).map(([k, v]) => (
+                          <div key={k} className="flex justify-between gap-2">
+                            <dt className="text-soft">{k}</dt>
+                            <dd className="font-semibold text-ink">{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {r.expected != null && r.langs.EN.expected == null && r.langs.FR.expected == null && (
+              <p className="mt-2 text-xs text-soft">{fr ? `Prévues (total) : ${r.expected}` : `Expected (total): ${r.expected}`}</p>
+            )}
+            {r.problem && <p className="mt-2 text-xs text-amber-700">{r.problem}</p>}
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

@@ -24,7 +24,17 @@ const BASE: Record<string, SocialPlatform> = {
   tiktok: "tiktok",
 };
 
+export interface LangStats {
+  expected: number | null; // from the report, when it names a language
+  makeQueued: number | null; // waiting in the Make queue (null = not read)
+  bufferQueued: number;
+  bufferSent: number;
+  sheetRecent: number | null; // rows in the Google Sheets (TikTok videos, English Instagram carousels / stories)
+  sheetPending: number | null;
+}
+
 export interface WeeklyRow {
+  langs: Record<"EN" | "FR", LangStats>;
   platform: SocialPlatform;
   expected: number | null; // from the report
   makeQueued: number | null; // waiting in the Make queue for the week (null = not read)
@@ -80,7 +90,7 @@ export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promis
       }
     })(),
     userId ? readTiktokSheets(db, userId) : Promise.resolve(null),
-    db.socialPost.findMany({ where: { postedAt: { gte: thisMonday, lt: windowEnd }, status: { in: ["QUEUED", "SENT"] } }, select: { platform: true, status: true, postedAt: true } }),
+    db.socialPost.findMany({ where: { postedAt: { gte: thisMonday, lt: windowEnd }, status: { in: ["QUEUED", "SENT"] } }, select: { platform: true, language: true, status: true, postedAt: true } }),
     db.socialWeeklyRun.findMany({ where: { weekStart: { in: weeks } }, orderBy: { reportedAt: "desc" } }),
   ]);
 
@@ -93,7 +103,7 @@ type Shared = {
   m: ReturnType<typeof montreal>;
   make: { queue: { key: string; data: Record<string, unknown> }[]; failed: number | null; error: string | null };
   sheets: Awaited<ReturnType<typeof readTiktokSheets>> | null;
-  posts: { platform: string; status: string; postedAt: Date | null }[];
+  posts: { platform: string; language: string; status: string; postedAt: Date | null }[];
   runs: { weekStart: Date; reportedAt: Date; status: string; note: string | null; errors: unknown; posts: unknown }[];
 };
 
@@ -103,23 +113,26 @@ function buildCheck({ monday, current, m, make, sheets, posts, runs }: Shared): 
   const run = runs.find((r) => r.weekStart.getTime() === monday.getTime());
   const afterThursdayNoon = m.weekday >= 5 || m.weekday === 0 || (m.weekday === 4 && m.hour >= 12);
   const reportMissing = !run && (current || afterThursdayNoon);
-  const reported = (run?.posts as { platform: SocialPlatform; count: number }[] | null) ?? [];
+  const reported = (run?.posts as { platform: SocialPlatform; language?: string | null; count: number }[] | null) ?? [];
   const makeError = make.error;
 
   const makeQueued = new Map<SocialPlatform, number>();
+  const makeQueuedLang = new Map<string, number>(); // "platform:EN"
   for (const r of make.queue) {
     const base = BASE[String(r.data.platform ?? "").toLowerCase()];
     const when = r.data.scheduled_time ? new Date(String(r.data.scheduled_time)) : null;
     if (!base || !when || Number.isNaN(when.getTime()) || when < monday || when >= weekEnd) continue;
     makeQueued.set(base, (makeQueued.get(base) ?? 0) + 1);
+    const lg = String(r.data.language ?? "").toUpperCase() === "FR" ? "FR" : "EN";
+    makeQueuedLang.set(`${base}:${lg}`, (makeQueuedLang.get(`${base}:${lg}`) ?? 0) + 1);
   }
 
   const inWeek = posts.filter((p) => p.postedAt && p.postedAt >= monday && p.postedAt < weekEnd);
-  const count = (status: string, platform: string) => inWeek.filter((p) => p.status === status && p.platform === platform).length;
+  const count = (status: string, platform: string, language?: string) =>
+    inWeek.filter((p) => p.status === status && p.platform === platform && (!language || p.language.toUpperCase() === language)).length;
 
   const rows: WeeklyRow[] = [];
   for (const platform of SOCIAL_PLATFORMS) {
-    if (platform === "youtube" && !reported.some((r) => r.platform === platform)) continue;
     const exp = reported.filter((r) => r.platform === platform);
     const expected = exp.length ? exp.reduce((s, r) => s + (r.count || 0), 0) : null;
     const unverifiable = platform === "tiktok";
@@ -137,12 +150,34 @@ function buildCheck({ monday, current, m, make, sheets, posts, runs }: Shared): 
         : platform === "instagram"
           ? { kind: "instagram", recent: sheetOk.EN.recentText, pending: sheetOk.EN.pendingText }
           : null;
+    const langs = {} as Record<"EN" | "FR", LangStats>;
+    for (const lg of ["EN", "FR"] as const) {
+      const named = exp.filter((r) => r.language);
+      const sheetLang =
+        !sheetOk
+          ? null
+          : platform === "tiktok"
+            ? { recent: sheetOk[lg].recentVideo, pending: sheetOk[lg].pendingVideo }
+            : platform === "instagram" && lg === "EN"
+              ? { recent: sheetOk.EN.recentText, pending: sheetOk.EN.pendingText }
+              : null;
+      langs[lg] = {
+        expected: named.length ? named.filter((r) => String(r.language).toUpperCase() === lg).reduce((a, r) => a + (r.count || 0), 0) : null,
+        makeQueued: makeError ? null : (makeQueuedLang.get(`${platform}:${lg}`) ?? 0),
+        bufferQueued: count("QUEUED", platform, lg),
+        bufferSent: count("SENT", platform, lg),
+        sheetRecent: sheetLang?.recent ?? null,
+        sheetPending: sheetLang?.pending ?? null,
+      };
+    }
     // Posts Make publishes itself (Facebook, LinkedIn, French Instagram) leave no trace once published, so during the
     // week in progress only what is still waiting, plus what Buffer sent, can be counted.
     const total = (queued ?? 0) + buf + (current ? sentNow : 0) + (!current && platform === "instagram" ? (sheetRow?.recent ?? 0) : 0);
     let ok: boolean | null = true;
     let problem: string | null = null;
-    if (unverifiable) {
+    if (platform === "youtube" && expected == null) {
+      ok = null; // nothing scheduled for YouTube
+    } else if (unverifiable) {
       // TikTok posts go to Google Sheets and leave the Make queue at once, so the sheets (or, failing that, the
       // Thursday report) are the only evidence.
       if (sheetRow) {
@@ -163,7 +198,7 @@ function buildCheck({ monday, current, m, make, sheets, posts, runs }: Shared): 
       ok = false;
       problem = `${total} queued for the week, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
     }
-    rows.push({ platform, expected, makeQueued: queued, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet: sheetRow, ok, problem });
+    rows.push({ langs, platform, expected, makeQueued: queued, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet: sheetRow, ok, problem });
   }
 
   const hasData = current || !!run || rows.some((r) => (r.makeQueued ?? 0) > 0 || r.bufferQueued > 0);
