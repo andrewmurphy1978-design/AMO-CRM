@@ -71,7 +71,6 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
                   lines.push([fr ? "En file" : "Queue", (d.makeQueued ?? 0) + d.bufferQueued]);
                   if (check.current) lines.push([fr ? "Envoyées" : "Sent", d.bufferSent]);
                   if (d.sheetRecent != null) lines.push([fr ? "Feuille (7 j)" : "Sheet (7 d)", d.sheetRecent]);
-                  if (d.sheetPending != null) lines.push([fr ? "En attente" : "Pending", d.sheetPending]);
                   const none = lines.every(([, v]) => v === 0 || v === "");
                   const pid = r.profileNames[lg];
                   return (
