@@ -973,7 +973,7 @@ export default async function DashboardPage() {
           {t.dashboard.noAutomationRuns}
         </p>
       ) : (
-        <ul className="mt-1.5 sm:mt-3 space-y-2">
+        <ul className="mt-1.5 sm:mt-3 max-h-96 space-y-2 overflow-y-auto">
           {automationEntries.map((entry) =>
             entry.kind === "run" ? (
               <li

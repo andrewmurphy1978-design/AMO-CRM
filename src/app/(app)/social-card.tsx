@@ -117,6 +117,9 @@ export function PlatformIcon({
   );
 }
 
+const LANG_PILL_EN = "rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-red-800";
+const LANG_PILL_FR = "rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold normal-case tracking-normal text-sky-800";
+
 function fmt(n: number): string {
   return n.toLocaleString();
 }
@@ -130,7 +133,7 @@ interface StatLine {
 // Fixed label width (not %-based) so a number's left edge lands at the
 // same x-position in every cell across the whole table — not just within
 // one platform's row — regardless of how long that row's own labels are.
-const LABEL_WIDTH = "w-[4.5rem]";
+const LABEL_WIDTH = "w-[3.75rem]";
 
 function StatCell({
   snapshot,
@@ -170,7 +173,7 @@ function StatCell({
 
   if (lines.length === 0) return <span className={soft}>—</span>;
   return (
-    <div className="space-y-0.5 text-xs leading-tight">
+    <div className="space-y-px text-xs leading-tight">
       {lines.map((line) => (
         <div key={line.key} className="flex items-baseline">
           <span className={clsx(LABEL_WIDTH, "shrink-0", soft)}>
@@ -179,7 +182,7 @@ function StatCell({
           {/* Fixed width + right-align so every value's last digit lands
               at the same x-position down the whole table, with a
               consistent gap (not just squeezed against the label). */}
-          <span className="ml-5 w-10 shrink-0 text-right font-medium tabular-nums">
+          <span className="ml-1 w-10 shrink-0 text-right font-medium tabular-nums">
             {fmt(line.value)}
           </span>
         </div>
@@ -323,8 +326,8 @@ export default function SocialCard({
             <div className="flex items-center gap-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-soft">
               <span className="w-8 shrink-0" />
               <span className="min-w-0 flex-1" />
-              <span className="w-12 shrink-0 text-right">{labels.languageEn}</span>
-              <span className="w-12 shrink-0 text-right">{labels.languageFr}</span>
+              <span className="w-12 shrink-0 text-right"><span className={LANG_PILL_EN}>{labels.languageEn}</span></span>
+              <span className="w-12 shrink-0 text-right"><span className={LANG_PILL_FR}>{labels.languageFr}</span></span>
             </div>
             {SOCIAL_PLATFORMS.map((platform) => (
               <MobilePlatformRow
@@ -342,9 +345,11 @@ export default function SocialCard({
               <thead>
                 <tr className="border-b border-card-border bg-field-bg text-xs font-semibold uppercase tracking-wide text-soft">
                   <th className="w-12 py-2 pl-3 text-left"></th>
-                  <th className="py-2 pl-2 text-left">{labels.languageEn}</th>
+                  <th className="py-2 pl-2 text-left">
+                    <span className={LANG_PILL_EN}>{labels.languageEn}</span>
+                  </th>
                   <th className="py-2 pl-2 pr-3 text-left">
-                    {labels.languageFr}
+                    <span className={LANG_PILL_FR}>{labels.languageFr}</span>
                   </th>
                 </tr>
               </thead>
@@ -359,7 +364,7 @@ export default function SocialCard({
                         style.rowBg,
                       )}
                     >
-                      <td className="py-3 pl-3">
+                      <td className="py-1.5 pl-3">
                         <div className="flex items-center gap-2">
                           <PlatformIcon platform={platform} style={style} />
                           <span
@@ -369,7 +374,7 @@ export default function SocialCard({
                           </span>
                         </div>
                       </td>
-                      <td className={clsx("py-3 pl-2 align-top", style.text)}>
+                      <td className={clsx("py-1.5 pl-2 align-top", style.text)}>
                         <StatCell
                           snapshot={byKey.get(`${platform}|EN`)}
                           labels={labels}
@@ -377,7 +382,7 @@ export default function SocialCard({
                         />
                       </td>
                       <td
-                        className={clsx("py-3 pl-2 pr-3 align-top", style.text)}
+                        className={clsx("py-1.5 pl-2 pr-3 align-top", style.text)}
                       >
                         <StatCell
                           snapshot={byKey.get(`${platform}|FR`)}

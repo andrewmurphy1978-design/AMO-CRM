@@ -18,7 +18,7 @@ export interface PostsDetailLabels {
   languageFr: string;
 }
 
-const SHOWN = 6;
+const SHOWN = 50;
 
 // "Tuesday, October 27, 2026 · 9:00 AM" / "Mardi, 27 octobre 2026 · 09:00", in Québec local time.
 function postWhen(d: Date | null, fr: boolean, hour12: boolean): string {
@@ -59,7 +59,7 @@ function Section({ title, count, headerBg, posts, queued, empty, fr, hour12, lab
         <h3 className="min-w-0 truncate text-xs font-semibold uppercase tracking-wide text-white">{title}</h3>
         <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-xs font-semibold text-white">{count}</span>
       </div>
-      <div className="bg-card-bg px-3">
+      <div className="max-h-80 overflow-y-auto bg-card-bg px-3">
         {posts.length === 0 ? (
           <p className="py-3 text-sm text-soft">{empty}</p>
         ) : (
