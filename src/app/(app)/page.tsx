@@ -53,6 +53,7 @@ import PendingAffiliateProgramsCard, {
 import { dashboardBucketOf } from "@/lib/affiliate-status";
 import ProjectsIcon from "./projects-icon";
 import TasksIcon from "./tasks-icon";
+import ProposalsInvoicesCard from "./proposals-invoices-card";
 import { PROJECT_CARD_ACCENT_BAR, PROJECT_CARD_BG } from "./project-summary-colors";
 import { TASK_CARD_ACCENT_BAR, TASK_CARD_BG } from "./task-card-colors";
 import {
@@ -1390,6 +1391,10 @@ export default async function DashboardPage() {
                 </ul>
               )}
             </div>
+
+            <Suspense fallback={<CardSkeleton title={lang === "fr" ? "Propositions et factures" : "Proposals & Invoices"} />}>
+              <ProposalsInvoicesCard lang={lang} />
+            </Suspense>
           </div>
 
           {/* Mobile only — its own separate instance from the desktop copy
