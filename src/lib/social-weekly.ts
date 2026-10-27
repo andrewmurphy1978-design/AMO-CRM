@@ -2,6 +2,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
 import { readTiktokSheets } from "@/lib/tiktok-sheets";
+import { getProfileIds, profileId } from "@/lib/social-profiles";
 
 // "Did next week's posts get made and queued?" — compares what the weekly Claude task reported with what is really
 // waiting to be published. How posts are published (read from the Make scenario "Social Media Poster", which runs every
@@ -35,6 +36,7 @@ export interface LangStats {
 
 export interface WeeklyRow {
   langs: Record<"EN" | "FR", LangStats>;
+  profileIds: Record<"EN" | "FR", string | null>;
   platform: SocialPlatform;
   expected: number | null; // from the report
   makeQueued: number | null; // waiting in the Make queue for the week (null = not read)
@@ -48,7 +50,8 @@ export interface WeeklyRow {
 
 export interface WeeklyCheck {
   weekStart: string;
-  current: boolean; // the week in progress (otherwise next week)
+  kind: "current" | "next" | "last";
+  current: boolean; // true for a week that has started (this week, last week); false for next week
   hasData: boolean; // false for a week with no report and nothing queued anywhere (only next week can be empty)
   report: { reportedAt: string; status: string; note: string | null; errors: string[] } | null;
   reportMissing: boolean;
@@ -75,10 +78,10 @@ export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promis
   const today = new Date(`${m.ymd}T00:00:00Z`);
   const thisMonday = new Date(today.getTime() - ((m.weekday + 6) % 7) * DAY);
   const nextMonday = new Date(thisMonday.getTime() + 7 * DAY);
-  const weeks = [thisMonday, nextMonday];
-  const windowEnd = new Date(weeks[weeks.length - 1].getTime() + 7 * DAY);
+  const lastMonday = new Date(thisMonday.getTime() - 7 * DAY);
+  const windowEnd = new Date(nextMonday.getTime() + 7 * DAY);
 
-  const [make, sheets, posts, runs] = await Promise.all([
+  const [make, sheets, posts, runs, ids] = await Promise.all([
     (async () => {
       try {
         const client = await makeClientWith(db);
@@ -90,16 +93,21 @@ export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promis
       }
     })(),
     userId ? readTiktokSheets(db, userId) : Promise.resolve(null),
-    db.socialPost.findMany({ where: { postedAt: { gte: thisMonday, lt: windowEnd }, status: { in: ["QUEUED", "SENT"] } }, select: { platform: true, language: true, status: true, postedAt: true } }),
-    db.socialWeeklyRun.findMany({ where: { weekStart: { in: weeks } }, orderBy: { reportedAt: "desc" } }),
+    db.socialPost.findMany({ where: { postedAt: { gte: lastMonday, lt: windowEnd }, status: { in: ["QUEUED", "SENT"] } }, select: { platform: true, language: true, status: true, postedAt: true } }),
+    db.socialWeeklyRun.findMany({ where: { weekStart: { in: [lastMonday, thisMonday, nextMonday] } }, orderBy: { reportedAt: "desc" } }),
+    getProfileIds(db),
   ]);
 
-  return weeks.map((monday) => buildCheck({ monday, current: monday.getTime() === thisMonday.getTime(), m, make, sheets, posts, runs }));
+  const build = (monday: Date, kind: "current" | "next" | "last") => buildCheck({ monday, kind, m, make, sheets, posts, runs, ids });
+  // Always two weeks: this week, then next week — or last week while next week has no data yet.
+  const next = build(nextMonday, "next");
+  return [build(thisMonday, "current"), next.hasData ? next : build(lastMonday, "last")];
 }
 
 type Shared = {
   monday: Date;
-  current: boolean;
+  kind: "current" | "next" | "last";
+  ids: Record<string, string>;
   m: ReturnType<typeof montreal>;
   make: { queue: { key: string; data: Record<string, unknown> }[]; failed: number | null; error: string | null };
   sheets: Awaited<ReturnType<typeof readTiktokSheets>> | null;
@@ -107,12 +115,13 @@ type Shared = {
   runs: { weekStart: Date; reportedAt: Date; status: string; note: string | null; errors: unknown; posts: unknown }[];
 };
 
-function buildCheck({ monday, current, m, make, sheets, posts, runs }: Shared): WeeklyCheck {
+function buildCheck({ monday, kind, ids, m, make, sheets, posts, runs }: Shared): WeeklyCheck {
+  const current = kind !== "next";
   const weekEnd = new Date(monday.getTime() + 7 * DAY);
   const weekStart = monday.toISOString().slice(0, 10);
   const run = runs.find((r) => r.weekStart.getTime() === monday.getTime());
   const afterThursdayNoon = m.weekday >= 5 || m.weekday === 0 || (m.weekday === 4 && m.hour >= 12);
-  const reportMissing = !run && (current || afterThursdayNoon);
+  const reportMissing = !run && (kind === "current" || (kind === "next" && afterThursdayNoon));
   const reported = (run?.posts as { platform: SocialPlatform; language?: string | null; count: number }[] | null) ?? [];
   const makeError = make.error;
 
@@ -198,12 +207,13 @@ function buildCheck({ monday, current, m, make, sheets, posts, runs }: Shared): 
       ok = false;
       problem = `${total} queued for the week, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
     }
-    rows.push({ langs, platform, expected, makeQueued: queued, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet: sheetRow, ok, problem });
+    rows.push({ profileIds: { EN: profileId(ids, platform, "EN"), FR: profileId(ids, platform, "FR") }, langs, platform, expected, makeQueued: queued, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet: sheetRow, ok, problem });
   }
 
-  const hasData = current || !!run || rows.some((r) => (r.makeQueued ?? 0) > 0 || r.bufferQueued > 0);
+  const hasData = kind !== "next" || !!run || rows.some((r) => (r.makeQueued ?? 0) > 0 || r.bufferQueued > 0);
   return {
     weekStart,
+    kind,
     current,
     hasData,
     report: run ? { reportedAt: run.reportedAt.toISOString(), status: run.status, note: run.note, errors: (run.errors as string[] | null) ?? [] } : null,

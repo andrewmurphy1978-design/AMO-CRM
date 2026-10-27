@@ -20,7 +20,7 @@ export default async function PostsTab({ platform: only, lang, isAdmin, labels, 
     const last = await db.socialPost.aggregate({ _max: { fetchedAt: true } });
     return { posts, latest: last._max.fetchedAt?.getTime() ?? 0 };
   });
-  const when = (d: Date | null) => (d ? format(d, "MMM d, yyyy · HH:mm", { locale: dateLocale }) : "—");
+  const when = (d: Date | null) => (d ? format(d, fr ? "d MMMM yyyy · HH:mm" : "MMMM d, yyyy · HH:mm", { locale: dateLocale }) : "—");
 
   return (
     <div className="space-y-6">
