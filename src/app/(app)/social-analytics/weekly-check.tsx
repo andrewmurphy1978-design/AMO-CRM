@@ -73,7 +73,7 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
                   if (d.sheetRecent != null) lines.push([fr ? "Feuille (7 j)" : "Sheet (7 d)", d.sheetRecent]);
                   if (d.sheetPending != null) lines.push([fr ? "En attente" : "Pending", d.sheetPending]);
                   const none = lines.every(([, v]) => v === 0 || v === "");
-                  const pid = r.profileIds[lg];
+                  const pid = r.profileNames[lg];
                   return (
                     <div key={lg} className="min-w-0">
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${dark ? "bg-white/15 text-white" : "bg-white/70 text-ink"}`}>
@@ -91,8 +91,8 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
                           ))}
                         </dl>
                       )}
-                      <p className={`mt-2 break-all text-[10px] ${st.soft}`} title={fr ? "Identifiant du profil" : "Profile ID"}>
-                        {fr ? "ID profil" : "Profile ID"}: {pid ?? "—"}
+                      <p className={`mt-2 break-all text-[10px] ${st.soft}`} title={fr ? "Nom d'utilisateur" : "Username"}>
+                        {pid ?? "—"}
                       </p>
                     </div>
                   );

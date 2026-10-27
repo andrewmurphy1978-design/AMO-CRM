@@ -46,7 +46,7 @@ function pickEnum(values: string[], status: PostStatus): string | null {
   return values.find((v) => exact.test(v)) ?? values.find((v) => loose.test(v)) ?? null;
 }
 
-interface Ctx { orgId: string; channelIds: string[]; status: PostStatus; statusApplied: boolean }
+interface Ctx { orgId: string; channelIds: string[]; status: PostStatus; statusApplied: boolean; after: string | null }
 
 async function fillInput(schema: Schema, typeName: string, ctx: Ctx, depth = 0): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
@@ -126,13 +126,13 @@ function normMetrics(m: unknown, out: Record<string, number> = {}): Record<strin
   return out;
 }
 
-export async function fetchBufferPosts(client: BufferClient, orgId: string, channelIds: string[], status: PostStatus, sharedSchema?: Schema): Promise<{ posts: BufferPost[]; statusApplied: boolean }> {
+export async function fetchBufferPosts(client: BufferClient, orgId: string, channelIds: string[], status: PostStatus, sharedSchema?: Schema, after: string | null = null): Promise<{ posts: BufferPost[]; statusApplied: boolean; next: string | null }> {
   const schema = sharedSchema ?? new Schema(client);
   const root = await schema.get("Query");
   const field = root?.fields?.find((f) => f.name === "posts");
   if (!field) throw new Error(`Buffer's API has no "posts" query (it offers: ${(root?.fields ?? []).map((f) => f.name).join(", ")})`);
 
-  const ctx: Ctx = { orgId, channelIds, status, statusApplied: false };
+  const ctx: Ctx = { orgId, channelIds, status, statusApplied: false, after };
   const decls: string[] = [];
   const uses: string[] = [];
   const variables: Record<string, unknown> = {};
@@ -142,6 +142,7 @@ export async function fetchBufferPosts(client: BufferClient, orgId: string, chan
     let value: unknown;
     if (nt?.kind === "INPUT_OBJECT") value = await fillInput(schema, nt.name as string, ctx);
     else if (/^organizationId$/i.test(a.name)) value = orgId;
+    else if (/^after$/i.test(a.name) && nt?.name === "String") value = after ?? undefined;
     else if (/^channelIds?$/i.test(a.name) && isList(a.type)) value = channelIds;
     else if (/^(first|limit|pageSize)$/i.test(a.name) && nt?.name === "Int") value = 50;
     else if (/^(status|statuses)$/i.test(a.name) && nt?.kind === "ENUM") {
@@ -163,6 +164,7 @@ export async function fetchBufferPosts(client: BufferClient, orgId: string, chan
   if (!returnType) throw new Error("Could not read the type that Buffer's posts query returns");
   let selection: string;
   let path: "edges" | string | null;
+  let withPageInfo = false;
   const edges = returnType.fields?.find((f) => f.name === "edges");
   const holder = returnType.fields?.find((f) => /^(nodes|posts|items|results)$/i.test(f.name));
   if (edges) {
@@ -172,6 +174,14 @@ export async function fetchBufferPosts(client: BufferClient, orgId: string, chan
     if (!nodeType) throw new Error("Could not read the post type inside Buffer's posts connection");
     selection = `edges { node { ${await postSelection(schema, nodeType)} } }`;
     path = "edges";
+    // Buffer returns one page at a time (50 posts): ask for the cursor of the next one when it offers it.
+    const pageInfoField = returnType.fields?.find((f) => f.name === "pageInfo");
+    const pageInfoType = await schema.get(named(pageInfoField?.type ?? null)?.name);
+    const piNames = new Set((pageInfoType?.fields ?? []).map((f) => f.name));
+    if (pageInfoField && piNames.has("hasNextPage") && piNames.has("endCursor")) {
+      selection += " pageInfo { hasNextPage endCursor }";
+      withPageInfo = true;
+    }
   } else if (holder) {
     const postType = await schema.get(named(holder.type)?.name);
     if (!postType) throw new Error("Could not read the post type in Buffer's posts result");
@@ -185,6 +195,8 @@ export async function fetchBufferPosts(client: BufferClient, orgId: string, chan
   const query = `query BufferPosts${decls.length ? `(${decls.join(", ")})` : ""} { posts${uses.length ? `(${uses.join(", ")})` : ""} { ${selection} } }`;
   const data = await client.query<{ posts: unknown }>(query, variables);
   let raw: unknown = data.posts;
+  const pageInfo = withPageInfo ? ((raw as { pageInfo?: { hasNextPage?: boolean; endCursor?: string | null } })?.pageInfo ?? null) : null;
+  const next = pageInfo?.hasNextPage && pageInfo.endCursor ? pageInfo.endCursor : null;
   if (path === "edges") raw = ((raw as { edges?: { node: unknown }[] })?.edges ?? []).map((e) => e.node);
   else if (path) raw = (raw as Record<string, unknown>)?.[path] ?? [];
   const nodes = Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
@@ -199,7 +211,7 @@ export async function fetchBufferPosts(client: BufferClient, orgId: string, chan
     channelId: str(n.channelId) ?? str((n.channel as { id?: unknown } | undefined)?.id),
     metrics: normMetrics(n.metrics),
   }));
-  return { posts, statusApplied: ctx.statusApplied };
+  return { posts, statusApplied: ctx.statusApplied, next };
 }
 
 // ---------------------------------------------------------------- sync into the database
@@ -207,12 +219,38 @@ export async function fetchBufferPosts(client: BufferClient, orgId: string, chan
 export interface ChannelPostCount { name: string; platform: string; language: string; sent: number; queued: number; error?: string }
 export interface PostsSyncResult { saved: number; errors: string[]; channels: ChannelPostCount[] }
 
+const MAX_PAGES = 6; // 6 x 50 posts per channel and status
+
+// The username / handle Buffer holds for each channel (falls back to the channel name). Buffer's schema is read live, so
+// only the fields it really offers are asked for.
+async function channelHandles(client: BufferClient, schema: Schema, orgId: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  try {
+    const ch = await schema.get("Channel");
+    const wanted = ["username", "handle", "serviceUsername", "screenName", "externalName", "displayName"];
+    const have = wanted.filter((w) => (ch?.fields ?? []).some((f) => f.name === w && ["SCALAR"].includes(named(f.type)?.kind ?? "")));
+    if (!have.length) return out;
+    const data = await client.query<{ channels: Record<string, unknown>[] }>(
+      `query ChannelHandles($organizationId: OrganizationId!) { channels(input: { organizationId: $organizationId }) { id ${have.join(" ")} } }`,
+      { organizationId: orgId },
+    );
+    for (const c of data.channels ?? []) {
+      const v = have.map((h) => c[h]).find((x) => typeof x === "string" && x.trim());
+      if (typeof v === "string") out.set(String(c.id), v.trim());
+    }
+  } catch {
+    // names are a nicety: keep the plain channel name
+  }
+  return out;
+}
+
 // Each channel is asked for separately: one combined query returns only Buffer's newest 50 posts across every channel,
 // which can crowd out a quieter channel (Instagram, TikTok) entirely. The counts per channel are returned so the Posts
 // tab can show which channels returned nothing.
 export async function syncBufferPosts(db: PrismaClient): Promise<PostsSyncResult> {
   const accounts = await db.integrationSetting.findMany({ where: { provider: { in: BUFFER_ACCOUNTS.map((a) => a.provider) } } });
   const result: PostsSyncResult = { saved: 0, errors: [], channels: [] };
+  const names: Record<string, string> = {}; // "platform:LANG" -> username, kept for the Summary cards
   for (const account of accounts) {
     if (!account.apiKeyEncrypted) continue;
     const config = BUFFER_ACCOUNTS.find((a) => a.provider === account.provider);
@@ -222,6 +260,7 @@ export async function syncBufferPosts(db: PrismaClient): Promise<PostsSyncResult
       const orgId = await client.getOrganizationId();
       const channels = await client.listChannels(orgId);
       const schema = new Schema(client);
+      const handles = await channelHandles(client, schema, orgId);
       const queuedSeen: string[] = [];
       let queuedComplete = true;
 
@@ -232,23 +271,36 @@ export async function syncBufferPosts(db: PrismaClient): Promise<PostsSyncResult
         const language: SocialLanguage = config.languageMode === "fixed" && config.fixedLanguage ? config.fixedLanguage : (detectLanguageFromChannelName(c.name) ?? "EN");
         const count: ChannelPostCount = { name: c.name, platform, language, sent: 0, queued: 0 };
         result.channels.push(count);
+        if (!names[`${platform}:${language}`]) names[`${platform}:${language}`] = handles.get(c.id) ?? c.name;
 
         for (const status of ["SENT", "QUEUED"] as PostStatus[]) {
           try {
-            const { posts, statusApplied } = await fetchBufferPosts(client, orgId, [c.id], status, schema);
-            for (const p of posts) {
-              // When the status could not be filtered in the query, sort the posts by their own status here.
-              if (!statusApplied) {
-                const kind = /sent|publish/i.test(p.statusRaw) ? "SENT" : /sched|queue|pend/i.test(p.statusRaw) ? "QUEUED" : null;
-                if (kind !== status) continue;
+            let after: string | null = null;
+            for (let page = 0; page < MAX_PAGES; page++) {
+              let fetched: Awaited<ReturnType<typeof fetchBufferPosts>>;
+              try {
+                fetched = await fetchBufferPosts(client, orgId, [c.id], status, schema, after);
+              } catch (e) {
+                if (page === 0) throw e;
+                break; // a later page failing keeps what the earlier pages brought
               }
-              if (p.channelId && p.channelId !== c.id) continue;
-              if (status === "QUEUED") queuedSeen.push(p.id);
-              const data = { channelId: c.id, platform, language, status, text: p.text, link: p.link, postedAt: p.postedAt ? new Date(p.postedAt) : null, metrics: p.metrics as never, fetchedAt: new Date() };
-              await db.socialPost.upsert({ where: { provider_bufferId: { provider: account.provider, bufferId: p.id } }, update: data, create: { provider: account.provider, bufferId: p.id, ...data } });
-              result.saved++;
-              if (status === "SENT") count.sent++;
-              else count.queued++;
+              const { posts, statusApplied, next } = fetched;
+              for (const p of posts) {
+                // When the status could not be filtered in the query, sort the posts by their own status here.
+                if (!statusApplied) {
+                  const kind = /sent|publish/i.test(p.statusRaw) ? "SENT" : /sched|queue|pend/i.test(p.statusRaw) ? "QUEUED" : null;
+                  if (kind !== status) continue;
+                }
+                if (p.channelId && p.channelId !== c.id) continue;
+                if (status === "QUEUED") queuedSeen.push(p.id);
+                const data = { channelId: c.id, platform, language, status, text: p.text, link: p.link, postedAt: p.postedAt ? new Date(p.postedAt) : null, metrics: p.metrics as never, fetchedAt: new Date() };
+                await db.socialPost.upsert({ where: { provider_bufferId: { provider: account.provider, bufferId: p.id } }, update: data, create: { provider: account.provider, bufferId: p.id, ...data } });
+                result.saved++;
+                if (status === "SENT") count.sent++;
+                else count.queued++;
+              }
+              if (!next || next === after || posts.length === 0) break;
+              after = next;
             }
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -263,6 +315,11 @@ export async function syncBufferPosts(db: PrismaClient): Promise<PostsSyncResult
     } catch (e) {
       result.errors.push(`${account.provider}: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+  if (Object.keys(names).length) {
+    const existing = await db.integrationSetting.findUnique({ where: { provider: "social_channels" } });
+    const metadata = { ...((existing?.metadata as Record<string, string> | null) ?? {}), ...names };
+    await db.integrationSetting.upsert({ where: { provider: "social_channels" }, update: { metadata }, create: { provider: "social_channels", metadata } });
   }
   return result;
 }

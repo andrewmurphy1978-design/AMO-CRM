@@ -2,7 +2,7 @@ import type { PrismaClient } from "@/lib/prisma";
 import { SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
 import { readTiktokSheets } from "@/lib/tiktok-sheets";
-import { getProfileIds, profileId } from "@/lib/social-profiles";
+import { getProfileNames, profileName } from "@/lib/social-profiles";
 
 // "Did next week's posts get made and queued?" — compares what the weekly Claude task reported with what is really
 // waiting to be published. How posts are published (read from the Make scenario "Social Media Poster", which runs every
@@ -36,7 +36,7 @@ export interface LangStats {
 
 export interface WeeklyRow {
   langs: Record<"EN" | "FR", LangStats>;
-  profileIds: Record<"EN" | "FR", string | null>;
+  profileNames: Record<"EN" | "FR", string | null>; // username shown under the data
   platform: SocialPlatform;
   expected: number | null; // from the report
   makeQueued: number | null; // waiting in the Make queue for the week (null = not read)
@@ -95,7 +95,7 @@ export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promis
     userId ? readTiktokSheets(db, userId) : Promise.resolve(null),
     db.socialPost.findMany({ where: { postedAt: { gte: lastMonday, lt: windowEnd }, status: { in: ["QUEUED", "SENT"] } }, select: { platform: true, language: true, status: true, postedAt: true } }),
     db.socialWeeklyRun.findMany({ where: { weekStart: { in: [lastMonday, thisMonday, nextMonday] } }, orderBy: { reportedAt: "desc" } }),
-    getProfileIds(db),
+    getProfileNames(db),
   ]);
 
   const build = (monday: Date, kind: "current" | "next" | "last") => buildCheck({ monday, kind, m, make, sheets, posts, runs, ids });
@@ -207,7 +207,7 @@ function buildCheck({ monday, kind, ids, m, make, sheets, posts, runs }: Shared)
       ok = false;
       problem = `${total} queued for the week, ${expected != null ? `${expected} expected` : "at least 1 expected"}`;
     }
-    rows.push({ profileIds: { EN: profileId(ids, platform, "EN"), FR: profileId(ids, platform, "FR") }, langs, platform, expected, makeQueued: queued, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet: sheetRow, ok, problem });
+    rows.push({ profileNames: { EN: profileName(ids, platform, "EN"), FR: profileName(ids, platform, "FR") }, langs, platform, expected, makeQueued: queued, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet: sheetRow, ok, problem });
   }
 
   const hasData = kind !== "next" || !!run || rows.some((r) => (r.makeQueued ?? 0) > 0 || r.bufferQueued > 0);
