@@ -45,6 +45,8 @@ import AutomationsSummaryCard, {
 } from "./automations-summary-card";
 import { AUTOMATIONS_CARD_ACCENT_BAR, AUTOMATIONS_CARD_BG } from "./automations-summary-colors";
 import AutomationsIcon from "./automations-icon";
+import PostsSummaryCardServer from "./posts-summary-card-server";
+import PostsDetailCard from "./posts-detail-card";
 import PendingAffiliateProgramsCard, {
   type PendingAffiliateProgramRow,
 } from "./pending-affiliate-programs-card";
@@ -901,6 +903,38 @@ export default async function DashboardPage() {
     makeLabel: t.dashboard.automationsSummaryMakeLabel,
     zapierLabel: t.dashboard.automationsSummaryZapierLabel,
   };
+  const postsSummaryLabels = {
+    title: t.dashboard.postsSummaryTitle,
+    totalLabel: t.dashboard.postsSummaryTotalLabel,
+    makeLabel: t.dashboard.postsSummaryMakeLabel,
+    bufferLabel: t.dashboard.postsSummaryBufferLabel,
+    sentLabel: t.dashboard.postsSummarySentLabel,
+    failedLabel: t.dashboard.postsSummaryFailedLabel,
+  };
+  const postsDetailLabels = {
+    title: t.dashboard.postsDetailTitle,
+    queue: t.dashboard.postsDetailQueue,
+    sent: t.dashboard.postsDetailSent,
+    emptyQueue: t.dashboard.postsDetailEmptyQueue,
+    emptySent: t.dashboard.postsDetailEmptySent,
+    all: t.dashboard.postsDetailAll,
+    makeUnreadable: t.dashboard.postsDetailMakeUnreadable,
+    platformNames: {
+      facebook: t.dashboard.socialFacebook,
+      instagram: t.dashboard.socialInstagram,
+      linkedin: t.dashboard.socialLinkedin,
+      youtube: t.dashboard.socialYoutube,
+      tiktok: t.dashboard.socialTiktok,
+      x: t.dashboard.socialX,
+    },
+    languageEn: t.dashboard.socialLanguageEn,
+    languageFr: t.dashboard.socialLanguageFr,
+  };
+  const postsDetailCard = (
+    <Suspense fallback={<CardSkeleton title={t.dashboard.postsDetailTitle} />}>
+      <PostsDetailCard lang={lang} hour12={hour12} labels={postsDetailLabels} />
+    </Suspense>
+  );
   const calendarLabels = {
     title: t.dashboard.calendarTitle,
     refresh: t.dashboard.refresh,
@@ -1135,6 +1169,9 @@ export default async function DashboardPage() {
             counts={automationSummaryCounts}
             labels={automationsSummaryLabels}
           />
+          <Suspense fallback={<CardSkeleton title={t.dashboard.postsSummaryTitle} />}>
+            <PostsSummaryCardServer labels={postsSummaryLabels} />
+          </Suspense>
         </div>
 
         {/* A single flat grid (not three separately-flowing column divs) so
@@ -1233,6 +1270,13 @@ export default async function DashboardPage() {
                   isAdmin={session?.user.role === "ADMIN"}
                   dateLocale={dateLocale}
                 />
+              </div>
+            </div>
+
+            {/* Post Details, right below the Social Media Analytics card. */}
+            <div className="hidden lg:block">
+              <div id="dashboard-posts-card-desktop" className="scroll-mt-20">
+                {postsDetailCard}
               </div>
             </div>
           </div>
@@ -1374,6 +1418,13 @@ export default async function DashboardPage() {
                 isAdmin={session?.user.role === "ADMIN"}
                 dateLocale={dateLocale}
               />
+            </div>
+          </div>
+
+          {/* Mobile-only Post Details instance, right after mobile Social (same dual-instance reasoning as the rest). */}
+          <div className="lg:hidden">
+            <div id="dashboard-posts-card-mobile" className="scroll-mt-20">
+              {postsDetailCard}
             </div>
           </div>
 

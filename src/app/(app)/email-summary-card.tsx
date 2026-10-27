@@ -78,6 +78,7 @@ export default function EmailSummaryCard({
           value={counts.today}
           label={labels.todayLabel}
           layout="row"
+          twoLine
           className="col-span-2"
         />
         <SubCard

@@ -59,7 +59,7 @@ export default function ProjectSummaryCard({
       <div className="grid grid-cols-4 items-center gap-1.5">
         <div className="col-span-2 flex items-center gap-2">
           <ProjectsIcon />
-          <h3 className="font-display text-lg font-semibold text-ink">
+          <h3 className="whitespace-pre-line font-display text-lg font-semibold leading-tight text-ink">
             {labels.title}
           </h3>
         </div>

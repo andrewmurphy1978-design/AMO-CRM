@@ -80,6 +80,7 @@ export default function ContactSummaryCard({
           value={counts.total}
           label={labels.totalLabel}
           layout="row"
+          twoLine
           className="col-span-2"
         />
         {/* New contacts — 3 equal stacked bands, one per bucket. */}

@@ -9,6 +9,12 @@ import { formatHoursFraction } from "@/lib/calendar-time";
 // Both layouts share a fixed height (matching the Calendar Summary card's
 // own bespoke 3-line Haley/Lukas/Mom card) so every sub-card in a metrics
 // row lines up regardless of how many lines its own content takes.
+// "total contacts" -> "total\ncontacts" (the break goes at the last space).
+function splitInTwo(label: string): string {
+  const i = label.lastIndexOf(" ");
+  return i > 0 ? `${label.slice(0, i)}\n${label.slice(i + 1)}` : label;
+}
+
 const SUB_CARD_HEIGHT = "h-14 sm:h-16";
 
 export default function SummarySubCard({
@@ -18,6 +24,7 @@ export default function SummarySubCard({
   label,
   hours,
   layout = "col",
+  twoLine = false,
   className,
 }: {
   bg: string;
@@ -32,6 +39,8 @@ export default function SummarySubCard({
   // fraction ("40½h") rather than under it like the label.
   hours?: number;
   layout?: "col" | "row";
+  // Row layout only: show the label on two lines (split at its last space) instead of one truncated line.
+  twoLine?: boolean;
   className?: string;
 }) {
   const hoursSuffix =
@@ -52,9 +61,15 @@ export default function SummarySubCard({
           </span>
           {hoursSuffix}
         </span>
-        <span className="min-w-0 truncate text-xs font-medium leading-tight sm:text-sm">
-          {label}
-        </span>
+        {twoLine ? (
+          <span className="min-w-0 whitespace-pre-line text-left text-xs font-medium leading-tight sm:text-sm">
+            {splitInTwo(label)}
+          </span>
+        ) : (
+          <span className="min-w-0 truncate text-xs font-medium leading-tight sm:text-sm">
+            {label}
+          </span>
+        )}
       </div>
     );
   }

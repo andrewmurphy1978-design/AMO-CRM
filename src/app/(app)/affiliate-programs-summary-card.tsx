@@ -73,6 +73,7 @@ export default function AffiliateProgramsSummaryCard({
           value={counts.total}
           label={labels.totalLabel}
           layout="row"
+          twoLine
           className="col-span-2"
         />
         <SubCard
