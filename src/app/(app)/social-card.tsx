@@ -8,6 +8,7 @@ import {
   type SocialPlatform,
   type SocialSnapshotView,
 } from "@/lib/social";
+import CardLink from "./card-link";
 import SocialSyncButton from "./social-sync-button";
 import SocialIcon from "./social-icon";
 import { SOCIAL_CARD_ACCENT_BAR, SOCIAL_CARD_BG } from "./social-summary-colors";
@@ -286,7 +287,7 @@ export default function SocialCard({
   );
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${SOCIAL_CARD_BG}`}>
+    <CardLink href="/social-analytics" className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${SOCIAL_CARD_BG}`}>
       <div className={`absolute inset-x-0 top-0 h-[3px] ${SOCIAL_CARD_ACCENT_BAR}`} />
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -398,6 +399,6 @@ export default function SocialCard({
           </div>
         </>
       )}
-    </div>
+    </CardLink>
   );
 }

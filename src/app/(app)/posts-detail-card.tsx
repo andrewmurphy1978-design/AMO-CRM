@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getPostsOverview, type OverviewPost } from "@/lib/posts-overview";
+import CardLink from "./card-link";
 import PostsIcon from "./posts-icon";
 import { POSTS_CARD_ACCENT_BAR, POSTS_CARD_BG } from "./posts-summary-colors";
 import { PlatformIcon, ROW_STYLE } from "./social-card";
@@ -79,7 +80,7 @@ export default async function PostsDetailCard({ lang, hour12, labels }: { lang: 
   const fr = lang === "fr";
   const o = await getPostsOverview();
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${POSTS_CARD_BG}`}>
+    <CardLink href="/social-analytics?tab=posts" className={`relative overflow-hidden rounded-2xl border border-card-border p-2 shadow-sm sm:p-5 ${POSTS_CARD_BG}`}>
       <div className={`absolute inset-x-0 top-0 h-[3px] ${POSTS_CARD_ACCENT_BAR}`} />
       <div className="flex items-center gap-2">
         <PostsIcon />
@@ -93,6 +94,6 @@ export default async function PostsDetailCard({ lang, hour12, labels }: { lang: 
         <Section title={labels.queue} count={o.makeQueued + o.bufferQueued} headerBg="bg-amber-500" posts={o.queued.slice(0, SHOWN)} queued empty={labels.emptyQueue} fr={fr} hour12={hour12} labels={labels} />
         <Section title={labels.sent} count={o.sentLast28} headerBg="bg-emerald-500" posts={o.sent.slice(0, SHOWN)} queued={false} empty={labels.emptySent} fr={fr} hour12={hour12} labels={labels} />
       </div>
-    </div>
+    </CardLink>
   );
 }
