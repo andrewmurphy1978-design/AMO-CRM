@@ -188,3 +188,8 @@ export async function getSocialLinks(db: PrismaClient): Promise<Record<string, s
   const setting = await db.integrationSetting.findUnique({ where: { provider: "social_links" } });
   return (setting?.metadata as Record<string, string> | null) ?? {};
 }
+
+/** The moment `days` days ago (kept here so pages do not call the clock while rendering). */
+export function daysAgo(days: number): Date {
+  return new Date(Date.now() - days * 86_400_000);
+}

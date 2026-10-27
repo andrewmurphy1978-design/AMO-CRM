@@ -1,14 +1,14 @@
 import { format } from "date-fns";
 import type { Locale } from "date-fns";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { SOCIAL_CHART_COLOR, type SocialPlatform } from "@/lib/social";
+import { SOCIAL_CHART_COLOR, daysAgo, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
 import { BASE, MAKE_QUEUE_STORE_ID } from "@/lib/social-weekly";
 import WeeklyCheck from "./weekly-check";
 
 type Labels = { statLabels: Record<string, string>; platformNames: Record<SocialPlatform, string>; languageEn: string; languageFr: string };
 
-const SHOW_SENT = 10;
+const SENT_DAYS = 28; // the Sent sub-card lists the last four weeks
 
 type Item = {
   id: string;
@@ -131,7 +131,13 @@ export default async function PostsTab({ platform: only, lang, labels, dateLocal
   const fr = lang === "fr";
   const { posts, make } = await withScopedPrismaClient(async (db) => {
     const [posts, make] = await Promise.all([
-      only ? db.socialPost.findMany({ where: { platform: only }, orderBy: { postedAt: "desc" }, take: 400 }) : Promise.resolve([]),
+      only
+        ? db.socialPost.findMany({
+            where: { platform: only, OR: [{ status: "QUEUED" }, { status: "SENT", postedAt: { gte: daysAgo(SENT_DAYS) } }] },
+            orderBy: { postedAt: "desc" },
+            take: 1500,
+          })
+        : Promise.resolve([]),
       only ? makeQueueFor(db, only) : Promise.resolve({ items: [] as Item[], error: null as string | null }),
     ]);
     return { posts, make };
@@ -149,9 +155,8 @@ export default async function PostsTab({ platform: only, lang, labels, dateLocal
   });
   const queuedAll = [...posts.filter((p) => p.status === "QUEUED").map(toItem), ...make.items];
   const sentAll = posts.filter((p) => p.status === "SENT").map(toItem);
-  const latestSent = (language: "EN" | "FR") => sentAll.filter((i) => i.language === language).sort((a, b) => (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0)).slice(0, SHOW_SENT);
   const queuePairs = pairByTime(queuedAll.filter((i) => i.language === "EN"), queuedAll.filter((i) => i.language === "FR"), true);
-  const sentPairs = pairByTime(latestSent("EN"), latestSent("FR"), false);
+  const sentPairs = pairByTime(sentAll.filter((i) => i.language === "EN"), sentAll.filter((i) => i.language === "FR"), false);
 
   return (
     <div className="space-y-6">
@@ -161,7 +166,7 @@ export default async function PostsTab({ platform: only, lang, labels, dateLocal
           <div className="absolute inset-x-0 top-0 h-[3px]" style={{ backgroundColor: SOCIAL_CHART_COLOR[only] }} />
           {make.error && <p className="text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{make.error}</p>}
           <SubCard fr={fr} when={when} labels={labels} title={fr ? "En file d'attente" : "Queue"} count={queuedAll.length} badge="bg-amber-100 text-amber-800" pairs={queuePairs} sent={false} empty={fr ? "Rien en file d'attente." : "Nothing in the queue."} />
-          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées" : "Sent"} count={sentAll.length} badge="bg-emerald-100 text-emerald-800" pairs={sentPairs} sent empty={fr ? "Aucune publication envoyée pour le moment." : "No sent posts yet."} />
+          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées (4 dernières semaines)" : "Sent (last 4 weeks)"} count={sentAll.length} badge="bg-emerald-100 text-emerald-800" pairs={sentPairs} sent empty={fr ? "Aucune publication envoyée au cours des 4 dernières semaines." : "No posts sent in the last 4 weeks."} />
         </div>
       )}
     </div>
