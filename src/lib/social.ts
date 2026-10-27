@@ -202,3 +202,20 @@ export function montrealWeekStart(d: Date): string {
   const day = new Date(`${get("year")}-${get("month")}-${get("day")}T00:00:00Z`);
   return new Date(day.getTime() - ((weekday + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
 }
+
+/** The instant a Montreal calendar day (YYYY-MM-DD) begins. */
+export function montrealDayStart(ymd: string): Date {
+  const guess = new Date(`${ymd}T00:00:00Z`);
+  const offsetAt = (d: Date) => {
+    const f = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Montreal", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(d);
+    const g = (t: string) => Number(f.find((p) => p.type === t)?.value);
+    return Date.UTC(g("year"), g("month") - 1, g("day"), g("hour"), g("minute"), g("second")) - d.getTime();
+  };
+  const first = guess.getTime() - offsetAt(guess);
+  return new Date(guess.getTime() - offsetAt(new Date(first)));
+}
+
+/** The calendar day (YYYY-MM-DD) `n` days after another. */
+export function addDaysKey(ymd: string, n: number): string {
+  return new Date(new Date(`${ymd}T00:00:00Z`).getTime() + n * 86_400_000).toISOString().slice(0, 10);
+}

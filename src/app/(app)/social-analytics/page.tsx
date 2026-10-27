@@ -39,7 +39,7 @@ import Link from "next/link";
 // Buffer user, so there's nothing for an admin to configure here.
 const BUFFER_ANALYTICS_URL = "https://publish.buffer.com/analytics";
 
-export default async function SocialAnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; platform?: string }> }) {
+export default async function SocialAnalyticsPage({ searchParams }: { searchParams: Promise<{ tab?: string; platform?: string; range?: string; from?: string; to?: string }> }) {
   const sp = await searchParams;
   const tab = sp.tab === "posts" ? "posts" : "analytics";
   const platformParam = (SOCIAL_PLATFORMS as readonly string[]).includes(sp.platform ?? "") ? (sp.platform as SocialPlatform) : null;
@@ -194,6 +194,9 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
           platform={platformParam}
           lang={lang}
           hour12={hour12}
+          range={sp.range}
+          from={sp.from}
+          to={sp.to}
           labels={{ statLabels: socialLabels.statLabels, platformNames, languageEn: t.dashboard.socialLanguageEn, languageFr: t.dashboard.socialLanguageFr }}
         />
       ) : (

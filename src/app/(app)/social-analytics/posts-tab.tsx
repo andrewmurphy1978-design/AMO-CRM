@@ -1,12 +1,19 @@
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { daysAgo, montrealWeekStart, type SocialPlatform } from "@/lib/social";
+import Link from "next/link";
+import { addDaysKey, daysAgo, montrealDayStart, montrealWeekStart, type SocialPlatform } from "@/lib/social";
 import { makeClientWith } from "@/lib/automations";
 import { BASE, MAKE_QUEUE_STORE_ID } from "@/lib/social-weekly";
 import WeeklyCheck from "./weekly-check";
 
 type Labels = { statLabels: Record<string, string>; platformNames: Record<SocialPlatform, string>; languageEn: string; languageFr: string };
 
-const SENT_DAYS = 28; // the Sent sub-card lists the last four weeks
+const PRESETS = [
+  { key: "1w", days: 7 },
+  { key: "2w", days: 14 },
+  { key: "4w", days: 28 },
+] as const;
+const DEFAULT_PRESET = "4w";
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 type Item = {
   id: string;
@@ -44,9 +51,10 @@ function pairByTime(en: Item[], fr: Item[], ascending: boolean): Pair[] {
   return out;
 }
 
-// Posts Make publishes itself wait in the Make data store "Social Post Queue" (Facebook, LinkedIn, French Instagram), not in Buffer.
+// Posts wait in the Make data store "Social Post Queue" until they are due: Facebook, LinkedIn and French Instagram are
+// then published by Make itself, X is handed to Buffer at that moment (so it never waits in Buffer's own queue).
 async function makeQueueFor(db: Parameters<Parameters<typeof withScopedPrismaClient>[0]>[0], platform: SocialPlatform): Promise<{ items: Item[]; error: string | null }> {
-  if (!["facebook", "linkedin", "instagram"].includes(platform)) return { items: [], error: null };
+  if (!["facebook", "linkedin", "instagram", "x"].includes(platform)) return { items: [], error: null };
   try {
     const client = await makeClientWith(db);
     if (!client) return { items: [], error: "Make is not connected in Settings" };
@@ -95,7 +103,43 @@ function Cell({ item, sent, fr, when, labels }: { item: Item | null; sent: boole
   );
 }
 
-function SubCard({ title, count, headerBg, pairs, sent, empty, fr, when, labels, byWeek }: { title: string; count: number; headerBg: string; pairs: Pair[]; sent: boolean; empty: string; fr: boolean; when: (d: Date | null) => string; labels: Labels; byWeek?: boolean }) {
+// "Last week / Last 2 weeks / Last 4 weeks" shortcuts and From / To date fields for the Sent sub-card (plain links and a
+// GET form, so the page simply reloads with the chosen period).
+function SentFilter({ fr, platform, preset, from, to }: { fr: boolean; platform: SocialPlatform; preset: string | null; from: string; to: string }) {
+  const base = `/social-analytics?tab=posts&platform=${platform}`;
+  const labels: Record<string, string> = fr ? { "1w": "Dernière semaine", "2w": "2 dernières semaines", "4w": "4 dernières semaines" } : { "1w": "Last week", "2w": "Last 2 weeks", "4w": "Last 4 weeks" };
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      {PRESETS.map((p) => (
+        <Link
+          key={p.key}
+          href={`${base}&range=${p.key}`}
+          prefetch={false}
+          className={`rounded-full border px-3 py-1 font-medium ${preset === p.key ? "border-emerald-500 bg-emerald-500 text-white" : "border-card-border bg-card-bg text-soft hover:text-ink"}`}
+        >
+          {labels[p.key]}
+        </Link>
+      ))}
+      <form method="get" action="/social-analytics" className="flex flex-wrap items-center gap-2 sm:ml-auto">
+        <input type="hidden" name="tab" value="posts" />
+        <input type="hidden" name="platform" value={platform} />
+        <label className="flex items-center gap-1 text-soft">
+          {fr ? "Du" : "From"}
+          <input type="date" name="from" defaultValue={from} className="rounded-md border border-card-border bg-card-bg px-2 py-1 text-ink" />
+        </label>
+        <label className="flex items-center gap-1 text-soft">
+          {fr ? "Au" : "To"}
+          <input type="date" name="to" defaultValue={to} className="rounded-md border border-card-border bg-card-bg px-2 py-1 text-ink" />
+        </label>
+        <button type="submit" data-readonly-ok className="rounded-md border border-card-border bg-card-bg px-3 py-1 font-medium text-ink hover:bg-black/5">
+          {fr ? "Appliquer" : "Apply"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function SubCard({ title, count, headerBg, pairs, sent, empty, fr, when, labels, byWeek, filter }: { title: string; count: number; headerBg: string; pairs: Pair[]; sent: boolean; empty: string; fr: boolean; when: (d: Date | null) => string; labels: Labels; byWeek?: boolean; filter?: React.ReactNode }) {
   // Optionally grouped under a heading per week (Monday to Sunday), newest week first.
   const groups: { week: string | null; pairs: Pair[] }[] = [];
   for (const pair of pairs) {
@@ -114,6 +158,7 @@ function SubCard({ title, count, headerBg, pairs, sent, empty, fr, when, labels,
         <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-xs font-semibold text-white">{count}</span>
       </div>
       <div className="bg-card-bg p-3 sm:p-4">
+        {filter && <div className="mb-3">{filter}</div>}
       {pairs.length === 0 ? (
         <p className="text-sm text-soft">{empty}</p>
       ) : (
@@ -150,13 +195,22 @@ function SubCard({ title, count, headerBg, pairs, sent, empty, fr, when, labels,
 // Recent posts for the chosen platform: Queue and Sent sub-cards, English on the left and French on the right with
 // matching posts on the same row. Buffer's posts come from the cache that "Refresh from Buffer" fills; Make's queue is
 // read live for the platforms Make publishes itself.
-export default async function PostsTab({ platform: only, lang, labels, hour12 }: { platform: SocialPlatform | null; lang: "en" | "fr"; labels: Labels; hour12: boolean }) {
+export default async function PostsTab({ platform: only, lang, labels, hour12, range, from, to }: { platform: SocialPlatform | null; lang: "en" | "fr"; labels: Labels; hour12: boolean; range?: string; from?: string; to?: string }) {
   const fr = lang === "fr";
+  // The Sent period: a shortcut (default: last 4 weeks) or a custom From / To (Montreal days, both ends included).
+  const customFrom = from && YMD.test(from) ? from : "";
+  const customTo = to && YMD.test(to) ? to : "";
+  const custom = !!(customFrom || customTo);
+  const preset = custom ? null : (PRESETS.find((p) => p.key === range)?.key ?? DEFAULT_PRESET);
+  const days = PRESETS.find((p) => p.key === preset)?.days ?? 28;
+  const sentWindow = custom
+    ? { ...(customFrom ? { gte: montrealDayStart(customFrom) } : {}), ...(customTo ? { lt: montrealDayStart(addDaysKey(customTo, 1)) } : {}) }
+    : { gte: daysAgo(days) };
   const { posts, make } = await withScopedPrismaClient(async (db) => {
     const [posts, make] = await Promise.all([
       only
         ? db.socialPost.findMany({
-            where: { platform: only, OR: [{ status: "QUEUED" }, { status: "SENT", postedAt: { gte: daysAgo(SENT_DAYS) } }] },
+            where: { platform: only, OR: [{ status: "QUEUED" }, { status: "SENT", postedAt: sentWindow }] },
             orderBy: { postedAt: "desc" },
             take: 1500,
           })
@@ -196,7 +250,7 @@ export default async function PostsTab({ platform: only, lang, labels, hour12 }:
         <div className="space-y-4">
           {make.error && <p className="text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{make.error}</p>}
           <SubCard fr={fr} when={when} labels={labels} title={fr ? "En file d'attente" : "Queue"} count={queuedAll.length} headerBg="bg-amber-500" pairs={queuePairs} sent={false} empty={fr ? "Rien en file d'attente." : "Nothing in the queue."} />
-          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées (4 dernières semaines)" : "Sent (last 4 weeks)"} count={sentAll.length} headerBg="bg-emerald-500" pairs={sentPairs} sent byWeek empty={fr ? "Aucune publication envoyée au cours des 4 dernières semaines." : "No posts sent in the last 4 weeks."} />
+          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées" : "Sent"} count={sentAll.length} headerBg="bg-emerald-500" pairs={sentPairs} sent byWeek filter={<SentFilter fr={fr} platform={only} preset={preset} from={customFrom} to={customTo} />} empty={fr ? "Aucune publication envoyée pendant cette période." : "No posts sent in this period."} />
         </div>
       )}
     </div>
