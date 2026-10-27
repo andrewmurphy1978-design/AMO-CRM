@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import type { SocialSummaryCounts } from "@/lib/social";
 import {
   SOCIAL_CARD_ACCENT_BAR,
@@ -28,7 +27,6 @@ export default function SocialAnalyticsSummaryCard({
   counts: SocialSummaryCounts;
   labels: SocialSummaryLabels;
 }) {
-  const router = useRouter();
   const growth = counts.followersGrowth;
   const growthColor =
     growth > 0 ? SOCIAL_GROWTH_COLORS.positive : growth < 0 ? SOCIAL_GROWTH_COLORS.negative : SOCIAL_GROWTH_COLORS.flat;
@@ -37,7 +35,19 @@ export default function SocialAnalyticsSummaryCard({
   return (
     <button
       type="button"
-      onClick={() => router.push("/social-analytics")}
+      onClick={() => {
+        // Desktop and mobile each render their own instance of the Social
+        // Media Analytics card at a different DOM position (see page.tsx),
+        // so each needs its own id — this picks whichever one is actually
+        // on screen, matching the same lg (1024px) breakpoint that
+        // switches between the two instances there.
+        const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+        document
+          .getElementById(
+            isDesktop ? "dashboard-social-card-desktop" : "dashboard-social-card-mobile",
+          )
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }}
       className={`group relative w-full overflow-hidden rounded-2xl border border-card-border p-2 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(219,39,119,0.15)] sm:p-5 ${SOCIAL_CARD_BG}`}
     >
       <div className={`absolute inset-x-0 top-0 h-[3px] ${SOCIAL_CARD_ACCENT_BAR}`} />
