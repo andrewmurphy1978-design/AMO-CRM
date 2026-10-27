@@ -39,6 +39,7 @@ export interface WeeklyRow {
 export interface WeeklyCheck {
   weekStart: string;
   current: boolean; // the week in progress (otherwise next week)
+  hasData: boolean; // false for a week with no report and nothing queued anywhere (only next week can be empty)
   report: { reportedAt: string; status: string; note: string | null; errors: string[] } | null;
   reportMissing: boolean;
   rows: WeeklyRow[];
@@ -55,8 +56,8 @@ function montreal(now: Date): { weekday: number; hour: number; ymd: string } {
 }
 
 /**
- * The weeks the summary covers: the week in progress until Thursday, then the week in progress and next week (the
- * Thursday task prepares the following Monday-Sunday). Everything the cards need (Make queue, Google Sheets, Buffer
+ * The weeks the summary covers: always the week in progress and next week (the Thursday task prepares the following
+ * Monday-Sunday; before that, next week simply has no data yet). Everything the cards need (Make queue, Google Sheets, Buffer
  * posts, Claude's reports) is read once, in parallel, and shared by both cards.
  */
 export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promise<WeeklyCheck[]> {
@@ -64,8 +65,7 @@ export async function getWeeklyChecks(db: PrismaClient, userId?: string): Promis
   const today = new Date(`${m.ymd}T00:00:00Z`);
   const thisMonday = new Date(today.getTime() - ((m.weekday + 6) % 7) * DAY);
   const nextMonday = new Date(thisMonday.getTime() + 7 * DAY);
-  const fromThursday = m.weekday === 4 || m.weekday === 5 || m.weekday === 6 || m.weekday === 0;
-  const weeks = fromThursday ? [thisMonday, nextMonday] : [thisMonday];
+  const weeks = [thisMonday, nextMonday];
   const windowEnd = new Date(weeks[weeks.length - 1].getTime() + 7 * DAY);
 
   const [make, sheets, posts, runs] = await Promise.all([
@@ -166,9 +166,11 @@ function buildCheck({ monday, current, m, make, sheets, posts, runs }: Shared): 
     rows.push({ platform, expected, makeQueued: queued, bufferQueued: buf, bufferSent: sentNow, unverifiable, sheet: sheetRow, ok, problem });
   }
 
+  const hasData = current || !!run || rows.some((r) => (r.makeQueued ?? 0) > 0 || r.bufferQueued > 0);
   return {
     weekStart,
     current,
+    hasData,
     report: run ? { reportedAt: run.reportedAt.toISOString(), status: run.status, note: run.note, errors: (run.errors as string[] | null) ?? [] } : null,
     reportMissing,
     rows,

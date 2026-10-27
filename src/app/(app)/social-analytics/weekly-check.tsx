@@ -8,9 +8,9 @@ import type { SocialPlatform } from "@/lib/social";
 export default async function WeeklyCheck({ lang, platformNames }: { lang: "en" | "fr"; platformNames: Record<SocialPlatform, string> }) {
   const session = await auth();
   const checks = await withScopedPrismaClient((db) => getWeeklyChecks(db, session?.user.id));
-  // Two columns from Thursday on (this week and next week); one card before that.
+  // Always two columns: this week and next week (a message replaces next week's card until it has data).
   return (
-    <div className={`grid grid-cols-1 gap-6 ${checks.length > 1 ? "lg:grid-cols-2" : ""}`}>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       {checks.map((check) => (
         <WeekCard key={check.weekStart} check={check} lang={lang} platformNames={platformNames} />
       ))}
@@ -20,6 +20,15 @@ export default async function WeeklyCheck({ lang, platformNames }: { lang: "en" 
 
 function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "fr"; platformNames: Record<SocialPlatform, string> }) {
   const fr = lang === "fr";
+  if (!check.hasData) {
+    return (
+      <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
+        <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
+        <h2 className="font-display text-lg font-semibold text-ink">{fr ? `Semaine prochaine (du ${check.weekStart})` : `Next week (starting ${check.weekStart})`}</h2>
+        <p className="mt-2 text-sm text-soft">{fr ? "Aucune donnée disponible pour la semaine prochaine." : "No data available for next week."}</p>
+      </div>
+    );
+  }
   const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(fr ? "fr-CA" : "en-CA", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Montreal" }) : "—");
   const mark = (ok: boolean | null) => (ok === true ? "✅" : ok === false ? "⚠️" : "❔");
   return (
