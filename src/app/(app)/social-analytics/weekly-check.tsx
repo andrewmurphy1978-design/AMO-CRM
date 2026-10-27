@@ -56,13 +56,17 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
           const st = r.platform === "tiktok" ? { ...ROW_STYLE.tiktok, iconBg: "bg-white", iconFill: "#000" } : ROW_STYLE[r.platform];
           const dark = r.platform === "tiktok";
           return (
-            <div key={r.platform} className={`rounded-xl border border-black/10 p-3 ${st.rowBg} ${st.text}`}>
+            <div key={r.platform} className={`flex flex-col rounded-xl border border-black/10 p-3 ${st.rowBg} ${st.text}`}>
               <div className="flex items-center gap-2">
                 <PlatformIcon platform={r.platform} style={st} />
                 <span className="font-semibold">{platformNames[r.platform]}</span>
                 <span className="ml-auto text-base" title={r.problem ?? undefined}>{mark(r.ok)}</span>
               </div>
-              <div className={`mt-2 grid grid-cols-2 gap-3 text-xs`}>
+              {r.expected != null && r.langs.EN.expected == null && r.langs.FR.expected == null && (
+                <p className={`mt-2 text-xs ${st.soft}`}>{fr ? `Prévues (total) : ${r.expected}` : `Expected (total): ${r.expected}`}</p>
+              )}
+              {r.problem && <p className={`mt-2 text-xs ${dark ? "text-amber-300" : "text-amber-700"}`}>{r.problem}</p>}
+              <div className="mt-2 grid flex-1 grid-cols-2 gap-3 text-xs">
                 {(["EN", "FR"] as const).map((lg) => {
                   const d = r.langs[lg];
                   const lines: [string, string | number][] = [];
@@ -74,7 +78,7 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
                   const none = lines.every(([, v]) => v === 0 || v === "");
                   const pid = r.profileNames[lg];
                   return (
-                    <div key={lg} className="min-w-0">
+                    <div key={lg} className="flex min-w-0 flex-col">
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${lg === "EN" ? "bg-red-100 text-red-800" : "bg-sky-100 text-sky-800"}`}>
                         {lg === "EN" ? (fr ? "Anglais" : "English") : fr ? "Français" : "French"}
                       </span>
@@ -90,17 +94,13 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
                           ))}
                         </dl>
                       )}
-                      <p className={`mt-2 break-all text-[10px] ${st.soft}`} title={fr ? "Nom d'utilisateur" : "Username"}>
+                      <p className={`mt-auto break-all pt-2 text-[10px] ${st.soft}`} title={fr ? "Nom d'utilisateur" : "Username"}>
                         {pid ?? "—"}
                       </p>
                     </div>
                   );
                 })}
               </div>
-              {r.expected != null && r.langs.EN.expected == null && r.langs.FR.expected == null && (
-                <p className={`mt-2 text-xs ${st.soft}`}>{fr ? `Prévues (total) : ${r.expected}` : `Expected (total): ${r.expected}`}</p>
-              )}
-              {r.problem && <p className={`mt-2 text-xs ${dark ? "text-amber-300" : "text-amber-700"}`}>{r.problem}</p>}
             </div>
           );
         })}
