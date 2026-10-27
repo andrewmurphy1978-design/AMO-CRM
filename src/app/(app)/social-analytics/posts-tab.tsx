@@ -139,7 +139,7 @@ function SentFilter({ fr, platform, preset, from, to }: { fr: boolean; platform:
   );
 }
 
-function SubCard({ title, count, headerBg, pairs, sent, empty, fr, when, labels, byWeek, filter }: { title: string; count: number; headerBg: string; pairs: Pair[]; sent: boolean; empty: string; fr: boolean; when: (d: Date | null) => string; labels: Labels; byWeek?: boolean; filter?: React.ReactNode }) {
+function SubCard({ title, count, countEn, countFr, headerBg, pairs, sent, empty, fr, when, labels, byWeek, filter }: { title: string; count: number; countEn: number; countFr: number; headerBg: string; pairs: Pair[]; sent: boolean; empty: string; fr: boolean; when: (d: Date | null) => string; labels: Labels; byWeek?: boolean; filter?: React.ReactNode }) {
   // Optionally grouped under a heading per week (Monday to Sunday), newest week first.
   const groups: { week: string | null; pairs: Pair[] }[] = [];
   for (const pair of pairs) {
@@ -153,9 +153,12 @@ function SubCard({ title, count, headerBg, pairs, sent, empty, fr, when, labels,
   return (
     // Same look as the categories of the Email page: a coloured header band with the title and a count badge.
     <section className="overflow-hidden rounded-2xl border border-card-border shadow-sm">
-      <div className={`flex items-center gap-2 px-4 py-2.5 ${headerBg}`}>
+      <div className={`flex flex-wrap items-center gap-2 px-4 py-2.5 ${headerBg}`}>
         <h3 className="min-w-0 truncate text-sm font-semibold uppercase tracking-wide text-white">{title}</h3>
         <span className="shrink-0 rounded-full bg-white/25 px-2 py-0.5 text-xs font-semibold text-white">{count}</span>
+        {/* The same total, split by language. */}
+        <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">{labels.languageEn} {countEn}</span>
+        <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-semibold text-sky-800">{labels.languageFr} {countFr}</span>
       </div>
       <div className="bg-card-bg p-3 sm:p-4">
         {filter && <div className="mb-3">{filter}</div>}
@@ -249,8 +252,8 @@ export default async function PostsTab({ platform: only, lang, labels, hour12, r
       {only && (
         <div className="space-y-4">
           {make.error && <p className="text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{make.error}</p>}
-          <SubCard fr={fr} when={when} labels={labels} title={fr ? "En file d'attente" : "Queue"} count={queuedAll.length} headerBg="bg-amber-500" pairs={queuePairs} sent={false} empty={fr ? "Rien en file d'attente." : "Nothing in the queue."} />
-          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées" : "Sent"} count={sentAll.length} headerBg="bg-emerald-500" pairs={sentPairs} sent byWeek filter={<SentFilter fr={fr} platform={only} preset={preset} from={customFrom} to={customTo} />} empty={fr ? "Aucune publication envoyée pendant cette période." : "No posts sent in this period."} />
+          <SubCard fr={fr} when={when} labels={labels} title={fr ? "En file d'attente" : "Queue"} count={queuedAll.length} countEn={queuedAll.filter((i) => i.language === "EN").length} countFr={queuedAll.filter((i) => i.language === "FR").length} headerBg="bg-amber-500" pairs={queuePairs} sent={false} empty={fr ? "Rien en file d'attente." : "Nothing in the queue."} />
+          <SubCard fr={fr} when={when} labels={labels} title={fr ? "Publiées" : "Sent"} count={sentAll.length} countEn={sentAll.filter((i) => i.language === "EN").length} countFr={sentAll.filter((i) => i.language === "FR").length} headerBg="bg-emerald-500" pairs={sentPairs} sent byWeek filter={<SentFilter fr={fr} platform={only} preset={preset} from={customFrom} to={customTo} />} empty={fr ? "Aucune publication envoyée pendant cette période." : "No posts sent in this period."} />
         </div>
       )}
     </div>
