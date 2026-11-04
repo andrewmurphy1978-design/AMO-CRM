@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import { notifyOverdueInvoices } from "@/lib/push-triggers";
 
 // The same GitHub Actions workflow that pings the other cron routes every
 // 15 minutes also pings this one — it only needs to run once a day since
@@ -39,5 +40,6 @@ export async function GET(request: Request) {
     })
   );
 
+  await withScopedPrismaClient((db) => notifyOverdueInvoices(db)).catch(() => undefined);
   return NextResponse.json({ ok: true, flippedToOverdue: result.count });
 }

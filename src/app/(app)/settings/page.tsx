@@ -23,6 +23,7 @@ import { loadCredentials, loadMailbox } from "@/lib/mail/shared-mailbox";
 import { resolvePermissions, currentPermissions, atLeast, type Section } from "@/lib/permissions";
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
+import NotificationsForm from "./notifications-form";
 import WorldClockForm from "./world-clock-form";
 import PersonalWatchForm from "./personal-watch-form";
 import EmailAddressColorForm from "./email-address-color-form";
@@ -326,6 +327,10 @@ export default async function SettingsPage({
     addSection({
       id: "time-format", scope: "user", group: t.settings.groupAccount, icon: "clock", label: t.settings.timeFormatLabel, description: t.settings.timeFormatDesc,
       content: <TimeFormatForm lang={lang} timeFormat={currentUser.timeFormat} />,
+    });
+    addSection({
+      id: "notifications", scope: "user", group: t.settings.groupAccount, icon: "bell", label: t.settings.pushTitle, description: t.settings.pushDesc,
+      content: <NotificationsForm lang={lang} />,
     });
     addSection({
       id: "world-clock", scope: "user", group: t.settings.groupDashboardWidgets, icon: "globe", label: t.settings.worldClockZonesLabel, description: t.settings.worldClockZonesDesc,

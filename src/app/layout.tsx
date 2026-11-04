@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import PwaRegister from "./pwa-register";
 
 const displayFont = Space_Grotesk({
   variable: "--font-display",
@@ -24,11 +25,17 @@ const AMO_BADGE_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596c0abd
 export const metadata: Metadata = {
   title: "Andrew Murphy Online CRM",
   description: "Contacts, projects, and tasks for Andrew Murphy Online.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "AMO CRM", statusBarStyle: "default" },
   icons: {
     icon: AMO_BADGE_URL,
     shortcut: AMO_BADGE_URL,
-    apple: AMO_BADGE_URL,
+    apple: "/apple-touch-icon.png",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0fa38a",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -52,7 +59,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           it as a candidate reference and keeps resolving against the real
           document scroll, on every browser. Still fully blocks the
           horizontal-pan-drags-the-fixed-sidebar bug this exists for. */}
-      <body className="min-h-full flex flex-col overflow-x-clip">{children}</body>
+      <body className="min-h-full flex flex-col overflow-x-clip">
+        {children}
+        <PwaRegister />
+      </body>
     </html>
   );
 }

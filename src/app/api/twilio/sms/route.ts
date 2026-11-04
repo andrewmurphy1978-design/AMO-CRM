@@ -1,4 +1,5 @@
 import { promoteContact } from "@/lib/project-progress";
+import { notifyUsers } from "@/lib/push";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { withScopedPrismaClient } from "@/lib/prisma";
@@ -53,6 +54,14 @@ export async function POST(request: NextRequest) {
       },
     });
     if (contactId) await promoteContact(db, contactId, "PROSPECT");
+    const who = contactId
+      ? await db.contact.findUnique({ where: { id: contactId }, select: { firstName: true, lastName: true } })
+      : null;
+    await notifyUsers(db, { to: "admins", category: "sms", dedupeKey: `sms:${sid}`, urgent: true }, {
+      title: `💬 ${[who?.firstName, who?.lastName].filter(Boolean).join(" ") || from}`,
+      body: body.slice(0, 160),
+      url: contactId ? `/contacts/${contactId}` : "/sms",
+    });
     return { status: 200 as const, contactId };
   });
 

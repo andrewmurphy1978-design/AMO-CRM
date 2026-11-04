@@ -2424,3 +2424,37 @@ model AccScannedEmail {
   @@unique([ownerId, source, messageKey])
   @@map("acc_scanned_emails")
 }
+
+// A device (phone, Windows PC, browser) that receives this user's Web Push notifications.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+// Which notification categories a user turned off (email, calendar, contact, sms, social, invoice); none = all on.
+model PushPreference {
+  userId   String   @id
+  disabled String[] @default([])
+
+  @@map("push_preferences")
+}
+
+// One row per notification already sent, so the 15-minute checks never notify twice for the same email / event / contact.
+model PushNotificationLog {
+  id     String   @id @default(cuid())
+  userId String
+  key    String
+  sentAt DateTime @default(now())
+
+  @@unique([userId, key])
+  @@index([sentAt])
+  @@map("push_notification_log")
+}

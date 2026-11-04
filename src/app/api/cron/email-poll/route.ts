@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { withScopedPrismaClient } from "@/lib/prisma";
 import { getValidAccessToken } from "@/lib/google";
-import { refreshEmailInboxCache } from "@/lib/email-inbox";
+import { getCachedInbox, refreshEmailInboxCache } from "@/lib/email-inbox";
+import { getUpcomingEvents } from "@/lib/google";
+import { notifyCalendar, notifyNewContacts, notifyNewEmails } from "@/lib/push-triggers";
+import { prunePushLog } from "@/lib/push";
 import { syncAllGoogleTasks } from "@/lib/google-tasks";
 
 // Keeps every user's Email page cache warm between page opens — without
@@ -34,14 +37,22 @@ export async function GET(request: Request) {
           outcomes.push({ userId, ok: false, error: "no_access_token" });
           continue;
         }
-        await refreshEmailInboxCache(db, userId, accessToken);
+        const before = await getCachedInbox(db, userId).catch(() => null);
+        const after = await refreshEmailInboxCache(db, userId, accessToken);
         outcomes.push({ userId, ok: true });
+        // Push notifications: new emails, then upcoming calendar events (Discovery calls included).
+        await notifyNewEmails(db, userId, before?.emails ?? null, after.emails).catch(() => undefined);
+        const events = await getUpcomingEvents(accessToken).catch(() => null);
+        if (events) await notifyCalendar(db, userId, events).catch(() => undefined);
       } catch (e) {
         // One user's bad IMAP password or a transient Gmail hiccup should
         // never stop the rest of the team's mailboxes from refreshing.
         outcomes.push({ userId, ok: false, error: e instanceof Error ? e.message : String(e) });
       }
     }
+    // New contacts (any source) and housekeeping of the notification log.
+    await notifyNewContacts(db).catch(() => undefined);
+    await prunePushLog(db);
     return outcomes;
   });
 
