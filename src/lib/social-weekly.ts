@@ -23,6 +23,7 @@ export const BASE: Record<string, SocialPlatform> = {
   x: "x",
   instagram: "instagram", "instagram-carousel": "instagram", "instagram-story": "instagram",
   tiktok: "tiktok",
+  youtube: "youtube", "youtube-short": "youtube",
 };
 
 export interface LangStats {

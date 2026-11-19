@@ -54,7 +54,7 @@ function pairByTime(en: Item[], fr: Item[], ascending: boolean): Pair[] {
 // Posts wait in the Make data store "Social Post Queue" until they are due: Facebook, LinkedIn and French Instagram are
 // then published by Make itself, X is handed to Buffer at that moment (so it never waits in Buffer's own queue).
 async function makeQueueFor(db: Parameters<Parameters<typeof withScopedPrismaClient>[0]>[0], platform: SocialPlatform): Promise<{ items: Item[]; error: string | null }> {
-  if (!["facebook", "linkedin", "instagram", "x"].includes(platform)) return { items: [], error: null };
+  if (!["facebook", "linkedin", "instagram", "x", "youtube"].includes(platform)) return { items: [], error: null };
   try {
     const client = await makeClientWith(db);
     if (!client) return { items: [], error: "Make is not connected in Settings" };
