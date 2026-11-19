@@ -42,7 +42,7 @@ function Row({ post, queued, fr, hour12, labels }: { post: OverviewPost; queued:
             {post.language === "EN" ? labels.languageEn : labels.languageFr}
           </span>
           {queued && (
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${post.source === "make" ? "bg-[#6D00CC]" : "bg-[#2C4BFF]"}`}>{post.source === "make" ? "Make" : "Buffer"}</span>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${post.source === "make" ? "bg-[#6D00CC]" : post.source === "youtube" ? "bg-[#FF0000]" : "bg-[#2C4BFF]"}`}>{post.source === "make" ? "Make" : post.source === "youtube" ? "YouTube" : "Buffer"}</span>
           )}
           <span>{postWhen(post.postedAt, fr, hour12)}</span>
         </div>
@@ -91,7 +91,7 @@ export default async function PostsDetailCard({ lang, hour12, labels }: { lang: 
       </div>
       {o.makeError && <p className="mt-2 text-xs text-amber-700">{labels.makeUnreadable} {o.makeError}</p>}
       <div className="mt-3 space-y-3">
-        <Section title={labels.queue} count={o.makeQueued + o.bufferQueued} headerBg="bg-amber-500" posts={o.queued.slice(0, SHOWN)} queued empty={labels.emptyQueue} fr={fr} hour12={hour12} labels={labels} />
+        <Section title={labels.queue} count={o.queued.length} headerBg="bg-amber-500" posts={o.queued.slice(0, SHOWN)} queued empty={labels.emptyQueue} fr={fr} hour12={hour12} labels={labels} />
         <Section title={labels.sent} count={o.sentLast28} headerBg="bg-emerald-500" posts={o.sent.slice(0, SHOWN)} queued={false} empty={labels.emptySent} fr={fr} hour12={hour12} labels={labels} />
       </div>
     </CardLink>

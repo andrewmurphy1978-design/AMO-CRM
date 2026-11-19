@@ -22,7 +22,7 @@ type Item = {
   text: string | null;
   link: string | null;
   metrics: Record<string, number>;
-  source: "buffer" | "make";
+  source: "buffer" | "make" | "youtube";
 };
 type Pair = { en: Item | null; fr: Item | null };
 
@@ -81,7 +81,7 @@ function Cell({ item, sent, fr, when, labels }: { item: Item | null; sent: boole
       <div className="flex flex-wrap items-center gap-2 text-xs text-soft">
         <span>{when(item.postedAt)}</span>
         {!sent && (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${item.source === "make" ? "bg-[#6D00CC]" : "bg-[#2C4BFF]"}`}>{item.source === "make" ? "Make" : "Buffer"}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${item.source === "make" ? "bg-[#6D00CC]" : item.source === "youtube" ? "bg-[#FF0000]" : "bg-[#2C4BFF]"}`}>{item.source === "make" ? "Make" : item.source === "youtube" ? "YouTube" : "Buffer"}</span>
         )}
         {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer" className="ml-auto font-semibold text-amo-lime hover:underline">{fr ? "Voir" : "View"} ↗</a>}
       </div>
@@ -239,7 +239,7 @@ export default async function PostsTab({ platform: only, lang, labels, hour12, r
     text: p.text,
     link: p.link,
     metrics: Object.fromEntries(Object.entries((p.metrics as Record<string, number> | null) ?? {}).filter(([, v]) => typeof v === "number")),
-    source: "buffer",
+    source: p.provider.startsWith("youtube") ? "youtube" : "buffer",
   });
   const queuedAll = [...posts.filter((p) => p.status === "QUEUED").map(toItem), ...make.items];
   const sentAll = posts.filter((p) => p.status === "SENT").map(toItem);

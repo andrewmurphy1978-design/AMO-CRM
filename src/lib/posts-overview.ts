@@ -10,7 +10,7 @@ export interface OverviewPost {
   language: "EN" | "FR";
   postedAt: Date | null;
   text: string | null;
-  source: "buffer" | "make";
+  source: "buffer" | "make" | "youtube";
 }
 
 export interface PostsOverview {
@@ -34,7 +34,7 @@ export const getPostsOverview = cache(async (): Promise<PostsOverview> => {
       db.socialPost.findMany({
         where: { OR: [{ status: "QUEUED" }, { status: "SENT", postedAt: { gte: daysAgo(28) } }] },
         orderBy: { postedAt: "desc" },
-        select: { id: true, platform: true, language: true, status: true, postedAt: true, text: true },
+        select: { id: true, provider: true, platform: true, language: true, status: true, postedAt: true, text: true },
         take: 2000,
       }),
       (async () => {
@@ -64,13 +64,14 @@ export const getPostsOverview = cache(async (): Promise<PostsOverview> => {
       language: p.language.toUpperCase() === "FR" ? "FR" : "EN",
       postedAt: p.postedAt,
       text: p.text,
-      source: "buffer",
+      source: p.provider.startsWith("youtube") ? "youtube" : "buffer",
     });
     const t = (p: OverviewPost) => p.postedAt?.getTime() ?? 0;
-    const bufferQueued = rows.filter((r) => r.status === "QUEUED").map(toPost);
+    const youtubeQueued = rows.filter((r) => r.status === "QUEUED" && r.provider.startsWith("youtube")).map(toPost);
+    const bufferQueued = rows.filter((r) => r.status === "QUEUED" && !r.provider.startsWith("youtube")).map(toPost);
     const sent = rows.filter((r) => r.status === "SENT").map(toPost).sort((a, b) => t(b) - t(a));
     return {
-      queued: [...bufferQueued, ...make.items].sort((a, b) => t(a) - t(b)),
+      queued: [...bufferQueued, ...youtubeQueued, ...make.items].sort((a, b) => t(a) - t(b)),
       sent,
       makeQueued: make.items.length,
       bufferQueued: bufferQueued.length,
