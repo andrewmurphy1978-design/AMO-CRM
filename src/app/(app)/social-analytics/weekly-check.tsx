@@ -29,6 +29,11 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
     ok === true ? "✅" : ok === false ? "⚠️" : (
       <span title={why ?? undefined} className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-800 text-xs font-extrabold leading-none text-white ring-2 ring-red-300">?</span>
     );
+  // A report that came in, or was due and didn't ("reportMissing"), gets a pass/fail badge up top — "reports on
+  // Thursday" (not due yet) gets no badge, since that's neither a success nor a failure yet.
+  const reportDue = Boolean(check.report) || check.reportMissing;
+  const reportOk = check.report?.status === "success";
+  const hasDetails = Boolean(check.report?.note) || Boolean(check.report?.errors.length) || Boolean(check.failedInMake) || Boolean(check.makeError);
   return (
     <div className="relative overflow-hidden rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm sm:p-5">
       <div className="absolute inset-x-0 top-0 h-[3px] amo-card-accent" />
@@ -37,23 +42,18 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
           : check.kind === "next"
             ? fr ? `Semaine prochaine (du ${day(check.weekStart)})` : `Next week (starting ${day(check.weekStart)})`
             : fr ? `Semaine dernière (du ${day(check.weekStart)})` : `Last week (starting ${day(check.weekStart)})`}</h2>
-      <p className="mt-1 text-sm text-soft">
-        {check.report
-          ? fr
-            ? `Rapport de la tâche Claude : ${when(check.report.reportedAt)} — ${check.report.status === "success" ? "terminée avec succès" : "terminée avec des erreurs"}.`
-            : `Claude task report: ${when(check.report.reportedAt)} — ${check.report.status === "success" ? "finished successfully" : "finished with errors"}.`
-          : check.reportMissing
-            ? fr ? "⚠️ Aucun rapport reçu de la tâche Claude du jeudi pour cette semaine." : "⚠️ No report received from Thursday's Claude task for this week."
-            : fr ? "Le rapport de la tâche Claude arrive le jeudi." : "The Claude task reports on Thursday."}
+      <p className="mt-1 flex items-center gap-2 text-sm text-soft">
+        {reportDue && <ReportBadge ok={reportOk} />}
+        <span>
+          {check.report
+            ? fr
+              ? `Rapport de la tâche Claude : ${when(check.report.reportedAt)} — ${check.report.status === "success" ? "terminée avec succès" : "terminée avec des erreurs"}.`
+              : `Claude task report: ${when(check.report.reportedAt)} — ${check.report.status === "success" ? "finished successfully" : "finished with errors"}.`
+            : check.reportMissing
+              ? fr ? "Aucun rapport reçu de la tâche Claude du jeudi pour cette semaine." : "No report received from Thursday's Claude task for this week."
+              : fr ? "Le rapport de la tâche Claude arrive le jeudi." : "The Claude task reports on Thursday."}
+        </span>
       </p>
-      {check.report?.note && <p className="mt-1 text-xs text-soft">{check.report.note}</p>}
-      {check.report?.errors.map((e, i) => <p key={i} className="mt-1 text-xs text-red-600">{e}</p>)}
-      {check.failedInMake ? (
-        <p className="mt-2 text-xs text-amber-700">
-          {fr ? `⚠️ ${check.failedInMake} publication(s) échouée(s) conservée(s) dans Make (« Failed Social Posts »).` : `⚠️ ${check.failedInMake} failed post(s) are kept in Make ("Failed Social Posts").`}
-        </p>
-      ) : null}
-      {check.makeError && <p className="mt-2 text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{check.makeError}</p>}
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {check.rows.map((r) => {
           const st = r.platform === "tiktok" ? { ...ROW_STYLE.tiktok, iconBg: "bg-white", iconFill: "#000" } : ROW_STYLE[r.platform];
@@ -102,6 +102,34 @@ function WeekCard({ check, lang, platformNames }: { check: Check; lang: "en" | "
           );
         })}
       </div>
+      {hasDetails && (
+        <div className="mt-4 space-y-1 border-t border-card-border pt-3">
+          {check.report?.note && <p className="text-xs text-soft">{check.report.note}</p>}
+          {check.report?.errors.map((e, i) => <p key={i} className="text-xs text-red-600">{e}</p>)}
+          {check.failedInMake ? (
+            <p className="text-xs text-amber-700">
+              {fr ? `⚠️ ${check.failedInMake} publication(s) échouée(s) conservée(s) dans Make (« Failed Social Posts »).` : `⚠️ ${check.failedInMake} failed post(s) are kept in Make ("Failed Social Posts").`}
+            </p>
+          ) : null}
+          {check.makeError && <p className="text-xs text-amber-700">{fr ? "File d'attente Make illisible : " : "Could not read the Make queue: "}{check.makeError}</p>}
+        </div>
+      )}
     </div>
+  );
+}
+
+function ReportBadge({ ok }: { ok: boolean }) {
+  return ok ? (
+    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="h-3 w-3">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+    </span>
+  ) : (
+    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-700 text-white">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="h-3 w-3">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </span>
   );
 }
