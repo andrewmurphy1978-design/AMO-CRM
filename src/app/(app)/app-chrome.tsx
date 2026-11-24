@@ -48,6 +48,10 @@ export default async function AppChrome({ children }: { children: React.ReactNod
     // Visible only on Andrew's own account — family emails/events have no
     // business reason to show up for any other team member.
     ...(isPersonalSectionUser(session.user.email) ? [{ href: "/personal", label: t.nav.personal }] : []),
+    // Andrew's own AI tool subscriptions/costs — same visibility rule as
+    // Personal above, not the role-based permission system, since this is
+    // personal/business financial data, not a team-shared CRM section.
+    ...(isPersonalSectionUser(session.user.email) ? [{ href: "/ai-memberships", label: t.nav.aiMemberships }] : []),
     ...(can("settings") ? [{ href: "/settings", label: t.nav.settings }] : []),
   ];
 

@@ -1882,6 +1882,46 @@ model ApiKeyVaultEntry {
   @@map("api_key_vault_entries")
 }
 
+// How often Andrew actually uses a given AI membership — drives the sort
+// order on the AI Memberships page (most-used on top) and is shown as its
+// own badge, not just a hidden ranking key.
+enum AiMembershipUsage {
+  DAILY
+  WEEKLY
+  MONTHLY
+  RARELY
+}
+
+// Andrew's own AI tool subscriptions (Claude, ChatGPT, Midjourney, etc.) —
+// separate from AffiliateProgram's AI_TOOLS tab, which tracks programs he
+// promotes as an affiliate, not necessarily ones he has a paid account
+// with. The two are cross-referenced by name on the page (not an FK) to
+// show whether an affiliate account already exists for a membership,
+// since a membership can exist with no matching affiliate program yet.
+model AiMembership {
+  id     String  @id @default(cuid())
+  name   String // "Claude", "ChatGPT", "Midjourney", ...
+  plan   String? // "Pro", "Max 5x", "Team", "Free", ...
+  isFree Boolean @default(false)
+
+  costUsdMonthly Float? // monthly cost in USD (null/0 alongside isFree for free plans)
+  costCadMonthly Float? // monthly cost in CAD
+
+  creditsAvailable Float? // credits left right now
+  creditsPerMonth  Float? // total credits granted each billing period
+  rolloverCredits  Float? // unused credits carried over from previous period(s)
+
+  renewsAt DateTime? @db.Date // next renewal/billing date
+
+  usage AiMembershipUsage @default(MONTHLY)
+  notes String?           @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_memberships")
+}
+
 // Automation run history shown on the Dashboard's Automations section.
 // "make" rows come from polling the Make API; "zapier" rows arrive via a
 // webhook step added to each Zap (there's no usable "list my recent Zap

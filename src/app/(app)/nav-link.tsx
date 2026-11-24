@@ -16,6 +16,7 @@ import MarketingIcon from "./marketing-icon";
 import SocialIcon from "./social-icon";
 import BookingsIcon from "./bookings-icon";
 import PersonalIcon from "./personal-icon";
+import AiMembershipsIcon from "./ai-memberships-icon";
 import SettingsIcon from "./settings-icon";
 import AccountingIcon from "./accounting-icon";
 
@@ -40,6 +41,7 @@ const NAV_PILL_ICONS: Record<
   "/social-analytics": SocialIcon,
   "/bookings": BookingsIcon,
   "/personal": PersonalIcon,
+  "/ai-memberships": AiMembershipsIcon,
   "/settings": SettingsIcon,
 };
 
