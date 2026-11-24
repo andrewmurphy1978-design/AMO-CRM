@@ -17,6 +17,7 @@ import SocialIcon from "./social-icon";
 import BookingsIcon from "./bookings-icon";
 import PersonalIcon from "./personal-icon";
 import AiMembershipsIcon from "./ai-memberships-icon";
+import BriefingIcon from "./briefing-icon";
 import SettingsIcon from "./settings-icon";
 import AccountingIcon from "./accounting-icon";
 
@@ -29,6 +30,7 @@ const NAV_PILL_ICONS: Record<
   ComponentType<{ size?: string; iconSize?: string; className?: string }>
 > = {
   "/": DashboardIcon,
+  "/briefing": BriefingIcon,
   "/email": EmailIcon,
   "/sms": SmsIcon,
   "/calendar-app": CalendarIcon,

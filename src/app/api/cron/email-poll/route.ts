@@ -6,6 +6,7 @@ import { getUpcomingEvents } from "@/lib/google";
 import { notifyCalendar, notifyNewContacts, notifyNewEmails } from "@/lib/push-triggers";
 import { prunePushLog } from "@/lib/push";
 import { syncAllGoogleTasks } from "@/lib/google-tasks";
+import { sendDailyBriefings } from "@/lib/daily-briefing";
 
 // Keeps every user's Email page cache warm between page opens — without
 // this, new IONOS mail (and new Gmail mail) only shows up once someone
@@ -53,6 +54,8 @@ export async function GET(request: Request) {
     // New contacts (any source) and housekeeping of the notification log.
     await notifyNewContacts(db).catch(() => undefined);
     await prunePushLog(db);
+    // The morning Daily Briefing: a no-op until 7:00 and once it's gone out today (inboxes were just refreshed above).
+    await sendDailyBriefings(db).catch(() => 0);
     return outcomes;
   });
 

@@ -119,6 +119,7 @@ export default function NotificationsForm({ lang }: { lang: Lang }) {
   }
 
   const labels: Record<PushCategory, string> = {
+    briefing: t.pushCatBriefing,
     email: t.pushCatEmail,
     calendar: t.pushCatCalendar,
     contact: t.pushCatContact,
@@ -126,7 +127,7 @@ export default function NotificationsForm({ lang }: { lang: Lang }) {
     social: t.pushCatSocial,
     invoice: t.pushCatInvoice,
   };
-  const adminOnly: PushCategory[] = ["contact", "sms", "social", "invoice"];
+  const adminOnly: PushCategory[] = ["briefing", "contact", "sms", "social", "invoice"];
   const on = thisDevice && permission === "granted";
   const btn = "rounded-lg px-4 py-1.5 text-sm font-semibold shadow-sm disabled:opacity-60";
 

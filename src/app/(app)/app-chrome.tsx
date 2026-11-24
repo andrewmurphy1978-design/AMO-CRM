@@ -31,6 +31,8 @@ export default async function AppChrome({ children }: { children: React.ReactNod
   const can = (section: Section) => !!me && atLeast(me.perms[section], "READ");
   const NAV_ITEMS = [
     ...(can("dashboard") ? [{ href: "/", label: t.nav.dashboard }] : []),
+    // The Daily Briefing spans the whole business (emails, invoices, accounting...), so admins only.
+    ...(session.user.role === "ADMIN" ? [{ href: "/briefing", label: t.nav.briefing }] : []),
     ...(can("email") ? [{ href: "/email", label: t.nav.email }] : []),
     ...(can("sms") ? [{ href: "/sms", label: t.nav.sms }] : []),
     // Points at the CRM's own native calendar (linkable to clients/
