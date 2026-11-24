@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import Link from "next/link";
 import { addAiMembership, updateAiMembership, deleteAiMembership } from "@/actions/ai-memberships";
 import { getDict, type Lang } from "@/lib/i18n/dictionaries";
@@ -88,22 +88,25 @@ function AccountBadge({ row, t }: { row: MembershipRow; t: ReturnType<typeof get
 
 function Fields({ lang, initial }: { lang: Lang; initial?: Partial<MembershipRow> }) {
   const t = getDict(lang).aiMemberships;
-  const [free, setFree] = useState(initial?.isFree ?? false);
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <input name="name" defaultValue={initial?.name ?? ""} placeholder={t.namePlaceholder} className={FIELD_CLASS} />
       <input name="plan" defaultValue={initial?.plan ?? ""} placeholder={t.planPlaceholder} className={FIELD_CLASS} />
       <label className="col-span-full -mt-1 flex items-center gap-2 text-sm text-ink">
-        <input type="checkbox" name="isFree" defaultChecked={initial?.isFree ?? false} onChange={(e) => setFree(e.target.checked)} className="accent-amo-lime" />
+        <input type="checkbox" name="isFree" defaultChecked={initial?.isFree ?? false} className="accent-amo-lime" />
         {t.freeLabel}
       </label>
+      {/* Left enabled even when Free is checked — the server zeroes these
+          out for a free plan regardless of what's typed here (see
+          addAiMembership/updateAiMembership), so there's no state to keep
+          in sync with the checkbox on an uncontrolled form. */}
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.costUsdLabel}</label>
-        <input type="number" step="0.01" min="0" name="costUsdMonthly" disabled={free} defaultValue={initial?.costUsdMonthly ?? ""} className={FIELD_CLASS} />
+        <input type="number" step="0.01" min="0" name="costUsdMonthly" defaultValue={initial?.costUsdMonthly ?? ""} className={FIELD_CLASS} />
       </div>
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.costCadLabel}</label>
-        <input type="number" step="0.01" min="0" name="costCadMonthly" disabled={free} defaultValue={initial?.costCadMonthly ?? ""} className={FIELD_CLASS} />
+        <input type="number" step="0.01" min="0" name="costCadMonthly" defaultValue={initial?.costCadMonthly ?? ""} className={FIELD_CLASS} />
       </div>
       <div>
         <label className="block text-xs font-semibold uppercase tracking-wide text-soft">{t.creditsAvailableLabel}</label>
@@ -257,13 +260,6 @@ export default function AiMembershipsList({
   const t = getDict(lang).aiMemberships;
   const locale = lang === "fr" ? "fr-CA" : "en-US";
   const [state, action, pending] = useActionState(addAiMembership, undefined);
-  // Remounts the (uncontrolled) fields after a successful add — otherwise
-  // the Free checkbox's own local state in Fields survives the submit, so
-  // the next entry's cost inputs can be left disabled from the previous one.
-  const [formKey, setFormKey] = useState(0);
-  useEffect(() => {
-    if (state?.success) setFormKey((k) => k + 1);
-  }, [state]);
 
   return (
     <div className="space-y-4">
@@ -281,7 +277,7 @@ export default function AiMembershipsList({
         {rows.length === 0 && <li className="text-sm text-soft">{t.empty}</li>}
       </ul>
 
-      <form key={formKey} action={action} className="space-y-2 rounded-xl border border-card-border p-3 sm:p-4">
+      <form action={action} className="space-y-2 rounded-xl border border-card-border p-3 sm:p-4">
         <p className="text-sm font-semibold text-ink">{t.addNew}</p>
         <Fields lang={lang} />
         <div className="flex items-center gap-2">
