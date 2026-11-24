@@ -131,6 +131,20 @@ export class BufferClient {
     return data.channels;
   }
 
+  /**
+   * Schedules one post (Buffer's createPost mutation). Returns the new post id; throws with Buffer's own message when the
+   * post is refused (e.g. the free plan's 10-scheduled-posts-per-channel limit).
+   */
+  async createPost(input: Record<string, unknown>): Promise<string> {
+    const data = await this.request<{ createPost: { post?: { id: string }; message?: string } | null }>(
+      `mutation($input: CreatePostInput!){ createPost(input:$input){ ... on PostActionSuccess { post { id } } ... on MutationError { message } } }`,
+      { input }
+    );
+    const id = data.createPost?.post?.id;
+    if (!id) throw new BufferApiError(data.createPost?.message || "Buffer did not return a post id");
+    return id;
+  }
+
   // Buffer normalizes engagement across networks into a flat list of typed
   // metrics for a set of channels (postCount/reactions/comments always
   // present; reach/impressions/engagementRate — and, on some networks,

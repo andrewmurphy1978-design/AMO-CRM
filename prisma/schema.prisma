@@ -2032,10 +2032,41 @@ model SocialWeeklyRun {
   posts      Json? // [{ platform, language?, count, via: "buffer" | "make" | "both" }]
   errors     Json?
   note       String?  @db.Text
+  source     String   @default("claude") // "claude" = the task's own report; "crm" = the CRM's merge after scheduling approved videos
   reportedAt DateTime @default(now())
 
   @@index([weekStart])
   @@map("social_weekly_runs")
+}
+
+// A TikTok video rendered by the weekly Claude task (Part 1), waiting for Andrew's approval in the CRM. On approval the CRM
+// schedules it itself: TikTok (+ the English Instagram Reel) through Buffer's API, and the Facebook Reel, French Instagram
+// Reel, LinkedIn video and YouTube Short through the Make "Social Post Queue" (datastore 108624).
+model SocialVideoApproval {
+  id            String    @id @default(cuid())
+  weekStart     DateTime  @db.Date // the Monday of the week the posts are for
+  weekNumber    Int?
+  slot          String // unique within the week, e.g. "tue-en"
+  language      String // "EN" | "FR"
+  title         String
+  mp4Url        String    @db.Text
+  tiktokDate    DateTime  @db.Date // the planned TikTok day (posts at 9:00 AM ET)
+  captions      Json // { tiktok, instagram, facebook, linkedin, youtubeTitle, youtube }
+  audioSeconds  Float?
+  videoSeconds  Float?
+  canvasUrl     String?   @db.Text
+  note          String?   @db.Text
+  status        String    @default("PENDING") // PENDING | CHANGES | SCHEDULED | ERROR
+  feedback      String?   @db.Text // what to fix, when changes were requested
+  scheduledDate DateTime? @db.Date // the TikTok day actually used (moved forward when the planned day had passed)
+  results       Json? // [{ target, ok, at, id?, error? }]
+  decidedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([weekStart, slot])
+  @@index([status])
+  @@map("social_video_approvals")
 }
 
 model SyncLog {

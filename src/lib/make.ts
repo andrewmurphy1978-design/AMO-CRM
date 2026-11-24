@@ -100,6 +100,28 @@ export class MakeClient {
     return out;
   }
 
+  /**
+   * Adds one record to a Make data store (e.g. the "Social Post Queue"). Needs an API key with the "Data stores: Write"
+   * scope (datastores:write) — a read-only key gets a clear 403 here.
+   */
+  async createDataStoreRecord(dataStoreId: number, key: string, record: Record<string, unknown>): Promise<void> {
+    const response = await fetch(`https://${this.zone}/api/v2/data-stores/${dataStoreId}/data`, {
+      method: "POST",
+      headers: { Authorization: `Token ${this.apiKey}`, Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ key, data: record }),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      if (response.status === 403) {
+        throw new MakeApiError(
+          `Make refused to write to data store ${dataStoreId} (403). The API key saved in Settings needs the "Data stores: Write" scope — edit it in Make under Profile → API, then save it here again. ${text.slice(0, 200)}`,
+          403
+        );
+      }
+      throw new MakeApiError(`Make data store write failed with ${response.status}: ${text.slice(0, 300)}`, response.status);
+    }
+  }
+
   /** Confirms the API key is valid by requesting the team's scenario list. */
   async verifyApiKey(teamId: number): Promise<boolean> {
     try {

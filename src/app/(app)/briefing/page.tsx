@@ -20,6 +20,7 @@ const COLORS: Record<BriefingSectionKey, CardColor> = {
   tasks: "tasks",
   projects: "projects",
   affiliates: "marketingPending",
+  videos: "mockups",
   social: "social",
   automations: "credentials",
   posts: "marketingNoProgram",

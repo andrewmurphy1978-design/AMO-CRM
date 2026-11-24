@@ -31,6 +31,7 @@ import PostsTab from "./posts-tab";
 import PlatformTabs from "./platform-tabs";
 import PostsRefresh from "./posts-refresh";
 import ManualFollowers from "./manual-followers";
+import VideoApprovals from "./video-approvals";
 import Link from "next/link";
 
 // A single hard-coded "external tool" link (unlike the per-platform
@@ -166,6 +167,8 @@ export default async function SocialAnalyticsPage({ searchParams }: { searchPara
           </a>
         }
       />
+
+      {session?.user.role === "ADMIN" && <VideoApprovals lang={lang} />}
 
       <div className="flex flex-wrap items-center gap-2">
       <nav className="flex gap-2" aria-label="Social Media">

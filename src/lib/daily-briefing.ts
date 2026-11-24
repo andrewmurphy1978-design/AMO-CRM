@@ -19,6 +19,7 @@ export const BRIEFING_SECTIONS = [
   "tasks",
   "projects",
   "affiliates",
+  "videos",
   "social",
   "automations",
   "posts",
@@ -208,6 +209,20 @@ export async function buildDailyBriefing(db: PrismaClient, user: { id: string; l
       detail: [p.followUpDate ? t.followUpDue.replace("{date}", fmtDate(p.followUpDate, lang)) : t.followUpNeeded, p.affiliateStatus].filter(Boolean).join(" · "),
       url: `/marketing/programs/${p.id}`,
       urgent: p.followUpDate !== null && p.followUpDate < todayStart,
+    }));
+  });
+
+  await section("videos", async () => {
+    const videos = await db.socialVideoApproval.findMany({
+      where: { status: { in: ["PENDING", "ERROR"] } },
+      orderBy: [{ tiktokDate: "asc" }, { language: "asc" }],
+      select: { title: true, language: true, status: true, tiktokDate: true },
+    });
+    sections.videos = videos.map((v) => ({
+      title: `${v.title} (${v.language})`,
+      detail: `TikTok ${fmtDate(new Date(`${v.tiktokDate.toISOString().slice(0, 10)}T12:00:00Z`), lang)}${v.status === "ERROR" ? " · ⚠️" : ""}`,
+      url: "/social-analytics#videos",
+      urgent: true,
     }));
   });
 
