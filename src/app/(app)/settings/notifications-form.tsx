@@ -54,15 +54,19 @@ export default function NotificationsForm({ lang }: { lang: Lang }) {
 
   useEffect(() => {
     const first = setTimeout(() => void refresh(), 0);
-    const onPrompt = (e: Event) => {
-      e.preventDefault();
-      setInstallEvent(e as BeforeInstallPromptEvent);
-    };
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", () => setInstalled(true));
+    // The root layout's inline script captures the install prompt on whatever page loaded first; read it from
+    // there instead of listening here, which missed it after navigating to Settings from another page.
+    const w = window as { __amoInstallPrompt?: BeforeInstallPromptEvent | null };
+    const sync = () => setInstallEvent(w.__amoInstallPrompt ?? null);
+    const onInstalled = () => setInstalled(true);
+    const initial = setTimeout(sync, 0);
+    window.addEventListener("amo-installable", sync);
+    window.addEventListener("appinstalled", onInstalled);
     return () => {
       clearTimeout(first);
-      window.removeEventListener("beforeinstallprompt", onPrompt);
+      clearTimeout(initial);
+      window.removeEventListener("amo-installable", sync);
+      window.removeEventListener("appinstalled", onInstalled);
     };
   }, [refresh]);
 
@@ -134,7 +138,16 @@ export default function NotificationsForm({ lang }: { lang: Lang }) {
             <p className="text-sm text-emerald-700">{t.pushInstalled}</p>
           ) : (
             installEvent && (
-              <button type="button" className={`btn-primary ${btn}`} onClick={() => void installEvent.prompt()}>
+              <button
+                type="button"
+                className={`btn-primary ${btn}`}
+                onClick={() => {
+                  // A prompt event can only be shown once; Chrome fires a fresh one on a later page load if dismissed.
+                  void installEvent.prompt();
+                  (window as { __amoInstallPrompt?: unknown }).__amoInstallPrompt = null;
+                  setInstallEvent(null);
+                }}
+              >
                 {t.pushInstall}
               </button>
             )

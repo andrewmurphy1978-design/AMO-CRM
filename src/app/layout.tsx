@@ -19,6 +19,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Chrome/Edge fire `beforeinstallprompt` once, early in a full page load — often before React hydrates, and
+// usually on a page other than Settings (where the Install button lives). Catching it here, before any React
+// code runs, keeps it for whichever page asks later (see notifications-form.tsx).
+const CAPTURE_INSTALL_PROMPT = `window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__amoInstallPrompt=e;window.dispatchEvent(new Event("amo-installable"))});window.addEventListener("appinstalled",function(){window.__amoInstallPrompt=null;window.dispatchEvent(new Event("amo-installable"))});`;
+
 // Same badge asset used throughout the sidebar/headers.
 const AMO_BADGE_URL = "https://d1yei2z3i6k35z.cloudfront.net/18410699/6a596c0abdbde8.23945126_AMOBadgeTransparent.png";
 
@@ -59,6 +64,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           it as a candidate reference and keeps resolving against the real
           document scroll, on every browser. Still fully blocks the
           horizontal-pan-drags-the-fixed-sidebar bug this exists for. */}
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: CAPTURE_INSTALL_PROMPT }} />
+      </head>
       <body className="min-h-full flex flex-col overflow-x-clip">
         {children}
         <PwaRegister />
