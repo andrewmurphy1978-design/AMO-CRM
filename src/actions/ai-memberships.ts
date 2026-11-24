@@ -70,10 +70,14 @@ export async function addAiMembership(
   );
 
   revalidatePath("/ai-memberships");
-  return { success: t.aiMemberships.save };
+  return { success: t.aiMemberships.saved };
 }
 
-export async function updateAiMembership(id: string, formData: FormData): Promise<{ error?: string }> {
+export async function updateAiMembership(
+  id: string,
+  _prevState: { error?: string; success?: string } | undefined,
+  formData: FormData
+): Promise<{ error?: string; success?: string }> {
   const session = await requirePersonalSectionUser();
   const t = getDict(session.user.language === "FR" ? "fr" : "en");
   const name = String(formData.get("name") ?? "").trim();
@@ -103,7 +107,7 @@ export async function updateAiMembership(id: string, formData: FormData): Promis
   );
 
   revalidatePath("/ai-memberships");
-  return {};
+  return { success: t.aiMemberships.saved };
 }
 
 export async function deleteAiMembership(id: string): Promise<void> {

@@ -7,7 +7,7 @@ import { getLang } from "@/lib/i18n/get-lang";
 import { getDict } from "@/lib/i18n/dictionaries";
 import PageHeader from "../page-header";
 import AiMembershipsIcon from "../ai-memberships-icon";
-import AiMembershipsList, { type MembershipRow } from "./ai-memberships-list";
+import AiMembershipsList, { AddMembershipButton, type MembershipRow } from "./ai-memberships-list";
 
 export default async function AiMembershipsPage() {
   const session = await auth();
@@ -74,7 +74,7 @@ export default async function AiMembershipsPage() {
   const totalCad = memberships.reduce((sum, m) => sum + (m.costCadMonthly ?? 0), 0);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-2 sm:gap-6">
       <PageHeader
         title={
           <span className="flex min-w-0 items-center gap-2">
@@ -85,8 +85,8 @@ export default async function AiMembershipsPage() {
         hour12={hour12}
         lang={lang}
         location={t.dashboard.myLocation}
+        actions={<AddMembershipButton lang={lang} />}
       />
-      <p className="text-sm text-soft">{t.aiMemberships.subtitle}</p>
 
       <AiMembershipsList rows={rows} totalUsd={totalUsd} totalCad={totalCad} lang={lang} />
     </div>
