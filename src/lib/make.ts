@@ -122,6 +122,20 @@ export class MakeClient {
     }
   }
 
+  /** Removes records from a Make data store by key (keys that are not there are ignored). Needs "Data stores: Write". */
+  async deleteDataStoreRecords(dataStoreId: number, keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    const response = await fetch(`https://${this.zone}/api/v2/data-stores/${dataStoreId}/data`, {
+      method: "DELETE",
+      headers: { Authorization: `Token ${this.apiKey}`, Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ keys }),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new MakeApiError(`Make data store delete failed with ${response.status}: ${text.slice(0, 300)}`, response.status);
+    }
+  }
+
   /** Confirms the API key is valid by requesting the team's scenario list. */
   async verifyApiKey(teamId: number): Promise<boolean> {
     try {

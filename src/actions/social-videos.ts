@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { withScopedPrismaClient } from "@/lib/prisma";
-import { requestVideoChanges, scheduleApprovedVideo, type VideoResult } from "@/lib/social-videos";
+import { requestVideoChanges, scheduleApprovedVideo, unscheduleVideo, type VideoResult, type VideoTarget } from "@/lib/social-videos";
 
 async function requireAdmin() {
   const session = await auth();
@@ -30,6 +30,19 @@ export async function requestSocialVideoChanges(id: string, feedback: string): P
     revalidatePath("/social-analytics");
     revalidatePath("/briefing");
     return { ok: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Removes an approved video's scheduled posts and puts it back to waiting for approval. */
+export async function unscheduleSocialVideo(id: string): Promise<{ removed: VideoTarget[]; kept: VideoResult[] } | { error: string }> {
+  try {
+    await requireAdmin();
+    const result = await withScopedPrismaClient((db) => unscheduleVideo(db, id));
+    revalidatePath("/social-analytics");
+    revalidatePath("/briefing");
+    return result;
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }

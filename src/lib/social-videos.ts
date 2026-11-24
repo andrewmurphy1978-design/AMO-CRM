@@ -35,6 +35,8 @@ export interface VideoResult {
   via: "buffer" | "make";
   id?: string; // Buffer post id or Make record key
   error?: string;
+  note?: string; // why a post was kept when the video was unscheduled (already published / uploaded)
+  retryRemoval?: boolean; // kept only because removing it failed — Unschedule can try again
 }
 
 const BUFFER_CHANNELS = {
@@ -300,6 +302,65 @@ export function listVideoApprovals(db: PrismaClient) {
     orderBy: [{ weekStart: "desc" }, { tiktokDate: "asc" }, { language: "asc" }],
     take: 24,
   });
+}
+
+/**
+ * Takes an approved video back: deletes its Buffer posts and its records in Make's queue, and puts it back to "waiting
+ * for approval". What already went out (its time has passed, or a YouTube Short the poster already uploaded) cannot be
+ * pulled back from here — those stay in the results with a note saying where to remove them, and are not posted again
+ * if the video is re-approved.
+ */
+export async function unscheduleVideo(db: PrismaClient, id: string): Promise<{ removed: VideoTarget[]; kept: VideoResult[] }> {
+  const video = await db.socialVideoApproval.findUniqueOrThrow({ where: { id } });
+  const results = ((video.results as VideoResult[] | null) ?? [])
+    .filter((r) => r.ok && r.id)
+    .filter((r) => !r.note || r.retryRemoval)
+    .map((r) => ({ ...r, note: undefined, retryRemoval: undefined }));
+  const alreadyKept = ((video.results as VideoResult[] | null) ?? []).filter((r) => r.ok && r.note && !r.retryRemoval);
+  const lang = video.language === "FR" ? "FR" : "EN";
+  const soon = Date.now() + 2 * 60_000;
+  const removed: VideoTarget[] = [];
+  const kept: VideoResult[] = [...alreadyKept];
+
+  const make = results.some((r) => r.via === "make") ? await makeClientWith(db) : null;
+  const queued = make ? new Set((await make.listDataStoreRecords(MAKE_QUEUE_STORE_ID)).map((r) => r.key)) : new Set<string>();
+  let buffer: BufferClient | null = null;
+
+  for (const r of results) {
+    const where = r.target === "youtube-short" ? "YouTube Studio" : r.target === "tiktok" ? "TikTok" : r.target.split("-")[0].replace(/^./, (c) => c.toUpperCase());
+    if (new Date(r.at).getTime() <= soon) {
+      kept.push({ ...r, note: `Already published — remove it in ${where} if needed.` });
+      continue;
+    }
+    try {
+      if (r.via === "buffer") {
+        buffer ??= await bufferClient(db, lang);
+        await buffer.deletePost(r.id!);
+        removed.push(r.target);
+      } else if (!make) {
+        kept.push({ ...r, note: "Make is not connected in Settings, so it could not be removed.", retryRemoval: true });
+      } else if (!queued.has(r.id!)) {
+        kept.push({
+          ...r,
+          note: r.target === "youtube-short" ? "Already uploaded to YouTube (private, scheduled) — delete it in YouTube Studio." : `No longer in Make's queue (posted or failed) — check ${where}.`,
+        });
+      } else {
+        await make.deleteDataStoreRecords(MAKE_QUEUE_STORE_ID, [r.id!]);
+        removed.push(r.target);
+      }
+    } catch (e) {
+      kept.push({ ...r, note: `Could not be removed: ${(e instanceof Error ? e.message : String(e)).slice(0, 300)}`, retryRemoval: true });
+    }
+  }
+
+  const tiktokKept = kept.some((r) => r.target === "tiktok");
+  await db.socialVideoApproval.update({
+    where: { id },
+    data: { status: "PENDING", results: kept as never, scheduledDate: tiktokKept ? video.scheduledDate : null, decidedAt: null },
+  });
+  // The CRM's merged report for the week no longer matches; the task's own report shows again until the next approval.
+  await db.socialWeeklyRun.deleteMany({ where: { weekStart: video.weekStart, source: "crm" } });
+  return { removed, kept };
 }
 
 /** Andrew wants something fixed before it goes out; the task re-renders and re-sends the video. */

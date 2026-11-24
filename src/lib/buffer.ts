@@ -145,6 +145,15 @@ export class BufferClient {
     return id;
   }
 
+  /** Deletes a scheduled post. Throws with Buffer's own message when it refuses. */
+  async deletePost(id: string): Promise<void> {
+    const data = await this.request<{ deletePost: { __typename?: string; message?: string } | null }>(
+      `mutation($input: DeletePostInput!){ deletePost(input:$input){ __typename ... on MutationError { message } } }`,
+      { input: { id } }
+    );
+    if (data.deletePost?.message) throw new BufferApiError(data.deletePost.message);
+  }
+
   // Buffer normalizes engagement across networks into a flat list of typed
   // metrics for a set of channels (postCount/reactions/comments always
   // present; reach/impressions/engagementRate — and, on some networks,

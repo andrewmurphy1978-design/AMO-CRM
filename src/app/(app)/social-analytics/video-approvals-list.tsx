@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Card from "@/components/section-card";
-import { approveSocialVideo, requestSocialVideoChanges } from "@/actions/social-videos";
+import { approveSocialVideo, requestSocialVideoChanges, unscheduleSocialVideo } from "@/actions/social-videos";
 import type { VideoCaptions, VideoResult } from "@/lib/social-videos";
 import type { getDict } from "@/lib/i18n/dictionaries";
 
@@ -48,6 +48,22 @@ function VideoCard({ v, lang, t, busy, onApprove }: { v: ApprovalVideo; lang: "e
   const [feedback, setFeedback] = useState(v.feedback ?? "");
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
+  const [removing, startRemoving] = useTransition();
+  const [info, setInfo] = useState<string | null>(null);
+  const canUnschedule = v.results.some((r) => r.ok && (r.retryRemoval || (!r.note && v.status !== "PENDING" && v.status !== "CHANGES")));
+
+  const unschedule = () => {
+    if (!window.confirm(t.unscheduleConfirm)) return;
+    startRemoving(async () => {
+      const res = await unscheduleSocialVideo(v.id);
+      if ("error" in res) setError(res.error);
+      else {
+        setError(null);
+        setInfo(t.unscheduled.replace("{n}", String(res.removed.length)));
+        router.refresh();
+      }
+    });
+  };
   const day = v.scheduledDate ?? v.tiktokDate;
   const moved = v.scheduledDate && v.scheduledDate !== v.tiktokDate;
   const canApprove = v.status === "PENDING" || v.status === "CHANGES" || v.status === "ERROR";
@@ -96,6 +112,7 @@ function VideoCard({ v, lang, t, busy, onApprove }: { v: ApprovalVideo; lang: "e
                 <span className="font-medium text-ink">{t.targets[r.target] ?? r.target}</span>
                 <span className="text-soft"> · {fmtAt(r.at, lang)}</span>
                 {!r.ok && r.error && <span className="block break-words text-red-600 dark:text-red-400">{r.error}</span>}
+                {r.note && <span className="block break-words text-amber-600 dark:text-amber-400">{r.note}</span>}
               </span>
             </li>
           ))}
@@ -115,6 +132,7 @@ function VideoCard({ v, lang, t, busy, onApprove }: { v: ApprovalVideo; lang: "e
       </details>
 
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {info && <p className="text-xs text-emerald-600 dark:text-emerald-400">{info}</p>}
 
       {editing ? (
         <div className="space-y-2">
@@ -135,12 +153,24 @@ function VideoCard({ v, lang, t, busy, onApprove }: { v: ApprovalVideo; lang: "e
           </div>
         </div>
       ) : (
-        canApprove && (
+        (canApprove || canUnschedule) && (
           <div className="mt-auto flex flex-wrap gap-2 pt-1">
-            <button type="button" disabled={busy} onClick={() => onApprove(v.id)} className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
-              {busy ? t.scheduling : v.status === "ERROR" ? t.retry : v.status === "CHANGES" ? t.reopen : t.approve}
-            </button>
-            {v.status !== "ERROR" && (
+            {canApprove && (
+              <button type="button" disabled={busy || removing} onClick={() => onApprove(v.id)} className="btn-primary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
+                {busy ? t.scheduling : v.status === "ERROR" ? t.retry : v.status === "CHANGES" ? t.reopen : t.approve}
+              </button>
+            )}
+            {canUnschedule && (
+              <button
+                type="button"
+                disabled={busy || removing}
+                onClick={unschedule}
+                className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-500/10 disabled:opacity-60 dark:text-red-400"
+              >
+                {removing ? t.unscheduling : t.unschedule}
+              </button>
+            )}
+            {(v.status === "PENDING" || v.status === "CHANGES") && (
               <button type="button" disabled={busy} onClick={() => setEditing(true)} className="rounded-lg border border-card-border px-3 py-1.5 text-sm text-soft hover:text-ink">
                 {t.requestChanges}
               </button>
