@@ -136,8 +136,42 @@ model User {
   ionosMailbox              IonosMailboxAccount?
   sentEmailRecords          SentEmailRecord[]
   sharedMailboxAccess       SharedMailboxAccess[]
+  passkeys                  Passkey[]
 
   @@map("users")
+}
+
+// A device's passkey (Face ID / fingerprint / Windows Hello PIN) for signing in without the password — see
+// src/lib/passkey.ts. The private key never leaves the device; only its public key is kept here.
+model Passkey {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String    @unique // base64url, as the browser reports it
+  publicKey    Bytes
+  // WebAuthn signature counter (unsigned 32-bit, hence BigInt); most phone/PC passkeys always report 0.
+  counter      BigInt    @default(0)
+  transports   String[]  @default([])
+  deviceName   String
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  @@index([userId])
+  @@map("passkeys")
+}
+
+// One pending passkey ceremony (setting one up, or signing in): the random challenge the device must sign. Its id
+// sits in a short-lived httpOnly cookie; it's deleted the moment it's used, so a sign-in can't be replayed.
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  challenge String
+  purpose   String // "register" | "login"
+  userId    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("webauthn_challenges")
 }
 
 // One personal Google connection per CRM user (Gmail + Calendar,

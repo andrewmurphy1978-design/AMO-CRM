@@ -24,6 +24,7 @@ import { resolvePermissions, currentPermissions, atLeast, type Section } from "@
 import ChangePasswordForm from "./change-password-form";
 import TimeFormatForm from "./time-format-form";
 import NotificationsForm from "./notifications-form";
+import PasskeysForm from "./passkeys-form";
 import WorldClockForm from "./world-clock-form";
 import PersonalWatchForm from "./personal-watch-form";
 import EmailAddressColorForm from "./email-address-color-form";
@@ -322,6 +323,10 @@ export default async function SettingsPage({
   addSection({
     id: "account", scope: "user", group: t.settings.groupAccount, icon: "user", label: t.settings.accountTitle, description: t.settings.accountDesc,
     content: <ChangePasswordForm lang={lang} />,
+  });
+  addSection({
+    id: "passkeys", scope: "user", group: t.settings.groupAccount, icon: "key", label: t.passkeys.title, description: t.passkeys.desc,
+    content: <PasskeysForm lang={lang} />,
   });
   if (currentUser) {
     addSection({

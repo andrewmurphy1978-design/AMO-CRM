@@ -2,6 +2,8 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { verifyPassword } from "@/lib/password";
 import { withScopedPrismaClient } from "@/lib/prisma";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+import { finishLogin, readChallengeCookie, relyingParty } from "@/lib/passkey";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // Required on platforms that don't run a traditional Node.js server
@@ -38,6 +40,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const valid = await verifyPassword(password, user.passwordHash);
         if (!valid) return null;
 
+        return {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          language: user.language,
+          timeFormat: user.timeFormat,
+        };
+      },
+    }),
+    // Face ID / fingerprint / Windows Hello: the login page gets a challenge from /api/passkey/login/options, the
+    // device signs it, and the signed response is checked here (see src/lib/passkey.ts).
+    Credentials({
+      id: "passkey",
+      name: "Passkey",
+      credentials: { response: { type: "text" } },
+      authorize: async (credentials, request) => {
+        if (typeof credentials?.response !== "string") return null;
+        let response: AuthenticationResponseJSON;
+        try {
+          response = JSON.parse(credentials.response) as AuthenticationResponseJSON;
+        } catch {
+          return null;
+        }
+        const { rpID, origin } = relyingParty(request.url);
+        const user = await withScopedPrismaClient((db) =>
+          finishLogin(db, { challengeId: readChallengeCookie(request.headers.get("cookie")), response, rpID, origin })
+        );
+        if (!user) return null;
         return {
           id: user.id,
           name: user.name,
